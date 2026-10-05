@@ -6,10 +6,10 @@
 # Новая раскладка — после сборки и перезапуска Revit. Перенос кнопки на другую панель сбрасывает у пользователей
 # её горячие клавиши и место на панели быстрого доступа (Revit помнит кнопку по вкладке и панели).
 
-[RAS-Model History]
+[Плагин]
+Core.About
+
+[История модели]
 ModelHistory.Journal
 ModelHistory.History
 ModelHistory.Settings
-
-[Плагин]
-Core.About

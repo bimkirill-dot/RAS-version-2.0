@@ -15,7 +15,7 @@ namespace RASv2.ModelHistory.Storage
         /// Папка журналов прежнего отдельного плагина. Здесь история команды до RAS v. 2.0 и записи тех, кто ещё работает
         /// в прежнем плагине. Модуль её только читает (LogFoldersToRead); пишет — в LogFolder.
         /// </summary>
-        public const string LegacyLogFolder = @"\10.10.1.77\Shared\BIM\Полетаев Кирилл\RAS-Model History";
+        public const string LegacyLogFolder = @"\\10.10.1.77\Shared\BIM\Полетаев Кирилл\RAS-Model History";
 
         /// <summary>Общая папка журналов команды: сюда пишутся новые записи.</summary>
         public static string LogFolder { get; private set; }
