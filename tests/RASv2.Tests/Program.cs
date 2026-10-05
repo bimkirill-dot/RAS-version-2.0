@@ -22,6 +22,7 @@ namespace RASv2.Tests
             Run("RAS-Model History: фильтр", ModelHistoryTests.Filter);
             Run("RAS-Model History: пары «правка + отмена»", ModelHistoryTests.Undo);
             Run("RAS-Model History: журнал", ModelHistoryTests.Journal);
+            Run("RAS-Model History: сотрудник за автором", ModelHistoryTests.Employees);
             Run("RAS-Model History: перенос личных папок", ModelHistoryTests.Folders);
 #endif
             Console.WriteLine(_failed == 0 ? "Все проверки прошли." : "Не прошло проверок: " + _failed);

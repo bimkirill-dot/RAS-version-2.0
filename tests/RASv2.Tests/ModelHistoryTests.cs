@@ -204,6 +204,52 @@ namespace RASv2.Tests
             });
         }
 
+        /// <summary>Поле «Сотрудник» (EmployeeIndex): учётная запись и полное имя автора записи.</summary>
+        public static IEnumerable<KeyValuePair<string, Action>> Employees()
+        {
+            ChangeRecord Own(string id, int minutes, string user, string account, string name) =>
+                With(R(id, minutes, ChangeKind.Modified, 1, "Перенести", user: user), account, name);
+            ChangeRecord With(ChangeRecord r, string account, string name)
+            {
+                r.WindowsAccount = account;
+                r.FullName = name;
+                return r;
+            }
+
+            yield return Case("своя запись автора — его имя и учётная запись", () =>
+            {
+                var index = new EmployeeIndex();
+                var r = Own("a", 0, "Ivanov_BIM", @"RAS\ivanov", "Иванов Иван");
+                index.Add(new[] { r });
+                Check(index.Describe(r) == @"Иванов Иван · RAS\ivanov", index.Describe(r));
+            });
+            yield return Case("запись из синхронизации — сотрудник по записям автора, а не того, кто синхронизировал", () =>
+            {
+                var index = new EmployeeIndex();
+                var own = Own("a", 0, "Ivanov_BIM", @"RAS\ivanov", "Иванов Иван");
+                var sync = With(R("b", 30, ChangeKind.Modified, 1, "", source: ChangeSource.Sync, user: "Ivanov_BIM", by: "Petrov_BIM"),
+                    @"RAS\petrov", "Петров Пётр");
+                index.Add(new[] { own, sync });
+                Check(index.Describe(sync) == @"Иванов Иван · RAS\ivanov", index.Describe(sync));
+            });
+            yield return Case("имя ещё не пришло из каталога — берётся из других записей той же учётной записи", () =>
+            {
+                var index = new EmployeeIndex();
+                var early = Own("a", 0, "Ivanov_BIM", @"RAS\ivanov", null);
+                var later = Own("b", 5, "Ivanov_BIM", @"RAS\ivanov", "Иванов Иван");
+                index.Add(new[] { early, later });
+                Check(index.Describe(early) == @"Иванов Иван · RAS\ivanov", index.Describe(early));
+            });
+            yield return Case("запись прежней версии и автор без плагина — неизвестно", () =>
+            {
+                var index = new EmployeeIndex();
+                var old = R("a", 0, ChangeKind.Modified, 1, "Перенести", user: "Sidorov");
+                var sync = R("b", 5, ChangeKind.Modified, 1, "", source: ChangeSource.Sync, user: "Sidorov", by: "Petrov_BIM");
+                index.Add(new[] { old, sync });
+                Check(index.Describe(old) == null && index.Describe(sync) == null, "сотрудник выдуман");
+            });
+        }
+
         /// <summary>Перенос личных папок с прежних мест (LegacyFolders): ничего не теряется и не перезаписывается.</summary>
         public static IEnumerable<KeyValuePair<string, Action>> Folders()
         {

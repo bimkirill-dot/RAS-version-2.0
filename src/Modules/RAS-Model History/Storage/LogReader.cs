@@ -186,6 +186,8 @@ namespace RASv2.ModelHistory.Storage
 
             r.User = Pool(r.User);
             r.Machine = Pool(r.Machine);
+            r.WindowsAccount = Pool(r.WindowsAccount);
+            r.FullName = Pool(r.FullName);
             r.RecordedBy = Pool(r.RecordedBy);
             r.Category = Pool(r.Category);
             r.ClassName = Pool(r.ClassName);

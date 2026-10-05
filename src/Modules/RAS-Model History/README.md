@@ -264,6 +264,8 @@ dotnet build SpyPlugin.csproj -c Release -p:DeployToRevit=true -p:RevitDir="D:\A
 | `t` | время |
 | `u` | автор |
 | `pc` | компьютер |
+| `wa` | учётная запись Windows того, кто записал («ДОМЕН\логин»); в записях прежних версий нет |
+| `fn` | полное имя этой учётной записи из каталога компании; нет — не удалось узнать |
 | `k` | действие: `Created` / `Modified` / `Deleted` / `Event` (если поля нет — `Created`) |
 | `s` | источник: `Live` / `Sync` / `Reload` / `Open` |
 | `op` | операция: `Undo` / `Redo` / `Rollback` |

@@ -106,6 +106,13 @@ namespace RASv2.ModelHistory.Tracking
         [JsonPropertyName("pc")] public string Machine { get; set; }
         /// <summary>Кто записал (для Sync/Open — пользователь, чей плагин обнаружил изменение).</summary>
         [JsonPropertyName("by")] public string RecordedBy { get; set; }
+        /// <summary>
+        /// Учётная запись Windows, под которой сделана запись («ДОМЕН\логин»), — того, кто записал (как и «pc»).
+        /// Нет — запись прежней версии плагина.
+        /// </summary>
+        [JsonPropertyName("wa")] public string WindowsAccount { get; set; }
+        /// <summary>Полное имя этой учётной записи из каталога компании; нет — не удалось узнать.</summary>
+        [JsonPropertyName("fn")] public string FullName { get; set; }
 
         [JsonPropertyName("k")] public ChangeKind Kind { get; set; }
         [JsonPropertyName("s")] public ChangeSource Source { get; set; }

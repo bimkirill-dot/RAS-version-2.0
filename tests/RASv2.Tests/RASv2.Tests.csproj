@@ -26,6 +26,7 @@
     <Compile Include="$(MhDir)Tracking\JournalDedup.cs" Link="ModelHistory\JournalDedup.cs" />
     <Compile Include="$(MhDir)Tracking\PeriodDiff.cs" Link="ModelHistory\PeriodDiff.cs" />
     <Compile Include="$(MhDir)Tracking\UndoPairs.cs" Link="ModelHistory\UndoPairs.cs" />
+    <Compile Include="$(MhDir)Tracking\EmployeeIndex.cs" Link="ModelHistory\EmployeeIndex.cs" />
     <Compile Include="$(MhDir)UI\RecordFilter.cs" Link="ModelHistory\RecordFilter.cs" />
     <Compile Include="$(MhDir)Storage\LegacyFolders.cs" Link="ModelHistory\LegacyFolders.cs" />
   </ItemGroup>

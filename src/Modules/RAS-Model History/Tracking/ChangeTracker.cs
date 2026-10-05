@@ -920,6 +920,8 @@ namespace RASv2.ModelHistory.Tracking
                 Time = DateTimeOffset.Now,
                 User = user ?? "",
                 Machine = Machine,
+                WindowsAccount = WindowsUser.Account,
+                FullName = WindowsUser.FullName,
                 Kind = kind,
                 Source = source,
                 Operation = op,

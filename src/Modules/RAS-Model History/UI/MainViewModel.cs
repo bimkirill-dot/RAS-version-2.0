@@ -18,6 +18,8 @@ namespace RASv2.ModelHistory.UI
         private const string UnknownAuthor = "(неизвестно)";
 
         private readonly Dispatcher _ui;
+        /// <summary>Сотрудники за авторами записей — для поля «Сотрудник» в подробностях.</summary>
+        private readonly EmployeeIndex _employees = new EmployeeIndex();
         private readonly ChangeTracker _tracker;
         private readonly SpySettings _settings;
         private readonly RevitActions _actions;
@@ -433,6 +435,8 @@ namespace RASv2.ModelHistory.UI
                     if (!string.IsNullOrWhiteSpace(value)) list.Add(new DetailField(label, value, tip));
                 }
                 Add("Автор", string.IsNullOrEmpty(r.Machine) ? row.AuthorText : row.AuthorText + " · " + r.Machine);
+                Add("Сотрудник", _employees.Describe(r),
+                    "Полное имя и учётная запись Windows автора — по ним сотрудника находят в каталоге компании");
                 Add("Время", row.TimeText);
                 if (r.Kind == ChangeKind.Event)
                 {
@@ -1909,6 +1913,7 @@ namespace RASv2.ModelHistory.UI
                         FolderProblem = error; // держится, пока связи с общей папкой нет; null — всё в порядке
                         if (fresh.Count == 0 && !initial) return;
                         _all.AddRange(fresh);
+                        _employees.Add(fresh);
                         _liveBefore = liveBefore;
                         _liveDeletedBefore = liveDeletedBefore;
                         if (!_hasNoiseRecords && fresh.Any(r => r.IsNoise == true)) HasNoiseRecords = true;

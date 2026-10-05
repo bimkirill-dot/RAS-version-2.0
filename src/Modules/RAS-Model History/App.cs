@@ -43,6 +43,7 @@ namespace RASv2.ModelHistory
             try { _mainWindow = application.MainWindowHandle; } catch { /* ignore */ }
             DataFolders.Init(context);
             LegacyFolders.Migrate(DataFolders.UserDataDir, DataFolders.LocalDataDir); // личные папки с прежних мест — до чтения настроек
+            WindowsUser.ResolveInBackground(); // полное имя сотрудника для записей журнала — из каталога, не задерживая запуск
             Settings = SpySettings.Load();
             Store = new LogStore();
             Idle = new IdleWorkQueue();
