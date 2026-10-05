@@ -17,10 +17,11 @@ namespace RASv2.ModelHistory.Commands
             {
                 var uiapp = commandData.Application;
                 App.Instance?.RememberMainWindow(uiapp);
-                // журнал в отдельном окне — показать окно, а не панель-заглушку
-                if (App.Instance?.Pane?.IsDetached == true)
+                // журнал открывается в окне (по умолчанию) — открыть или показать окно, как «Настройки»
+                var journal = App.Instance?.Pane;
+                if (journal != null && (journal.IsDetached || journal.OpenInWindow))
                 {
-                    App.Instance.Pane.ActivateWindow();
+                    journal.OpenWindow();
                     return Result.Succeeded;
                 }
                 var pane = uiapp.GetDockablePane(App.PaneId);
@@ -51,7 +52,8 @@ namespace RASv2.ModelHistory.Commands
                 if (uidoc == null) return Result.Cancelled;
 
                 var ids = uidoc.Selection.GetElementIds().Select(x => x.Value).ToList();
-                if (App.Instance?.Pane?.IsDetached == true) App.Instance.Pane.ActivateWindow();
+                var journal = App.Instance?.Pane;
+                if (journal != null && (journal.IsDetached || journal.OpenInWindow)) journal.OpenWindow();
                 else
                 {
                     var pane = uiapp.GetDockablePane(App.PaneId);

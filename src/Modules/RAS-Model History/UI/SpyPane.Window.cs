@@ -6,17 +6,18 @@ using System.Windows.Interop;
 namespace RASv2.ModelHistory.UI
 {
     /// <summary>
-    /// Журнал в отдельном окне. У стыкуемой панели Revit нет кнопки «Развернуть»: содержимое панели переносится
-    /// в обычное окно (развернуть на весь экран, перенести на другой монитор), а при закрытии окна возвращается в панель.
-    /// Переносится корень разметки (PaneRoot) — те же элементы и та же модель представления, ничего не пересоздаётся.
-    /// Положение и размер окна запоминаются в ui.json.
+    /// Журнал в отдельном окне — по умолчанию (UiState.OpenInWindow): у стыкуемой панели Revit нет кнопки «Развернуть»,
+    /// а окно растягивается, разворачивается на весь экран и переносится на другой монитор. Кто хочет журнал в панели Revit,
+    /// закрепляет его кнопкой в окне — выбор запоминается. Содержимое панели переносится в окно и обратно: переносится
+    /// корень разметки (PaneRoot) — те же элементы и та же модель представления, ничего не пересоздаётся.
+    /// Закрыть окно — закрыть журнал (содержимое тихо возвращается в скрытую панель). Положение окна — в ui.json.
     /// </summary>
     public partial class SpyPane
     {
         private const string DetachIcon = ""; // «Во весь экран» (Segoe MDL2 Assets)
         private const string AttachIcon = ""; // «Вернуть в окно»
-        private const string DetachTip = "Открыть журнал в отдельном окне: его можно развернуть на весь экран или перенести на другой монитор";
-        private const string AttachTip = "Вернуть журнал в панель Revit";
+        private const string DetachTip = "Открывать журнал в отдельном окне: его можно развернуть на весь экран или перенести на другой монитор";
+        private const string AttachTip = "Закрепить журнал в панели Revit — он будет открываться там";
 
         private Window _window;
         private FrameworkElement _placeholder;
@@ -24,14 +25,50 @@ namespace RASv2.ModelHistory.UI
         /// <summary>Журнал сейчас в отдельном окне.</summary>
         public bool IsDetached => _window != null;
 
-        private void WindowButton_Click(object sender, RoutedEventArgs e)
+        /// <summary>Журнал открывается в окне (а не в панели Revit) — выбор пользователя.</summary>
+        public bool OpenInWindow => _state.OpenInWindow;
+
+        /// <summary>Открыть журнал в окне или показать уже открытое (кнопки ленты).</summary>
+        public void OpenWindow()
         {
-            if (IsDetached) _window.Close(); // Closed → Attach
-            else Detach();
+            if (_window == null) Detach();
+            else ActivateWindow();
         }
 
-        /// <summary>Показать открытое окно поверх остальных (кнопки ленты, пока журнал в окне).</summary>
-        public void ActivateWindow()
+        private void WindowButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (IsDetached) MoveToPane();
+            else MoveToWindow();
+        }
+
+        /// <summary>Из панели — в окно; дальше журнал открывается в окне, панель Revit скрывается.</summary>
+        private void MoveToWindow()
+        {
+            _state.OpenInWindow = true;
+            Detach();
+            ShowRevitPane(false);
+        }
+
+        /// <summary>Из окна — в панель Revit; дальше журнал открывается в панели.</summary>
+        private void MoveToPane()
+        {
+            _state.OpenInWindow = false;
+            _window?.Close(); // Closed → Attach
+            ShowRevitPane(true);
+        }
+
+        /// <summary>Показать / скрыть стыкуемую панель — это Revit API, поэтому через ExternalEvent.</summary>
+        private static void ShowRevitPane(bool show)
+        {
+            App.Instance?.Actions?.Run(app =>
+            {
+                var pane = app.GetDockablePane(App.PaneId);
+                if (show) pane.Show();
+                else pane.Hide();
+            });
+        }
+
+        private void ActivateWindow()
         {
             if (_window == null) return;
             if (_window.WindowState == WindowState.Minimized) _window.WindowState = WindowState.Normal;
@@ -125,7 +162,7 @@ namespace RASv2.ModelHistory.UI
             var show = new Button { Content = "Показать окно", Padding = new Thickness(12, 3, 12, 3), Margin = new Thickness(0, 0, 6, 0) };
             show.Click += (s, e) => ActivateWindow();
             var back = new Button { Content = "Вернуть в панель", Padding = new Thickness(12, 3, 12, 3) };
-            back.Click += (s, e) => _window?.Close();
+            back.Click += (s, e) => MoveToPane();
             return new StackPanel
             {
                 HorizontalAlignment = HorizontalAlignment.Center,

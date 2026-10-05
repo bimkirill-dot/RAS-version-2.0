@@ -45,6 +45,9 @@ namespace RASv2.ModelHistory.Storage
         /// <summary>Открытая вкладка подробностей: 0 — «Запись», 1 — «Было → стало», 2 — «Все параметры», 3 — «История».</summary>
         public int DetailsTab { get; set; } = 1;
 
+        /// <summary>Журнал открывается в отдельном окне (по умолчанию) или в панели Revit — кнопка в окне / панели.</summary>
+        public bool OpenInWindow { get; set; } = true;
+
         /// <summary>Отдельное окно журнала: положение и размер (ширина 0 — ещё не открывали), развёрнуто ли на весь экран.</summary>
         public double WindowLeft { get; set; }
         public double WindowTop { get; set; }
