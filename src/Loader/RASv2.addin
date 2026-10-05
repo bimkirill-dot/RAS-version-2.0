@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>RAS v. 2.0</Name>
+    <Assembly>RASv2\RASv2.Loader.dll</Assembly>
+    <AddInId>B7E3A1C4-2F5D-4C8B-9E61-3D7A0F2C5B84</AddInId>
+    <FullClassName>RASv2.Loader.LoaderApp</FullClassName>
+    <VendorId>RASG</VendorId>
+    <VendorDescription>RAS Group</VendorDescription>
+    <Description>Плагин компании RAS v. 2.0: загрузчик берёт актуальную версию с сервера при запуске Revit.</Description>
+  </AddIn>
+</RevitAddIns>

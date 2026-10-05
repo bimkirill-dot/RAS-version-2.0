@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Загрузчик: единственное, что ставит установщик. Без ссылок на ядро и модули (PRINCIPLES.md, раздел 2). -->
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <AssemblyName>RASv2.Loader</AssemblyName>
+    <RootNamespace>RASv2.Loader</RootNamespace>
+    <UseRevitApi>true</UseRevitApi>
+    <OutputPath>$(RasOut)loader\</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\RasPaths.cs" Link="Shared\RasPaths.cs" />
+    <None Update="RASv2.addin" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

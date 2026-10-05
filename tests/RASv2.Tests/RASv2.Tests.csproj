@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Проверки логики без Revit: обычная консольная программа, без сторонних библиотек.
+    Собирается и запускается под обе платформы (Revit 2023 и 2026). Логику берёт из исходников модулей (Compile Include),
+    чтобы не тянуть Revit API.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>RASv2.Tests</AssemblyName>
+    <RootNamespace>RASv2.Tests</RootNamespace>
+    <OutputPath>$(RasOut)tests\</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\Loader\BuildResolver.cs" Link="Loader\BuildResolver.cs" />
+  </ItemGroup>
+
+</Project>

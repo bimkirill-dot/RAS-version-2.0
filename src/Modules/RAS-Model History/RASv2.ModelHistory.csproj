@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Модуль «RAS-Model History»: журнал изменений модели (MODULE.md). Зависит только от ядра. -->
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <AssemblyName>RASv2.ModelHistory</AssemblyName>
+    <RootNamespace>RASv2.ModelHistory</RootNamespace>
+    <UseRevitApi>true</UseRevitApi>
+    <OutputPath>$(RasOut)parts\</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ядро лежит в той же папке сборки — отдельная копия рядом с модулем не нужна -->
+    <ProjectReference Include="..\..\Core\RASv2.Core.csproj" Private="false" />
+  </ItemGroup>
+
+</Project>

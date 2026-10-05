@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Ядро: общее для всех модулей (PRINCIPLES.md, раздел 5). Загружается загрузчиком из локальной копии сборки. -->
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <AssemblyName>RASv2.Core</AssemblyName>
+    <RootNamespace>RASv2.Core</RootNamespace>
+    <UseRevitApi>true</UseRevitApi>
+    <OutputPath>$(RasOut)parts\</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\RasPaths.cs" Link="Shared\RasPaths.cs" />
+  </ItemGroup>
+
+</Project>
