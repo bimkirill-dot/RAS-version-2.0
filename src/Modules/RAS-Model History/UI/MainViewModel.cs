@@ -1273,7 +1273,7 @@ namespace RASv2.ModelHistory.UI
             var period = SelectedPeriod?.Value ?? 7;
             var created = _showCreated;
             var modified = _showModified;
-            var roots = DataFolders.LogFoldersToRead;
+            var root = DataFolders.LogFolder;
             var legacy = _legacyKeys;
             var localExcluded = new HashSet<string>(_localExcluded, StringComparer.Ordinal);
             var localRestored = new HashSet<string>(_localRestored, StringComparer.Ordinal);
@@ -1285,7 +1285,7 @@ namespace RASv2.ModelHistory.UI
                 List<ChangeRecord> records;
                 try
                 {
-                    records = new LogReader(roots, key, null, legacy, me).ReadNew();
+                    records = new LogReader(root, key, null, legacy, me).ReadNew();
                 }
                 catch (Exception ex)
                 {
@@ -1536,7 +1536,7 @@ namespace RASv2.ModelHistory.UI
             _actualizeKey = key;
             IsActualizing = true;
             ActualizeText = "Актуализация: читаю весь журнал модели…";
-            var roots = DataFolders.LogFoldersToRead;
+            var root = DataFolders.LogFolder;
             var legacyKeys = _legacyKeys;
             var store = _tracker.Store;
             var localExcluded = new HashSet<string>(_localExcluded, StringComparer.Ordinal);
@@ -1547,7 +1547,7 @@ namespace RASv2.ModelHistory.UI
                 try
                 {
                     store.Flush(); // свои последние записи — в журнал до чтения
-                    var all = new LogReader(roots, key, null, legacyKeys).ReadNew(); // вся история, не только выбранный период
+                    var all = new LogReader(root, key, null, legacyKeys).ReadNew(); // вся история, не только выбранный период
                     var statuses = SyncStatusCalculator.Compute(all);
                     var ctx = JournalAudit.BuildContext(all, statuses, centralUpToDate);
                     var excluded = Excluded(all, localExcluded, localRestored);
@@ -1871,7 +1871,7 @@ namespace RASv2.ModelHistory.UI
                     since = period > 0 ? today.AddDays(-(period - 1)) : (DateTimeOffset?)null;
                     break;
             }
-            _reader = new LogReader(DataFolders.LogFoldersToRead, _modelKey, since, _legacyKeys, _tracker.CurrentUser);
+            _reader = new LogReader(DataFolders.LogFolder, _modelKey, since, _legacyKeys, _tracker.CurrentUser);
             _all.Clear();
             _liveBefore = new List<string>();
             _liveDeletedBefore = new List<long>();
@@ -2771,26 +2771,20 @@ namespace RASv2.ModelHistory.UI
             FiltersChanged();
         }
 
-        /// <summary>
-        /// Открыть в проводнике папку журнала этой модели: в новой общей папке, если записи уже там, иначе в прежней;
-        /// записей нигде нет — новую общую папку.
-        /// </summary>
+        /// <summary>Открыть в проводнике папку журнала этой модели (или общую папку, если записей ещё нет).</summary>
         private void OpenLogFolder()
         {
-            var roots = DataFolders.LogFoldersToRead;
+            var root = DataFolders.LogFolder;
             var key = _modelKey;
             Task.Run(() =>
             {
                 try
                 {
                     // сетевая папка может отвечать долго — проверяем не в потоке интерфейса
-                    var dir = key == null ? null
-                        : roots.Select(r => System.IO.Path.Combine(r, key)).FirstOrDefault(System.IO.Directory.Exists);
-                    if (dir == null)
-                    {
-                        dir = roots[0];
-                        System.IO.Directory.CreateDirectory(dir);
-                    }
+                    var dir = key != null && System.IO.Directory.Exists(System.IO.Path.Combine(root, key))
+                        ? System.IO.Path.Combine(root, key)
+                        : root;
+                    System.IO.Directory.CreateDirectory(dir);
                     Post(() => RevealFolder?.Invoke(dir));
                 }
                 catch (Exception ex)

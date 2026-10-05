@@ -75,8 +75,7 @@ namespace RASv2.ModelHistory
             events.Idling(Idle.OnIdling);
             events.ThemeChanged(OnThemeChanged);
 
-            Diag.Log("Модуль запущен. Папка журналов: " + DataFolders.LogFolder + " (читается и прежняя: " +
-                     DataFolders.LegacyLogFolder + ")");
+            Diag.Log("Модуль запущен. Папка журналов: " + DataFolders.LogFolder);
         }
 
         /// <summary>Revit закрывается: сохранить вид панели и дописать очередь журнала. Отписку делает ядро.</summary>
