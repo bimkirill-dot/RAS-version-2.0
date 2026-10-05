@@ -28,6 +28,13 @@
 - `src\Modules\<папка модуля>` — модули; у каждого `MODULE.md`. Сейчас: `RAS-Model History` (переезжает из `D:\Code\SpyPlugin`, ход переезда — в его `MODULE.md`).
 - `tests\RASv2.Tests` — проверки логики: консольная программа без сторонних библиотек, логику подключает исходниками (`Compile Include`).
 
+## Планы
+
+- **RAS-Model History** — доделать переезд: шаги 5–7 в его `MODULE.md`.
+- **Перенос уже написанных функций.** В RAS v. 2.0 будут переезжать готовые функции: их нужно адаптировать под `PRINCIPLES.md` и оформить модулями (порядок — `PRINCIPLES.md`, раздел 4, «Встроить существующий отдельный плагин»; образец — RAS-Model History). Какие функции и в каком порядке — решает разработчик; без его выбора не начинать. Кандидаты:
+  - прежний плагин RAS, `D:\Code\RasPlugin`: AssemblyGrouping, FireCouplingPlacement, SleevePlacement, Kj (PartitionReinforcement, StructuralDataKj, WorksetsDistributorKj), LevelNameChecker, Ov, IntehPlus, BIM_otdela_checkRas, FilterDiagnostics, Common. Там три копии кода (`RAS`, `RAS_2023`, `RAS_2026`) — перед переносом сравнить и взять актуальную;
+  - отдельные проекты в `D:\Code`: Stamp-Generator, WallRebarGenerator, Revit-file-history, Automatisation-checklist.
+
 ## Правила, о которые уже спотыкались
 
 - Сборки 2023 и 2026 из одних исходников: служебные файлы каждой версии — в `obj\<год>`, и папки `obj` / `bin` исключены из исходников (`DefaultItemExcludes`). Без этого сборка 2026 подхватывает сгенерированные файлы сборки 2023.
