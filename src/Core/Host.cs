@@ -18,12 +18,15 @@ namespace RASv2.Core
 
     /// <summary>
     /// Ядро: его запускает загрузчик (по имени типа и метода, без ссылки на ядро). Создаёт вкладку,
-    /// находит и запускает модули. Ошибка модуля отключает только этот модуль (PRINCIPLES.md, раздел 7).
+    /// находит и запускает модули, раскладывает их кнопки по панелям (RibbonLayout).
+    /// Ошибка модуля отключает только этот модуль (PRINCIPLES.md, раздел 7).
     /// </summary>
     public static class Host
     {
         public const string TabName = "RAS v. 2.0";
         private const string Tag = "Ядро";
+        /// <summary>Панель по умолчанию для кнопок ядра («О плагине»).</summary>
+        private const string ServicePanel = "Плагин";
 
         /// <summary>Запущено ли ядро в этой копии сборки (кнопки должны попадать в ту же копию).</summary>
         public static bool IsStarted { get; private set; }
@@ -36,6 +39,9 @@ namespace RASv2.Core
 
         private static readonly List<ModuleSlot> ModuleList = new List<ModuleSlot>();
         private static RevitEventHub _events;
+        /// <summary>Кнопки запущенных модулей и ядра — в порядке объявления; на ленту — после запуска всех модулей.</summary>
+        private static readonly List<RibbonButton> RibbonOrder = new List<RibbonButton>();
+        private static readonly Dictionary<string, PushButtonData> RibbonData = new Dictionary<string, PushButtonData>(StringComparer.OrdinalIgnoreCase);
         public static IReadOnlyList<ModuleSlot> Modules => ModuleList;
 
         /// <summary>Вызывает загрузчик (сигнатуру менять только вместе с ним).</summary>
@@ -57,7 +63,11 @@ namespace RASv2.Core
                 ModuleList.Add(slot);
                 if (slot.Module != null) StartModule(app, slot);
             }
-            CreateServicePanel(app);
+            AddButton(new PushButtonData("Core.About", "О плагине", typeof(AboutCommand).Assembly.Location, typeof(AboutCommand).FullName)
+            {
+                ToolTip = "Версия плагина, модули и их состояние, журнал ошибок"
+            }, ServicePanel);
+            CreateRibbon(app, buildDir);
             IsStarted = true;
         }
 
@@ -79,30 +89,73 @@ namespace RASv2.Core
                 slot.State = "не работает в Revit " + RevitYear;
                 return;
             }
-            RibbonPanel panel = null;
             try
             {
-                panel = app.CreateRibbonPanel(TabName, module.Title);
-                module.Start(new ModuleContext(module, app, panel, _events));
+                var context = new ModuleContext(module, app, _events);
+                module.Start(context);
                 slot.State = ModuleCatalog.Running;
+                // кнопки — только у запустившегося модуля: у отключённого их на ленте нет
+                foreach (var data in context.Buttons) AddButton(data, module.Title);
             }
             catch (Exception ex)
             {
                 // модуль отключается до следующего запуска Revit, остальные работают
                 Log.Write(module.Id, "Модуль не запустился", ex);
                 slot.State = "отключён: ошибка при запуске (" + ex.Message + ")";
-                if (panel != null) panel.Visible = false;
             }
         }
 
-        private static void CreateServicePanel(UIControlledApplication app)
+        private static void AddButton(PushButtonData data, string defaultPanel)
         {
-            var panel = app.CreateRibbonPanel(TabName, "Плагин");
-            var about = typeof(AboutCommand);
-            panel.AddItem(new PushButtonData("RASv2.About", "О плагине", about.Assembly.Location, about.FullName)
+            if (RibbonData.ContainsKey(data.Name))
             {
-                ToolTip = "Версия плагина, модули и их состояние, журнал ошибок"
-            });
+                Log.Write(Tag, "Кнопка «" + data.Name + "» объявлена дважды — вторая пропущена");
+                return;
+            }
+            RibbonData[data.Name] = data;
+            RibbonOrder.Add(new RibbonButton(data.Name, defaultPanel));
+        }
+
+        /// <summary>
+        /// Лента: панели и кнопки по раскладке из сборки (ribbon.txt). Нет файла или он с ошибками — кнопки
+        /// стоят на панелях по умолчанию. Ошибка одной кнопки или панели не мешает остальным.
+        /// </summary>
+        private static void CreateRibbon(UIControlledApplication app, string buildDir)
+        {
+            var layout = new List<RibbonPanelSpec>();
+            var file = Path.Combine(buildDir, RibbonLayout.FileName);
+            try
+            {
+                if (File.Exists(file)) layout = RibbonLayout.Parse(File.ReadAllLines(file), w => Log.Write(Tag, w));
+                else Log.Write(Tag, "Нет раскладки ленты (" + RibbonLayout.FileName + ") — кнопки на панелях модулей");
+            }
+            catch (Exception ex)
+            {
+                Log.Write(Tag, "Не удалось прочитать раскладку ленты", ex);
+            }
+
+            foreach (var panel in RibbonLayout.Arrange(layout, RibbonOrder, w => Log.Write(Tag, w)))
+            {
+                RibbonPanel ribbonPanel;
+                try { ribbonPanel = app.CreateRibbonPanel(TabName, panel.Title); }
+                catch (Exception ex)
+                {
+                    Log.Write(Tag, "Не удалось создать панель «" + panel.Title + "»", ex);
+                    continue;
+                }
+                foreach (var id in panel.Buttons)
+                {
+                    try { ribbonPanel.AddItem(RibbonData[id]); }
+                    catch (Exception ex) { Log.Write(ButtonOwner(id), "Не удалось поставить кнопку «" + id + "» на ленту", ex); }
+                }
+            }
+        }
+
+        /// <summary>Метка журнала для кнопки: модуль — часть кода до точки.</summary>
+        private static string ButtonOwner(string id)
+        {
+            var dot = id.IndexOf('.');
+            return dot > 0 ? id.Substring(0, dot) : Tag;
         }
     }
 

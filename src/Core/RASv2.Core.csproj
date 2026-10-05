@@ -11,6 +11,8 @@
 
   <ItemGroup>
     <Compile Include="..\Shared\RasPaths.cs" Link="Shared\RasPaths.cs" />
+    <!-- раскладка кнопок по панелям вкладки (RibbonLayout) — едет в сборку рядом с ядром -->
+    <None Update="ribbon.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
