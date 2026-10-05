@@ -33,6 +33,9 @@ namespace RASv2.ModelHistory
         private SpyPane _pane;
         private IntPtr _mainWindow;
 
+        /// <summary>Панель журнала (её содержимое бывает в отдельном окне — SpyPane.IsDetached).</summary>
+        internal SpyPane Pane => _pane;
+
         /// <summary>Главное окно Revit — владелец диалогов модуля.</summary>
         public IntPtr MainWindowHandle => _mainWindow;
 

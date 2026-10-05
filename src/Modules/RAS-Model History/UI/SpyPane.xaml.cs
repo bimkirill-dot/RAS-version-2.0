@@ -109,8 +109,9 @@ namespace RASv2.ModelHistory.UI
                 catch (Exception ex) { vm.Status = "Не удалось открыть папку журнала: " + ex.Message; }
             };
 
-            IsVisibleChanged += (s, e) => vm.SetPaneVisible(IsVisible);
-            SizeChanged += (s, e) => UpdateLayoutMode(e.NewSize.Width);
+            IsVisibleChanged += (s, e) => vm.SetPaneVisible(IsVisible || IsDetached);
+            // ширина — у корня разметки: он бывает и в панели, и в отдельном окне
+            PaneRoot.SizeChanged += (s, e) => UpdateLayoutMode(e.NewSize.Width);
             MainArea.SizeChanged += (s, e) => ClampDetails();
             FilterBar.SizeChanged += (s, e) => QueueFilterDock();
             FilterGroup.SizeChanged += (s, e) => QueueFilterDock();
@@ -214,6 +215,7 @@ namespace RASv2.ModelHistory.UI
                 };
             }).ToList();
             RememberDetailsSize();
+            if (_window != null) RememberWindow(_window);
             _state.DetailsWidth = _detailsWidth.IsAbsolute ? _detailsWidth.Value : 380;
             _state.DetailsHeight = _detailsHeight.IsAbsolute ? _detailsHeight.Value : 240;
             _state.Save();

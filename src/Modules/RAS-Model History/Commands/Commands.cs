@@ -17,6 +17,12 @@ namespace RASv2.ModelHistory.Commands
             {
                 var uiapp = commandData.Application;
                 App.Instance?.RememberMainWindow(uiapp);
+                // журнал в отдельном окне — показать окно, а не панель-заглушку
+                if (App.Instance?.Pane?.IsDetached == true)
+                {
+                    App.Instance.Pane.ActivateWindow();
+                    return Result.Succeeded;
+                }
                 var pane = uiapp.GetDockablePane(App.PaneId);
                 if (pane.IsShown()) pane.Hide();
                 else pane.Show();
@@ -45,8 +51,12 @@ namespace RASv2.ModelHistory.Commands
                 if (uidoc == null) return Result.Cancelled;
 
                 var ids = uidoc.Selection.GetElementIds().Select(x => x.Value).ToList();
-                var pane = uiapp.GetDockablePane(App.PaneId);
-                if (!pane.IsShown()) pane.Show();
+                if (App.Instance?.Pane?.IsDetached == true) App.Instance.Pane.ActivateWindow();
+                else
+                {
+                    var pane = uiapp.GetDockablePane(App.PaneId);
+                    if (!pane.IsShown()) pane.Show();
+                }
                 var view = uidoc.Document.ActiveView;
                 // ничего не выделено — история открытого вида: сам вид и то, что на нём нарисовано (размеры, марки)
                 if (ids.Count == 0 && view != null) App.Instance?.ViewModel?.ShowViewHistory(view.Id.Value, view.Name);

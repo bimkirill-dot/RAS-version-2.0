@@ -19,7 +19,8 @@
         </ResourceDictionary>
     </UserControl.Resources>
 
-    <Grid Margin="6">
+    <!-- PaneRoot переносится в отдельное окно и обратно (SpyPane.Window.cs) -->
+    <Grid x:Name="PaneRoot" Margin="6">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -32,6 +33,8 @@
         <StackPanel Grid.Row="0" Margin="0,0,0,6">
             <DockPanel LastChildFill="False">
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="WindowButton" Style="{StaticResource Spy.IconButton}" Content="&#xE740;" Click="WindowButton_Click"
+                            ToolTip="Открыть журнал в отдельном окне: его можно развернуть на весь экран или перенести на другой монитор" />
                     <Button Style="{StaticResource Spy.IconButton}" Content="3D" FontFamily="Segoe UI" FontWeight="SemiBold" FontSize="12"
                             Command="{Binding ShowIn3DCommand}"
                             ToolTip="Показать изменения в 3D: свой 3D-вид, где изменения за период раскрашены, а остальная модель бледная. Рабочие виды не меняются." />
