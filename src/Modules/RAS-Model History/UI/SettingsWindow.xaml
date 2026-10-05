@@ -1,0 +1,141 @@
+<Window x:Class="RASv2.ModelHistory.UI.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:RASv2.ModelHistory.UI"
+        Title="RAS-Model History — настройки"
+        Width="640" MinWidth="520" MinHeight="320" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner" ResizeMode="CanResizeWithGrip" ShowInTaskbar="False"
+        FontSize="12" Background="{DynamicResource Spy.Bg}" Foreground="{DynamicResource Spy.Text}">
+    <Window.Resources>
+        <ResourceDictionary>
+        <ResourceDictionary.MergedDictionaries>
+            <!-- то же оформление и тема, что у панели -->
+            <local:ThemeResources />
+        </ResourceDictionary.MergedDictionaries>
+        <Style x:Key="Hint" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Spy.Muted}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="20,0,0,6" />
+        </Style>
+        <!-- свой ключ, а не неявный стиль: неявный с BasedOn на {x:Type CheckBox} в этом же словаре
+             не находит стиль темы (BasedOn остаётся пустым), и флажки рисуются системными -->
+        <Style x:Key="Check" TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
+            <Setter Property="Margin" Value="0,6,0,2" />
+        </Style>
+        <Style x:Key="Num" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="Width" Value="90" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="Margin" Value="0,2" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <DockPanel Margin="12,12,12,10" LastChildFill="True">
+        <!-- кнопки всегда видны внизу, остальное прокручивается -->
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button Content="Сохранить" Width="100" Height="26" IsDefault="True" Command="{Binding SaveCommand}" />
+            <Button Content="Отмена" Width="100" Height="26" Margin="8,0,0,0" IsCancel="True" Command="{Binding CancelCommand}" />
+        </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
+            <StackPanel>
+                <GroupBox Header="Оформление">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Тема панели:" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <ComboBox Width="160" Height="24" ItemsSource="{Binding ThemeOptions}" DisplayMemberPath="Label"
+                                      SelectedItem="{Binding SelectedTheme}" />
+                        </StackPanel>
+                        <TextBlock Text="«Как в Revit» — светлая или тёмная вслед за темой интерфейса Revit (Revit 2024 и новее)."
+                                   Style="{StaticResource Hint}" Margin="0,4,0,0" />
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="Панель">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Период по умолчанию, дней (0 — всё время):" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <TextBox Style="{StaticResource Num}" Width="60" Text="{Binding DefaultPeriodDays, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <TextBlock Text="Применяется сразу после «Сохранить» и при каждом запуске Revit."
+                                   Style="{StaticResource Hint}" Margin="0,4,0,0" />
+                    </StackPanel>
+                </GroupBox>
+
+                <!-- общее для команды: если отключить запись у одного человека, в журнале команды будут дыры -->
+                <Border Margin="0,10,0,2" Padding="8,6" CornerRadius="3" Background="{DynamicResource Spy.InfoBg}"
+                        BorderBrush="{DynamicResource Spy.Line}" BorderThickness="1">
+                    <TextBlock TextWrapping="Wrap"
+                               Text="Ниже — настройки, одинаковые для всей команды: если выключить запись у одного человека, в журнале команды появятся дыры. Их задаёт BIM-менеджер в общем файле, который раздаётся вместе с плагином; здесь они только для просмотра." />
+                </Border>
+
+                <GroupBox Header="Что отслеживать (для всей команды)" IsEnabled="False">
+                    <StackPanel>
+                        <CheckBox Style="{StaticResource Check}" Content="Изменения параметров «было → стало»" IsChecked="{Binding TrackParameters}" />
+                        <TextBlock Style="{StaticResource Hint}"
+                                   Text="Revit не сообщает старые значения, поэтому плагин заранее запоминает параметры: при выделении элемента, открытии вида, после каждого изменения и (если включено ниже) при открытии модели." />
+
+                        <CheckBox Style="{StaticResource Check}" Content="Подготовка при открытии модели (в фоне)" IsChecked="{Binding SnapshotOnOpen}" />
+                        <TextBlock Style="{StaticResource Hint}"
+                                   Text="Запоминает сведения обо всех элементах, чтобы описывать удалённые, и параметры видов, шаблонов видов, типов, уровней, осей, фильтров, материалов. Выполняется порциями, когда Revit простаивает." />
+
+                        <CheckBox Style="{StaticResource Check}" Content="Полный снимок: параметры всех элементов модели" IsChecked="{Binding SnapshotAllElements}"
+                                  Margin="20,6,0,2" />
+                        <TextBlock Style="{StaticResource Hint}" Margin="40,0,0,6"
+                                   Text="При открытии в фоне запоминаются параметры всех элементов (стены, двери, оборудование…) — в файле на диске, а не в памяти. Тогда «было → стало» известно для любого изменения, а у удалённых элементов сохраняются все параметры. На больших моделях первая подготовка идёт несколько минут; файл снимков — до нескольких сотен МБ." />
+
+                        <CheckBox Style="{StaticResource Check}" Content="Сохранять снимки между сеансами" IsChecked="{Binding PersistSnapshots}" />
+                        <TextBlock Style="{StaticResource Hint}" Margin="20,0,0,2"
+                                   Text="При повторном открытии той же модели (в том числе новой локальной копии) снимки берутся с диска, а переснимаются только элементы, изменившиеся с прошлого раза — проверка занимает секунды. Снимки хранятся в %LocalAppData%\RAS-Model History\Cache. Если выключить, файл снимков удаляется при закрытии модели, и при каждом открытии подготовка идёт заново." />
+                        <StackPanel Orientation="Horizontal" Margin="20,0,0,6">
+                            <TextBlock Text="Удалять снимки моделей, не открывавшихся дольше, дней:" VerticalAlignment="Center" Foreground="{DynamicResource Spy.Muted}" />
+                            <TextBox Style="{StaticResource Num}" Width="60" Margin="6,0,0,0"
+                                     Text="{Binding SnapshotCacheDays, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+
+                        <CheckBox Style="{StaticResource Check}" Content="Фиксировать изменения других пользователей при синхронизации" IsChecked="{Binding DetectRemoteChanges}" />
+                        <TextBlock Style="{StaticResource Hint}"
+                                   Text="Полезно, если плагин стоит не у всех: после синхронизации, обновления или открытия плагин определит, какие элементы изменили коллеги, и возьмёт автора из данных совместной работы (кто последним синхронизировал)." />
+
+                        <CheckBox Style="{StaticResource Check}" Content="Записывать служебные элементы Revit" IsChecked="{Binding RecordNoise}" />
+                        <TextBlock Style="{StaticResource Hint}"
+                                   Text="Внутренние объекты без категории, линии эскизов, временные размеры. Обычно это «шум», журнал заметно вырастет." />
+
+                        <CheckBox Style="{StaticResource Check}" Content="Отслеживать редактор семейств" IsChecked="{Binding TrackFamilyDocuments}" />
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="Лимиты (для всей команды)" IsEnabled="False">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" VerticalAlignment="Center" Text="Записей на одну операцию (остальное — одной сводной строкой)" />
+                        <TextBox Grid.Row="0" Grid.Column="1" Style="{StaticResource Num}" Text="{Binding MaxRecordsPerTransaction, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="Элементов с разбором параметров на одну операцию" />
+                        <TextBox Grid.Row="1" Grid.Column="1" Style="{StaticResource Num}" Text="{Binding MaxParamDiffPerTransaction, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="Запоминать параметры выделенных элементов (не больше)" />
+                        <TextBox Grid.Row="2" Grid.Column="1" Style="{StaticResource Num}" Text="{Binding MaxSelectionSnapshot, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Grid.Row="3" VerticalAlignment="Center" Text="Снимков параметров в оперативной памяти (остальные — на диске)" />
+                        <TextBox Grid.Row="3" Grid.Column="1" Style="{StaticResource Num}" Text="{Binding MaxSnapshotElements, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Grid.Row="4" VerticalAlignment="Center" Text="Максимум строк в таблице (экспорт CSV — весь список)" />
+                        <TextBox Grid.Row="4" Grid.Column="1" Style="{StaticResource Num}" Text="{Binding MaxDisplayedRows, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+                </GroupBox>
+
+                <TextBox Text="{Binding SettingsPathText, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                         Foreground="{DynamicResource Spy.Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10" />
+
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

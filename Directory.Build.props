@@ -30,6 +30,9 @@
     <Company>RAS Group</Company>
     <Product>RAS v. 2.0</Product>
     <Version>2.0.0</Version>
+    <!-- коммит git в сборку не пишем: иначе загрузчик «менялся» бы с каждым коммитом и просил переустановки;
+         коммит сборки записан в build.txt (tools\Release.ps1) -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <!-- MSB3277 — конфликт версий внутри ссылок самого Revit API 2026; на работу не влияет и заслоняет настоящие предупреждения -->
     <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);MSB3277</MSBuildWarningsAsMessages>
   </PropertyGroup>

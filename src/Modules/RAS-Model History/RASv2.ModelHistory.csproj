@@ -6,12 +6,26 @@
     <AssemblyName>RASv2.ModelHistory</AssemblyName>
     <RootNamespace>RASv2.ModelHistory</RootNamespace>
     <UseRevitApi>true</UseRevitApi>
+    <UseWPF>true</UseWPF>
     <OutputPath>$(RasOut)parts\</OutputPath>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- ядро лежит в той же папке сборки — отдельная копия рядом с модулем не нужна -->
     <ProjectReference Include="..\..\Core\RASv2.Core.csproj" Private="false" />
+    <!-- общие для команды настройки: что отслеживать, лимиты (MODULE.md) -->
+    <None Update="RasModelHistory.settings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!--
+    Revit 2023 (.NET Framework) модуль пока не поддерживает (MODULE.md, шаг 6): собирается только описание модуля,
+    чтобы ядро показало «не работает в Revit 2023», а не потеряло модуль.
+  -->
+  <ItemGroup Condition="'$(RevitVersion)' == '2023'">
+    <Compile Remove="**\*.cs" />
+    <Compile Include="ModelHistoryModule.cs" />
+    <Page Remove="**\*.xaml" />
+    <None Remove="RasModelHistory.settings.json" />
   </ItemGroup>
 
 </Project>

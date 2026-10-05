@@ -35,6 +35,7 @@ namespace RASv2.Core
         public static int RevitYear { get; private set; }
 
         private static readonly List<ModuleSlot> ModuleList = new List<ModuleSlot>();
+        private static RevitEventHub _events;
         public static IReadOnlyList<ModuleSlot> Modules => ModuleList;
 
         /// <summary>Вызывает загрузчик (сигнатуру менять только вместе с ним).</summary>
@@ -47,6 +48,7 @@ namespace RASv2.Core
             RevitYear = revitYear;
             Log.Write(Tag, "Запуск: Revit " + revitYear + ", канал «" + channel + "»");
 
+            _events = new RevitEventHub(app);
             try { app.CreateRibbonTab(TabName); }
             catch (Autodesk.Revit.Exceptions.ArgumentException) { /* вкладка уже есть */ }
 
@@ -66,6 +68,7 @@ namespace RASv2.Core
                 try { slot.Module.Stop(); }
                 catch (Exception ex) { Log.Write(slot.Module.Id, "Ошибка при остановке", ex); }
             }
+            _events?.DetachAll();
         }
 
         private static void StartModule(UIControlledApplication app, ModuleSlot slot)
@@ -80,7 +83,7 @@ namespace RASv2.Core
             try
             {
                 panel = app.CreateRibbonPanel(TabName, module.Title);
-                module.Start(new ModuleContext(module, app, panel));
+                module.Start(new ModuleContext(module, app, panel, _events));
                 slot.State = ModuleCatalog.Running;
             }
             catch (Exception ex)

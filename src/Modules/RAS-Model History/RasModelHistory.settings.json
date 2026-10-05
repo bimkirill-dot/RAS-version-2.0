@@ -1,0 +1,16 @@
+{
+  "TrackParameters": true,
+  "SnapshotOnOpen": true,
+  "SnapshotAllElements": true,
+  "PersistSnapshots": true,
+  "SnapshotCacheDays": 30,
+  "DetectRemoteChanges": true,
+  "RecordNoise": false,
+  "TrackFamilyDocuments": false,
+  "MaxRecordsPerTransaction": 5000,
+  "MaxParamDiffPerTransaction": 500,
+  "MaxSelectionSnapshot": 300,
+  "MaxSnapshotElements": 3000,
+  "DefaultPeriodDays": 7,
+  "MaxDisplayedRows": 50000
+}

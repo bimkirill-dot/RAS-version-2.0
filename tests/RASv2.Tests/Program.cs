@@ -17,6 +17,11 @@ namespace RASv2.Tests
         {
             Console.OutputEncoding = System.Text.Encoding.UTF8;
             Run("Загрузчик: выбор сборки", LoaderTests.All);
+#if REVIT2026
+            Run("RAS-Model History: фильтр", ModelHistoryTests.Filter);
+            Run("RAS-Model History: пары «правка + отмена»", ModelHistoryTests.Undo);
+            Run("RAS-Model History: журнал", ModelHistoryTests.Journal);
+#endif
             Console.WriteLine(_failed == 0 ? "Все проверки прошли." : "Не прошло проверок: " + _failed);
             return _failed == 0 ? 0 : 1;
         }

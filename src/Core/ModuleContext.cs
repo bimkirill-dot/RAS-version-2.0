@@ -9,12 +9,13 @@ namespace RASv2.Core
     {
         private readonly IModule _module;
 
-        public ModuleContext(IModule module, UIControlledApplication application, RibbonPanel panel)
+        public ModuleContext(IModule module, UIControlledApplication application, RibbonPanel panel, RevitEventHub events)
         {
             _module = module;
             Application = application;
             Panel = panel;
             Log = new ModuleLog(module.Id);
+            Events = new ModuleEvents(events, module.Id);
         }
 
         public UIControlledApplication Application { get; }
@@ -22,6 +23,7 @@ namespace RASv2.Core
         public int RevitYear => Host.RevitYear;
         public RibbonPanel Panel { get; }
         public ModuleLog Log { get; }
+        public IRevitEvents Events { get; }
         public string LocalDataDir => Path.Combine(RasPaths.Local, _module.Title);
         public string UserDataDir => Path.Combine(RasPaths.User, _module.Title);
         public string SharedDataDir => Path.Combine(RasPaths.SharedData, _module.Title);

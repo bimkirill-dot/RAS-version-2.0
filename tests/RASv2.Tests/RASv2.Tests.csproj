@@ -10,10 +10,25 @@
     <AssemblyName>RASv2.Tests</AssemblyName>
     <RootNamespace>RASv2.Tests</RootNamespace>
     <OutputPath>$(RasOut)tests\</OutputPath>
+    <MhDir>..\..\src\Modules\RAS-Model History\</MhDir>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="..\..\src\Loader\BuildResolver.cs" Link="Loader\BuildResolver.cs" />
+  </ItemGroup>
+
+  <!-- логика RAS-Model History: модуль пока только для Revit 2026 (.NET 8) -->
+  <ItemGroup Condition="'$(RevitVersion)' == '2026'">
+    <Compile Include="$(MhDir)Tracking\ChangeRecord.cs" Link="ModelHistory\ChangeRecord.cs" />
+    <Compile Include="$(MhDir)Tracking\SyncStatus.cs" Link="ModelHistory\SyncStatus.cs" />
+    <Compile Include="$(MhDir)Tracking\JournalAudit.cs" Link="ModelHistory\JournalAudit.cs" />
+    <Compile Include="$(MhDir)Tracking\JournalDedup.cs" Link="ModelHistory\JournalDedup.cs" />
+    <Compile Include="$(MhDir)Tracking\PeriodDiff.cs" Link="ModelHistory\PeriodDiff.cs" />
+    <Compile Include="$(MhDir)Tracking\UndoPairs.cs" Link="ModelHistory\UndoPairs.cs" />
+    <Compile Include="$(MhDir)UI\RecordFilter.cs" Link="ModelHistory\RecordFilter.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(RevitVersion)' != '2026'">
+    <Compile Remove="ModelHistoryTests.cs" />
   </ItemGroup>
 
 </Project>

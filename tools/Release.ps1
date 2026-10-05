@@ -135,6 +135,30 @@ function Install-DevLoader {
     }
 }
 
+# Прежние отдельные установки модулей (RAS-Model History, бывший SpyPlugin): с ними в Revit журнал писали бы два
+# плагина сразу. Сначала манифест — без него Revit плагин уже не загрузит, даже если папку держит открытый Revit.
+function Remove-LegacyInstalls {
+    foreach ($year in $Years) {
+        $addins = Join-Path $env:APPDATA "Autodesk\Revit\Addins\$year"
+        foreach ($name in @('RasModelHistory', 'SpyPlugin')) {
+            $addin = Join-Path $addins "$name.addin"
+            if (Test-Path $addin) {
+                Remove-Item $addin -Force
+                Write-Host "Убрана прежняя установка $name из Revit $year."
+            }
+            $dir = Join-Path $addins $name
+            if (Test-Path $dir) {
+                try { Remove-Item $dir -Recurse -Force }
+                catch { Write-Warning "Папку $dir держит открытый Revit $year — она удалится при следующем build.cmd (плагин уже не загрузится)." }
+            }
+        }
+    }
+    foreach ($key in @('RasModelHistory', 'SpyPlugin')) {
+        $path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\$key"
+        if (Test-Path $path) { Remove-Item $path -Recurse -Force }
+    }
+}
+
 function Set-DevConfig {
     $dir = Join-Path $env:APPDATA 'RAS_v_2.0'
     New-Item -ItemType Directory -Path $dir -Force | Out-Null
@@ -171,6 +195,7 @@ try {
                 Remove-OldBuilds $yearDir 5
             }
             Install-DevLoader
+            Remove-LegacyInstalls
             Set-DevConfig
             Write-Host ""
             Write-Host "Готово: сборка $id. Перезапустите Revit — подхватится она."

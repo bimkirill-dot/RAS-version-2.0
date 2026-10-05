@@ -1,0 +1,177 @@
+<Window x:Class="RASv2.ModelHistory.UI.ChangesViewWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:RASv2.ModelHistory.UI"
+        Title="RAS-Model History — показать изменения в 3D"
+        Width="560" MinWidth="480" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize" ShowInTaskbar="False"
+        FontSize="12" Background="{DynamicResource Spy.Bg}" Foreground="{DynamicResource Spy.Text}">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <local:ThemeResources />
+            </ResourceDictionary.MergedDictionaries>
+            <BooleanToVisibilityConverter x:Key="BoolToVis" />
+            <Style x:Key="Hint" TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{DynamicResource Spy.Muted}" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+                <Setter Property="FontSize" Value="11" />
+            </Style>
+            <!-- свой ключ, а не неявный стиль: см. CLAUDE.md, «Локальный стиль поверх стиля темы» -->
+            <Style x:Key="Option" TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
+                <Setter Property="Margin" Value="0,3,0,3" />
+            </Style>
+            <Style x:Key="Choice" TargetType="RadioButton" BasedOn="{StaticResource {x:Type RadioButton}}">
+                <Setter Property="Margin" Value="0,3,0,3" />
+            </Style>
+            <!-- выбор цвета: образец + название -->
+            <Style x:Key="ColorPick" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+                <Setter Property="Width" Value="170" />
+                <Setter Property="Height" Value="24" />
+                <Setter Property="Margin" Value="0,2" />
+                <Setter Property="ItemsSource" Value="{Binding ColorChoices}" />
+                <Setter Property="ItemTemplate">
+                    <Setter.Value>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <Border Width="14" Height="14" CornerRadius="2" Background="{Binding Swatch}" Margin="0,0,8,0"
+                                        VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding Label}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+            <Style x:Key="Date" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+                <Setter Property="Width" Value="90" />
+                <Setter Property="Height" Value="22" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+            </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <DockPanel Margin="14,12,14,12">
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+            <TextBlock Text="{Binding Error}" Foreground="{DynamicResource Spy.Warning}" TextWrapping="Wrap" Margin="0,0,0,8"
+                       Visibility="{Binding HasError, Converter={StaticResource BoolToVis}}" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="Показать" Width="100" Height="26" IsDefault="True" Command="{Binding OkCommand}" />
+                <Button Content="Отмена" Width="100" Height="26" Margin="8,0,0,0" IsCancel="True" Command="{Binding CancelCommand}" />
+            </StackPanel>
+        </StackPanel>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+                <TextBlock Style="{StaticResource Hint}" Margin="2,0,0,6"
+                           Text="Из панели берутся период, автор и действия. Поиск, «Фильтр», тип объекта и история выбранных элементов на 3D-вид не влияют." />
+                <GroupBox Header="Период">
+                    <StackPanel>
+                        <ComboBox Width="340" Height="24" HorizontalAlignment="Left" ItemsSource="{Binding Periods}" DisplayMemberPath="Label"
+                                  SelectedItem="{Binding SelectedPeriod}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0" Visibility="{Binding IsCustom, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="с" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBox Style="{StaticResource Date}" Text="{Binding FromText, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="по" VerticalAlignment="Center" Margin="12,0,6,0" />
+                            <TextBox Style="{StaticResource Date}" Text="{Binding ToText, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Style="{StaticResource Hint}" Text="ДД.ММ.ГГГГ; пустое «по» — до сейчас" VerticalAlignment="Center" Margin="10,0,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="Чьи изменения">
+                    <StackPanel>
+                        <CheckBox Style="{StaticResource Option}" Content="Все авторы" IsChecked="{Binding AllAuthors}" />
+                        <ListBox ItemsSource="{Binding Authors}" MaxHeight="130" Margin="20,2,0,0" IsEnabled="{Binding PickAuthors}"
+                                 Visibility="{Binding PickAuthors, Converter={StaticResource BoolToVis}}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <!-- текстом, а не строкой: иначе «_» в имени («Kirill_BIM») WPF принял бы за клавишу доступа -->
+                                    <CheckBox IsChecked="{Binding IsChecked}" Margin="0,1">
+                                        <TextBlock Text="{Binding Label}" />
+                                    </CheckBox>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="Что показать">
+                    <StackPanel>
+                        <CheckBox Style="{StaticResource Option}" Content="Созданные" IsChecked="{Binding ShowCreated}" />
+                        <CheckBox Style="{StaticResource Option}" Content="Изменённые" IsChecked="{Binding ShowModified}" />
+                        <CheckBox Style="{StaticResource Option}" Content="Изменённые без отличий в параметрах" IsChecked="{Binding ShowNoNetChange}"
+                                  ToolTip="Revit отметил «изменён», но параметры к концу периода те же: изменили и вернули, Revit только пересчитал соединения или помещения, элемент лишь заняли для правки. Сюда же — старые записи без сведений «было»." />
+                        <TextBlock Style="{StaticResource Hint}" Margin="20,0,0,4"
+                                   Text="Цвет — по итогу за период: созданный и потом передвинутый элемент считается созданным; изменённым — только тот, что был до начала периода и стал другим. Удалённые на виде не показать — их число будет в легенде." />
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="Цвета">
+                    <StackPanel>
+                        <RadioButton Style="{StaticResource Choice}" GroupName="SpyColor" IsChecked="{Binding ColorByAction}"
+                                     Content="По действию:" />
+                        <Grid Margin="20,2,0,4" IsEnabled="{Binding ColorByAction}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Text="созданное" VerticalAlignment="Center" Margin="0,2,10,2" />
+                            <ComboBox Grid.Row="0" Grid.Column="1" Style="{StaticResource ColorPick}" SelectedItem="{Binding CreatedColor}" />
+                            <TextBlock Grid.Row="1" Text="изменённое" VerticalAlignment="Center" Margin="0,2,10,2" />
+                            <ComboBox Grid.Row="1" Grid.Column="1" Style="{StaticResource ColorPick}" SelectedItem="{Binding ModifiedColor}" />
+                            <TextBlock Grid.Row="2" Text="без отличий" VerticalAlignment="Center" Margin="0,2,10,2" />
+                            <ComboBox Grid.Row="2" Grid.Column="1" Style="{StaticResource ColorPick}" SelectedItem="{Binding NoNetColor}" />
+                        </Grid>
+                        <RadioButton Style="{StaticResource Choice}" GroupName="SpyColor" IsChecked="{Binding ColorByAuthor}"
+                                     Content="По автору: у каждого свой цвет (легенда — в панели)" />
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <TextBlock Text="Остальная модель:" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <ComboBox Width="260" Height="24" ItemsSource="{Binding BackgroundOptions}" DisplayMemberPath="Label"
+                                      SelectedItem="{Binding Background}" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                            <TextBlock Text="Заливка:" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <RadioButton Style="{StaticResource Choice}" GroupName="SpyShade" IsChecked="{Binding Flat}"
+                                         Content="ярко, без теней" Margin="0,3,16,3" />
+                            <RadioButton Style="{StaticResource Choice}" GroupName="SpyShade" IsChecked="{Binding Shaded}"
+                                         Content="объёмно, с тенями" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0"
+                                   Text="Изменённые элементы обведены толстой линией. Если в Revit включены «Тонкие линии» (Вид → Тонкие линии), обводка будет тонкой." />
+                        <Button Style="{StaticResource Spy.LinkButton}" Content="Цвета по умолчанию" HorizontalAlignment="Left"
+                                Margin="0,6,0,0" Command="{Binding ResetColorsCommand}" />
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="Подрезка и видимость">
+                    <StackPanel>
+                        <RadioButton Style="{StaticResource Choice}" GroupName="SpyCrop" IsChecked="{Binding CropChanges}"
+                                     Content="Рамка вокруг изменений" />
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton Style="{StaticResource Choice}" GroupName="SpyCrop" IsChecked="{Binding CropLevels}"
+                                         IsEnabled="{Binding HasLevels}" Content="Этажи: с" VerticalAlignment="Center" />
+                            <ComboBox Width="140" Height="24" Margin="6,0,0,0" ItemsSource="{Binding Levels}" DisplayMemberPath="Label"
+                                      SelectedItem="{Binding LevelFrom}" IsEnabled="{Binding CropLevels}" />
+                            <TextBlock Text="по" VerticalAlignment="Center" Margin="8,0,6,0" />
+                            <ComboBox Width="140" Height="24" ItemsSource="{Binding Levels}" DisplayMemberPath="Label"
+                                      SelectedItem="{Binding LevelTo}" IsEnabled="{Binding CropLevels}" />
+                        </StackPanel>
+                        <RadioButton Style="{StaticResource Choice}" GroupName="SpyCrop" IsChecked="{Binding CropNone}" Content="Без подрезки" />
+                        <WrapPanel Margin="0,6,0,0">
+                            <CheckBox Style="{StaticResource Option}" Content="Скрыть перекрытия" IsChecked="{Binding HideFloors}" Margin="0,3,16,3" />
+                            <CheckBox Style="{StaticResource Option}" Content="Скрыть крыши" IsChecked="{Binding HideRoofs}" Margin="0,3,16,3" />
+                            <CheckBox Style="{StaticResource Option}" Content="Скрыть потолки" IsChecked="{Binding HideCeilings}" Margin="0,3,16,3" />
+                        </WrapPanel>
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0"
+                                   Text="Плагин строит свой вид «RAS-Model History — изменения (…)»; рабочие виды не меняются. Закройте вкладку вида — он удалится сам." />
+                    </StackPanel>
+                </GroupBox>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

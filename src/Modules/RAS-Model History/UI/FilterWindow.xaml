@@ -1,0 +1,99 @@
+<Window x:Class="RASv2.ModelHistory.UI.FilterWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:RASv2.ModelHistory.UI"
+        Title="RAS-Model History — фильтр"
+        Width="860" SizeToContent="Height" MinWidth="640"
+        WindowStartupLocation="CenterOwner" ResizeMode="CanResize" ShowInTaskbar="False"
+        FontSize="12" Background="{DynamicResource Spy.Bg}" Foreground="{DynamicResource Spy.Text}">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <local:ThemeResources />
+            </ResourceDictionary.MergedDictionaries>
+            <BooleanToVisibilityConverter x:Key="BoolToVis" />
+            <!-- значение и сколько записей с ним -->
+            <DataTemplate x:Key="ValueItem">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding CountText}" Margin="16,0,0,0" Foreground="{DynamicResource Spy.Muted}" />
+                    <TextBlock Text="{Binding Value}" TextTrimming="CharacterEllipsis" />
+                </DockPanel>
+            </DataTemplate>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <DockPanel Margin="14,12,14,12">
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0" LastChildFill="False">
+            <Button DockPanel.Dock="Left" Content="Сбросить" Width="100" Height="26" Command="{Binding ResetCommand}"
+                    ToolTip="Убрать все условия" />
+            <Button DockPanel.Dock="Right" Content="Отмена" Width="100" Height="26" Margin="8,0,0,0" IsCancel="True"
+                    Command="{Binding CancelCommand}" />
+            <Button DockPanel.Dock="Right" Content="OK" Width="100" Height="26" IsDefault="True" Command="{Binding OkCommand}" />
+        </DockPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+            <TextBlock Text="{Binding PreviewText}" FontWeight="SemiBold"
+                       ToolTip="Среди записей, которые остались после поиска, периода, автора и других фильтров панели" />
+            <TextBlock Text="{Binding IncompleteText}" Margin="0,2,0,0" Foreground="{DynamicResource Spy.Warning}" TextWrapping="Wrap" />
+            <TextBlock Margin="0,6,0,0" Style="{StaticResource Spy.MutedText}" FontSize="11" TextWrapping="Wrap"
+                       Text="«Параметр элемента»: у созданных и удалённых — значение из журнала (на момент создания или удаления), у изменённых — текущее из модели: журнал хранит только изменившиеся параметры. «Было» и «Стало» есть только у записей, где параметр менялся." />
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+            <TextBlock Text="Показывать записи, для которых выполняются:" VerticalAlignment="Center" Margin="0,0,12,0" />
+            <RadioButton Content="И — все условия" IsChecked="{Binding IsAnd}" GroupName="SpyFilterMode" VerticalAlignment="Center" />
+            <RadioButton Content="ИЛИ — любое из условий" IsChecked="{Binding IsOr}" GroupName="SpyFilterMode" Margin="14,0,0,0"
+                         VerticalAlignment="Center" />
+        </StackPanel>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+            <StackPanel Grid.IsSharedSizeScope="True">
+                <ItemsControl ItemsSource="{Binding Rows}" Focusable="False">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="190" />
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="SpyParam" />
+                                    <ColumnDefinition Width="160" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ComboBox Grid.Column="0" Height="24" ItemsSource="{Binding Fields}" DisplayMemberPath="Label"
+                                          SelectedItem="{Binding Field}" IsSynchronizedWithCurrentItem="False"
+                                          ToolTip="Поле записи, изменённый параметр или параметр элемента">
+                                    <ComboBox.GroupStyle>
+                                        <GroupStyle>
+                                            <GroupStyle.HeaderTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Margin="6,6,0,2"
+                                                               Foreground="{DynamicResource Spy.Muted}" />
+                                                </DataTemplate>
+                                            </GroupStyle.HeaderTemplate>
+                                        </GroupStyle>
+                                    </ComboBox.GroupStyle>
+                                </ComboBox>
+                                <ComboBox Grid.Column="1" Width="200" Height="24" Margin="6,0,0,0" IsEditable="True" IsTextSearchEnabled="True"
+                                          StaysOpenOnEdit="True" ItemsSource="{Binding ParamNames}"
+                                          Text="{Binding ParamName, UpdateSourceTrigger=PropertyChanged}"
+                                          Visibility="{Binding NeedsParam, Converter={StaticResource BoolToVis}}"
+                                          ToolTip="Имя параметра: выберите из списка или начните вводить" />
+                                <ComboBox Grid.Column="2" Height="24" Margin="6,0,0,0" ItemsSource="{Binding Operators}" DisplayMemberPath="Label"
+                                          SelectedItem="{Binding Operator}" />
+                                <ComboBox Grid.Column="3" Height="24" Margin="6,0,0,0" IsEditable="True" IsTextSearchEnabled="False"
+                                          StaysOpenOnEdit="True" ItemsSource="{Binding Suggestions}" ItemTemplate="{StaticResource ValueItem}"
+                                          TextSearch.TextPath="Value" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
+                                          DropDownOpened="ValueDropDownOpened" ToolTip="{Binding ValueToolTip}"
+                                          Visibility="{Binding NeedsValue, Converter={StaticResource BoolToVis}}" />
+                                <Button Grid.Column="4" Style="{StaticResource Spy.IconButton}" Content="&#xE711;" FontSize="11" Margin="4,0,0,0"
+                                        Command="{Binding RemoveCommand}" ToolTip="Убрать условие" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button Style="{StaticResource Spy.LinkButton}" Content="+ Добавить условие" HorizontalAlignment="Left" Margin="0,2,0,0"
+                        Command="{Binding AddCommand}" />
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

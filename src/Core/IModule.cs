@@ -39,6 +39,9 @@ namespace RASv2.Core
         /// <summary>Панель модуля на вкладке «RAS v. 2.0».</summary>
         RibbonPanel Panel { get; }
 
+        /// <summary>События Revit — подписка только через ядро.</summary>
+        IRevitEvents Events { get; }
+
         /// <summary>Журнал ошибок с меткой модуля.</summary>
         ModuleLog Log { get; }
 

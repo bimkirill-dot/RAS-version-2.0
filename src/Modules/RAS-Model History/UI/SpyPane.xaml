@@ -1,0 +1,685 @@
+<UserControl x:Class="RASv2.ModelHistory.UI.SpyPane"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:RASv2.ModelHistory.UI"
+             Background="{DynamicResource Spy.Bg}"
+             Foreground="{DynamicResource Spy.Text}"
+             FontSize="12"
+             MinWidth="360"
+             MinHeight="260">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- плоское оформление и цвета темы (светлая / тёмная) -->
+                <local:ThemeResources />
+            </ResourceDictionary.MergedDictionaries>
+            <BooleanToVisibilityConverter x:Key="BoolToVis" />
+            <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis" />
+            <local:InverseBoolConverter x:Key="InverseBool" />
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid Margin="6">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- ═══ Верхняя строка: модель, вкладки, общие действия ═══ -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,6">
+            <DockPanel LastChildFill="False">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Style="{StaticResource Spy.IconButton}" Content="3D" FontFamily="Segoe UI" FontWeight="SemiBold" FontSize="12"
+                            Command="{Binding ShowIn3DCommand}"
+                            ToolTip="Показать изменения в 3D: свой 3D-вид, где изменения за период раскрашены, а остальная модель бледная. Рабочие виды не меняются." />
+                    <Button Style="{StaticResource Spy.IconButton}" Content="&#xE72C;" Command="{Binding RefreshCommand}"
+                            ToolTip="Обновить: перечитать журналы всех пользователей" />
+                    <Button Style="{StaticResource Spy.IconButton}" Content="&#xE896;" Command="{Binding ExportCommand}"
+                            ToolTip="Экспорт CSV: сохранить отфильтрованный список в файл для Excel" />
+                    <Button x:Name="MoreButton" Style="{StaticResource Spy.IconButton}" Content="&#xE712;" Click="MoreButton_Click"
+                            IsHitTestVisible="{Binding ContextMenu.IsOpen, RelativeSource={RelativeSource Self}, Converter={StaticResource InverseBool}}"
+                            ToolTip="Меню: актуализация журнала, выделение в модели, папка журнала, настройки">
+                        <Button.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Актуализировать журнал…" Command="{Binding ActualizeCommand}"
+                                          ToolTip="Сверить журнал с тем, что сейчас в модели, и убрать записи об изменениях, которых в модели нет (несинхронизированные и потерянные). Перед удалением будет показан список." />
+                                <MenuItem Header="Выделить все из списка в модели" Command="{Binding SelectAllInModelCommand}"
+                                          ToolTip="Выделить в Revit все существующие элементы из текущего списка" />
+                                <Separator />
+                                <MenuItem Header="Открыть папку журнала" Command="{Binding OpenLogFolderCommand}" />
+                                <MenuItem Header="Настройки…" Command="{Binding SettingsCommand}" />
+                            </ContextMenu>
+                        </Button.ContextMenu>
+                    </Button>
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,8,0"
+                            IsEnabled="{Binding IsNormalMode}">
+                    <RadioButton Style="{StaticResource Spy.ViewTab}" GroupName="SpyView" Content="Изменения"
+                                 IsChecked="{Binding IsChangesView}" ToolTip="Кто, что и когда создал, изменил или удалил" />
+                    <RadioButton Style="{StaticResource Spy.ViewTab}" GroupName="SpyView" Content="События модели"
+                                 IsChecked="{Binding IsEventsView}" ToolTip="Кто и когда открыл, синхронизировал, сохранил и закрыл модель" />
+                </StackPanel>
+                <!-- DockPanel ограничивает ширину названия — длинное обрезается многоточием -->
+                <TextBlock DockPanel.Dock="Left" Text="{Binding ModelTitle}" FontWeight="SemiBold" FontSize="14"
+                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip="{Binding ModelInfo}" />
+                <TextBlock DockPanel.Dock="Left" Text="{Binding ModelMode}" Style="{StaticResource Spy.MutedText}" FontSize="11" Margin="8,1,0,0"
+                           VerticalAlignment="Center" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" ToolTip="{Binding ModelInfo}" />
+            </DockPanel>
+            <!-- общая папка недоступна: держится, пока связи нет (не мимолётная строка состояния) -->
+            <Border Margin="0,4,0,0" Padding="6,3" CornerRadius="3" Background="{DynamicResource Spy.WarningBg}"
+                    BorderBrush="{DynamicResource Spy.WarningBorder}" BorderThickness="1" HorizontalAlignment="Left"
+                    Visibility="{Binding HasFolderProblem, Converter={StaticResource BoolToVis}}" ToolTip="{Binding FolderProblem}">
+                <DockPanel>
+                    <TextBlock Text="&#xE7BA;" FontFamily="Segoe MDL2 Assets" FontSize="13" Foreground="{DynamicResource Spy.Warning}"
+                               Margin="0,0,6,0" VerticalAlignment="Center" />
+                    <TextBlock Foreground="{DynamicResource Spy.Warning}" TextWrapping="Wrap" VerticalAlignment="Center"
+                               Text="Нет связи с общей папкой журналов: изменения коллег не обновляются, ваши копятся на этом компьютере и уйдут, когда связь появится." />
+                </DockPanel>
+            </Border>
+        </StackPanel>
+
+        <!-- ═══ Фильтры (скрыты, пока показан список несоответствий актуализации) ═══ -->
+        <StackPanel Grid.Row="1" Visibility="{Binding IsNormalMode, Converter={StaticResource BoolToVis}}">
+            <DockPanel x:Name="FilterBar" LastChildFill="True">
+                <WrapPanel x:Name="FilterGroup" DockPanel.Dock="Right" Orientation="Horizontal" Margin="8,0,0,0">
+                    <TextBlock Style="{StaticResource Spy.FilterLabel}" Text="Период:" />
+                    <ComboBox Style="{StaticResource Spy.FilterCombo}" ItemsSource="{Binding PeriodOptions}" MinWidth="96"
+                              DisplayMemberPath="Label" SelectedItem="{Binding SelectedPeriod}" />
+                    <TextBlock Style="{StaticResource Spy.FilterLabel}" Text="Автор:" />
+                    <ComboBox Style="{StaticResource Spy.FilterCombo}" ItemsSource="{Binding Authors}" MinWidth="120" MaxWidth="220"
+                              SelectedItem="{Binding SelectedAuthor}" />
+                    <StackPanel Orientation="Horizontal" Visibility="{Binding IsChangesView, Converter={StaticResource BoolToVis}}">
+                        <!-- «Действие»: флажки в выпадающем списке -->
+                        <ToggleButton x:Name="KindButton" Style="{StaticResource Spy.DropButton}"
+                                      IsHitTestVisible="{Binding IsOpen, ElementName=KindPopup, Converter={StaticResource InverseBool}}"
+                                      ToolTip="Какие записи показывать: создание, изменение, удаление">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Действие: " Foreground="{DynamicResource Spy.Muted}" />
+                                <TextBlock Text="{Binding KindSummary}" />
+                                <TextBlock Text="&#xE70D;" FontFamily="Segoe MDL2 Assets" FontSize="9" Margin="6,0,0,0" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Spy.Muted}" />
+                            </StackPanel>
+                        </ToggleButton>
+                        <Popup x:Name="KindPopup" PlacementTarget="{Binding ElementName=KindButton}" Placement="Bottom"
+                               StaysOpen="False" AllowsTransparency="True" VerticalOffset="2"
+                               IsOpen="{Binding IsChecked, ElementName=KindButton, Mode=TwoWay}">
+                            <Border Background="{DynamicResource Spy.Surface}" BorderBrush="{DynamicResource Spy.Border}" BorderThickness="1"
+                                    CornerRadius="4" Padding="10,6">
+                                <StackPanel>
+                                    <CheckBox Style="{StaticResource Spy.FilterCheck}" Content="Создание" IsChecked="{Binding ShowCreated}"
+                                              Foreground="{DynamicResource Spy.Success}" />
+                                    <CheckBox Style="{StaticResource Spy.FilterCheck}" Content="Изменение" IsChecked="{Binding ShowModified}"
+                                              Foreground="{DynamicResource Spy.Accent}" />
+                                    <CheckBox Style="{StaticResource Spy.FilterCheck}" Content="Удаление" IsChecked="{Binding ShowDeleted}"
+                                              Foreground="{DynamicResource Spy.Danger}" />
+                                    <Button Style="{StaticResource Spy.LinkButton}" Content="Все" Margin="0,4,0,0" HorizontalAlignment="Left"
+                                            Command="{Binding AllKindsCommand}" />
+                                </StackPanel>
+                            </Border>
+                        </Popup>
+                        <ToggleButton Style="{StaticResource Spy.DropButton}" IsChecked="{Binding IsMoreOpen}"
+                                      ToolTip="Тип объекта, столбец параметра, дубли, статус хранилища, служебные элементы">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding MoreText}" />
+                                <TextBlock Text="&#xE70D;" FontFamily="Segoe MDL2 Assets" FontSize="9" Margin="6,0,0,0" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Spy.Muted}" />
+                            </StackPanel>
+                        </ToggleButton>
+                        <Button Margin="0,0,6,4" Height="24" Padding="8,2" Command="{Binding OpenFilterCommand}"
+                                ToolTip="Фильтр — как в фильтрах Revit: условия «равно», «содержит», «больше»… по полям записи, изменённым параметрам и параметрам элемента; «И» / «ИЛИ»">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE71C;" FontFamily="Segoe MDL2 Assets" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{DynamicResource Spy.Muted}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasFilter}" Value="True">
+                                                    <Setter Property="Foreground" Value="{DynamicResource Spy.Accent}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <TextBlock Text="{Binding FilterSummary}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Margin="0,0,6,4" Height="24" Padding="8,2" Command="{Binding OpenSortCommand}"
+                                ToolTip="Сортировка и группировка — как в спецификации Revit: до четырёх уровней, заголовки групп. Щелчок по заголовку столбца тоже сортирует.">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE8CB;" FontFamily="Segoe MDL2 Assets" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Spy.Muted}" />
+                                <TextBlock Text="{Binding SortSummary}" MaxWidth="220" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <ToggleButton Style="{StaticResource Spy.IconToggle}" Content="&#xE890;" Margin="0,0,0,4"
+                                      IsChecked="{Binding FollowSelection}"
+                                      ToolTip="Следить за выделением: список сам показывает историю элементов, выделенных в Revit" />
+                    </StackPanel>
+                </WrapPanel>
+                <!-- Поиск: на всю оставшуюся ширину -->
+                <Grid Height="24" MinWidth="160" Margin="0,0,0,4">
+                    <TextBox x:Name="SearchBox" Padding="20,0,22,0" VerticalContentAlignment="Center"
+                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="Имя, категория, тип, ID, автор, команда, параметр, значение (в том числе у удалённых элементов)" />
+                    <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="11" Margin="7,0,0,0"
+                               VerticalAlignment="Center" HorizontalAlignment="Left" Foreground="{DynamicResource Spy.Muted}"
+                               IsHitTestVisible="False" />
+                    <TextBlock Text="Поиск: имя, ID, параметр, значение…" Margin="24,0,0,0" VerticalAlignment="Center"
+                               Foreground="{DynamicResource Spy.Faint}" IsHitTestVisible="False"
+                               Visibility="{Binding HasSearchText, Converter={StaticResource InverseBoolToVis}}" />
+                    <Button Style="{StaticResource Spy.ChipRemove}" Content="&#xE711;" HorizontalAlignment="Right" Margin="0,0,3,0"
+                            Foreground="{DynamicResource Spy.Muted}" Command="{Binding ClearSearchCommand}" ToolTip="Очистить поиск"
+                            Visibility="{Binding HasSearchText, Converter={StaticResource BoolToVis}}" />
+                </Grid>
+            </DockPanel>
+
+            <!-- «Ещё»: редкие фильтры и вид списка (только на вкладке «Изменения») -->
+            <Grid Visibility="{Binding IsChangesView, Converter={StaticResource BoolToVis}}">
+                <Border Margin="0,0,0,4" Padding="8,4,8,0" CornerRadius="4" Background="{DynamicResource Spy.SurfaceAlt}"
+                        BorderBrush="{DynamicResource Spy.Line}" BorderThickness="1"
+                        Visibility="{Binding IsMoreOpen, Converter={StaticResource BoolToVis}}">
+                    <WrapPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Spy.FilterLabel}" Text="Тип объекта:" />
+                        <ComboBox Style="{StaticResource Spy.FilterCombo}" ItemsSource="{Binding GroupOptions}" MinWidth="150"
+                                  DisplayMemberPath="Label" SelectedItem="{Binding SelectedGroup}" />
+                        <StackPanel Orientation="Horizontal"
+                                    ToolTip="Показать в таблице значение параметра — в том числе у удалённых элементов (значение на момент удаления). Список — все параметры, найденные у элементов модели.">
+                            <TextBlock Style="{StaticResource Spy.FilterLabel}" Text="Столбец параметра:" />
+                            <ComboBox x:Name="ParamCombo" Style="{StaticResource Spy.FilterCombo}" Width="190" IsEditable="True"
+                                      IsTextSearchEnabled="True" StaysOpenOnEdit="True" ItemsSource="{Binding ParamNames}"
+                                      Text="{Binding ParamColumnName, UpdateSourceTrigger=PropertyChanged, Delay=400}" />
+                        </StackPanel>
+                        <CheckBox Style="{StaticResource Spy.FilterCheck}" Content="Без дублей" IsChecked="{Binding HideDuplicates}"
+                                  ToolTip="Скрывать записи «Синхронизация», если то же изменение уже записал сам автор" />
+                        <CheckBox Style="{StaticResource Spy.FilterCheck}" Content="{Binding HideVoidLabel}" IsChecked="{Binding HideVoid}"
+                                  ToolTip="Скрыть изменения, которых фактически не было: модель закрыта без синхронизации и без сохранения, или локальная копия заменена. В итогах внизу они не считаются в любом случае." />
+                        <CheckBox Style="{StaticResource Spy.FilterCheck}" Content="Скрыть отменённые (Ctrl+Z)" IsChecked="{Binding HideUndone}"
+                                  ToolTip="Скрыть пары «правка + её отмена»: по итогу ничего не изменилось. Повтор (Ctrl+Y) остаётся виден." />
+                        <CheckBox Style="{StaticResource Spy.FilterCheck}" Content="Показать убранные" IsChecked="{Binding ShowExcluded}"
+                                  ToolTip="Показать записи, убранные из журнала при актуализации (значок ⊘)" />
+                        <CheckBox Style="{StaticResource Spy.FilterCheck}" Content="Служебные элементы" IsChecked="{Binding ShowNoise}"
+                                  Visibility="{Binding ShowNoiseOption, Converter={StaticResource BoolToVis}}"
+                                  ToolTip="Показывать внутренние элементы Revit: линии эскизов, временные размеры и т. п." />
+                    </WrapPanel>
+                </Border>
+            </Grid>
+
+            <!-- Включённые фильтры: каждый снимается крестиком -->
+            <WrapPanel Orientation="Horizontal" Margin="0,0,0,4" Visibility="{Binding HasChips, Converter={StaticResource BoolToVis}}">
+                <ItemsControl ItemsSource="{Binding Chips}" Focusable="False">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,0,6,2" Padding="8,1,2,1" CornerRadius="10" Background="{DynamicResource Spy.AccentBg}"
+                                    BorderBrush="{DynamicResource Spy.AccentBorder}" BorderThickness="1">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Text}" Foreground="{DynamicResource Spy.AccentText}" VerticalAlignment="Center" />
+                                    <Button Style="{StaticResource Spy.ChipRemove}" Content="&#xE711;"
+                                            Command="{Binding RemoveCommand}" ToolTip="{Binding ToolTip}" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button Style="{StaticResource Spy.LinkButton}" Content="Сбросить все" Margin="4,0,0,2"
+                        Command="{Binding ResetFiltersCommand}" ToolTip="Снять все фильтры (период и столбец параметра остаются)" />
+            </WrapPanel>
+        </StackPanel>
+
+        <!-- ═══ Актуализация: ход проверки и список несоответствий ═══ -->
+        <StackPanel Grid.Row="2">
+            <!-- легенда 3D-вида изменений: цвета на виде, сколько показано и чего на виде нет -->
+            <Border Margin="0,0,0,6" Padding="8,5" CornerRadius="4" Background="{DynamicResource Spy.AccentBg}"
+                    BorderBrush="{DynamicResource Spy.AccentBorder}" BorderThickness="1"
+                    Visibility="{Binding HasChangesView, Converter={StaticResource BoolToVis}}">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Удалить вид" Margin="8,0,0,0" VerticalAlignment="Top"
+                            Command="{Binding CloseChangesViewCommand}"
+                            ToolTip="Удалить 3D-вид изменений. Он удаляется и сам, когда закрыта его вкладка." />
+                    <StackPanel>
+                        <WrapPanel>
+                            <TextBlock Text="{Binding ChangesViewTitle}" FontWeight="SemiBold" Foreground="{DynamicResource Spy.AccentText}"
+                                       Margin="0,0,12,2" VerticalAlignment="Center" />
+                            <ItemsControl ItemsSource="{Binding ChangesViewLegend}" Focusable="False" VerticalAlignment="Center">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,12,2">
+                                            <Border Width="12" Height="12" CornerRadius="2" Background="{Binding Fill}" BorderBrush="{Binding Line}"
+                                                    BorderThickness="1.5" VerticalAlignment="Center" Margin="0,0,5,0" />
+                                            <TextBlock Text="{Binding Label}" VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding CountText}" Style="{StaticResource Spy.MutedText}" Margin="4,0,0,0"
+                                                       VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </WrapPanel>
+                        <TextBlock Text="{Binding ChangesViewNote}" Style="{StaticResource Spy.MutedText}" FontSize="11" TextWrapping="Wrap"
+                                   Visibility="{Binding HasChangesViewNote, Converter={StaticResource BoolToVis}}" />
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+            <Border Margin="0,0,0,6" Padding="8,5" CornerRadius="4" Background="{DynamicResource Spy.InfoBg}"
+                    BorderBrush="{DynamicResource Spy.Line}" BorderThickness="1"
+                    Visibility="{Binding IsActualizing, Converter={StaticResource BoolToVis}}">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Остановить" Margin="8,0,0,0"
+                            Command="{Binding StopActualizeCommand}" ToolTip="Прервать проверку. Журнал не изменится." />
+                    <ProgressBar DockPanel.Dock="Left" Width="60" Height="6" IsIndeterminate="True" Margin="0,0,8,0" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding ActualizeText}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                </DockPanel>
+            </Border>
+            <Border Margin="0,0,0,6" Padding="8,5" CornerRadius="4" Background="{DynamicResource Spy.WarningBg}"
+                    BorderBrush="{DynamicResource Spy.WarningBorder}" BorderThickness="1"
+                    Visibility="{Binding HasPurgePreview, Converter={StaticResource BoolToVis}}">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Content="{Binding ConfirmPurgeText}" FontWeight="SemiBold" Margin="8,0,0,0"
+                                Command="{Binding ConfirmPurgeCommand}"
+                                ToolTip="Записи будут скрыты у всех пользователей. Файлы журнала не меняются — в журнал добавляется отметка, кто и когда убрал записи." />
+                        <Button Content="Отмена" Margin="6,0,0,0" Command="{Binding CancelPurgeCommand}"
+                                ToolTip="Вернуться к журналу, ничего не меняя" />
+                    </StackPanel>
+                    <TextBlock Text="&#xE7BA;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="{DynamicResource Spy.Warning}"
+                               Margin="0,0,8,0" VerticalAlignment="Center" DockPanel.Dock="Left" />
+                    <TextBlock Text="{Binding PurgeText}" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{DynamicResource Spy.Warning}" />
+                </DockPanel>
+            </Border>
+        </StackPanel>
+
+        <!-- ═══ Список и подробности: справа при широкой панели, снизу — при узкой (раскладку задаёт код окна) ═══ -->
+        <Grid Grid.Row="3" x:Name="MainArea">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MinWidth="240" />
+                <ColumnDefinition Width="5" />
+                <ColumnDefinition Width="380" MinWidth="260" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" MinHeight="100" />
+                <RowDefinition Height="0" />
+                <RowDefinition Height="0" />
+            </Grid.RowDefinitions>
+
+            <Grid x:Name="ListHost" Grid.Row="0" Grid.Column="0">
+                <!-- Изменения -->
+                <DataGrid x:Name="LogGrid"
+                          Visibility="{Binding IsChangesView, Converter={StaticResource BoolToVis}}"
+                          ItemsSource="{Binding ChangeRows}"
+                          SelectedItem="{Binding SelectedChangeRow, Mode=TwoWay}"
+                          SelectionMode="Single" SelectionUnit="FullRow"
+                          CanUserReorderColumns="True" CanUserResizeColumns="True" CanUserSortColumns="True"
+                          EnableRowVirtualization="True" EnableColumnVirtualization="True"
+                          VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                          VirtualizingPanel.IsVirtualizingWhenGrouping="True" VirtualizingPanel.ScrollUnit="Pixel">
+                    <!-- заголовки групп «Сортировки и группировки» (уровни с «Заголовком»), сворачиваются ▸ -->
+                    <DataGrid.GroupStyle>
+                        <GroupStyle>
+                            <GroupStyle.ContainerStyle>
+                                <Style TargetType="GroupItem">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="GroupItem">
+                                                <Expander x:Name="GroupExpander" Style="{StaticResource Spy.GroupExpander}"
+                                                          IsExpanded="{Binding Name.IsExpanded, Mode=TwoWay}">
+                                                    <Expander.Header>
+                                                        <TextBlock Text="{Binding Name.Title}" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                    </Expander.Header>
+                                                    <ItemsPresenter />
+                                                </Expander>
+                                                <ControlTemplate.Triggers>
+                                                    <!-- вложенные заголовки сдвигаются вправо (строки таблицы — нет, чтобы не съехать со столбцов) -->
+                                                    <DataTrigger Binding="{Binding Name.Level}" Value="1">
+                                                        <Setter TargetName="GroupExpander" Property="Padding" Value="18,0,0,0" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Name.Level}" Value="2">
+                                                        <Setter TargetName="GroupExpander" Property="Padding" Value="36,0,0,0" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Name.Level}" Value="3">
+                                                        <Setter TargetName="GroupExpander" Property="Padding" Value="54,0,0,0" />
+                                                    </DataTrigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </GroupStyle.ContainerStyle>
+                        </GroupStyle>
+                    </DataGrid.GroupStyle>
+                    <DataGrid.RowStyle>
+                        <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                            <Style.Triggers>
+                                <!-- изменение не попало в хранилище — бледно и курсивом -->
+                                <DataTrigger Binding="{Binding IsVoid}" Value="True">
+                                    <Setter Property="Foreground" Value="{DynamicResource Spy.Faint}" />
+                                    <Setter Property="FontStyle" Value="Italic" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </DataGrid.RowStyle>
+                    <!-- пункты меню собирает код окна: они зависят от строки и столбца под мышью -->
+                    <DataGrid.ContextMenu>
+                        <ContextMenu />
+                    </DataGrid.ContextMenu>
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn x:Name="ColTime" Header="Время" SortMemberPath="Record.Time" Width="112">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding TimeShort}" ToolTip="{Binding TimeText}" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn x:Name="ColKind" Header="Действие" SortMemberPath="KindText" Width="92">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Style="{StaticResource Spy.KindText}" Text="{Binding KindText}" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn x:Name="ColAuthor" Header="Автор" Binding="{Binding AuthorText}" Width="100" />
+                        <DataGridTemplateColumn x:Name="ColObject" Header="Объект" SortMemberPath="Name" Width="260">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <DockPanel x:Name="ObjectPanel" LastChildFill="True">
+                                        <Button DockPanel.Dock="Left" Style="{StaticResource Spy.ChipRemove}" Margin="0,0,4,0"
+                                                Foreground="{DynamicResource Spy.Muted}" Content="{Binding ExpandGlyph}"
+                                                Visibility="{Binding IsGroupHeader, Converter={StaticResource BoolToVis}}"
+                                                Command="{Binding DataContext.ToggleGroupCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                CommandParameter="{Binding}" ToolTip="Раскрыть или свернуть операцию"
+                                                PreviewMouseLeftButtonDown="ExpandButton_PreviewMouseLeftButtonDown" />
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock x:Name="ObjectTitle" Text="{Binding ObjectTitle}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{Binding ObjectSubtitle}" FontSize="11" TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource Spy.Muted}" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding IsGroupHeader}" Value="True">
+                                            <Setter TargetName="ObjectTitle" Property="FontWeight" Value="SemiBold" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsGroupChild}" Value="True">
+                                            <Setter TargetName="ObjectPanel" Property="Margin" Value="22,0,0,0" />
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn x:Name="ColChanges" Header="Что изменилось" Binding="{Binding ParamsText}" Width="*" MinWidth="160" CanUserSort="False" />
+                        <DataGridTemplateColumn x:Name="ColStatus" Header="Статус" SortMemberPath="StatusKey" Width="170">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <DockPanel Background="Transparent" ToolTip="{Binding StatusTip}">
+                                        <TextBlock DockPanel.Dock="Left" Style="{StaticResource Spy.StatusIcon}" Text="{Binding StatusGlyph}"
+                                                   Margin="0,0,6,0" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding StatusLabel}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                    </DockPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn x:Name="ParamColumn" Header="Параметр" Binding="{Binding ParamValue}" Width="170" Visibility="Collapsed" />
+                        <DataGridTextColumn x:Name="ColGroup" Header="Тип объекта" Binding="{Binding GroupText}" Width="110" Visibility="Collapsed" />
+                        <DataGridTextColumn x:Name="ColCategory" Header="Категория" Binding="{Binding Category}" Width="120" Visibility="Collapsed" />
+                        <DataGridTextColumn x:Name="ColType" Header="Тип / семейство" Binding="{Binding TypeName}" Width="200" Visibility="Collapsed" />
+                        <DataGridTextColumn x:Name="ColId" Header="ID" Binding="{Binding IdText}" SortMemberPath="Record.ElementId" Width="74" Visibility="Collapsed" />
+                        <DataGridTextColumn x:Name="ColTransaction" Header="Команда Revit" Binding="{Binding Transaction}" Width="150" Visibility="Collapsed" />
+                        <DataGridTextColumn x:Name="ColLevel" Header="Уровень" Binding="{Binding Level}" Width="90" Visibility="Collapsed" />
+                        <DataGridTextColumn x:Name="ColWorkset" Header="Рабочий набор" Binding="{Binding Workset}" Width="110" Visibility="Collapsed" />
+                        <DataGridTextColumn x:Name="ColView" Header="Вид" Binding="{Binding OwnerView}" Width="110" Visibility="Collapsed" />
+                        <DataGridTextColumn x:Name="ColSource" Header="Источник" Binding="{Binding SourceText}" Width="120" Visibility="Collapsed" />
+                        <DataGridTextColumn x:Name="ColCreator" Header="Создатель элемента" Binding="{Binding Creator}" Width="120" Visibility="Collapsed" />
+                        <DataGridTextColumn x:Name="ColMachine" Header="Компьютер" Binding="{Binding Machine}" Width="100" Visibility="Collapsed" />
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <!-- События модели -->
+                <DataGrid x:Name="EventGrid"
+                          Visibility="{Binding IsEventsView, Converter={StaticResource BoolToVis}}"
+                          ItemsSource="{Binding EventRows}"
+                          SelectedItem="{Binding SelectedEventRow, Mode=TwoWay}"
+                          SelectionMode="Single" SelectionUnit="FullRow"
+                          EnableRowVirtualization="True" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="Время" SortMemberPath="Record.Time" Width="112">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding TimeShort}" ToolTip="{Binding TimeText}" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="Событие" SortMemberPath="EventTypeText" Width="190">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Style="{StaticResource Spy.KindText}" Text="{Binding EventTypeText}" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="Автор" Binding="{Binding AuthorText}" Width="110" />
+                        <DataGridTextColumn Header="Описание" Binding="{Binding Name}" Width="*" MinWidth="200" />
+                        <DataGridTextColumn Header="Компьютер" Binding="{Binding Machine}" Width="110" />
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" Margin="20"
+                           Style="{StaticResource Spy.MutedText}" TextAlignment="Center" IsHitTestVisible="False"
+                           Visibility="{Binding ShowEmptyHint, Converter={StaticResource BoolToVis}}"
+                           Text="{Binding EmptyHint}" />
+            </Grid>
+
+            <GridSplitter x:Name="DetailsSplitter" Grid.Row="0" Grid.Column="1"
+                          HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                          ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
+                          ToolTip="Потяните, чтобы изменить размер подробностей" />
+
+            <!-- ═══ Подробности ═══ -->
+            <Grid x:Name="DetailsHost" Grid.Row="0" Grid.Column="2" Margin="6,0,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- Выделенное в Revit -->
+                <Border Grid.Row="0" Margin="0,0,0,8" Padding="8,5" CornerRadius="4" Background="{DynamicResource Spy.AccentBg}"
+                        BorderBrush="{DynamicResource Spy.AccentBorder}" BorderThickness="1"
+                        Visibility="{Binding HasCard, Converter={StaticResource BoolToVis}}">
+                    <StackPanel>
+                        <TextBlock Text="Выделено в Revit" FontSize="11" Foreground="{DynamicResource Spy.AccentText}" />
+                        <TextBlock Text="{Binding CardTitle}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,1,0,0" />
+                        <TextBlock Text="{Binding CardAuthors}" Style="{StaticResource Spy.MutedText}" Margin="0,1,0,0" />
+                        <Button Style="{StaticResource Spy.LinkButton}" HorizontalAlignment="Left" Margin="0,3,0,0"
+                                Content="{Binding CardHistoryText}" Command="{Binding CardHistoryCommand}"
+                                ToolTip="Показать в журнале историю выделенных элементов" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Ничего не выбрано -->
+                <TextBlock Grid.Row="1" Style="{StaticResource Spy.MutedText}" Margin="2,4"
+                           Text="Выберите запись в списке — здесь появятся подробности: кто, когда и что изменилось."
+                           Visibility="{Binding NoSelectedRow, Converter={StaticResource BoolToVis}}" />
+
+                <!-- Заголовок записи и действия -->
+                <StackPanel Grid.Row="2" Margin="0,0,0,6" Visibility="{Binding HasSelectedRow, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="{Binding DetailTitle}" FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding DetailSubtitle}" TextWrapping="Wrap" Margin="0,1,0,0">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource Spy.Muted}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding DetailKindKey}" Value="created">
+                                        <Setter Property="Foreground" Value="{DynamicResource Spy.Success}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding DetailKindKey}" Value="modified">
+                                        <Setter Property="Foreground" Value="{DynamicResource Spy.Accent}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding DetailKindKey}" Value="deleted">
+                                        <Setter Property="Foreground" Value="{DynamicResource Spy.Danger}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding DetailKindKey}" Value="void">
+                                        <Setter Property="Foreground" Value="{DynamicResource Spy.Faint}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <WrapPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding IsChangesView, Converter={StaticResource BoolToVis}}">
+                        <Button Margin="0,0,4,2" Content="Показать в модели" Command="{Binding ShowInModelCommand}"
+                                ToolTip="Показать элемент в модели (у операции — выделить все её элементы)" />
+                        <Button Margin="0,0,4,2" Content="История элемента" Command="{Binding HistoryCommand}"
+                                ToolTip="Оставить в списке только записи об этом элементе" />
+                        <Button Margin="0,0,4,2" Content="Копировать ID" Command="{Binding CopyIdCommand}" />
+                    </WrapPanel>
+                </StackPanel>
+
+                <TabControl Grid.Row="3" SelectedIndex="{Binding DetailsTabIndex}"
+                            Visibility="{Binding HasSelectedRow, Converter={StaticResource BoolToVis}}">
+                    <TabItem Header="Запись">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel Margin="4,2">
+                                <ItemsControl ItemsSource="{Binding DetailFields}" Grid.IsSharedSizeScope="True" Focusable="False">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,1">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" SharedSizeGroup="FieldLabel" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{Binding Label}" Foreground="{DynamicResource Spy.Muted}"
+                                                           Margin="0,0,10,0" />
+                                                <TextBox Grid.Column="1" Text="{Binding Value, Mode=OneWay}" IsReadOnly="True"
+                                                         BorderThickness="0" Background="Transparent" Padding="0"
+                                                         TextWrapping="Wrap" ToolTip="{Binding ToolTip}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="{Binding DetailNote}" Style="{StaticResource Spy.MutedText}" Margin="0,8,0,0"
+                                           Visibility="{Binding HasDetailNote, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
+                    <TabItem Header="{Binding ChangesTabHeader}" Visibility="{Binding HasElementDetails, Converter={StaticResource BoolToVis}}">
+                        <Grid>
+                            <DataGrid Style="{StaticResource Spy.SmallGrid}" ItemsSource="{Binding SelectedParams}"
+                                      Visibility="{Binding HasSelectedParams, Converter={StaticResource BoolToVis}}">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Параметр" Binding="{Binding Name}" Width="2*" />
+                                    <DataGridTextColumn Header="Было" Binding="{Binding Old}" Width="3*">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource Spy.Muted}" />
+                                                <Setter Property="TextWrapping" Value="Wrap" />
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                    <DataGridTextColumn Header="Стало" Binding="{Binding New}" Width="3*">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="TextWrapping" Value="Wrap" />
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                            <TextBlock Text="{Binding ChangesEmptyText}" Style="{StaticResource Spy.MutedText}" Margin="6,6"
+                                       Visibility="{Binding HasSelectedParams, Converter={StaticResource InverseBoolToVis}}" />
+                        </Grid>
+                    </TabItem>
+                    <TabItem Header="Все параметры" Visibility="{Binding HasElementDetails, Converter={StaticResource BoolToVis}}">
+                        <DockPanel>
+                            <Grid DockPanel.Dock="Top" Height="24" Margin="2,2,2,2">
+                                <TextBox Padding="20,0,4,0" VerticalContentAlignment="Center"
+                                         Text="{Binding ParamFilterText, UpdateSourceTrigger=PropertyChanged, Delay=200}"
+                                         ToolTip="Найти параметр по имени или значению" />
+                                <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="11" Margin="7,0,0,0"
+                                           VerticalAlignment="Center" HorizontalAlignment="Left" Foreground="{DynamicResource Spy.Muted}"
+                                           IsHitTestVisible="False" />
+                            </Grid>
+                            <TextBlock DockPanel.Dock="Top" Text="{Binding SelectedAllParamsTitle}" Style="{StaticResource Spy.MutedText}" Margin="2,2" />
+                            <DataGrid Style="{StaticResource Spy.SmallGrid}" ItemsSource="{Binding SelectedAllParams}">
+                                <DataGrid.Columns>
+                                    <DataGridTemplateColumn Header="Параметр" Width="2*" SortMemberPath="Name">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Name}" FontWeight="{Binding Weight}" />
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn Header="Значение" Width="3*" SortMemberPath="Value">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Value}" FontWeight="{Binding Weight}" TextWrapping="Wrap" />
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
+                    </TabItem>
+                    <TabItem Header="{Binding HistoryTabHeader}" Visibility="{Binding HasElementDetails, Converter={StaticResource BoolToVis}}">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Style="{StaticResource Spy.MutedText}" FontSize="11" Margin="2,0,2,4"
+                                       Text="Все записи об этом элементе за выбранный период. Щелчок — показать запись в списке." />
+                            <ListBox ItemsSource="{Binding ElementHistory}" SelectedItem="{Binding SelectedHistoryItem}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="112" />
+                                                <ColumnDefinition Width="82" />
+                                                <ColumnDefinition Width="90" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding TimeText}" ToolTip="{Binding TimeTip}" FontWeight="{Binding Weight}" />
+                                            <TextBlock Grid.Column="1" Style="{StaticResource Spy.KindText}" Text="{Binding KindText}" />
+                                            <TextBlock Grid.Column="2" Text="{Binding AuthorText}" TextTrimming="CharacterEllipsis" FontWeight="{Binding Weight}" />
+                                            <TextBlock Grid.Column="3" Text="{Binding Summary}" TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource Spy.Muted}" ToolTip="{Binding Summary}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </DockPanel>
+                    </TabItem>
+                </TabControl>
+            </Grid>
+        </Grid>
+
+        <!-- ═══ Строка состояния ═══ -->
+        <DockPanel Grid.Row="4" Margin="0,5,0,0" LastChildFill="True">
+            <ProgressBar DockPanel.Dock="Left" Width="60" Height="6" IsIndeterminate="True" Margin="0,0,6,0"
+                         Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}" />
+            <TextBlock DockPanel.Dock="Left" Text="{Binding SummaryText}" Style="{StaticResource Spy.MutedText}" TextWrapping="NoWrap" />
+            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal"
+                        Visibility="{Binding HasStats, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text=" · " Style="{StaticResource Spy.MutedText}" />
+                <TextBlock Text="{Binding StatCreated}" Foreground="{DynamicResource Spy.Success}" />
+                <TextBlock Text=" · " Style="{StaticResource Spy.MutedText}" />
+                <TextBlock Text="{Binding StatModified}" Foreground="{DynamicResource Spy.Accent}" />
+                <TextBlock Text=" · " Style="{StaticResource Spy.MutedText}" />
+                <TextBlock Text="{Binding StatDeleted}" Foreground="{DynamicResource Spy.Danger}" />
+            </StackPanel>
+            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Margin="16,0,0,0"
+                        Visibility="{Binding HasWarmup, Converter={StaticResource BoolToVis}}"
+                        ToolTip="Плагин в фоне запоминает элементы и их параметры, чтобы знать «было» для любого изменения. Работать в модели можно как обычно.">
+                <ProgressBar Width="60" Height="6" Minimum="0" Maximum="100" Value="{Binding WarmupPercent, Mode=OneWay}"
+                             VerticalAlignment="Center" Margin="0,0,6,0" />
+                <TextBlock Text="{Binding WarmupText}" Style="{StaticResource Spy.MutedText}" TextWrapping="NoWrap" />
+            </StackPanel>
+            <TextBlock Text="{Binding Status}" Style="{StaticResource Spy.MutedText}" Margin="16,0,0,0" TextAlignment="Right"
+                       TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Status}" />
+        </DockPanel>
+    </Grid>
+</UserControl>
