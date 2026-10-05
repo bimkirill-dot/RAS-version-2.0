@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using RASv2.ModelHistory.Storage;
 using RASv2.ModelHistory.Tracking;
 using RASv2.ModelHistory.UI;
 
@@ -8,7 +10,7 @@ namespace RASv2.Tests
 {
     /// <summary>
     /// Логика модуля RAS-Model History без Revit: фильтр, пары «правка + отмена», актуализация, «Без дублей»,
-    /// итог за период. Пока модуль работает только в Revit 2026, проверки собираются только под 2026.
+    /// итог за период, перенос личных папок. Пока модуль работает только в Revit 2026, проверки собираются только под 2026.
     /// </summary>
     internal static class ModelHistoryTests
     {
@@ -200,6 +202,101 @@ namespace RASv2.Tests
                       diff.Elements["U1"].Id == 20, "перенумерованный элемент");
                 Check(diff.Elements["U2"].Change != NetChange.Created, "отмена удаления посчитана созданием");
             });
+        }
+
+        /// <summary>Перенос личных папок с прежних мест (LegacyFolders): ничего не теряется и не перезаписывается.</summary>
+        public static IEnumerable<KeyValuePair<string, Action>> Folders()
+        {
+            yield return Case("новой папки нет — прежняя переносится целиком", () =>
+            {
+                using (var t = new TempDir())
+                {
+                    t.Write(@"old\ui.json", "вид");
+                    t.Write(@"old\Spool\m1\Иванов@PC_2026-10.jsonl", "запись");
+                    LegacyFolders.Merge(t.Path("old"), t.Path(@"RAS_v_2.0\RAS-Model History"));
+                    Check(!Directory.Exists(t.Path("old")), "прежняя папка осталась");
+                    Check(t.Read(@"RAS_v_2.0\RAS-Model History\ui.json") == "вид", "вид панели не перенесён");
+                    Check(t.Read(@"RAS_v_2.0\RAS-Model History\Spool\m1\Иванов@PC_2026-10.jsonl") == "запись", "буфер не перенесён");
+                }
+            });
+            yield return Case("новая папка есть — недостающее переносится, своё не перезаписывается", () =>
+            {
+                using (var t = new TempDir())
+                {
+                    t.Write(@"new\ui.json", "новый вид");
+                    t.Write(@"new\Cache\m1\a.snap", "новый снимок");
+                    t.Write(@"old\ui.json", "прежний вид");
+                    t.Write(@"old\settings.json", "тема");
+                    t.Write(@"old\Cache\m1\a.snap", "прежний снимок");
+                    t.Write(@"old\Cache\m2\b.snap", "снимок другой модели");
+                    LegacyFolders.Merge(t.Path("old"), t.Path("new"));
+                    Check(t.Read(@"new\ui.json") == "новый вид" && t.Read(@"new\Cache\m1\a.snap") == "новый снимок", "перезаписано");
+                    Check(t.Read(@"new\settings.json") == "тема" && t.Read(@"new\Cache\m2\b.snap") == "снимок другой модели",
+                        "недостающее не перенесено");
+                    Check(t.Read(@"old\ui.json") == "прежний вид", "прежний файл, который не перенесли, удалён");
+                }
+            });
+            yield return Case("неотправленные записи с тем же именем не теряются — переносятся к досылке", () =>
+            {
+                using (var t = new TempDir())
+                {
+                    t.Write(@"new\Spool\m1\Иванов@PC_2026-10.jsonl", "новая");
+                    t.Write(@"old\Spool\m1\Иванов@PC_2026-10.jsonl", "прежняя");
+                    t.Write(@"new\Spool\m1\Иванов@PC_2026-09.jsonl.ab12cd.sending", "своя недосланная");
+                    t.Write(@"old\Spool\m1\Иванов@PC_2026-09.jsonl.ab12cd.sending", "недосланная");
+                    LegacyFolders.Merge(t.Path("old"), t.Path("new"));
+                    var dir = t.Path(@"new\Spool\m1");
+                    var oct = Directory.GetFiles(dir, "Иванов@PC_2026-10.jsonl.legacy*.sending");
+                    var sep = Directory.GetFiles(dir, "Иванов@PC_2026-09.jsonl.legacy*.sending");
+                    Check(t.Read(@"new\Spool\m1\Иванов@PC_2026-10.jsonl") == "новая", "новый буфер перезаписан");
+                    Check(oct.Length == 1 && File.ReadAllText(oct[0]) == "прежняя", "прежние записи октября потеряны");
+                    Check(sep.Length == 1 && File.ReadAllText(sep[0]) == "недосланная", "прежние недосланные записи потеряны");
+                    Check(!Directory.Exists(t.Path("old")), "в прежней папке что-то осталось");
+                }
+            });
+            yield return Case("сначала более новая прежняя папка, затем самая старая", () =>
+            {
+                using (var t = new TempDir())
+                {
+                    t.Write(@"RAS-Model History\ui.json", "вид 2");
+                    t.Write(@"SpyPlugin\ui.json", "вид 1");
+                    t.Write(@"SpyPlugin\state.json", "синхронизации");
+                    LegacyFolders.Merge(t.Path("RAS-Model History"), t.Path("new"));
+                    LegacyFolders.Merge(t.Path("SpyPlugin"), t.Path("new"));
+                    Check(t.Read(@"new\ui.json") == "вид 2" && t.Read(@"new\state.json") == "синхронизации", "порядок переноса");
+                }
+            });
+            yield return Case("прежней папки нет — ничего не происходит", () =>
+            {
+                using (var t = new TempDir())
+                {
+                    LegacyFolders.Merge(t.Path("нет"), t.Path("new"));
+                    Check(!Directory.Exists(t.Path("new")), "создана пустая новая папка");
+                }
+            });
+        }
+
+        /// <summary>Временная папка для проверок переноса.</summary>
+        private sealed class TempDir : IDisposable
+        {
+            private readonly string _root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "rasv2-mh-" + Guid.NewGuid().ToString("N"));
+
+            public string Path(string relative) => System.IO.Path.Combine(_root, relative);
+
+            public void Write(string relative, string text)
+            {
+                var file = Path(relative);
+                Directory.CreateDirectory(System.IO.Path.GetDirectoryName(file));
+                File.WriteAllText(file, text);
+            }
+
+            public string Read(string relative) => File.Exists(Path(relative)) ? File.ReadAllText(Path(relative)) : null;
+
+            public void Dispose()
+            {
+                try { Directory.Delete(_root, true); }
+                catch (Exception) { /* временная папка — не страшно */ }
+            }
         }
     }
 }

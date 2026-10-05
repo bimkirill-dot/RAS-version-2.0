@@ -3,23 +3,16 @@ using System.IO;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Text.Json.Serialization;
 
 namespace RASv2.ModelHistory.Storage
 {
     /// <summary>
     /// Настройки плагина. Общие для команды (что отслеживать, лимиты) — из RasModelHistory.settings.json рядом с DLL,
-    /// личные (тема, период по умолчанию) — из %AppData%\RAS-Model History\settings.json (см. Load).
-    /// Папка журналов в настройках не задаётся — она зашита в плагин (SharedLogFolder).
+    /// личные (тема, период по умолчанию) — из settings.json в DataFolders.UserDataDir (см. Load).
+    /// Папка журналов в настройках не задаётся — её даёт ядро (DataFolders.LogFolder).
     /// </summary>
     public sealed class SpySettings
     {
-        /// <summary>
-        /// Общая папка журналов команды (задаётся в SharedFolder.cs). Пока папка недоступна, записи копятся
-        /// локально (LogStore.SpoolRoot) и отправляются, когда она снова доступна.
-        /// </summary>
-        public const string SharedLogFolder = SharedFolder.LogFolder;
-
         /// <summary>Детализация «было → стало» по параметрам.</summary>
         public bool TrackParameters { get; set; } = true;
         /// <summary>При открытии в фоне запоминать сведения обо всех элементах и снимки параметров видов, шаблонов, типов.</summary>
@@ -57,20 +50,7 @@ namespace RASv2.ModelHistory.Storage
         /// <summary>Тема панели: «Auto» — как в Revit, «Light» — светлая, «Dark» — тёмная.</summary>
         public string UiTheme { get; set; } = "Auto";
 
-        /// <summary>Имя личных папок плагина в %AppData% и %LocalAppData% (прежние «SpyPlugin» переносит LegacyFolders).</summary>
-        public const string FolderName = "RAS-Model History";
-
-        public static string UserDataDir => Path.Combine(Folder(Environment.SpecialFolder.ApplicationData), FolderName);
-
-        public static string LocalDataDir => Path.Combine(Folder(Environment.SpecialFolder.LocalApplicationData), FolderName);
-
-        private static string Folder(Environment.SpecialFolder folder)
-        {
-            var path = Environment.GetFolderPath(folder);
-            return string.IsNullOrEmpty(path) ? Path.GetTempPath() : path;
-        }
-
-        public static string UserSettingsPath => Path.Combine(UserDataDir, "settings.json");
+        public static string UserSettingsPath => Path.Combine(DataFolders.UserDataDir, "settings.json");
 
         public static string CompanySettingsPath
         {
@@ -80,10 +60,6 @@ namespace RASv2.ModelHistory.Storage
                 return Path.Combine(dir, "RasModelHistory.settings.json");
             }
         }
-
-        /// <summary>Папка журналов (общая, зашита в плагин).</summary>
-        [JsonIgnore]
-        public string ResolvedLogFolder => SharedLogFolder;
 
         private static readonly JsonSerializerOptions Options = new JsonSerializerOptions
         {
@@ -95,7 +71,7 @@ namespace RASv2.ModelHistory.Storage
 
         /// <summary>
         /// Что отслеживать и лимиты — одинаковые у всей команды: только из общего файла RasModelHistory.settings.json рядом
-        /// с плагином (его раздаёт BIM-менеджер). Личный файл (%AppData%\RAS-Model History\settings.json) задаёт только тему
+        /// с плагином (его раздаёт BIM-менеджер). Личный файл (UserSettingsPath) задаёт только тему
         /// и период по умолчанию. Раньше личный файл целиком заменял общий: после любого «Сохранить» правки общего файла
         /// до человека не доходили, и любой мог выключить запись изменений.
         /// </summary>
@@ -154,7 +130,7 @@ namespace RASv2.ModelHistory.Storage
         /// <summary>Сохранить личное (тема, период по умолчанию). Общие для команды настройки — только в общем файле.</summary>
         public void Save()
         {
-            Directory.CreateDirectory(UserDataDir);
+            Directory.CreateDirectory(DataFolders.UserDataDir);
             var personal = new PersonalSettings { UiTheme = UiTheme, DefaultPeriodDays = DefaultPeriodDays };
             File.WriteAllText(UserSettingsPath, JsonSerializer.Serialize(personal, Options));
         }

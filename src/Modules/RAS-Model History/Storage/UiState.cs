@@ -26,7 +26,7 @@ namespace RASv2.ModelHistory.Storage
 
     /// <summary>
     /// Вид панели, который запоминается между сеансами: столбцы, размер подробностей, группировка и т. п.
-    /// Хранится отдельно от настроек: %AppData%\RAS-Model History\ui.json.
+    /// Хранится отдельно от настроек: %AppData%\RAS_v_2.0\RAS-Model History\ui.json.
     /// </summary>
     public sealed class UiState
     {
@@ -51,7 +51,7 @@ namespace RASv2.ModelHistory.Storage
         /// </summary>
         public ChangesViewStyle ChangesStyle { get; set; }
 
-        public static string FilePath => Path.Combine(SpySettings.UserDataDir, "ui.json");
+        public static string FilePath => Path.Combine(DataFolders.UserDataDir, "ui.json");
 
         public static UiState Load()
         {
@@ -83,7 +83,7 @@ namespace RASv2.ModelHistory.Storage
             try
             {
                 Version = CurrentVersion;
-                Directory.CreateDirectory(SpySettings.UserDataDir);
+                Directory.CreateDirectory(DataFolders.UserDataDir);
                 File.WriteAllText(FilePath, JsonSerializer.Serialize(this, SpyJson.Pretty));
             }
             catch (Exception ex)

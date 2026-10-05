@@ -26,9 +26,11 @@
     <Compile Include="$(MhDir)Tracking\PeriodDiff.cs" Link="ModelHistory\PeriodDiff.cs" />
     <Compile Include="$(MhDir)Tracking\UndoPairs.cs" Link="ModelHistory\UndoPairs.cs" />
     <Compile Include="$(MhDir)UI\RecordFilter.cs" Link="ModelHistory\RecordFilter.cs" />
+    <Compile Include="$(MhDir)Storage\LegacyFolders.cs" Link="ModelHistory\LegacyFolders.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(RevitVersion)' != '2026'">
     <Compile Remove="ModelHistoryTests.cs" />
+    <Compile Remove="ModelHistoryStubs.cs" />
   </ItemGroup>
 
 </Project>

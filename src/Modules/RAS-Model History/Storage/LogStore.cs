@@ -16,7 +16,7 @@ namespace RASv2.ModelHistory.Storage
     /// Запись журнала. Каждый пользователь пишет только в свои файлы:
     ///   &lt;Папка журналов&gt;\&lt;модель&gt;\&lt;пользователь&gt;@&lt;компьютер&gt;_&lt;гггг-ММ&gt;.jsonl
     /// поэтому одновременная работа многих людей с общей сетевой папкой безопасна.
-    /// Если сетевая папка недоступна — записи копятся локально (%LocalAppData%\RAS-Model History\Spool)
+    /// Если сетевая папка недоступна — записи копятся локально (%LocalAppData%\RAS_v_2.0\RAS-Model History\Spool)
     /// и досылаются, когда папка снова доступна. Запись идёт в фоновом потоке.
     /// </summary>
     public sealed class LogStore : IDisposable
@@ -28,7 +28,6 @@ namespace RASv2.ModelHistory.Storage
             public string Line;
         }
 
-        private readonly SpySettings _settings;
         private readonly ConcurrentQueue<Pending> _queue = new ConcurrentQueue<Pending>();
         private readonly ConcurrentDictionary<string, bool> _descriptorsWritten =
             new ConcurrentDictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
@@ -48,13 +47,12 @@ namespace RASv2.ModelHistory.Storage
         /// <summary>Последняя ошибка доступа к папке журналов (для строки состояния).</summary>
         public string LastError { get; private set; }
 
-        public LogStore(SpySettings settings)
+        public LogStore()
         {
-            _settings = settings;
             _timer = new Timer(_ => SafeFlush(), null, 1000, 1000);
         }
 
-        public static string SpoolRoot => Path.Combine(SpySettings.LocalDataDir, "Spool");
+        public static string SpoolRoot => Path.Combine(DataFolders.LocalDataDir, "Spool");
 
         public static string NewRecordId()
         {
@@ -106,7 +104,7 @@ namespace RASv2.ModelHistory.Storage
                 }
                 if (batch.Count == 0 && touchedModels.Count == 0) return;
 
-                var root = _settings.ResolvedLogFolder;
+                var root = DataFolders.LogFolder;
                 foreach (var group in batch.GroupBy(p => (p.Model.Key, File: FileNameFor(p.Record))))
                 {
                     var items = group.ToList();
@@ -184,7 +182,7 @@ namespace RASv2.ModelHistory.Storage
         private void DeliverSpool(HashSet<string> touched)
         {
             if (!Directory.Exists(SpoolRoot)) return;
-            var root = _settings.ResolvedLogFolder;
+            var root = DataFolders.LogFolder;
             foreach (var spoolDir in Directory.GetDirectories(SpoolRoot))
             {
                 var pending = Directory.GetFiles(spoolDir, "*.jsonl").Concat(Directory.GetFiles(spoolDir, "*.sending")).ToList();

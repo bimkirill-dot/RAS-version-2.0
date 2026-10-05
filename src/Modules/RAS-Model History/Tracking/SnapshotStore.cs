@@ -10,7 +10,7 @@ namespace RASv2.ModelHistory.Tracking
     /// <summary>
     /// Хранилище снимков параметров всех элементов модели.
     ///
-    /// Снимки лежат в файле на диске (%LocalAppData%\RAS-Model History\Cache), в памяти — только индекс
+    /// Снимки лежат в файле на диске (%LocalAppData%\RAS_v_2.0\RAS-Model History\Cache), в памяти — только индекс
     /// «id → позиция в файле», версии элементов и небольшой кэш последних снимков.
     ///
     /// Постоянный режим (по умолчанию): при закрытии модели индекс сохраняется, и при следующем открытии
@@ -63,7 +63,7 @@ namespace RASv2.ModelHistory.Tracking
             _requestedCapacity = Math.Max(100, hotCapacity);
             _hot = new LruCache<long, ParameterSnapshot>(_requestedCapacity);
             _modelKey = ModelIdentity.Sanitize(modelKey);
-            _cacheRoot = Path.Combine(SpySettings.LocalDataDir, "Cache");
+            _cacheRoot = Path.Combine(DataFolders.LocalDataDir, "Cache");
             try
             {
                 Directory.CreateDirectory(_cacheRoot);

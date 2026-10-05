@@ -15,7 +15,7 @@ namespace RASv2.ModelHistory.Storage
         private static readonly object Sync = new object();
         private static Dictionary<string, string> _versions;
 
-        private static string PathName => Path.Combine(SpySettings.LocalDataDir, "state.json");
+        private static string PathName => Path.Combine(DataFolders.LocalDataDir, "state.json");
 
         public static string GetLastVersion(string modelKey)
         {
@@ -57,7 +57,7 @@ namespace RASv2.ModelHistory.Storage
                 _versions[key] = value;
                 try
                 {
-                    Directory.CreateDirectory(SpySettings.LocalDataDir);
+                    Directory.CreateDirectory(DataFolders.LocalDataDir);
                     File.WriteAllText(PathName, JsonSerializer.Serialize(_versions, SpyJson.Pretty));
                 }
                 catch (Exception ex)
@@ -78,7 +78,7 @@ namespace RASv2.ModelHistory.Storage
         }
 
         private static Dictionary<string, PendingLocal> _pending;
-        private static string PendingPath => Path.Combine(SpySettings.LocalDataDir, "pending.json");
+        private static string PendingPath => Path.Combine(DataFolders.LocalDataDir, "pending.json");
 
         public static PendingLocal GetPending(string localPath)
         {
@@ -103,7 +103,7 @@ namespace RASv2.ModelHistory.Storage
                     _pending.Remove(k);
                 try
                 {
-                    Directory.CreateDirectory(SpySettings.LocalDataDir);
+                    Directory.CreateDirectory(DataFolders.LocalDataDir);
                     File.WriteAllText(PendingPath, JsonSerializer.Serialize(_pending, SpyJson.Pretty));
                 }
                 catch (Exception ex)

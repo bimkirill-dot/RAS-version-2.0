@@ -11,6 +11,8 @@ namespace RASv2.ModelHistory.Storage
     /// <summary>
     /// Чтение журналов всех пользователей одной модели. Читает инкрементально:
     /// при повторном вызове обрабатываются только дописанные строки.
+    /// Папок журналов может быть несколько (DataFolders.LogFoldersToRead: новая и прежняя), первая — основная:
+    /// только её недоступность показывается в панели. Одна и та же запись в разных папках читается один раз.
     /// Не потокобезопасен — вызывайте из одного фонового потока за раз.
     /// </summary>
     public sealed class LogReader
@@ -18,7 +20,8 @@ namespace RASv2.ModelHistory.Storage
         private readonly string _modelKey;
         private readonly List<string> _keys;
         private readonly string _ownPrefix;
-        private readonly string _root;
+        private readonly IReadOnlyList<string> _roots;
+        private bool _extraRootErrorLogged;
         private readonly DateTimeOffset? _since;
         private readonly Dictionary<string, long> _positions = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _seen = new HashSet<string>(StringComparer.Ordinal);
@@ -28,11 +31,12 @@ namespace RASv2.ModelHistory.Storage
         private readonly HashSet<string> _liveBefore = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<long> _liveDeletedBefore = new HashSet<long>();
 
+        /// <param name="roots">Папки журналов; первая — основная (туда пишет LogStore).</param>
         /// <param name="legacyKeys">Прежние ключи модели (ModelIdentity.LegacyKeys): их подпапки читаются вместе с текущей.</param>
         /// <param name="user">Текущий пользователь: свои файлы проверяются при каждом чтении (см. ReadNew).</param>
-        public LogReader(string root, string modelKey, DateTimeOffset? since, IEnumerable<string> legacyKeys = null, string user = null)
+        public LogReader(IReadOnlyList<string> roots, string modelKey, DateTimeOffset? since, IEnumerable<string> legacyKeys = null, string user = null)
         {
-            _root = root;
+            _roots = roots;
             _modelKey = modelKey;
             _since = since;
             _keys = new List<string> { modelKey };
@@ -69,13 +73,14 @@ namespace RASv2.ModelHistory.Storage
             HasRead = true;
             foreach (var key in _keys)
             {
-                ReadDir(Path.Combine(_root, key), local: false, result);
-                ReadDir(Path.Combine(LogStore.SpoolRoot, key), local: true, result);
+                for (int i = 0; i < _roots.Count; i++)
+                    ReadDir(Path.Combine(_roots[i], key), local: false, primary: i == 0, result);
+                ReadDir(Path.Combine(LogStore.SpoolRoot, key), local: true, primary: true, result);
             }
             return result;
         }
 
-        private void ReadDir(string dir, bool local, List<ChangeRecord> result)
+        private void ReadDir(string dir, bool local, bool primary, List<ChangeRecord> result)
         {
             FileInfo[] files;
             try
@@ -86,9 +91,16 @@ namespace RASv2.ModelHistory.Storage
             {
                 return; // папки нет (прежний ключ модели, пустой буфер) — это нормально
             }
-            catch (Exception ex)
+            catch (Exception ex) when (primary)
             {
                 LastError = "Не удалось прочитать папку журналов: " + ex.Message;
+                return;
+            }
+            catch (Exception ex)
+            {
+                // прежняя папка (архив) недоступна — новые записи это не задерживает; в журнал ошибок — один раз
+                if (!_extraRootErrorLogged) Diag.Log("Extra log folder unavailable: " + dir, ex);
+                _extraRootErrorLogged = true;
                 return;
             }
             foreach (var file in files)

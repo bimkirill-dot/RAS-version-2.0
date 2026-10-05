@@ -41,9 +41,10 @@ namespace RASv2.ModelHistory
             Instance = this;
             var application = context.Application;
             try { _mainWindow = application.MainWindowHandle; } catch { /* ignore */ }
-            LegacyFolders.Migrate(); // личные папки прежнего названия SpyPlugin — до чтения настроек
+            DataFolders.Init(context);
+            LegacyFolders.Migrate(DataFolders.UserDataDir, DataFolders.LocalDataDir); // личные папки с прежних мест — до чтения настроек
             Settings = SpySettings.Load();
-            Store = new LogStore(Settings);
+            Store = new LogStore();
             Idle = new IdleWorkQueue();
             Tracker = new ChangeTracker(Settings, Store, Idle);
             Actions = new RevitActions(Tracker);
@@ -74,7 +75,8 @@ namespace RASv2.ModelHistory
             events.Idling(Idle.OnIdling);
             events.ThemeChanged(OnThemeChanged);
 
-            Diag.Log("Модуль запущен. Папка журналов: " + Settings.ResolvedLogFolder);
+            Diag.Log("Модуль запущен. Папка журналов: " + DataFolders.LogFolder + " (читается и прежняя: " +
+                     DataFolders.LegacyLogFolder + ")");
         }
 
         /// <summary>Revit закрывается: сохранить вид панели и дописать очередь журнала. Отписку делает ядро.</summary>
