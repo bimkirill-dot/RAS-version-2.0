@@ -103,6 +103,8 @@ function Get-Pointer([string]$yearDir, [string]$channel) {
 }
 
 function Remove-OldBuilds([string]$yearDir, [int]$keep) {
+    # недокопированные остатки прерванных сборок
+    Get-ChildItem $yearDir -Directory -Filter '*.tmp' | ForEach-Object { Remove-Item $_.FullName -Recurse -Force }
     $pointed = @('dev', 'test', 'all') | ForEach-Object { Get-Pointer $yearDir $_ }
     Get-ChildItem $yearDir -Directory | Sort-Object Name -Descending | Select-Object -Skip $keep |
         Where-Object { $pointed -notcontains $_.Name } | ForEach-Object { Remove-Item $_.FullName -Recurse -Force }
