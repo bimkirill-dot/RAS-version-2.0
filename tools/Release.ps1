@@ -1,12 +1,13 @@
 ﻿# Сборка и выпуск RAS v. 2.0 (PRINCIPLES.md, раздел 10).
-# Запускается из build.cmd, publish.cmd, promote.cmd, rollback.cmd в корне.
+# Запускается из build.cmd, publish.cmd, promote.cmd, rollback.cmd, publish-setup.cmd в корне.
 #   build    — собрать под Revit 2023 и 2026, проверить, положить сборку в out\Releases и установить загрузчик себе
 #   publish  — то же + выпуск на сервер в канал «тест» или «все»
 #   promote  — перевести сборку канала «тест» на «всех» (без пересборки)
 #   rollback — вернуть каналу одну из прежних сборок
+#   setup    — собрать, проверить и выложить установку (install.cmd + загрузчик) в папку Setup на сервере
 # Файл в UTF-8 с BOM: иначе Windows PowerShell 5.1 искажает русский текст.
 param(
-    [ValidateSet('build', 'publish', 'promote', 'rollback')]
+    [ValidateSet('build', 'publish', 'promote', 'rollback', 'setup')]
     [string]$Action = 'build',
     [ValidateSet('test', 'all')]
     [string]$Channel = 'test'
@@ -110,53 +111,10 @@ function Remove-OldBuilds([string]$yearDir, [int]$keep) {
         Where-Object { $pointed -notcontains $_.Name } | ForEach-Object { Remove-Item $_.FullName -Recurse -Force }
 }
 
-# Загрузчик себе (компьютер разработчика). Он меняется редко: копируется, только если изменился.
+# Загрузчик себе (компьютер разработчика) и уборка прежних установок — тем же скриптом, что ставит плагин
+# пользователям: одна логика установки. Загрузчик меняется редко: копируется, только если изменился.
 function Install-DevLoader {
-    foreach ($year in $Years) {
-        if (-not (Test-Path "C:\Program Files\Autodesk\Revit $year")) { continue }
-        $addins = Join-Path $env:APPDATA "Autodesk\Revit\Addins\$year"
-        $source = Join-Path $Root "out\bin\$year\loader"
-        $target = Join-Path $addins 'RASv2'
-        New-Item -ItemType Directory -Path $target -Force | Out-Null
-        $changed = $false
-        try {
-            foreach ($file in Get-ChildItem $source -File | Where-Object { $_.Name -ne 'RASv2.addin' }) {
-                $dest = Join-Path $target $file.Name
-                if ((Test-Path $dest) -and (Get-FileHash $dest).Hash -eq (Get-FileHash $file.FullName).Hash) { continue }
-                Copy-Item $file.FullName $dest -Force
-                $changed = $true
-            }
-            Copy-Item (Join-Path $source 'RASv2.addin') (Join-Path $addins 'RASv2.addin') -Force
-            if ($changed) { Write-Host "Загрузчик для Revit $year установлен: $addins" }
-        }
-        catch {
-            Write-Warning "Загрузчик для Revit $year не обновлён: он занят открытым Revit $year. Закройте Revit $year и запустите build.cmd ещё раз."
-        }
-    }
-}
-
-# Прежние отдельные установки модулей (RAS-Model History, бывший SpyPlugin): с ними в Revit журнал писали бы два
-# плагина сразу. Сначала манифест — без него Revit плагин уже не загрузит, даже если папку держит открытый Revit.
-function Remove-LegacyInstalls {
-    foreach ($year in $Years) {
-        $addins = Join-Path $env:APPDATA "Autodesk\Revit\Addins\$year"
-        foreach ($name in @('RasModelHistory', 'SpyPlugin')) {
-            $addin = Join-Path $addins "$name.addin"
-            if (Test-Path $addin) {
-                Remove-Item $addin -Force
-                Write-Host "Убрана прежняя установка $name из Revit $year."
-            }
-            $dir = Join-Path $addins $name
-            if (Test-Path $dir) {
-                try { Remove-Item $dir -Recurse -Force }
-                catch { Write-Warning "Папку $dir держит открытый Revit $year — она удалится при следующем build.cmd (плагин уже не загрузится)." }
-            }
-        }
-    }
-    foreach ($key in @('RasModelHistory', 'SpyPlugin')) {
-        $path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\$key"
-        if (Test-Path $path) { Remove-Item $path -Recurse -Force }
-    }
+    & (Join-Path $Root 'setup\install.ps1') -Source (Join-Path $Root 'out\bin') -Inner 'loader' -Dev
 }
 
 function Set-DevConfig {
@@ -195,7 +153,6 @@ try {
                 Remove-OldBuilds $yearDir 5
             }
             Install-DevLoader
-            Remove-LegacyInstalls
             Set-DevConfig
             Write-Host ""
             Write-Host "Готово: сборка $id. Перезапустите Revit — подхватится она."
@@ -230,6 +187,43 @@ try {
             Write-Host "Выпущено: сборка $id, канал «$($ChannelNames[$Channel])»."
             Write-Host 'Пользователям этого канала достаточно перезапустить Revit.'
             if ($Channel -eq 'test') { Write-Host "Тестовая группа: $testers. Проверили — promote.cmd переведёт эту сборку на всех." }
+        }
+        'setup' {
+            Assert-Server
+            Invoke-Build
+            if (Invoke-Git status --porcelain) {
+                Write-Warning 'Есть незафиксированные изменения: по установке нельзя будет понять, какой в ней код.'
+                if (-not (Confirm 'Всё равно выложить?')) { Write-Host 'Отменено.'; exit 1 }
+            }
+            $setup = Join-Path $ServerRoot 'Setup'
+            $changed = @($Years | Where-Object {
+                $old = Join-Path $setup "$_\RASv2.Loader.dll"
+                -not (Test-Path $old) -or (Get-FileHash $old).Hash -ne (Get-FileHash (Join-Path $Root "out\bin\$_\loader\RASv2.Loader.dll")).Hash
+            })
+            if ($changed.Count -eq 0) { Write-Host 'Загрузчик тот же, что на сервере: обновятся только скрипты установки.' }
+            else {
+                Write-Warning ("Загрузчик для Revit " + ($changed -join ', ') + " новый или изменился. Ошибка в загрузчике ломает плагин у всех, кто его поставит: " +
+                    "сначала проверьте его у себя в каждой версии Revit (build.cmd ставит его вам). У тех, кто уже установил плагин, " +
+                    "новый загрузчик появится только после повторного запуска install.cmd.")
+            }
+            if (-not (Confirm "Выложить установку в $setup?")) { Write-Host 'Отменено.'; exit 1 }
+            # сначала во временную папку, потом замена: недокопированная установка не видна
+            $temp = "$setup.tmp"
+            if (Test-Path $temp) { Remove-Item $temp -Recurse -Force }
+            New-Item -ItemType Directory -Path $temp -Force | Out-Null
+            Copy-Item (Join-Path $Root 'setup\install.cmd'), (Join-Path $Root 'setup\install.ps1') -Destination $temp
+            foreach ($year in $Years) {
+                $dir = Join-Path $temp $year
+                New-Item -ItemType Directory -Path $dir -Force | Out-Null
+                Get-ChildItem (Join-Path $Root "out\bin\$year\loader") -File | Where-Object { $_.Extension -ne '.pdb' } | Copy-Item -Destination $dir
+            }
+            $info = @("Коммит: $(Get-Commit)", "Выложил: $env:USERNAME, $(Get-Date -Format 'dd.MM.yyyy HH:mm')")
+            Set-Content -Path (Join-Path $temp 'build.txt') -Value $info -Encoding UTF8
+            if (Test-Path $setup) { Remove-Item $setup -Recurse -Force }
+            Rename-Item -Path $temp -NewName (Split-Path -Leaf $setup)
+            Write-Host ""
+            Write-Host "Установка выложена: $setup\install.cmd"
+            Write-Host 'Коллеге: закрыть Revit, запустить install.cmd, открыть Revit. Ядро и модули загрузчик возьмёт из выпусков (publish.cmd).'
         }
         'promote' {
             Assert-Server
