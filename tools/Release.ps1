@@ -5,9 +5,10 @@
 #   promote  — перевести сборку канала «тест» на «всех» (без пересборки)
 #   rollback — вернуть каналу одну из прежних сборок
 #   setup    — собрать, проверить и выложить установку (install.cmd + загрузчик) в папку Setup на сервере
+#   status   — что сейчас у каналов «тест» и «все»: версия, когда выпущена, что нового (ничего не меняет)
 # Файл в UTF-8 с BOM: иначе Windows PowerShell 5.1 искажает русский текст.
 param(
-    [ValidateSet('build', 'publish', 'promote', 'rollback', 'setup')]
+    [ValidateSet('build', 'publish', 'promote', 'rollback', 'setup', 'status')]
     [string]$Action = 'build',
     [ValidateSet('test', 'all')]
     [string]$Channel = 'test'
@@ -101,6 +102,20 @@ function Get-Pointer([string]$yearDir, [string]$channel) {
     $file = Join-Path $yearDir "$channel.txt"
     if (-not (Test-Path $file)) { return $null }
     return (Get-Content $file -Encoding UTF8 | Where-Object { $_.Trim() } | Select-Object -First 1).Trim()
+}
+
+# «2026.10.06-153038 — 06.10.2026 15:30 — что нового»; сборки нет на сервере — так и сказать
+function Get-BuildText([string]$yearDir, [string]$id) {
+    if (-not $id) { return $null }
+    $when = $id
+    $date = [datetime]::MinValue
+    if ([datetime]::TryParseExact($id, 'yyyy.MM.dd-HHmmss', $null, 'None', [ref]$date)) { $when = $date.ToString('dd.MM.yyyy HH:mm') }
+    $dir = Join-Path $yearDir $id
+    if (-not (Test-Path $dir)) { return "$id — сборки нет на сервере!" }
+    $notesFile = Join-Path $dir 'notes.txt'
+    $notes = if (Test-Path $notesFile) { ((Get-Content $notesFile -Encoding UTF8) -join ' ').Trim() } else { '' }
+    if (-not $notes) { $notes = '(без описания)' }
+    return "$when — $notes   [$id]"
 }
 
 function Remove-OldBuilds([string]$yearDir, [int]$keep) {
@@ -224,6 +239,35 @@ try {
             Write-Host ""
             Write-Host "Установка выложена: $setup\install.cmd"
             Write-Host 'Коллеге: закрыть Revit, запустить install.cmd, открыть Revit. Ядро и модули загрузчик возьмёт из выпусков (publish.cmd).'
+        }
+        'status' {
+            Assert-Server
+            foreach ($year in $Years) {
+                $yearDir = Join-Path $ServerReleases $year
+                Write-Host ""
+                Write-Host "Revit $year" -ForegroundColor Cyan
+                $all = Get-Pointer $yearDir 'all'
+                $test = Get-Pointer $yearDir 'test'
+                $allText = Get-BuildText $yearDir $all
+                Write-Host ("  «все»  : " + $(if ($allText) { $allText } else { 'ничего не выпущено' }))
+                if (-not $test) { Write-Host '  «тест» : своей версии нет — тестовая группа берёт ту же, что у всех' }
+                elseif ($test -eq $all) { Write-Host '  «тест» : та же версия, что у всех' }
+                else { Write-Host ("  «тест» : " + (Get-BuildText $yearDir $test) + '   ← отличается от «все»') -ForegroundColor Yellow }
+                $history = Join-Path $yearDir 'history.txt'
+                if (Test-Path $history) {
+                    Write-Host '  последние выпуски:'
+                    Get-Content $history -Encoding UTF8 | Select-Object -Last 5 | ForEach-Object {
+                        Write-Host ('    ' + ($_ -replace ' test ', ' «тест» ' -replace ' all ', ' «все» '))
+                    }
+                }
+            }
+            $testers = Join-Path $ServerRoot 'Config\test-users.txt'
+            $names = if (Test-Path $testers) { @(Get-Content $testers -Encoding UTF8 | ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not $_.StartsWith('#') }) } else { @() }
+            Write-Host ""
+            Write-Host ("Тестовая группа: " + $(if ($names.Count) { $names -join ', ' } else { 'пусто' }) + "  ($testers)")
+            if (Test-Path (Join-Path $env:APPDATA 'RAS_v_2.0\loader.ini')) {
+                Write-Host 'Ваш Revit сейчас берёт версию не с сервера, а из папки проекта (loader.ini, режим «разработка»).'
+            }
         }
         'promote' {
             Assert-Server
