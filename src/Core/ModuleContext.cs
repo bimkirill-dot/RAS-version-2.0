@@ -30,13 +30,18 @@ namespace RASv2.Core
         /// <summary>Объявленные кнопки — ядро ставит их на ленту, когда модуль запустился.</summary>
         public List<PushButtonData> Buttons { get; } = new List<PushButtonData>();
 
-        public PushButtonData AddButton(string name, string text, Type command, string toolTip)
+        public PushButtonData AddButton(string name, string text, Type command, string toolTip, string icon = null)
         {
             // команда указывает на ту сборку, из которой модуль уже загружен, — в процессе остаётся одна её копия
             var data = new PushButtonData(_module.Id + "." + name, text, command.Assembly.Location, command.FullName)
             {
                 ToolTip = toolTip
             };
+            if (icon != null)
+            {
+                data.LargeImage = RibbonIcons.Load(command.Assembly, icon, 32);
+                data.Image = RibbonIcons.Load(command.Assembly, icon, 16);
+            }
             Buttons.Add(data);
             return data;
         }

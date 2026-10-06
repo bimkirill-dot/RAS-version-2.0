@@ -73,9 +73,12 @@ namespace RASv2.Core
                 ModuleList.Add(slot);
                 if (slot.Module != null) StartModule(app, slot, ModuleSwitches.ModeOf(switches, slot.Id));
             }
-            AddButton(new PushButtonData("Core.About", "О плагине", typeof(AboutCommand).Assembly.Location, typeof(AboutCommand).FullName)
+            var about = typeof(AboutCommand).Assembly;
+            AddButton(new PushButtonData("Core.About", "О плагине", about.Location, typeof(AboutCommand).FullName)
             {
-                ToolTip = "Версия плагина, модули и их состояние, журнал ошибок"
+                ToolTip = "Версия плагина, модули и их состояние, журнал ошибок",
+                LargeImage = RibbonIcons.Load(about, "About", 32),
+                Image = RibbonIcons.Load(about, "About", 16)
             }, ServicePanel);
             CreateRibbon(app, buildDir);
             IsStarted = true;

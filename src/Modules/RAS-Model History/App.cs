@@ -93,26 +93,20 @@ namespace RASv2.ModelHistory
         private static void CreateButtons(IModuleContext context)
         {
             var journal = context.AddButton("Journal", "Журнал\nизменений", typeof(ShowPaneCommand),
-                "Показать / скрыть панель журнала изменений модели");
+                "Открыть журнал изменений модели", icon: "Journal");
             journal.AvailabilityClassName = typeof(AlwaysAvailable).FullName;
             journal.LongDescription = "Кто, что и когда создал, изменил или удалил: элементы, виды, шаблоны видов, типы, семейства, " +
                                       "фильтры, материалы, листы и спецификации. Для изменённых параметров — значения «было → стало».";
-            journal.LargeImage = Icons.Journal(32);
-            journal.Image = Icons.Journal(16);
 
             var history = context.AddButton("History", "История\nвыделенного", typeof(SelectionHistoryCommand),
-                "Показать в журнале историю выделенных элементов");
+                "Показать в журнале историю выделенных элементов", icon: "History");
             history.LongDescription = "Выделите один или несколько элементов (или откройте вид) и нажмите — в панели останутся только записи о них.";
-            history.LargeImage = Icons.History(32);
-            history.Image = Icons.History(16);
 
             // «Актуализировать журнал» — только в меню «⋯» панели: действие для BIM-менеджера, скрывает записи у всей
             // команды; большая кнопка на ленте приглашала каждого «почистить журнал»
             var settings = context.AddButton("Settings", "Настройки", typeof(SettingsCommand),
-                "Тема и период по умолчанию; общие для команды настройки — для просмотра");
+                "Тема и период по умолчанию; общие для команды настройки — для просмотра", icon: "Settings");
             settings.AvailabilityClassName = typeof(AlwaysAvailable).FullName;
-            settings.LargeImage = Icons.Settings(32);
-            settings.Image = Icons.Settings(16);
         }
 
         public void ShowSettings(IntPtr owner)

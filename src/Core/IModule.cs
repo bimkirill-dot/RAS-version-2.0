@@ -54,9 +54,10 @@ namespace RASv2.Core
         /// <summary>
         /// Кнопка модуля; команда — класс модуля с IExternalCommand. Код кнопки — «&lt;Id модуля&gt;.&lt;name&gt;»: по нему
         /// раскладка ленты (ribbon.txt) ставит кнопку на панель, а без раскладки она стоит на панели с названием модуля.
-        /// На ленте кнопка появляется после запуска всех модулей, поэтому значки, описание и доступность задаются
+        /// icon — имя иконки: картинки Icons\&lt;icon&gt;32.png и Icons\&lt;icon&gt;16.png, вшитые в сборку модуля.
+        /// На ленте кнопка появляется после запуска всех модулей, поэтому описание и доступность задаются
         /// на возвращённых данных кнопки. Код после выпуска не меняется: по нему Revit помнит горячие клавиши.
         /// </summary>
-        PushButtonData AddButton(string name, string text, Type command, string toolTip);
+        PushButtonData AddButton(string name, string text, Type command, string toolTip, string icon = null);
     }
 }

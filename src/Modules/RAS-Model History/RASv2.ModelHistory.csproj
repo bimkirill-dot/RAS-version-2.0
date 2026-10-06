@@ -15,6 +15,9 @@
     <ProjectReference Include="..\..\Core\RASv2.Core.csproj" Private="false" />
     <!-- общие для команды настройки: что отслеживать, лимиты (MODULE.md) -->
     <None Update="RasModelHistory.settings.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- иконки кнопок: Icons\<имя>32.png и Icons\<имя>16.png, вшиты в сборку (RibbonIcons в ядре) -->
+    <None Remove="Icons\*.png" />
+    <EmbeddedResource Include="Icons\*.png" LogicalName="Icons.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <!--

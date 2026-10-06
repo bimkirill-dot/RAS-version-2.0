@@ -6,6 +6,8 @@
     <AssemblyName>RASv2.Core</AssemblyName>
     <RootNamespace>RASv2.Core</RootNamespace>
     <UseRevitApi>true</UseRevitApi>
+    <!-- картинки иконок кнопок (RibbonIcons) -->
+    <UseWPF>true</UseWPF>
     <OutputPath>$(RasOut)parts\</OutputPath>
   </PropertyGroup>
 
@@ -13,6 +15,9 @@
     <Compile Include="..\Shared\RasPaths.cs" Link="Shared\RasPaths.cs" />
     <!-- раскладка кнопок по панелям вкладки (RibbonLayout) — едет в сборку рядом с ядром -->
     <None Update="ribbon.txt" CopyToOutputDirectory="PreserveNewest" />
+    <!-- иконки кнопок: Icons\<имя>32.png и Icons\<имя>16.png, вшиты в сборку (RibbonIcons в ядре) -->
+    <None Remove="Icons\*.png" />
+    <EmbeddedResource Include="Icons\*.png" LogicalName="Icons.%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>
