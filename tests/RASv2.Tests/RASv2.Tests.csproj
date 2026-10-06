@@ -16,6 +16,8 @@
   <ItemGroup>
     <Compile Include="..\..\src\Loader\BuildResolver.cs" Link="Loader\BuildResolver.cs" />
     <Compile Include="..\..\src\Core\RibbonLayout.cs" Link="Core\RibbonLayout.cs" />
+    <Compile Include="..\..\src\Core\ModuleSwitches.cs" Link="Core\ModuleSwitches.cs" />
+    <Compile Include="..\..\src\Core\ErrorFuse.cs" Link="Core\ErrorFuse.cs" />
   </ItemGroup>
 
   <!-- логика RAS-Model History: модуль пока только для Revit 2026 (.NET 8) -->

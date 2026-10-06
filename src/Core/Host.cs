@@ -10,16 +10,20 @@ namespace RASv2.Core
     /// <summary>Модуль и его состояние — для окна «О плагине».</summary>
     public sealed class ModuleSlot
     {
+        /// <summary>Код модуля (IModule.Id; у незагруженной сборки — окончание её имени).</summary>
+        public string Id;
         public string Title;
         public IModule Module;
-        /// <summary>«работает», «отключён: …».</summary>
+        /// <summary>Модуль запущен: при закрытии Revit ему вызывается Stop (и после предохранителя — тоже).</summary>
+        public bool Running;
+        /// <summary>«работает», «выключен в общих настройках», «отключён: …».</summary>
         public string State;
     }
 
     /// <summary>
     /// Ядро: его запускает загрузчик (по имени типа и метода, без ссылки на ядро). Создаёт вкладку,
-    /// находит и запускает модули, раскладывает их кнопки по панелям (RibbonLayout).
-    /// Ошибка модуля отключает только этот модуль (PRINCIPLES.md, раздел 7).
+    /// находит и запускает модули (кроме выключенных в общих настройках — ModuleSwitches), раскладывает их кнопки
+    /// по панелям (RibbonLayout). Ошибка модуля отключает только этот модуль (PRINCIPLES.md, раздел 7).
     /// </summary>
     public static class Host
     {
@@ -36,12 +40,16 @@ namespace RASv2.Core
         /// <summary>Почему загрузчик взял не сборку канала; null — всё штатно.</summary>
         public static string LoaderNote { get; private set; }
         public static int RevitYear { get; private set; }
+        /// <summary>Общие настройки модулей взяты не с сервера, а из копии — почему; null — всё штатно.</summary>
+        public static string ConfigNote { get; private set; }
 
         private static readonly List<ModuleSlot> ModuleList = new List<ModuleSlot>();
         private static RevitEventHub _events;
         /// <summary>Кнопки запущенных модулей и ядра — в порядке объявления; на ленту — после запуска всех модулей.</summary>
         private static readonly List<RibbonButton> RibbonOrder = new List<RibbonButton>();
         private static readonly Dictionary<string, PushButtonData> RibbonData = new Dictionary<string, PushButtonData>(StringComparer.OrdinalIgnoreCase);
+        /// <summary>Кнопки на ленте по кодам — чтобы выключить кнопки модуля, отключённого предохранителем.</summary>
+        private static readonly Dictionary<string, RibbonItem> RibbonItems = new Dictionary<string, RibbonItem>(StringComparer.OrdinalIgnoreCase);
         public static IReadOnlyList<ModuleSlot> Modules => ModuleList;
 
         /// <summary>Вызывает загрузчик (сигнатуру менять только вместе с ним).</summary>
@@ -55,13 +63,15 @@ namespace RASv2.Core
             Log.Write(Tag, "Запуск: Revit " + revitYear + ", канал «" + channel + "»");
 
             _events = new RevitEventHub(app);
+            _events.ModuleTripped += OnModuleTripped;
             try { app.CreateRibbonTab(TabName); }
             catch (Autodesk.Revit.Exceptions.ArgumentException) { /* вкладка уже есть */ }
 
-            foreach (var slot in ModuleCatalog.Discover(buildDir))
+            var switches = LoadSwitches();
+            foreach (var slot in ModuleCatalog.Discover(buildDir, switches))
             {
                 ModuleList.Add(slot);
-                if (slot.Module != null) StartModule(app, slot);
+                if (slot.Module != null) StartModule(app, slot, ModuleSwitches.ModeOf(switches, slot.Id));
             }
             AddButton(new PushButtonData("Core.About", "О плагине", typeof(AboutCommand).Assembly.Location, typeof(AboutCommand).FullName)
             {
@@ -73,7 +83,7 @@ namespace RASv2.Core
 
         public static void Stop(UIControlledApplication app)
         {
-            foreach (var slot in ModuleList.Where(s => s.Module != null && s.State == ModuleCatalog.Running))
+            foreach (var slot in ModuleList.Where(s => s.Module != null && s.Running))
             {
                 try { slot.Module.Stop(); }
                 catch (Exception ex) { Log.Write(slot.Module.Id, "Ошибка при остановке", ex); }
@@ -81,7 +91,19 @@ namespace RASv2.Core
             _events?.DetachAll();
         }
 
-        private static void StartModule(UIControlledApplication app, ModuleSlot slot)
+        /// <summary>Общие настройки модулей (Config\modules.txt на сервере или его копия). Нет файла — все работают.</summary>
+        private static Dictionary<string, ModuleMode> LoadSwitches()
+        {
+            var lines = ServerConfig.ReadLines(ModuleSwitches.FileName, out var note);
+            ConfigNote = note;
+            if (note != null) Log.Write(Tag, "Общие настройки модулей: " + note);
+            var switches = ModuleSwitches.Parse(lines ?? new string[0], w => Log.Write(Tag, w));
+            foreach (var s in switches.Where(s => s.Value != ModuleMode.Works))
+                Log.Write(Tag, "Общие настройки: " + s.Key + " — " + s.Value);
+            return switches;
+        }
+
+        private static void StartModule(UIControlledApplication app, ModuleSlot slot, ModuleMode mode)
         {
             var module = slot.Module;
             if (module.RevitYears == null || !module.RevitYears.Contains(RevitYear))
@@ -89,13 +111,28 @@ namespace RASv2.Core
                 slot.State = "не работает в Revit " + RevitYear;
                 return;
             }
+            if (mode == ModuleMode.Off)
+            {
+                slot.State = "выключен в общих настройках";
+                return;
+            }
+            var testOnly = mode == ModuleMode.TestOnly;
+            if (testOnly && !ModuleSwitches.IsTestChannel(Channel))
+            {
+                slot.State = "только для тестовой группы";
+                return;
+            }
             try
             {
                 var context = new ModuleContext(module, app, _events);
                 module.Start(context);
-                slot.State = ModuleCatalog.Running;
-                // кнопки — только у запустившегося модуля: у отключённого их на ленте нет
-                foreach (var data in context.Buttons) AddButton(data, module.Title);
+                slot.Running = true;
+                slot.State = mode == ModuleMode.NoButtons ? ModuleCatalog.Running + " без кнопок (общие настройки)"
+                    : testOnly ? ModuleCatalog.Running + " (только для тестовой группы)"
+                    : ModuleCatalog.Running;
+                // кнопки — только у запустившегося модуля: у отключённого их на ленте нет; «без кнопок» — тоже нет
+                if (mode != ModuleMode.NoButtons)
+                    foreach (var data in context.Buttons) AddButton(data, module.Title);
             }
             catch (Exception ex)
             {
@@ -145,9 +182,24 @@ namespace RASv2.Core
                 }
                 foreach (var id in panel.Buttons)
                 {
-                    try { ribbonPanel.AddItem(RibbonData[id]); }
+                    try { RibbonItems[id] = ribbonPanel.AddItem(RibbonData[id]); }
                     catch (Exception ex) { Log.Write(ButtonOwner(id), "Не удалось поставить кнопку «" + id + "» на ленту", ex); }
                 }
+            }
+        }
+
+        /// <summary>
+        /// Предохранитель отключил модуль: обработчики событий модуля ядро уже не вызывает, кнопки модуля — недоступны.
+        /// Stop при закрытии Revit модулю по-прежнему вызывается: дописать несохранённое.
+        /// </summary>
+        private static void OnModuleTripped(string id)
+        {
+            var slot = ModuleList.FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase));
+            if (slot != null) slot.State = "отключён: слишком много ошибок (с " + DateTime.Now.ToString("dd.MM.yyyy HH:mm") + ")";
+            foreach (var item in RibbonItems.Where(i => string.Equals(ButtonOwner(i.Key), id, StringComparison.OrdinalIgnoreCase)))
+            {
+                try { item.Value.Enabled = false; }
+                catch (Exception ex) { Log.Write(Tag, "Не удалось выключить кнопку «" + item.Key + "»", ex); }
             }
         }
 
@@ -164,7 +216,8 @@ namespace RASv2.Core
     {
         public const string Running = "работает";
 
-        public static List<ModuleSlot> Discover(string buildDir)
+        /// <param name="switches">Общие настройки: сборки модулей с «не загружать» не загружаются совсем.</param>
+        public static List<ModuleSlot> Discover(string buildDir, IReadOnlyDictionary<string, ModuleMode> switches)
         {
             var result = new List<ModuleSlot>();
             foreach (var file in Directory.GetFiles(buildDir, "RASv2.*.dll").OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
@@ -172,19 +225,26 @@ namespace RASv2.Core
                 var name = Path.GetFileNameWithoutExtension(file);
                 if (name.Equals("RASv2.Core", StringComparison.OrdinalIgnoreCase) ||
                     name.Equals("RASv2.Loader", StringComparison.OrdinalIgnoreCase)) continue;
+                // код модуля = окончание имени сборки (RASv2.<код>.dll) — известен до загрузки
+                var code = name.Substring("RASv2.".Length);
+                if (ModuleSwitches.ModeOf(switches, code) == ModuleMode.NoLoad)
+                {
+                    result.Add(new ModuleSlot { Id = code, Title = code, State = "не загружается: выключен в общих настройках" });
+                    continue;
+                }
                 try
                 {
                     var assembly = LoadAssembly(file);
                     foreach (var type in assembly.GetTypes().Where(t => typeof(IModule).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface))
                     {
                         var module = (IModule)Activator.CreateInstance(type);
-                        result.Add(new ModuleSlot { Title = module.Title, Module = module });
+                        result.Add(new ModuleSlot { Id = module.Id, Title = module.Title, Module = module });
                     }
                 }
                 catch (Exception ex)
                 {
                     Log.Write("Ядро", "Не удалось загрузить " + name, ex);
-                    result.Add(new ModuleSlot { Title = name, State = "отключён: не загрузился (" + ex.Message + ")" });
+                    result.Add(new ModuleSlot { Id = code, Title = name, State = "отключён: не загрузился (" + ex.Message + ")" });
                 }
             }
             return result;

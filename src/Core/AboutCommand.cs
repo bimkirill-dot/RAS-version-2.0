@@ -24,6 +24,7 @@ namespace RASv2.Core
             }
             text.AppendLine("Сборка " + Host.BuildId + ", канал «" + ChannelText(Host.Channel) + "», Revit " + Host.RevitYear + ".");
             if (Host.LoaderNote != null) text.AppendLine("Загрузчик: " + Host.LoaderNote + ".");
+            if (Host.ConfigNote != null) text.AppendLine("Общие настройки модулей: " + Host.ConfigNote + ".");
             text.AppendLine();
             text.AppendLine("Модули:");
             foreach (var slot in Host.Modules) text.AppendLine("• " + slot.Title + " — " + slot.State);

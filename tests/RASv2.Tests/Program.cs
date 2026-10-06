@@ -18,6 +18,7 @@ namespace RASv2.Tests
             Console.OutputEncoding = System.Text.Encoding.UTF8;
             Run("Загрузчик: выбор сборки", LoaderTests.All);
             Run("Ядро: раскладка ленты", RibbonTests.All);
+            Run("Ядро: выключение модулей и предохранитель", ModuleSwitchTests.All);
 #if REVIT2026
             Run("RAS-Model History: фильтр", ModelHistoryTests.Filter);
             Run("RAS-Model History: пары «правка + отмена»", ModelHistoryTests.Undo);

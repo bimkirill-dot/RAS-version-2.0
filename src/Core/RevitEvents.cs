@@ -38,11 +38,13 @@ namespace RASv2.Core
         private readonly string _name;
         private readonly Action<EventHandler<TArgs>> _attach;
         private readonly Action<EventHandler<TArgs>> _detach;
+        private readonly RevitEventHub _hub;
         private readonly List<KeyValuePair<string, EventHandler<TArgs>>> _handlers = new List<KeyValuePair<string, EventHandler<TArgs>>>();
         private bool _attached;
 
-        public EventChannel(string name, Action<EventHandler<TArgs>> attach, Action<EventHandler<TArgs>> detach)
+        public EventChannel(RevitEventHub hub, string name, Action<EventHandler<TArgs>> attach, Action<EventHandler<TArgs>> detach)
         {
+            _hub = hub;
             _name = name;
             _attach = attach;
             _detach = detach;
@@ -68,8 +70,9 @@ namespace RASv2.Core
         {
             foreach (var h in _handlers.ToArray())
             {
+                if (_hub.IsBlocked(h.Key)) continue; // модуль отключён предохранителем
                 try { h.Value(sender, e); }
-                catch (Exception ex) { Log.Write(h.Key, "Ошибка в обработчике события " + _name, ex); }
+                catch (Exception ex) { _hub.HandlerFailed(h.Key, _name, ex); }
             }
         }
     }
@@ -94,28 +97,45 @@ namespace RASv2.Core
         public readonly EventChannel<ThemeChangedEventArgs> ThemeChanged;
 #endif
 
+        private readonly ErrorFuse _fuse = new ErrorFuse();
+
+        /// <summary>Предохранитель выбил модуль (аргумент — метка модуля): его обработчики больше не вызываются.</summary>
+        public event Action<string> ModuleTripped;
+
+        public bool IsBlocked(string tag) => _fuse.IsTripped(tag);
+
+        /// <summary>Ошибка в обработчике модуля: в журнал; слишком часто — модуль отключается до перезапуска Revit.</summary>
+        public void HandlerFailed(string tag, string eventName, Exception ex)
+        {
+            Log.Write(tag, "Ошибка в обработчике события " + eventName, ex);
+            if (!_fuse.Record(tag, DateTime.Now)) return;
+            Log.Write(tag, "Модуль отключён до перезапуска Revit: больше " + ErrorFuse.Limit + " ошибок в обработчиках событий за "
+                           + (int)ErrorFuse.Window.TotalSeconds + " с");
+            ModuleTripped?.Invoke(tag);
+        }
+
         public RevitEventHub(UIControlledApplication ui)
         {
             var app = ui.ControlledApplication;
-            DocumentChanged = new EventChannel<DocumentChangedEventArgs>("DocumentChanged", h => app.DocumentChanged += h, h => app.DocumentChanged -= h);
-            DocumentOpened = new EventChannel<DocumentOpenedEventArgs>("DocumentOpened", h => app.DocumentOpened += h, h => app.DocumentOpened -= h);
-            DocumentClosing = new EventChannel<DocumentClosingEventArgs>("DocumentClosing", h => app.DocumentClosing += h, h => app.DocumentClosing -= h);
-            DocumentClosed = new EventChannel<DocumentClosedEventArgs>("DocumentClosed", h => app.DocumentClosed += h, h => app.DocumentClosed -= h);
-            DocumentSaved = new EventChannel<DocumentSavedEventArgs>("DocumentSaved", h => app.DocumentSaved += h, h => app.DocumentSaved -= h);
-            DocumentSavedAs = new EventChannel<DocumentSavedAsEventArgs>("DocumentSavedAs", h => app.DocumentSavedAs += h, h => app.DocumentSavedAs -= h);
-            Synchronizing = new EventChannel<DocumentSynchronizingWithCentralEventArgs>("DocumentSynchronizingWithCentral",
+            DocumentChanged = new EventChannel<DocumentChangedEventArgs>(this, "DocumentChanged", h => app.DocumentChanged += h, h => app.DocumentChanged -= h);
+            DocumentOpened = new EventChannel<DocumentOpenedEventArgs>(this, "DocumentOpened", h => app.DocumentOpened += h, h => app.DocumentOpened -= h);
+            DocumentClosing = new EventChannel<DocumentClosingEventArgs>(this, "DocumentClosing", h => app.DocumentClosing += h, h => app.DocumentClosing -= h);
+            DocumentClosed = new EventChannel<DocumentClosedEventArgs>(this, "DocumentClosed", h => app.DocumentClosed += h, h => app.DocumentClosed -= h);
+            DocumentSaved = new EventChannel<DocumentSavedEventArgs>(this, "DocumentSaved", h => app.DocumentSaved += h, h => app.DocumentSaved -= h);
+            DocumentSavedAs = new EventChannel<DocumentSavedAsEventArgs>(this, "DocumentSavedAs", h => app.DocumentSavedAs += h, h => app.DocumentSavedAs -= h);
+            Synchronizing = new EventChannel<DocumentSynchronizingWithCentralEventArgs>(this, "DocumentSynchronizingWithCentral",
                 h => app.DocumentSynchronizingWithCentral += h, h => app.DocumentSynchronizingWithCentral -= h);
-            Synchronized = new EventChannel<DocumentSynchronizedWithCentralEventArgs>("DocumentSynchronizedWithCentral",
+            Synchronized = new EventChannel<DocumentSynchronizedWithCentralEventArgs>(this, "DocumentSynchronizedWithCentral",
                 h => app.DocumentSynchronizedWithCentral += h, h => app.DocumentSynchronizedWithCentral -= h);
-            ReloadingLatest = new EventChannel<DocumentReloadingLatestEventArgs>("DocumentReloadingLatest",
+            ReloadingLatest = new EventChannel<DocumentReloadingLatestEventArgs>(this, "DocumentReloadingLatest",
                 h => app.DocumentReloadingLatest += h, h => app.DocumentReloadingLatest -= h);
-            ReloadedLatest = new EventChannel<DocumentReloadedLatestEventArgs>("DocumentReloadedLatest",
+            ReloadedLatest = new EventChannel<DocumentReloadedLatestEventArgs>(this, "DocumentReloadedLatest",
                 h => app.DocumentReloadedLatest += h, h => app.DocumentReloadedLatest -= h);
-            ViewActivated = new EventChannel<ViewActivatedEventArgs>("ViewActivated", h => ui.ViewActivated += h, h => ui.ViewActivated -= h);
-            SelectionChanged = new EventChannel<SelectionChangedEventArgs>("SelectionChanged", h => ui.SelectionChanged += h, h => ui.SelectionChanged -= h);
-            Idling = new EventChannel<IdlingEventArgs>("Idling", h => ui.Idling += h, h => ui.Idling -= h);
+            ViewActivated = new EventChannel<ViewActivatedEventArgs>(this, "ViewActivated", h => ui.ViewActivated += h, h => ui.ViewActivated -= h);
+            SelectionChanged = new EventChannel<SelectionChangedEventArgs>(this, "SelectionChanged", h => ui.SelectionChanged += h, h => ui.SelectionChanged -= h);
+            Idling = new EventChannel<IdlingEventArgs>(this, "Idling", h => ui.Idling += h, h => ui.Idling -= h);
 #if !REVIT2023
-            ThemeChanged = new EventChannel<ThemeChangedEventArgs>("ThemeChanged", h => ui.ThemeChanged += h, h => ui.ThemeChanged -= h);
+            ThemeChanged = new EventChannel<ThemeChangedEventArgs>(this, "ThemeChanged", h => ui.ThemeChanged += h, h => ui.ThemeChanged -= h);
 #endif
         }
 
