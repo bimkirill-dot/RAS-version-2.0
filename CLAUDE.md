@@ -1,6 +1,6 @@
 # RAS v. 2.0 — практические заметки
 
-Сначала прочитать `PRINCIPLES.md` (принципы плагина) и `MODULE.md` модуля, с которым работаете. Здесь — как собрать, проверить и выпустить.
+Сначала прочитать `PRINCIPLES.md` (принципы плагина), `MODULE.md` и `DECISIONS.md` модуля, с которым работаете. Здесь — как собрать, проверить и выпустить.
 
 ## Репозиторий
 
@@ -33,12 +33,12 @@
 - `src\Loader` — загрузчик (`BuildResolver` — выбор сборки, без Revit API, проверяется тестами; `LoaderApp` — вход из Revit).
 - `src\Core` — ядро (`Host` — запуск модулей и ленты, `IModule` / `IModuleContext` — контракт с модулями, `Log`, `AboutCommand`).
 - Лента: модуль объявляет кнопки (`IModuleContext.AddButton`, код `<Id модуля>.<кнопка>`), ядро ставит их на панели по раскладке `src\Core\ribbon.txt` (`[Панель]` и коды кнопок под ней; логика — `RibbonLayout`, проверяется тестами). Кнопка без раскладки — на панели с названием модуля. Раскладка едет в сборку: поменять — правка файла, `build.cmd` / `publish.cmd`, перезапуск Revit. Коды кнопок после выпуска не менять.
-- `src\Modules\<папка модуля>` — модули; у каждого `MODULE.md`. Сейчас: `RAS-Model History` (переезжает из `D:\Code\SpyPlugin`, ход переезда — в его `MODULE.md`).
+- `src\Modules\<папка модуля>` — модули; у каждого `MODULE.md` (как устроен) и `DECISIONS.md` (решения с причинами, планы, идеи). Сейчас: `RAS-Model History` (переезжает из `D:\Code\SpyPlugin`, ход переезда — в его `MODULE.md`).
 - `tests\RASv2.Tests` — проверки логики: консольная программа без сторонних библиотек, логику подключает исходниками (`Compile Include`).
 
 ## Планы
 
-- **RAS-Model History** — планы (связь журналов, «хранилище заменено», аналитика) и шаги 6–7 переезда — в его `MODULE.md`, раздел «Планы».
+- **RAS-Model History** — планы (связь журналов, «хранилище заменено», аналитика) — в его `DECISIONS.md`; шаги 6–7 переезда — в `MODULE.md`.
 - **Перенос уже написанных функций.** В RAS v. 2.0 будут переезжать готовые функции: их нужно адаптировать под `PRINCIPLES.md` и оформить модулями (порядок — `PRINCIPLES.md`, раздел 4, «Встроить существующий отдельный плагин»; образец — RAS-Model History). Какие функции и в каком порядке — решает разработчик; без его выбора не начинать. Кандидаты:
   - прежний плагин RAS, `D:\Code\RasPlugin`: AssemblyGrouping, FireCouplingPlacement, SleevePlacement, Kj (PartitionReinforcement, StructuralDataKj, WorksetsDistributorKj), LevelNameChecker, Ov, IntehPlus, BIM_otdela_checkRas, FilterDiagnostics, Common. Там три копии кода (`RAS`, `RAS_2023`, `RAS_2026`) — перед переносом сравнить и взять актуальную;
   - отдельные проекты в `D:\Code`: Stamp-Generator, WallRebarGenerator, Revit-file-history, Automatisation-checklist.
