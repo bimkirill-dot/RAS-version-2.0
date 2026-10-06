@@ -37,11 +37,7 @@ namespace RASv2.Core
             {
                 ToolTip = toolTip
             };
-            if (icon != null)
-            {
-                data.LargeImage = RibbonIcons.Load(command.Assembly, icon, 32);
-                data.Image = RibbonIcons.Load(command.Assembly, icon, 16);
-            }
+            if (icon != null) RibbonIcons.Set(data, command.Assembly, icon);
             Buttons.Add(data);
             return data;
         }

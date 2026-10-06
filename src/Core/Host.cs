@@ -64,6 +64,9 @@ namespace RASv2.Core
 
             _events = new RevitEventHub(app);
             _events.ModuleTripped += OnModuleTripped;
+#if !REVIT2023
+            _events.ThemeChanged.Add(Tag, (s, e) => OnThemeChanged()); // светлые / тёмные иконки — по теме Revit
+#endif
             try { app.CreateRibbonTab(TabName); }
             catch (Autodesk.Revit.Exceptions.ArgumentException) { /* вкладка уже есть */ }
 
@@ -74,12 +77,12 @@ namespace RASv2.Core
                 if (slot.Module != null) StartModule(app, slot, ModuleSwitches.ModeOf(switches, slot.Id));
             }
             var about = typeof(AboutCommand).Assembly;
-            AddButton(new PushButtonData("Core.About", "О плагине", about.Location, typeof(AboutCommand).FullName)
+            var aboutData = new PushButtonData("Core.About", "О плагине", about.Location, typeof(AboutCommand).FullName)
             {
-                ToolTip = "Версия плагина, модули и их состояние, журнал ошибок",
-                LargeImage = RibbonIcons.Load(about, "About", 32),
-                Image = RibbonIcons.Load(about, "About", 16)
-            }, ServicePanel);
+                ToolTip = "Версия плагина, модули и их состояние, журнал ошибок"
+            };
+            RibbonIcons.Set(aboutData, about, "About");
+            AddButton(aboutData, ServicePanel);
             CreateRibbon(app, buildDir);
             IsStarted = true;
         }
@@ -203,6 +206,16 @@ namespace RASv2.Core
             {
                 try { item.Value.Enabled = false; }
                 catch (Exception ex) { Log.Write(Tag, "Не удалось выключить кнопку «" + item.Key + "»", ex); }
+            }
+        }
+
+        /// <summary>Тема Revit сменилась (светлая / тёмная): иконки всех кнопок — по новой теме.</summary>
+        private static void OnThemeChanged()
+        {
+            foreach (var item in RibbonItems)
+            {
+                try { RibbonIcons.Refresh(item.Key, item.Value); }
+                catch (Exception ex) { Log.Write(ButtonOwner(item.Key), "Не удалось сменить иконку «" + item.Key + "»", ex); }
             }
         }
 

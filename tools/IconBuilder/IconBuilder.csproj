@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Иконки кнопок из SVG: icons.cmd в корне. Рисует PNG 32 и 16, светлые и тёмные, рядом с SVG (папки Icons модулей
+    и ядра) и картинку для просмотра out\icons-preview.png. В выпуск не попадает. Справочник стиля — СТИЛЬ.md.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <BaseIntermediateOutputPath>obj\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+
+</Project>
