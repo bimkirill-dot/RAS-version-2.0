@@ -20,6 +20,11 @@
     <Compile Include="..\..\src\Core\ErrorFuse.cs" Link="Core\ErrorFuse.cs" />
   </ItemGroup>
 
+  <!-- RAS-Clash Analysis: разбор отчётов Navisworks — без Revit, под обе версии -->
+  <ItemGroup>
+    <Compile Include="..\..\src\Modules\RAS-Clash Analysis\Reports\*.cs" LinkBase="ClashAnalysis" />
+  </ItemGroup>
+
   <!-- логика RAS-Model History: модуль пока только для Revit 2026 (.NET 8) -->
   <ItemGroup Condition="'$(RevitVersion)' == '2026'">
     <Compile Include="$(MhDir)Tracking\ChangeRecord.cs" Link="ModelHistory\ChangeRecord.cs" />

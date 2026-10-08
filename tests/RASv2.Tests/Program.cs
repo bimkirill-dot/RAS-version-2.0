@@ -19,6 +19,7 @@ namespace RASv2.Tests
             Run("Загрузчик: выбор сборки", LoaderTests.All);
             Run("Ядро: раскладка ленты", RibbonTests.All);
             Run("Ядро: выключение модулей и предохранитель", ModuleSwitchTests.All);
+            Run("RAS-Clash Analysis: отчёты Navisworks", ClashReportTests.All);
 #if REVIT2026
             Run("RAS-Model History: фильтр", ModelHistoryTests.Filter);
             Run("RAS-Model History: пары «правка + отмена»", ModelHistoryTests.Undo);
