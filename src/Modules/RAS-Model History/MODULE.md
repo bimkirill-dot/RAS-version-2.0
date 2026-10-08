@@ -2,7 +2,7 @@
 
 Журнал изменений модели Revit 2026: кто, что и когда создал, изменил или удалил; фильтр, сортировка, 3D-вид изменений.
 Общие правила плагина — `PRINCIPLES.md` в корне, сборка и выпуск — `CLAUDE.md` в корне. Описание для пользователей —
-`README.md` рядом (написан для прежнего отдельного плагина; разделы об установке устарели до шага 7). Решения по модулю
+`README.md` рядом. Решения по модулю
 (что, почему, что отвергли), планы и идеи — `DECISIONS.md` рядом.
 
 ## Состояние переезда
@@ -32,16 +32,18 @@
 
 ## Проверки
 
-Логика без Revit (`RecordFilter`, `UndoPairs`, `JournalAudit`, `JournalDedup`, `PeriodDiff`, `SyncStatus`, перенос
-личных папок `LegacyFolders`) проверяется в `tests\RASv2.Tests\ModelHistoryTests.cs` при каждой сборке (`Diag` там —
-заглушка, `ModelHistoryStubs.cs`). Новое правило логики — новая проверка там.
+Логика без Revit проверяется при каждой сборке: `RecordFilter`, `UndoPairs`, `JournalAudit`, `JournalDedup`, `PeriodDiff`,
+`SyncStatus`, перенос личных папок `LegacyFolders`, «Сотрудник» `EmployeeIndex` — в `tests\RASv2.Tests\ModelHistoryTests.cs`;
+«удалён вместе с» `DeletionCascade`, «нет сведений» из журнала `UnknownElementResolver`, кэш сведений `ElementInfoCache`,
+«Модель запомнена» `WarmupProgress` — в `ModelHistoryElementTests.cs` (`Diag` там — заглушка, `ModelHistoryStubs.cs`).
+Новое правило логики — новая проверка там.
 
 ## Устройство
 
 - `App.cs` — стыкуемая панель, кнопки и подписки на события Revit — через контекст ядра (`ModelHistoryModule` → `App.Start`). Коды кнопок: `ModelHistory.Journal`, `ModelHistory.History`, `ModelHistory.Settings`, иконки — `Icons\Journal|History|Settings.svg` → PNG 32 и 16, светлые и тёмные (`icons.cmd`, стиль — `tools\IconBuilder\СТИЛЬ.md`), отдел — BIM (`Icons\department.txt`); на какой панели они стоят — раскладка ядра `src\Core\ribbon.txt`.
-- `Tracking/` — запись изменений (`ChangeTracker`, `Jobs`), снимки параметров («было → стало», `ParameterSnapshot`, `SnapshotStore`), статус синхронизации (`SyncStatus`), актуализация журнала (`JournalAudit`), «Без дублей» (`JournalDedup` — общий для панели и 3D-вида), 3D-вид изменений: итог за период `PeriodDiff` (без Revit и WPF — проверяется на журналах вне Revit) + построение вида `ChangesView3D`. Окно — `UI/ChangesViewWindow.xaml` + `ChangesViewDialog.cs`, вызов — `RevitActions.ShowChangesView`.
+- `Tracking/` — запись изменений (`ChangeTracker`, `Jobs`), сведения об элементах (`ElementDescriber`, `ElementInfo`, кэш между сеансами `ElementInfoCache`, «нет сведений» из журнала `UnknownElementResolver`), «удалён вместе с» (`DeletionCascade`), «Сотрудник» (`WindowsUser`, `EmployeeIndex`), снимки параметров («было → стало», `ParameterSnapshot`, `SnapshotStore`), статус синхронизации (`SyncStatus`), актуализация журнала (`JournalAudit`), «Без дублей» (`JournalDedup` — общий для панели и 3D-вида), 3D-вид изменений: итог за период `PeriodDiff` (без Revit и WPF — проверяется на журналах вне Revit) + построение вида `ChangesView3D`. Окно — `UI/ChangesViewWindow.xaml` + `ChangesViewDialog.cs`, вызов — `RevitActions.ShowChangesView`.
 - `Storage/` — папки модуля (`DataFolders`) и перенос с прежних мест (`LegacyFolders`), запись/чтение журнала в общей папке (`LogStore`, `LogReader`, jsonl), настройки (`SpySettings`), локальное состояние моделей (`LocalState` → `state.json`: последняя версия модели, время последней синхронизации с ключом `commit|…`), вид панели (`UiState` → `ui.json` в личной папке). Папку журналов даёт ядро, в настройках и интерфейсе её не выбирают; `LogFolder` из старых settings.json вырезается при разборе.
-- `UI/` — панель `SpyPane.xaml(.cs)` + `MainViewModel.cs`, строки таблицы `ChangeRow.cs`, сортировка/группы `RowSorting.cs` + окно `SortWindow.xaml`/`SortViewModel.cs`, тема `ThemeResources.xaml` + `ThemeManager.cs`, группировка операций `OperationGrouping.cs`, фильтр `RecordFilter.cs` (условия, без WPF и Revit) + окно `FilterWindow.xaml`/`FilterViewModel.cs`, настройки `SettingsWindow.xaml`.
+- `UI/` — панель `SpyPane.xaml(.cs)` + `MainViewModel.cs`, отдельное окно журнала `SpyPane.Window.cs`, столбцы параметров `SpyPane.ParamColumns.cs` + окно выбора `ParamPickerWindow.xaml`, «Модель запомнена» `WarmupProgress.cs`, строки таблицы `ChangeRow.cs`, сортировка/группы `RowSorting.cs` + окно `SortWindow.xaml`/`SortViewModel.cs`, тема `ThemeResources.xaml` + `ThemeManager.cs`, группировка операций `OperationGrouping.cs`, фильтр `RecordFilter.cs` (условия, без WPF и Revit) + окно `FilterWindow.xaml`/`FilterViewModel.cs`, настройки `SettingsWindow.xaml`.
 
 ## Правила, о которые уже спотыкались
 
