@@ -29,6 +29,17 @@ namespace RASv2.Core
             text.AppendLine("Модули:");
             foreach (var slot in Host.Modules) text.AppendLine("• " + slot.Title + " — " + slot.State);
             if (Host.Modules.Count == 0) text.AppendLine("• нет");
+            if (RibbonBuilder.CurrentDepartment != null)
+            {
+                text.AppendLine();
+                text.AppendLine("Отдел на ленте: «" + RibbonBuilder.CurrentDepartment + "».");
+            }
+
+            // коды кнопок и подписи модулей — для раскладки ленты (ribbon.txt)
+            text.AppendLine();
+            text.AppendLine("Кнопки (код — подпись):");
+            foreach (var button in Host.DeclaredButtons)
+                text.AppendLine("• " + button.Key + " — «" + button.Value.Replace("\n", " ") + "»");
 
             var dialog = new TaskDialog("RAS v. 2.0")
             {

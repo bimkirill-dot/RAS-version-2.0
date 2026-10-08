@@ -44,13 +44,26 @@ namespace RASv2.Core
             data.Image = Load(assembly, name, 16, dark);
         }
 
-        /// <summary>Тема Revit сменилась: иконки кнопки — по новой теме (у кнопок без иконки — ничего).</summary>
+        /// <summary>
+        /// Тема Revit сменилась: иконки кнопки — по новой теме (у кнопок без иконки — ничего). Переключатель отделов
+        /// (выпадающая кнопка на месте «О плагине») — с иконкой «О плагине».
+        /// </summary>
         public static void Refresh(string id, RibbonItem item)
         {
-            if (!(item is PushButton button) || !Owners.TryGetValue(id, out var owner)) return;
+            if (!Owners.TryGetValue(id, out var owner)) return;
             var dark = IsDark;
-            button.LargeImage = Load(owner.Key, owner.Value, 32, dark);
-            button.Image = Load(owner.Key, owner.Value, 16, dark);
+            var large = Load(owner.Key, owner.Value, 32, dark);
+            var small = Load(owner.Key, owner.Value, 16, dark);
+            if (item is PushButton push)
+            {
+                push.LargeImage = large;
+                push.Image = small;
+            }
+            else if (item is PulldownButton pulldown)
+            {
+                pulldown.LargeImage = large;
+                pulldown.Image = small;
+            }
         }
 
         /// <summary>Иконка размера size (32 или 16); тёмной нет — светлая; нет и светлой — null, причина в журнале.</summary>

@@ -94,7 +94,7 @@ namespace RASv2.ModelHistory
         {
             var journal = context.AddButton("Journal", "Журнал\nизменений", typeof(ShowPaneCommand),
                 "Открыть журнал изменений модели", icon: "Journal");
-            journal.AvailabilityClassName = typeof(AlwaysAvailable).FullName;
+            journal.AvailabilityClassName = typeof(Commands.AlwaysAvailable).FullName;
             journal.LongDescription = "Кто, что и когда создал, изменил или удалил: элементы, виды, шаблоны видов, типы, семейства, " +
                                       "фильтры, материалы, листы и спецификации. Для изменённых параметров — значения «было → стало».";
 
@@ -106,7 +106,7 @@ namespace RASv2.ModelHistory
             // команды; большая кнопка на ленте приглашала каждого «почистить журнал»
             var settings = context.AddButton("Settings", "Настройки", typeof(SettingsCommand),
                 "Тема и период по умолчанию; общие для команды настройки — для просмотра", icon: "Settings");
-            settings.AvailabilityClassName = typeof(AlwaysAvailable).FullName;
+            settings.AvailabilityClassName = typeof(Commands.AlwaysAvailable).FullName;
         }
 
         public void ShowSettings(IntPtr owner)

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace RASv2.Core
 {
@@ -19,111 +21,273 @@ namespace RASv2.Core
         public string DefaultPanel { get; }
     }
 
-    /// <summary>Панель вкладки и коды кнопок на ней — по порядку.</summary>
+    /// <summary>Кнопка на ленте: код и подпись (null — как задал модуль, «» — без подписи, одна иконка).</summary>
+    internal sealed class RibbonEntry
+    {
+        public RibbonEntry(string id, string label)
+        {
+            Id = id;
+            Label = label;
+        }
+
+        public string Id { get; }
+
+        public string Label { get; }
+    }
+
+    /// <summary>Место на панели: одна кнопка — большая; 2–3 — стопка маленьких в одну колонку.</summary>
+    internal sealed class RibbonSlot
+    {
+        public List<RibbonEntry> Entries { get; } = new List<RibbonEntry>();
+
+        public bool IsStack => Entries.Count > 1;
+    }
+
+    /// <summary>Панель: отдел (null — видна во всех отделах), название, места по порядку слева направо.</summary>
     internal sealed class RibbonPanelSpec
     {
-        public RibbonPanelSpec(string title)
+        public RibbonPanelSpec(string department, string title)
         {
+            Department = department;
             Title = title;
         }
 
+        public string Department { get; }
+
         public string Title { get; }
 
-        public List<string> Buttons { get; } = new List<string>();
+        public List<RibbonSlot> Slots { get; } = new List<RibbonSlot>();
+    }
+
+    /// <summary>Что строить на ленте: панели и отделы (пусто — переключателя отделов нет).</summary>
+    internal sealed class RibbonPlan
+    {
+        public List<RibbonPanelSpec> Panels { get; } = new List<RibbonPanelSpec>();
+
+        public List<string> Departments { get; } = new List<string>();
     }
 
     /// <summary>
-    /// Раскладка кнопок по панелям вкладки (PRINCIPLES.md, раздел 12). Модули объявляют кнопки, а на какой панели
-    /// и в каком порядке они стоят, задаёт файл ribbon.txt в сборке (src\Core\ribbon.txt):
+    /// Раскладка кнопок по отделам и панелям (PRINCIPLES.md, раздел 12; src\Core\DECISIONS.md). Модули объявляют кнопки,
+    /// а где они стоят, задаёт файл ribbon.txt в сборке (src\Core\ribbon.txt):
     /// <code>
-    /// # комментарий
-    /// [Общие]
-    /// ModelHistory.Journal
+    /// [Плагин]                                 — панель до первого отдела: видна во всех отделах
     /// Core.About
+    /// [[Конструктив]]                          — отдел
+    /// [История модели]                         — его панель
+    /// ModelHistory.Journal подпись="Журнал\nизменений"
+    /// (                                        — стопка: 2–3 маленькие кнопки в одну колонку
+    /// ModelHistory.History подпись="История"
+    /// ModelHistory.Settings подпись=""         — без подписи, одна иконка
+    /// )
     /// </code>
-    /// Кнопка, которой нет в раскладке, попадает на панель по умолчанию (с названием модуля) — новый модуль виден сразу.
-    /// Без Revit API: проверяется тестами.
+    /// Кнопка, которой нет в раскладке, — на панели с названием модуля, во всех отделах: новый модуль виден сразу.
+    /// Ошибки в файле ленту не ломают: строка пропускается, причина — в warn. Без Revit API: проверяется тестами.
     /// </summary>
     internal static class RibbonLayout
     {
         public const string FileName = "ribbon.txt";
 
-        /// <summary>Разобрать раскладку. Ошибки в файле не мешают: строка пропускается, причина — в warn.</summary>
+        /// <summary>В Revit в стопке не больше трёх кнопок.</summary>
+        public const int MaxStack = 3;
+
+        private static readonly Regex Attribute = new Regex(@"(\S+?)\s*=\s*""((?:[^""\\]|\\.)*)""", RegexOptions.CultureInvariant);
+
+        /// <summary>Разобрать раскладку: панели в порядке файла (одинаковые панели одного отдела — одна).</summary>
         public static List<RibbonPanelSpec> Parse(IEnumerable<string> lines, Action<string> warn)
         {
             var panels = new List<RibbonPanelSpec>();
-            RibbonPanelSpec current = null;
+            string department = null;
+            RibbonPanelSpec panel = null;
+            RibbonSlot stack = null;
             var number = 0;
+
+            void CloseStack(string why)
+            {
+                if (stack == null) return;
+                if (why != null) warn("раскладка ленты, строка " + number + ": стопка не закрыта «)» — " + why);
+                stack = null;
+            }
+
             foreach (var raw in lines)
             {
                 number++;
                 var line = raw.Trim();
                 if (line.Length == 0 || line.StartsWith("#", StringComparison.Ordinal)) continue;
+
+                if (line.StartsWith("[[", StringComparison.Ordinal) && line.EndsWith("]]", StringComparison.Ordinal))
+                {
+                    CloseStack("закрыта перед отделом");
+                    var name = line.Substring(2, line.Length - 4).Trim();
+                    if (name.Length == 0) warn("раскладка ленты, строка " + number + ": пустое название отдела — его панели видны во всех отделах");
+                    department = name.Length == 0 ? null : name;
+                    panel = null;
+                    continue;
+                }
                 if (line.StartsWith("[", StringComparison.Ordinal) && line.EndsWith("]", StringComparison.Ordinal))
                 {
+                    CloseStack("закрыта перед панелью");
                     var title = line.Substring(1, line.Length - 2).Trim();
                     if (title.Length == 0)
                     {
                         warn("раскладка ленты, строка " + number + ": пустое название панели");
-                        current = null;
+                        panel = null;
                         continue;
                     }
-                    // одна панель, упомянутая дважды, — одна панель на ленте
-                    current = Find(panels, title);
-                    if (current == null) panels.Add(current = new RibbonPanelSpec(title));
+                    panel = panels.FirstOrDefault(p => Same(p.Department, department) && Same(p.Title, title));
+                    if (panel == null) panels.Add(panel = new RibbonPanelSpec(department, title));
                     continue;
                 }
-                if (current == null)
+                if (line == "(")
                 {
-                    warn("раскладка ленты, строка " + number + ": кнопка «" + line + "» до первой панели");
+                    if (stack != null) warn("раскладка ленты, строка " + number + ": стопка внутри стопки — «(» пропущена");
+                    else if (panel == null) warn("раскладка ленты, строка " + number + ": стопка до первой панели — пропущена");
+                    else panel.Slots.Add(stack = new RibbonSlot());
                     continue;
                 }
-                current.Buttons.Add(line);
+                if (line == ")")
+                {
+                    if (stack == null) warn("раскладка ленты, строка " + number + ": «)» без «(» — пропущена");
+                    stack = null;
+                    continue;
+                }
+
+                var entry = ParseButton(line, number, warn);
+                if (entry == null) continue;
+                if (panel == null)
+                {
+                    warn("раскладка ленты, строка " + number + ": кнопка «" + entry.Id + "» до первой панели — пропущена");
+                    continue;
+                }
+                if (stack != null) stack.Entries.Add(entry);
+                else
+                {
+                    var slot = new RibbonSlot();
+                    slot.Entries.Add(entry);
+                    panel.Slots.Add(slot);
+                }
             }
+            CloseStack("в конце файла");
             return panels;
         }
 
+        /// <summary>«Код подпись="…"»: подпись — в кавычках, \n — перенос строки, \" — кавычка, \\ — обратная косая.</summary>
+        private static RibbonEntry ParseButton(string line, int number, Action<string> warn)
+        {
+            var space = line.IndexOfAny(new[] { ' ', '\t' });
+            var id = space < 0 ? line : line.Substring(0, space);
+            var rest = space < 0 ? "" : line.Substring(space + 1).Trim();
+            string label = null;
+            var consumed = new StringBuilder(rest);
+            foreach (Match m in Attribute.Matches(rest))
+            {
+                var key = m.Groups[1].Value;
+                if (string.Equals(key, "подпись", StringComparison.OrdinalIgnoreCase)) label = Unescape(m.Groups[2].Value);
+                else if (string.Equals(key, "размер", StringComparison.OrdinalIgnoreCase))
+                    warn("раскладка ленты, строка " + number + ": «размер» не нужен — маленькие кнопки задаются стопкой «( … )»");
+                else warn("раскладка ленты, строка " + number + ": непонятное «" + key + "» — пропущено");
+                consumed.Replace(m.Value, new string(' ', m.Value.Length));
+            }
+            if (consumed.ToString().Trim().Length > 0)
+                warn("раскладка ленты, строка " + number + ": не понято «" + consumed.ToString().Trim() + "» (подпись — в кавычках: подпись=\"…\")");
+            return new RibbonEntry(id, label);
+        }
+
+        private static string Unescape(string s)
+        {
+            var sb = new StringBuilder();
+            for (var i = 0; i < s.Length; i++)
+            {
+                if (s[i] != '\\' || i + 1 >= s.Length) { sb.Append(s[i]); continue; }
+                var next = s[++i];
+                sb.Append(next == 'n' ? '\n' : next);
+            }
+            return sb.ToString();
+        }
+
         /// <summary>
-        /// Что создать на ленте: сначала панели раскладки (в её порядке, только кнопки, которые есть в сборке),
-        /// затем не попавшие в раскладку кнопки — на свои панели по умолчанию. Пустые панели не создаются.
-        /// Кнопки раскладки, которых нет, не ошибка: модуль мог не запуститься или не работать в этой версии Revit.
+        /// Что строить: в панелях раскладки — только кнопки, которые есть (модуль мог не запуститься или не работать в этой
+        /// версии Revit — это не ошибка); стопка без пропавших кнопок, из одной кнопки — большая кнопка, больше трёх —
+        /// первые три в стопке, остальные большие; пустые панели и отделы без панелей не строятся. Кнопки без раскладки —
+        /// на панелях модулей, во всех отделах. selectorId («Core.About») — где стоит переключатель отделов: если отделы
+        /// есть, он обязан быть на панели, видной во всех отделах, иначе из чужого отдела не вернуться.
         /// </summary>
-        public static List<RibbonPanelSpec> Arrange(IEnumerable<RibbonPanelSpec> layout, IEnumerable<RibbonButton> buttons, Action<string> warn)
+        public static RibbonPlan Arrange(IEnumerable<RibbonPanelSpec> layout, IEnumerable<RibbonButton> buttons, Action<string> warn,
+            string selectorId = null)
         {
             var available = buttons.ToList();
-            var known = new HashSet<string>(available.Select(b => b.Id), StringComparer.OrdinalIgnoreCase);
+            var byId = available.GroupBy(b => b.Id, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
             var placed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var result = new List<RibbonPanelSpec>();
+            var placedIn = new HashSet<string>(StringComparer.OrdinalIgnoreCase); // «отдел|код» — кнопка дважды в одном отделе
+            var plan = new RibbonPlan();
 
-            foreach (var panel in layout)
+            foreach (var source in layout)
             {
-                var target = Find(result, panel.Title);
-                if (target == null) result.Add(target = new RibbonPanelSpec(panel.Title));
-                foreach (var id in panel.Buttons)
+                var target = new RibbonPanelSpec(source.Department, source.Title);
+                foreach (var slot in source.Slots)
                 {
-                    if (!known.Contains(id)) continue;
-                    if (!placed.Add(id))
+                    var entries = new List<RibbonEntry>();
+                    foreach (var e in slot.Entries)
                     {
-                        warn("раскладка ленты: кнопка «" + id + "» указана дважды, стоит на первом месте");
-                        continue;
+                        if (!byId.TryGetValue(e.Id, out var button)) continue;
+                        if (!placedIn.Add((source.Department ?? "") + "|" + button.Id))
+                        {
+                            warn("раскладка ленты: кнопка «" + e.Id + "» указана дважды" +
+                                 (source.Department == null ? "" : " в отделе «" + source.Department + "»") + " — стоит на первом месте");
+                            continue;
+                        }
+                        placed.Add(button.Id);
+                        entries.Add(new RibbonEntry(button.Id, e.Label));
                     }
-                    target.Buttons.Add(available.First(b => string.Equals(b.Id, id, StringComparison.OrdinalIgnoreCase)).Id);
+                    if (slot.IsStack && entries.Count > MaxStack)
+                        warn("раскладка ленты: в стопке больше " + MaxStack + " кнопок — «" + string.Join("», «", entries.Skip(MaxStack).Select(x => x.Id)) +
+                             "» большими кнопками после неё");
+                    var stacked = new RibbonSlot();
+                    stacked.Entries.AddRange(entries.Take(MaxStack));
+                    if (stacked.Entries.Count > 0) target.Slots.Add(stacked); // из одной кнопки — большая (IsStack == false)
+                    foreach (var extra in entries.Skip(MaxStack))
+                    {
+                        var single = new RibbonSlot();
+                        single.Entries.Add(extra);
+                        target.Slots.Add(single);
+                    }
                 }
+                if (target.Slots.Count > 0) plan.Panels.Add(target);
+            }
+
+            foreach (var d in plan.Panels.Where(p => p.Department != null).Select(p => p.Department))
+                if (!plan.Departments.Contains(d, StringComparer.OrdinalIgnoreCase)) plan.Departments.Add(d);
+
+            // переключатель отделов — только на панели, видной во всех отделах
+            if (selectorId != null && plan.Departments.Count > 0 && byId.ContainsKey(selectorId) &&
+                !plan.Panels.Any(p => p.Department == null && p.Slots.Any(s => s.Entries.Any(e => Same(e.Id, selectorId)))))
+            {
+                warn("раскладка ленты: «" + selectorId + "» (переключатель отделов) должна стоять на панели до первого отдела — " +
+                     "поставлена на панель «" + byId[selectorId].DefaultPanel + "», видную во всех отделах");
+                placed.Remove(selectorId);
             }
 
             foreach (var button in available)
             {
-                if (!placed.Add(button.Id)) continue;
-                var target = Find(result, button.DefaultPanel);
-                if (target == null) result.Add(target = new RibbonPanelSpec(button.DefaultPanel));
-                target.Buttons.Add(button.Id);
+                if (placed.Contains(button.Id)) continue;
+                placed.Add(button.Id);
+                var target = plan.Panels.FirstOrDefault(p => p.Department == null && Same(p.Title, button.DefaultPanel));
+                if (target == null) plan.Panels.Add(target = new RibbonPanelSpec(null, button.DefaultPanel));
+                var slot = new RibbonSlot();
+                slot.Entries.Add(new RibbonEntry(button.Id, null));
+                target.Slots.Add(slot);
             }
-
-            result.RemoveAll(p => p.Buttons.Count == 0);
-            return result;
+            return plan;
         }
 
-        private static RibbonPanelSpec Find(List<RibbonPanelSpec> panels, string title) =>
-            panels.FirstOrDefault(p => string.Equals(p.Title, title, StringComparison.OrdinalIgnoreCase));
+        /// <summary>Видна ли панель в отделе (null — отделов нет: видны все).</summary>
+        public static bool IsVisible(RibbonPanelSpec panel, string department) =>
+            panel.Department == null || department == null || Same(panel.Department, department);
+
+        /// <summary>Отдел при запуске: сохранённый выбор человека, если такой отдел ещё есть, иначе — первый.</summary>
+        public static string StartDepartment(RibbonPlan plan, string saved) =>
+            plan.Departments.FirstOrDefault(d => Same(d, saved)) ?? plan.Departments.FirstOrDefault();
+
+        private static bool Same(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
     }
 }

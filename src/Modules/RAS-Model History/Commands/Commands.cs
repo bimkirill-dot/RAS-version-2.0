@@ -74,7 +74,10 @@ namespace RASv2.ModelHistory.Commands
         }
     }
 
-    /// <summary>Кнопка доступна и без открытой модели (панель, настройки).</summary>
+    /// <summary>
+    /// Кнопка доступна и без открытой модели (панель, настройки). Свой у каждой сборки, а не общий из ядра: Revit ищет
+    /// класс доступности в сборке команды кнопки (у ядра — RASv2.Core.AlwaysAvailable для «О плагине» и отделов).
+    /// </summary>
     public sealed class AlwaysAvailable : IExternalCommandAvailability
     {
         public bool IsCommandAvailable(UIApplication applicationData, CategorySet selectedCategories) => true;

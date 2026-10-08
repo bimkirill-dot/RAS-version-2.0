@@ -48,8 +48,10 @@ namespace RASv2.Core
         /// <summary>Кнопки запущенных модулей и ядра — в порядке объявления; на ленту — после запуска всех модулей.</summary>
         private static readonly List<RibbonButton> RibbonOrder = new List<RibbonButton>();
         private static readonly Dictionary<string, PushButtonData> RibbonData = new Dictionary<string, PushButtonData>(StringComparer.OrdinalIgnoreCase);
-        /// <summary>Кнопки на ленте по кодам — чтобы выключить кнопки модуля, отключённого предохранителем.</summary>
-        private static readonly Dictionary<string, RibbonItem> RibbonItems = new Dictionary<string, RibbonItem>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Объявленные кнопки: код и подпись, заданная модулем, — для «О плагине» (коды для раскладки ribbon.txt).</summary>
+        public static IEnumerable<KeyValuePair<string, string>> DeclaredButtons =>
+            RibbonOrder.Select(b => new KeyValuePair<string, string>(b.Id, RibbonData[b.Id].Text));
         public static IReadOnlyList<ModuleSlot> Modules => ModuleList;
 
         /// <summary>Вызывает загрузчик (сигнатуру менять только вместе с ним).</summary>
@@ -77,9 +79,10 @@ namespace RASv2.Core
                 if (slot.Module != null) StartModule(app, slot, ModuleSwitches.ModeOf(switches, slot.Id));
             }
             var about = typeof(AboutCommand).Assembly;
-            var aboutData = new PushButtonData("Core.About", "О плагине", about.Location, typeof(AboutCommand).FullName)
+            var aboutData = new PushButtonData(RibbonBuilder.SelectorId, "О плагине", about.Location, typeof(AboutCommand).FullName)
             {
-                ToolTip = "Версия плагина, модули и их состояние, журнал ошибок"
+                ToolTip = "Версия плагина, модули и их состояние, коды кнопок, журнал ошибок",
+                AvailabilityClassName = typeof(AlwaysAvailable).FullName
             };
             RibbonIcons.Set(aboutData, about, "About");
             AddButton(aboutData, ServicePanel);
@@ -160,8 +163,8 @@ namespace RASv2.Core
         }
 
         /// <summary>
-        /// Лента: панели и кнопки по раскладке из сборки (ribbon.txt). Нет файла или он с ошибками — кнопки
-        /// стоят на панелях по умолчанию. Ошибка одной кнопки или панели не мешает остальным.
+        /// Лента: отделы, панели, кнопки и стопки по раскладке из сборки (ribbon.txt) — RibbonLayout, строит RibbonBuilder.
+        /// Нет файла или он с ошибками — кнопки стоят на панелях по умолчанию.
         /// </summary>
         private static void CreateRibbon(UIControlledApplication app, string buildDir)
         {
@@ -176,22 +179,8 @@ namespace RASv2.Core
             {
                 Log.Write(Tag, "Не удалось прочитать раскладку ленты", ex);
             }
-
-            foreach (var panel in RibbonLayout.Arrange(layout, RibbonOrder, w => Log.Write(Tag, w)))
-            {
-                RibbonPanel ribbonPanel;
-                try { ribbonPanel = app.CreateRibbonPanel(TabName, panel.Title); }
-                catch (Exception ex)
-                {
-                    Log.Write(Tag, "Не удалось создать панель «" + panel.Title + "»", ex);
-                    continue;
-                }
-                foreach (var id in panel.Buttons)
-                {
-                    try { RibbonItems[id] = ribbonPanel.AddItem(RibbonData[id]); }
-                    catch (Exception ex) { Log.Write(ButtonOwner(id), "Не удалось поставить кнопку «" + id + "» на ленту", ex); }
-                }
-            }
+            var plan = RibbonLayout.Arrange(layout, RibbonOrder, w => Log.Write(Tag, w), RibbonBuilder.SelectorId);
+            RibbonBuilder.Build(app, TabName, plan, RibbonData);
         }
 
         /// <summary>
@@ -202,9 +191,10 @@ namespace RASv2.Core
         {
             var slot = ModuleList.FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase));
             if (slot != null) slot.State = "отключён: слишком много ошибок (с " + DateTime.Now.ToString("dd.MM.yyyy HH:mm") + ")";
-            foreach (var item in RibbonItems.Where(i => string.Equals(ButtonOwner(i.Key), id, StringComparison.OrdinalIgnoreCase)))
+            foreach (var item in RibbonBuilder.AllItems.Where(i => string.Equals(RibbonBuilder.OwnerOf(i.Key), id, StringComparison.OrdinalIgnoreCase)))
+            foreach (var copy in item.Value)
             {
-                try { item.Value.Enabled = false; }
+                try { copy.Enabled = false; }
                 catch (Exception ex) { Log.Write(Tag, "Не удалось выключить кнопку «" + item.Key + "»", ex); }
             }
         }
@@ -212,19 +202,14 @@ namespace RASv2.Core
         /// <summary>Тема Revit сменилась (светлая / тёмная): иконки всех кнопок — по новой теме.</summary>
         private static void OnThemeChanged()
         {
-            foreach (var item in RibbonItems)
+            foreach (var item in RibbonBuilder.AllItems)
+            foreach (var copy in item.Value)
             {
-                try { RibbonIcons.Refresh(item.Key, item.Value); }
-                catch (Exception ex) { Log.Write(ButtonOwner(item.Key), "Не удалось сменить иконку «" + item.Key + "»", ex); }
+                try { RibbonIcons.Refresh(item.Key, copy); }
+                catch (Exception ex) { Log.Write(RibbonBuilder.OwnerOf(item.Key), "Не удалось сменить иконку «" + item.Key + "»", ex); }
             }
         }
 
-        /// <summary>Метка журнала для кнопки: модуль — часть кода до точки.</summary>
-        private static string ButtonOwner(string id)
-        {
-            var dot = id.IndexOf('.');
-            return dot > 0 ? id.Substring(0, dot) : Tag;
-        }
     }
 
     /// <summary>Поиск модулей в папке сборки: все RASv2.*.dll, кроме ядра и загрузчика.</summary>
