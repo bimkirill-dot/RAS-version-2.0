@@ -191,6 +191,8 @@ try {
             foreach ($year in $Years) {
                 $yearDir = Join-Path $ServerReleases $year
                 Set-Pointer $yearDir $Channel $id
+                # выпуск сразу всем — и тестовой группе: она берёт «тест», и старая версия там оставила бы её позади всех
+                if ($Channel -eq 'all') { Set-Pointer $yearDir 'test' $id }
                 Remove-OldBuilds $yearDir 20
             }
             $testers = Join-Path $ServerRoot 'Config\test-users.txt'
@@ -200,6 +202,7 @@ try {
             }
             Write-Host ""
             Write-Host "Выпущено: сборка $id, канал «$($ChannelNames[$Channel])»."
+            if ($Channel -eq 'all') { Write-Host 'Канал «тест» переведён на ту же сборку: тестовая группа тоже получит её.' }
             Write-Host 'Пользователям этого канала достаточно перезапустить Revit.'
             if ($Channel -eq 'test') { Write-Host "Тестовая группа: $testers. Проверили — promote.cmd переведёт эту сборку на всех." }
         }
