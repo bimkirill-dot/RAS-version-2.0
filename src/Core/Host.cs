@@ -69,6 +69,7 @@ namespace RASv2.Core
 #if !REVIT2023
             _events.ThemeChanged.Add(Tag, (s, e) => OnThemeChanged()); // светлые / тёмные иконки — по теме Revit
 #endif
+            _events.Idling.Add(Tag, (s, e) => RibbonBuilder.RetryHiddenText()); // кнопки без подписи, если лента была не готова
             try { app.CreateRibbonTab(TabName); }
             catch (Autodesk.Revit.Exceptions.ArgumentException) { /* вкладка уже есть */ }
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Autodesk.Revit.UI;
+using AW = Autodesk.Windows;
 
 namespace RASv2.Core
 {
@@ -16,15 +17,19 @@ namespace RASv2.Core
     internal static class RibbonBuilder
     {
         private const string Tag = "Ядро";
-        /// <summary>Подпись «без подписи»: пустую строку Revit может не принять, а этот знак не виден.</summary>
-        private const string NoLabel = "​";
         public const string SelectorId = "Core.About";
+        /// <summary>Сколько раз в простое Revit искать кнопки без подписи, если при запуске лента ещё не была готова.</summary>
+        private const int HideTextAttempts = 200;
 
         /// <summary>Кнопки на ленте по кодам (у кнопки в нескольких отделах — несколько).</summary>
         private static readonly Dictionary<string, List<RibbonItem>> Items = new Dictionary<string, List<RibbonItem>>(StringComparer.OrdinalIgnoreCase);
         private static readonly List<KeyValuePair<RibbonPanelSpec, RibbonPanel>> Panels = new List<KeyValuePair<RibbonPanelSpec, RibbonPanel>>();
         private static readonly List<PulldownButton> Selectors = new List<PulldownButton>();
         private static RibbonPlan _plan;
+        private static string _tab;
+        /// <summary>Кнопки без подписи, которых ещё не нашли во внутренней ленте Revit: имя панели → код кнопки.</summary>
+        private static readonly List<KeyValuePair<string, string>> PendingNoText = new List<KeyValuePair<string, string>>();
+        private static int _hideAttempts;
 
         private static string SavedDepartmentFile => Path.Combine(RasPaths.User, "department.txt");
 
@@ -38,6 +43,7 @@ namespace RASv2.Core
         public static void Build(UIControlledApplication app, string tab, RibbonPlan plan, IReadOnlyDictionary<string, PushButtonData> data)
         {
             _plan = plan;
+            _tab = tab;
             var departments = plan.Departments.Take(DepartmentCommands.Count).ToList();
             if (plan.Departments.Count > departments.Count)
                 Log.Write(Tag, "Отделов больше " + DepartmentCommands.Count + " — лишние в переключателе не показаны: " +
@@ -46,10 +52,11 @@ namespace RASv2.Core
             foreach (var spec in plan.Panels)
             {
                 RibbonPanel panel;
+                // имя панели на вкладке уникально: у панели отдела — с названием отдела, на ленте — только своё название
+                var panelName = spec.Department == null ? spec.Title : spec.Department + " · " + spec.Title;
                 try
                 {
-                    // имя панели на вкладке уникально: у панели отдела — с названием отдела, на ленте — только своё название
-                    panel = app.CreateRibbonPanel(tab, spec.Department == null ? spec.Title : spec.Department + " · " + spec.Title);
+                    panel = app.CreateRibbonPanel(tab, panelName);
                     panel.Title = spec.Title;
                 }
                 catch (Exception ex)
@@ -58,13 +65,15 @@ namespace RASv2.Core
                     continue;
                 }
                 Panels.Add(new KeyValuePair<RibbonPanelSpec, RibbonPanel>(spec, panel));
-                foreach (var slot in spec.Slots) AddSlot(panel, slot, data, departments);
+                foreach (var slot in spec.Slots) AddSlot(panel, panelName, slot, data, departments);
             }
+            HidePendingText();
 
             if (departments.Count > 0) ShowDepartment(RibbonLayout.StartDepartment(plan, ReadSaved()), save: false);
         }
 
-        private static void AddSlot(RibbonPanel panel, RibbonSlot slot, IReadOnlyDictionary<string, PushButtonData> data, List<string> departments)
+        private static void AddSlot(RibbonPanel panel, string panelName, RibbonSlot slot, IReadOnlyDictionary<string, PushButtonData> data,
+            List<string> departments)
         {
             var items = new List<RibbonItemData>();
             foreach (var e in slot.Entries)
@@ -85,7 +94,7 @@ namespace RASv2.Core
                     if (!Items.TryGetValue(entry.Id, out var list)) Items[entry.Id] = list = new List<RibbonItem>();
                     list.Add(item);
                     if (item is PulldownButton selector) FillSelector(selector, data[entry.Id], departments);
-                    else if (entry.Label != null) SetLabel(item, entry.Label);
+                    else if (entry.Label != null) SetLabel(panelName, item, entry.Label);
                 }
             }
             catch (Exception ex)
@@ -95,11 +104,71 @@ namespace RASv2.Core
             }
         }
 
-        /// <summary>Своя подпись кнопки из раскладки; «» — без подписи.</summary>
-        private static void SetLabel(RibbonItem item, string label)
+        /// <summary>
+        /// Своя подпись кнопки из раскладки. «» — без подписи: пустую подпись (и невидимые знаки) Revit API не принимает,
+        /// поэтому подпись остаётся, а показ текста выключается во внутренней ленте Revit (AdWindows: ShowText = false).
+        /// </summary>
+        private static void SetLabel(string panelName, RibbonItem item, string label)
         {
-            try { item.ItemText = label.Length == 0 ? NoLabel : label; }
+            if (label.Length == 0)
+            {
+                PendingNoText.Add(new KeyValuePair<string, string>(panelName, item.Name));
+                return;
+            }
+            try { item.ItemText = label; }
             catch (Exception ex) { Log.Write(Tag, "Не удалось задать подпись «" + label + "» кнопке «" + item.Name + "»", ex); }
+        }
+
+        /// <summary>
+        /// Выключить текст у кнопок без подписи. Кнопка во внутренней ленте Revit — по номеру вида
+        /// «…%&lt;вкладка&gt;%&lt;панель&gt;%…%&lt;код кнопки&gt;». Если лента ещё не готова (запуск Revit), — повтор в простое
+        /// (RetryHiddenText), пока не найдутся.
+        /// </summary>
+        private static void HidePendingText()
+        {
+            if (PendingNoText.Count == 0) return;
+            try
+            {
+                var tab = AW.ComponentManager.Ribbon?.Tabs.FirstOrDefault(t => t.Id == _tab || t.Title == _tab);
+                if (tab == null) return;
+                var items = tab.Panels.SelectMany(p => Flatten(p.Source?.Items)).Where(i => i?.Id != null).ToList();
+                foreach (var pending in PendingNoText.ToList())
+                {
+                    var found = items.Where(i => i.Id.EndsWith("%" + pending.Value, StringComparison.Ordinal) &&
+                                                 i.Id.IndexOf("%" + pending.Key + "%", StringComparison.Ordinal) >= 0).ToList();
+                    if (found.Count == 0) continue;
+                    foreach (var i in found) i.ShowText = false;
+                    PendingNoText.Remove(pending);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Write(Tag, "Не удалось убрать подпись кнопок", ex);
+                PendingNoText.Clear();
+            }
+        }
+
+        /// <summary>В простое Revit: кнопки без подписи, которые при запуске не нашлись во внутренней ленте.</summary>
+        public static void RetryHiddenText()
+        {
+            if (PendingNoText.Count == 0) return;
+            HidePendingText();
+            if (PendingNoText.Count == 0 || ++_hideAttempts < HideTextAttempts) return;
+            Log.Write(Tag, "Не нашлись во внутренней ленте Revit кнопки без подписи — подпись осталась: " +
+                           string.Join(", ", PendingNoText.Select(p => p.Value)));
+            PendingNoText.Clear();
+        }
+
+        /// <summary>Кнопки панели, в том числе в стопках (строки стопки — RibbonRowPanel).</summary>
+        private static IEnumerable<AW.RibbonItem> Flatten(IEnumerable<AW.RibbonItem> items)
+        {
+            if (items == null) yield break;
+            foreach (var item in items)
+            {
+                yield return item;
+                if (item is AW.RibbonRowPanel row)
+                    foreach (var inner in Flatten(row.Items)) yield return inner;
+            }
         }
 
         /// <summary>Переключатель отделов — выпадающая кнопка вместо «О плагине», с той же иконкой.</summary>

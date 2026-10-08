@@ -13,6 +13,11 @@
 
   <ItemGroup>
     <Compile Include="..\Shared\RasPaths.cs" Link="Shared\RasPaths.cs" />
+    <!-- лента Revit изнутри (AdWindows.dll — часть самого Revit, с плагином не копируется): кнопка без подписи -->
+    <Reference Include="AdWindows">
+      <HintPath>$(RevitDir)\AdWindows.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <!-- раскладка кнопок по панелям вкладки (RibbonLayout) — едет в сборку рядом с ядром -->
     <None Update="ribbon.txt" CopyToOutputDirectory="PreserveNewest" />
     <!-- иконки кнопок: Icons\<имя>32.png и Icons\<имя>16.png, вшиты в сборку (RibbonIcons в ядре) -->
