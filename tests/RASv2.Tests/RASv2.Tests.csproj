@@ -31,10 +31,16 @@
     <Compile Include="$(MhDir)Tracking\EmployeeIndex.cs" Link="ModelHistory\EmployeeIndex.cs" />
     <Compile Include="$(MhDir)UI\RecordFilter.cs" Link="ModelHistory\RecordFilter.cs" />
     <Compile Include="$(MhDir)Storage\LegacyFolders.cs" Link="ModelHistory\LegacyFolders.cs" />
+    <Compile Include="$(MhDir)Tracking\ElementInfo.cs" Link="ModelHistory\ElementInfo.cs" />
+    <Compile Include="$(MhDir)Tracking\DeletionCascade.cs" Link="ModelHistory\DeletionCascade.cs" />
+    <Compile Include="$(MhDir)Tracking\UnknownElementResolver.cs" Link="ModelHistory\UnknownElementResolver.cs" />
+    <Compile Include="$(MhDir)Tracking\ElementInfoCache.cs" Link="ModelHistory\ElementInfoCache.cs" />
+    <Compile Include="$(MhDir)UI\WarmupProgress.cs" Link="ModelHistory\WarmupProgress.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(RevitVersion)' != '2026'">
     <Compile Remove="ModelHistoryTests.cs" />
     <Compile Remove="ModelHistoryStubs.cs" />
+    <Compile Remove="ModelHistoryElementTests.cs" />
   </ItemGroup>
 
 </Project>

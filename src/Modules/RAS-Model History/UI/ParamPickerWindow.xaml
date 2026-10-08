@@ -1,0 +1,29 @@
+<Window x:Class="RASv2.ModelHistory.UI.ParamPickerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:RASv2.ModelHistory.UI"
+        Title="RAS-Model History — столбец параметра"
+        Width="420" Height="520" MinWidth="320" MinHeight="300"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        FontSize="12" Background="{DynamicResource Spy.Bg}" Foreground="{DynamicResource Spy.Text}">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <local:ThemeResources />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <DockPanel Margin="14,12,14,12">
+        <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Margin="0,0,0,8" Style="{StaticResource Spy.MutedText}"
+                   Text="Значение параметра появится в таблице отдельным столбцом — в том числе у удалённых элементов (на момент удаления)." />
+        <TextBox x:Name="Search" DockPanel.Dock="Top" Margin="0,0,0,8" TextChanged="Search_TextChanged"
+                 ToolTip="Начните вводить имя параметра" />
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0" LastChildFill="False">
+            <TextBlock x:Name="CountText" DockPanel.Dock="Left" VerticalAlignment="Center" Style="{StaticResource Spy.MutedText}" />
+            <Button DockPanel.Dock="Right" Content="Отмена" Width="100" Height="26" Margin="8,0,0,0" IsCancel="True" />
+            <Button x:Name="Ok" DockPanel.Dock="Right" Content="Добавить" Width="100" Height="26" IsDefault="True" Click="Ok_Click" />
+        </DockPanel>
+        <ListBox x:Name="ParamList" MouseDoubleClick="List_MouseDoubleClick" SelectionChanged="List_SelectionChanged" />
+    </DockPanel>
+</Window>

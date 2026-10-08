@@ -188,13 +188,6 @@
                         <TextBlock Style="{StaticResource Spy.FilterLabel}" Text="Тип объекта:" />
                         <ComboBox Style="{StaticResource Spy.FilterCombo}" ItemsSource="{Binding GroupOptions}" MinWidth="150"
                                   DisplayMemberPath="Label" SelectedItem="{Binding SelectedGroup}" />
-                        <StackPanel Orientation="Horizontal"
-                                    ToolTip="Показать в таблице значение параметра — в том числе у удалённых элементов (значение на момент удаления). Список — все параметры, найденные у элементов модели.">
-                            <TextBlock Style="{StaticResource Spy.FilterLabel}" Text="Столбец параметра:" />
-                            <ComboBox x:Name="ParamCombo" Style="{StaticResource Spy.FilterCombo}" Width="190" IsEditable="True"
-                                      IsTextSearchEnabled="True" StaysOpenOnEdit="True" ItemsSource="{Binding ParamNames}"
-                                      Text="{Binding ParamColumnName, UpdateSourceTrigger=PropertyChanged, Delay=400}" />
-                        </StackPanel>
                         <CheckBox Style="{StaticResource Spy.FilterCheck}" Content="Без дублей" IsChecked="{Binding HideDuplicates}"
                                   ToolTip="Скрывать записи «Синхронизация», если то же изменение уже записал сам автор" />
                         <CheckBox Style="{StaticResource Spy.FilterCheck}" Content="{Binding HideVoidLabel}" IsChecked="{Binding HideVoid}"
@@ -419,7 +412,28 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn x:Name="ColChanges" Header="Что изменилось" Binding="{Binding ParamsText}" Width="*" MinWidth="160" CanUserSort="False" />
+                        <DataGridTemplateColumn x:Name="ColChanges" Header="Что изменилось" Width="*" MinWidth="160" CanUserSort="False">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Grid VerticalAlignment="Center">
+                                        <TextBlock x:Name="ChangesText" Text="{Binding ParamsText}" TextTrimming="CharacterEllipsis" ToolTip="{Binding ParamsText}" />
+                                        <TextBlock x:Name="ParentLink" Visibility="Collapsed" TextTrimming="CharacterEllipsis"
+                                                   ToolTip="Revit удалил элемент вместе с тем, от чего он зависел. Щелчок — к строке удаления">
+                                            <Hyperlink Command="{Binding DataContext.GoToParentCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                       CommandParameter="{Binding}" Foreground="{DynamicResource Spy.Accent}">
+                                                <Run Text="{Binding ParentText, Mode=OneWay}" />
+                                            </Hyperlink>
+                                        </TextBlock>
+                                    </Grid>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding HasParentLink}" Value="True">
+                                            <Setter TargetName="ChangesText" Property="Visibility" Value="Collapsed" />
+                                            <Setter TargetName="ParentLink" Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                         <DataGridTemplateColumn x:Name="ColStatus" Header="Статус" SortMemberPath="StatusKey" Width="170">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
@@ -431,7 +445,6 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn x:Name="ParamColumn" Header="Параметр" Binding="{Binding ParamValue}" Width="170" Visibility="Collapsed" />
                         <DataGridTextColumn x:Name="ColGroup" Header="Тип объекта" Binding="{Binding GroupText}" Width="110" Visibility="Collapsed" />
                         <DataGridTextColumn x:Name="ColCategory" Header="Категория" Binding="{Binding Category}" Width="120" Visibility="Collapsed" />
                         <DataGridTextColumn x:Name="ColType" Header="Тип / семейство" Binding="{Binding TypeName}" Width="200" Visibility="Collapsed" />
@@ -662,6 +675,23 @@
 
         <!-- ═══ Строка состояния ═══ -->
         <DockPanel Grid.Row="4" Margin="0,5,0,0" LastChildFill="True">
+            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Margin="0,0,16,0"
+                        Visibility="{Binding HasWarmup, Converter={StaticResource BoolToVis}}" ToolTip="{Binding WarmupToolTip}">
+                <ProgressBar Width="110" Height="8" Minimum="0" Maximum="100" Value="{Binding WarmupPercent, Mode=OneWay}"
+                             VerticalAlignment="Center" Margin="0,0,6,0"
+                             Visibility="{Binding IsWarmupDone, Converter={StaticResource InverseBoolToVis}}" />
+                <TextBlock x:Name="WarmupLabel" Text="{Binding WarmupText}" TextWrapping="NoWrap">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource Spy.MutedText}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsWarmupDone}" Value="True">
+                                    <Setter Property="Foreground" Value="{DynamicResource Spy.Success}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </StackPanel>
             <ProgressBar DockPanel.Dock="Left" Width="60" Height="6" IsIndeterminate="True" Margin="0,0,6,0"
                          Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}" />
             <TextBlock DockPanel.Dock="Left" Text="{Binding SummaryText}" Style="{StaticResource Spy.MutedText}" TextWrapping="NoWrap" />
@@ -673,13 +703,6 @@
                 <TextBlock Text="{Binding StatModified}" Foreground="{DynamicResource Spy.Accent}" />
                 <TextBlock Text=" · " Style="{StaticResource Spy.MutedText}" />
                 <TextBlock Text="{Binding StatDeleted}" Foreground="{DynamicResource Spy.Danger}" />
-            </StackPanel>
-            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Margin="16,0,0,0"
-                        Visibility="{Binding HasWarmup, Converter={StaticResource BoolToVis}}"
-                        ToolTip="Плагин в фоне запоминает элементы и их параметры, чтобы знать «было» для любого изменения. Работать в модели можно как обычно.">
-                <ProgressBar Width="60" Height="6" Minimum="0" Maximum="100" Value="{Binding WarmupPercent, Mode=OneWay}"
-                             VerticalAlignment="Center" Margin="0,0,6,0" />
-                <TextBlock Text="{Binding WarmupText}" Style="{StaticResource Spy.MutedText}" TextWrapping="NoWrap" />
             </StackPanel>
             <TextBlock Text="{Binding Status}" Style="{StaticResource Spy.MutedText}" Margin="16,0,0,0" TextAlignment="Right"
                        TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Status}" />

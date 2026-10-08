@@ -55,7 +55,12 @@ namespace RASv2.ModelHistory.Tracking
         /// <summary>Актуализация журнала: перечисленные записи не соответствуют модели и убраны из журнала.</summary>
         Exclude,
         /// <summary>Убранные при актуализации записи возвращены в журнал (поле «ex» — их id).</summary>
-        Restore
+        Restore,
+        /// <summary>
+        /// Модель сохранена из отсоединённой копии (новое хранилище или новый файл): отсоединённую копию журнал не вёл,
+        /// поэтому здесь граница — что было с моделью до этого, журнал не знает.
+        /// </summary>
+        FromDetached
     }
 
     /// <summary>Укрупнённый тип объекта — для фильтра «Тип объекта».</summary>
@@ -97,6 +102,9 @@ namespace RASv2.ModelHistory.Tracking
     /// </summary>
     public sealed class ChangeRecord
     {
+        /// <summary>Имя удалённого элемента, о котором модуль ничего не знал (удалён до того, как модуль его запомнил).</summary>
+        public const string UnknownElementName = "(нет сведений: элемент удалён до того, как плагин его запомнил)";
+
         /// <summary>Уникальный id записи (для устранения дублей при чтении).</summary>
         [JsonPropertyName("r")] public string RecordId { get; set; }
         [JsonPropertyName("t")] public DateTimeOffset Time { get; set; }
@@ -165,6 +173,19 @@ namespace RASv2.ModelHistory.Tracking
         [JsonPropertyName("inc")] public List<string> Sessions { get; set; }
         /// <summary>Для Exclude: id записей, убранных из журнала при актуализации.</summary>
         [JsonPropertyName("ex")] public List<string> Excludes { get; set; }
+
+        /// <summary>
+        /// Удалён вместе с элементом, от которого зависел (марка — со стеной, проём — с перекрытием, арматура — с балкой):
+        /// номер элемента-родителя. Нет — удалён сам.
+        /// </summary>
+        [JsonPropertyName("pid")] public long? ParentId { get; set; }
+        /// <summary>Запись об удалении родителя (её «r») — ссылка «удалён вместе с …» в журнале.</summary>
+        [JsonPropertyName("pr")] public string ParentRecord { get; set; }
+        /// <summary>Родитель для человека: «Стены · Базовая стена».</summary>
+        [JsonPropertyName("pn")] public string ParentName { get; set; }
+
+        /// <summary>Сведения об удалённом элементе взяты из прежних записей журнала (сам модуль его не успел запомнить).</summary>
+        [JsonIgnore] public bool InfoFromJournal { get; set; }
 
         [JsonIgnore] public bool IsSummary => SummaryCount.HasValue;
         [JsonIgnore] public bool HasParams => Params != null && Params.Count > 0;

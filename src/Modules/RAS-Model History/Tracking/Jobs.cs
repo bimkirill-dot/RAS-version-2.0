@@ -34,6 +34,11 @@ namespace RASv2.ModelHistory.Tracking
         /// <summary>Мелкая операция (обычная ручная правка) — для неё можно позволить больше работы.</summary>
         private readonly bool _small;
 
+        /// <summary>Удалённые в этой операции → заранее выданные номера записей (ссылка «удалён вместе с» — на запись родителя).</summary>
+        private Dictionary<long, string> _deletedRecordIds;
+        /// <summary>Удалённый → корень: удалённый в той же операции элемент, от которого он зависел.</summary>
+        private Dictionary<long, long> _cascadeRoots;
+
         public RecordBatch(ChangeTracker tr, DocumentTracker t, ChangeSource source, OperationKind op, string tx, string user,
             int totalIds = 0)
         {
@@ -51,6 +56,40 @@ namespace RASv2.ModelHistory.Tracking
 
         public int Count => _records.Count;
 
+        /// <summary>
+        /// До записей об удалении: что удалено вместе с чем (DeletionCascade) и номера их записей — чтобы у зависимого
+        /// сразу была ссылка на запись родителя, в каком бы порядке ни пришли удалённые.
+        /// </summary>
+        public void PrepareCascade(ICollection<long> deleted)
+        {
+            if (deleted == null || deleted.Count == 0) return;
+            try
+            {
+                _cascadeRoots = DeletionCascade.Roots(deleted, _t.ParentsOf);
+                _deletedRecordIds = new Dictionary<long, string>(deleted.Count);
+                foreach (var id in deleted) _deletedRecordIds[id] = LogStore.NewRecordId();
+            }
+            catch (Exception ex)
+            {
+                Diag.Log("Deletion cascade failed", ex); // без связи «вместе с» — записи всё равно будут
+                _cascadeRoots = null;
+                _deletedRecordIds = null;
+            }
+        }
+
+        /// <summary>Запись об удалении: её заранее выданный номер и «удалён вместе с …».</summary>
+        private void ApplyCascade(ChangeRecord rec, long id)
+        {
+            _t.DeletedIds.Add(id);
+            if (_deletedRecordIds == null || !_deletedRecordIds.TryGetValue(id, out var recordId)) return;
+            rec.RecordId = recordId;
+            if (_cascadeRoots == null || !_cascadeRoots.TryGetValue(id, out var root)) return;
+            rec.ParentId = root;
+            rec.ParentRecord = _deletedRecordIds[root];
+            if (_t.TryKnow(root, out var parent))
+                rec.ParentName = string.IsNullOrEmpty(parent.Category) ? parent.Name : parent.Category + " · " + parent.Name;
+        }
+
         public bool OverLimit => _added >= _tr.Settings.MaxRecordsPerTransaction;
 
         /// <summary>Изменение, сделанное текущим пользователем в этом сеансе.</summary>
@@ -63,7 +102,7 @@ namespace RASv2.ModelHistory.Tracking
             if (kind == ChangeKind.Deleted)
             {
                 _t.LiveDeletedSinceSync.Add(v);
-                if (!_t.Info.TryGetValue(v, out var known))
+                if (!_t.TryKnow(v, out var known))
                 {
                     // после полной подготовки «неизвестный» элемент — служебный
                     if (_t.WarmupDone && !s.RecordNoise) return;
@@ -73,6 +112,7 @@ namespace RASv2.ModelHistory.Tracking
                 if (ChangesView3D.IsChangesViewName(known.Name)) return; // 3D-вид изменений удалили вручную — не правка модели
                 var del = New(kind, _user);
                 known.FillRecord(del);
+                ApplyCascade(del, v);
                 if (!OverLimit) AttachLastState(del, v); // сверх лимита запись всё равно уйдёт в сводку
                 Add(del);
                 return;
@@ -156,6 +196,7 @@ namespace RASv2.ModelHistory.Tracking
             if (parameters != null && parameters.Count > 0) rec.Params = parameters;
             if (kind == ChangeKind.Modified) rec.BeforeKnown = parameters != null; // разница посчитана (хоть и пустая) или «было» неизвестно
             if (state != null && state.Count > 0) rec.State = state;
+            if (kind == ChangeKind.Deleted) ApplyCascade(rec, info.Id);
             Add(rec);
         }
 
@@ -342,6 +383,7 @@ namespace RASv2.ModelHistory.Tracking
                     _snapIds = null;
                     _t.WarmupDone = true;
                     _t.WarmupProgress = _t.WarmupTotal;
+                    _t.SaveInfoCache(); // если Revit закроется аварийно — сведения уже на диске
                     _tr.ReportWarmup(_t);
                     return true;
             }
@@ -489,6 +531,7 @@ namespace RASv2.ModelHistory.Tracking
                 default: tx = "Изменения с прошлого сеанса"; break;
             }
             _batch = new RecordBatch(tr, t, source, OperationKind.None, tx, "");
+            _batch.PrepareCascade(new HashSet<long>(deleted.Where(x => !myDeleted.Contains(x))));
         }
 
         public bool IsObsolete => _t.IsClosed;
@@ -508,7 +551,7 @@ namespace RASv2.ModelHistory.Tracking
                     if (item.Key == ChangeKind.Deleted)
                     {
                         if (_myDeleted.Contains(v)) continue;
-                        if (!_t.Info.TryGetValue(v, out var known))
+                        if (!_t.TryKnow(v, out var known))
                         {
                             if (_t.WarmupDone && !s.RecordNoise) continue;
                             known = ElementDescriber.Unknown(v);

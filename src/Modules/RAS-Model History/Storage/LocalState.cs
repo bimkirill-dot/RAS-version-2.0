@@ -90,6 +90,17 @@ namespace RASv2.ModelHistory.Storage
             }
         }
 
+        /// <summary>Локальные копии модели (кроме exceptPath) с несинхронизированными изменениями: путь → что осталось.</summary>
+        public static List<KeyValuePair<string, PendingLocal>> PendingOf(Func<string, bool> isModelKey, string exceptPath)
+        {
+            lock (Sync)
+            {
+                EnsurePendingLoaded();
+                var except = (exceptPath ?? "").ToLowerInvariant();
+                return _pending.Where(p => p.Key != except && p.Value?.ModelKey != null && isModelKey(p.Value.ModelKey)).ToList();
+            }
+        }
+
         public static void SetPending(string localPath, PendingLocal entry)
         {
             if (string.IsNullOrEmpty(localPath)) return;

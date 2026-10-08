@@ -9,7 +9,7 @@ namespace RASv2.ModelHistory.UI
     /// <summary>Общие для всех строк сведения: какой параметр показать в столбце и где взять его текущее значение.</summary>
     public sealed class RowContext
     {
-        /// <summary>Имя параметра для столбца «значение параметра» (null — столбец скрыт).</summary>
+        /// <summary>Параметр, по которому сортируют (столбец параметра, по заголовку которого щёлкнули); null — нет.</summary>
         public string ParamName { get; set; }
         /// <summary>(id элемента, имя параметра) → последнее известное значение по снимку модели.</summary>
         public Func<long, string, string> Lookup { get; set; }
@@ -32,7 +32,8 @@ namespace RASv2.ModelHistory.UI
     {
         private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
         private readonly RowContext _ctx;
-        private string _paramValue;
+        /// <summary>Значения столбцов параметров — читаются из снимков один раз.</summary>
+        private Dictionary<string, string> _paramValues;
 
         public ChangeRow(ChangeRecord r, RowContext ctx = null)
         {
@@ -188,31 +189,38 @@ namespace RASv2.ModelHistory.UI
         /// <summary>Изменения фактически не было: не попало в хранилище или убрано при актуализации.</summary>
         public bool IsVoid => IsExcluded || SyncStatusCalculator.IsVoid(Status);
 
+        /// <summary>Значение параметра, по которому сортируют (RowContext.ParamName).</summary>
+        public string ParamValue => ParamValueOf(_ctx?.ParamName);
+
         /// <summary>
-        /// Значение выбранного параметра:
+        /// Значение параметра для столбца параметра:
         /// изменён в этой записи — «было → стало»; удалён/создан — значение из записи журнала;
         /// иначе — последнее известное значение по снимку модели.
         /// </summary>
-        public string ParamValue
+        public string ParamValueOf(string name)
         {
-            get
+            if (string.IsNullOrEmpty(name) || Record.Kind == ChangeKind.Event || IsGroupHeader) return "";
+            _paramValues ??= new Dictionary<string, string>(StringComparer.CurrentCultureIgnoreCase);
+            if (_paramValues.TryGetValue(name, out var cached)) return cached;
+            string v = null;
+            var changed = Record.Params?.FirstOrDefault(p => Same(p.Name, name));
+            if (changed != null) v = Short(changed.Old, 60) + " → " + Short(changed.New, 60);
+            if (v == null && Record.State != null)
+                v = Record.State.FirstOrDefault(p => Same(p.Name, name))?.Value;
+            if (v == null && Record.ElementId > 0)
             {
-                if (_paramValue != null) return _paramValue;
-                var name = _ctx?.ParamName;
-                if (string.IsNullOrEmpty(name) || Record.Kind == ChangeKind.Event || IsGroupHeader) return _paramValue = "";
-                string v = null;
-                var changed = Record.Params?.FirstOrDefault(p => Same(p.Name, name));
-                if (changed != null) v = Short(changed.Old, 60) + " → " + Short(changed.New, 60);
-                if (v == null && Record.State != null)
-                    v = Record.State.FirstOrDefault(p => Same(p.Name, name))?.Value;
-                if (v == null && Record.ElementId > 0)
-                {
-                    try { v = _ctx.Lookup?.Invoke(Record.ElementId, name); }
-                    catch (Exception) { v = null; }
-                }
-                return _paramValue = v ?? "";
+                try { v = _ctx?.Lookup?.Invoke(Record.ElementId, name); }
+                catch (Exception) { v = null; }
             }
+            return _paramValues[name] = v ?? "";
         }
+
+        /// <summary>Удалён вместе с элементом, от которого зависел: в «Что изменилось» — ссылка на запись его удаления.</summary>
+        public bool HasParentLink => !IsGroupHeader && Record.Kind == ChangeKind.Deleted && Record.ParentId.HasValue;
+
+        /// <summary>«Удалён вместе с: Стены · Базовая стена».</summary>
+        public string ParentText =>
+            !HasParentLink ? "" : "Удалён вместе с: " + (string.IsNullOrEmpty(Record.ParentName) ? "элемент ID " + Record.ParentId : Record.ParentName);
 
         private static bool Same(string a, string b) => string.Equals(a, b, StringComparison.CurrentCultureIgnoreCase);
 
@@ -397,6 +405,7 @@ namespace RASv2.ModelHistory.UI
                     var head = string.Join(", ", names.Take(4));
                     return names.Count > 4 ? head + $" …ещё {names.Count - 4}" : head;
                 }
+                if (HasParentLink) return ParentText;
                 if (!Record.HasParams) return "";
                 var parts = Record.Params.Take(4).Select(p => $"{p.Name}: {Short(p.Old)} → {Short(p.New)}");
                 var text = string.Join("; ", parts);

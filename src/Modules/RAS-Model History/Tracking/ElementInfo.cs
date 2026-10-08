@@ -1,8 +1,8 @@
 namespace RASv2.ModelHistory.Tracking
 {
     /// <summary>
-    /// Облегчённые сведения об элементе. Хранятся в кэше, чтобы после удаления
-    /// элемента можно было сказать, что именно было удалено.
+    /// Облегчённые сведения об элементе. Хранятся в памяти и в кэше между сеансами (ElementInfoCache), чтобы после
+    /// удаления элемента можно было сказать, что именно было удалено и вместе с чем.
     /// </summary>
     public sealed class ElementInfo
     {
@@ -18,6 +18,11 @@ namespace RASv2.ModelHistory.Tracking
         public string OwnerView;
         public string Creator;
         public bool IsNoise;
+        /// <summary>
+        /// От чего элемент зависит и с чем удаляется: основа, вложенность, тип, уровень, вид-владелец, группа, отмеченный
+        /// элемент у марки, элементы размера. Нужно, чтобы понять «удалён вместе с …».
+        /// </summary>
+        public long[] Parents;
 
         public void FillRecord(ChangeRecord r)
         {

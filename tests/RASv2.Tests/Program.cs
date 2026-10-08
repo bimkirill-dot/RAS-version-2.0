@@ -25,6 +25,10 @@ namespace RASv2.Tests
             Run("RAS-Model History: журнал", ModelHistoryTests.Journal);
             Run("RAS-Model History: сотрудник за автором", ModelHistoryTests.Employees);
             Run("RAS-Model History: перенос личных папок", ModelHistoryTests.Folders);
+            Run("RAS-Model History: удалённые — «вместе с»", ModelHistoryElementTests.Deleted);
+            Run("RAS-Model History: «нет сведений» — из журнала", ModelHistoryElementTests.Unknown);
+            Run("RAS-Model History: кэш сведений об элементах", ModelHistoryElementTests.Cache);
+            Run("RAS-Model History: «Модель запомнена»", ModelHistoryElementTests.Warmup);
 #endif
             Console.WriteLine(_failed == 0 ? "Все проверки прошли." : "Не прошло проверок: " + _failed);
             return _failed == 0 ? 0 : 1;

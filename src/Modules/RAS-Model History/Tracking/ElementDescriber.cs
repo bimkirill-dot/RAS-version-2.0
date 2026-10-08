@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Autodesk.Revit.DB;
+using Autodesk.Revit.DB.Structure;
 
 namespace RASv2.ModelHistory.Tracking
 {
@@ -80,6 +82,7 @@ namespace RASv2.ModelHistory.Tracking
             info.Name = t != null ? t.Pool(GetName(el)) : GetName(el);
             info.TypeName = Intern(GetTypeName(doc, el));
             info.IsNoise = IsNoise(el, cat);
+            info.Parents = ParentsOf(el);
 
             try
             {
@@ -107,6 +110,61 @@ namespace RASv2.ModelHistory.Tracking
             return info;
         }
 
+        /// <summary>
+        /// От чего элемент зависит и с чем Revit его удалит (DeletionCascade): основа (стена у двери, перекрытие у проёма,
+        /// балка у арматуры), вложенность, тип, уровень, вид-владелец (аннотации вида), группа, видовой экран — вид,
+        /// марка — отмеченные элементы, размер — элементы, к которым он привязан. Только дешёвые свойства — вызывается
+        /// для каждого элемента при подготовке модели.
+        /// </summary>
+        public static long[] ParentsOf(Element el)
+        {
+            var list = new List<long>(4);
+            void Add(ElementId id)
+            {
+                if (IsValid(id) && id.Value != el.Id.Value && !list.Contains(id.Value)) list.Add(id.Value);
+            }
+            try
+            {
+                switch (el)
+                {
+                    case FamilyInstance fi:
+                        Add(fi.Host?.Id);
+                        Add(fi.SuperComponent?.Id);
+                        break;
+                    case Opening op:
+                        Add(op.Host?.Id);
+                        break;
+                    case Rebar rebar:
+                        Add(rebar.GetHostId());
+                        break;
+                    case RebarInSystem rs:
+                        Add(rs.GetHostId());
+                        break;
+                    case AreaReinforcement ar:
+                        Add(ar.GetHostId());
+                        break;
+                    case PathReinforcement pr:
+                        Add(pr.GetHostId());
+                        break;
+                    case IndependentTag tag:
+                        foreach (var id in tag.GetTaggedLocalElementIds()) Add(id);
+                        break;
+                    case Viewport vp:
+                        Add(vp.ViewId);
+                        break;
+                    case Dimension dim:
+                        foreach (Reference r in dim.References) Add(r?.ElementId);
+                        break;
+                }
+            }
+            catch { /* у части элементов свойства бросают исключение — родителей по ним просто нет */ }
+            try { if (!(el is ElementType)) Add(el.GetTypeId()); } catch { /* ignore */ }
+            try { Add(el.LevelId); } catch { /* ignore */ }
+            try { Add(el.OwnerViewId); } catch { /* ignore */ }
+            try { Add(el.GroupId); } catch { /* ignore */ }
+            return list.Count == 0 ? null : list.ToArray();
+        }
+
         /// <summary>Быстрое описание (только категория, класс, имя) — для элементов сверх лимита записей.</summary>
         public static ElementInfo QuickInfo(Element el)
         {
@@ -131,7 +189,7 @@ namespace RASv2.ModelHistory.Tracking
             Category = "",
             ClassName = "",
             Group = ObjectGroup.Unknown,
-            Name = "(нет сведений: элемент удалён до того, как плагин его запомнил)",
+            Name = ChangeRecord.UnknownElementName,
             TypeName = ""
         };
 

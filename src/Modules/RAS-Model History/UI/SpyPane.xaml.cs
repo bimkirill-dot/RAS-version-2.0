@@ -78,6 +78,7 @@ namespace RASv2.ModelHistory.UI
                 ("Machine", "Компьютер", ColMachine, false)
             };
             foreach (var c in LogGrid.Columns) _columnDefaults[c] = (c.Width, c.DisplayIndex);
+            InitParamColumns(); // столбцы параметров из ui.json — до восстановления ширины и порядка
             ApplyColumnState();
 
             _saveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.5) };
@@ -117,20 +118,12 @@ namespace RASv2.ModelHistory.UI
             FilterGroup.SizeChanged += (s, e) => QueueFilterDock();
 
             // столбцы: ширина и порядок запоминаются (только когда меняется сама ширина, а не её пересчёт при раскладке)
-            var widthProperty = DependencyPropertyDescriptor.FromProperty(DataGridColumn.WidthProperty, typeof(DataGridColumn));
-            foreach (var c in LogGrid.Columns)
+            foreach (var c in LogGrid.Columns.Where(c => !_paramColumns.ContainsKey(c))) HookColumnWidth(c);
+            LogGrid.ColumnReordered += (s, e) =>
             {
-                var col = c;
-                var last = (col.Width.UnitType, col.Width.Value);
-                widthProperty?.AddValueChanged(col, (s, e) =>
-                {
-                    var now = (col.Width.UnitType, col.Width.Value);
-                    if (now == last) return;
-                    last = now;
-                    QueueSave();
-                });
-            }
-            LogGrid.ColumnReordered += (s, e) => QueueSave();
+                QueueSave();
+                QueueFill();
+            };
 
             // меню ячейки и заголовка, двойной щелчок, клавиши
             LogGrid.ContextMenuOpening += LogGrid_ContextMenuOpening;
@@ -142,7 +135,7 @@ namespace RASv2.ModelHistory.UI
             _sortFields = new Dictionary<DataGridColumn, SortField>
             {
                 [ColTime] = SortField.Time, [ColKind] = SortField.Kind, [ColAuthor] = SortField.Author, [ColObject] = SortField.Name,
-                [ColStatus] = SortField.Status, [ParamColumn] = SortField.Param, [ColGroup] = SortField.Group,
+                [ColStatus] = SortField.Status, [ColGroup] = SortField.Group,
                 [ColCategory] = SortField.Category, [ColType] = SortField.TypeName, [ColId] = SortField.Id,
                 [ColTransaction] = SortField.Transaction, [ColLevel] = SortField.Level, [ColWorkset] = SortField.Workset,
                 [ColView] = SortField.View, [ColSource] = SortField.Source, [ColCreator] = SortField.Creator,
@@ -151,7 +144,8 @@ namespace RASv2.ModelHistory.UI
             LogGrid.Sorting += (s, e) =>
             {
                 e.Handled = true;
-                if (_sortFields.TryGetValue(e.Column, out var field)) _vm.SortByColumn(field);
+                if (_paramColumns.TryGetValue(e.Column, out var param)) _vm.SortByParam(param);
+                else if (_sortFields.TryGetValue(e.Column, out var field)) _vm.SortByColumn(field);
             };
             vm.SortDialogRequested += OpenSortDialog;
             vm.FilterDialogRequested += OpenFilterDialog;
@@ -175,7 +169,7 @@ namespace RASv2.ModelHistory.UI
                         break;
 
                     case nameof(MainViewModel.ParamColumnName):
-                        UpdateParamColumn();
+                        UpdateSortGlyphs();
                         break;
                     case nameof(MainViewModel.HasPurgePreview):
                         UpdateStatusColumn();
@@ -184,10 +178,10 @@ namespace RASv2.ModelHistory.UI
             };
             vm.ScrollRequested += row =>
                 Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => BringIntoView(row)));
-            UpdateParamColumn();
             UpdateStatusColumn();
             UpdateSortGlyphs();
             ApplyLayoutMode(true);
+            QueueFill();
         }
 
         // ───────────────────────────── состояние панели (ui.json) ─────────────────────────────
@@ -288,11 +282,12 @@ namespace RASv2.ModelHistory.UI
                 c.Column.Visibility = c.DefaultVisible ? Visibility.Visible : Visibility.Collapsed;
                 c.Column.Width = d.Width;
             }
-            ParamColumn.Width = _columnDefaults[ParamColumn].Width;
+            foreach (var name in _vm.ParamColumns.ToList()) _vm.RemoveParamColumn(name); // столбцы параметров — не по умолчанию
             var order = LogGrid.Columns.OrderBy(col => _columnDefaults[col].Index).ToList();
             for (int i = 0; i < order.Count; i++) order[i].DisplayIndex = i;
             UpdateStatusColumn();
             QueueSave();
+            QueueFill();
         }
 
         // ───────────────────────────── меню ─────────────────────────────
@@ -408,12 +403,12 @@ namespace RASv2.ModelHistory.UI
             yield return MenuAction($"Не равно: {name} «{shown}»", () => _vm.AddCellCondition(f, v, true));
         }
 
-        /// <summary>Правый щелчок по заголовку: какие столбцы показывать.</summary>
+        /// <summary>Правый щелчок по заголовку: какие столбцы показывать, столбцы параметров.</summary>
         private void BuildColumnMenu(ContextMenu menu)
         {
             foreach (var c in _columns)
             {
-                if (ReferenceEquals(c.Column, ColObject)) continue;
+                if (ReferenceEquals(c.Column, ColObject) || _paramColumns.ContainsKey(c.Column)) continue;
                 var col = c.Column;
                 var isStatus = ReferenceEquals(col, ColStatus);
                 var item = new MenuItem
@@ -436,15 +431,28 @@ namespace RASv2.ModelHistory.UI
                         col.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
                     }
                     QueueSave();
+                    QueueFill();
                 };
                 menu.Items.Add(item);
             }
             menu.Items.Add(new Separator());
-            menu.Items.Add(MenuAction("Столбец параметра…", () =>
+            // столбцы параметров: снять флажок — убрать столбец
+            foreach (var name in _vm.ParamColumns.ToList())
             {
-                _vm.IsMoreOpen = true;
-                Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => ParamCombo.Focus()));
-            }, "Показать в таблице значение любого параметра, в том числе у удалённых элементов"));
+                var item = new MenuItem
+                {
+                    Header = "Параметр «" + name + "»",
+                    IsCheckable = true,
+                    IsChecked = true,
+                    ToolTip = "Снимите флажок, чтобы убрать столбец"
+                };
+                var param = name;
+                item.Click += (s, e) => _vm.RemoveParamColumn(param);
+                menu.Items.Add(item);
+            }
+            menu.Items.Add(MenuAction("Добавить столбец параметра…", AskParamColumn,
+                "Показать в таблице значение любого параметра модели — в том числе у удалённых элементов (на момент удаления)"));
+            menu.Items.Add(new Separator());
             menu.Items.Add(MenuAction("Вернуть столбцы по умолчанию", ResetColumns));
         }
 
@@ -535,13 +543,6 @@ namespace RASv2.ModelHistory.UI
             if (e.ClickCount > 1) e.Handled = true;
         }
 
-        /// <summary>Столбец «значение параметра»: заголовок = имя параметра, скрыт, если параметр не выбран.</summary>
-        private void UpdateParamColumn()
-        {
-            ParamColumn.Header = _vm.HasParamColumn ? _vm.ParamColumnName : "Параметр";
-            ParamColumn.Visibility = _vm.HasParamColumn ? Visibility.Visible : Visibility.Collapsed;
-        }
-
         /// <summary>В режиме актуализации столбец «Статус» показывает причину несоответствия — и виден всегда.</summary>
         private void UpdateStatusColumn()
         {
@@ -559,6 +560,7 @@ namespace RASv2.ModelHistory.UI
             ColStatus.Header = "Статус";
             ColStatus.Visibility = _statusUserVisible ? Visibility.Visible : Visibility.Collapsed;
             if (_statusUserVisible) _statusUserWidth = ColStatus.Width;
+            QueueFill();
         }
 
         /// <summary>Стрелки в заголовках столбцов, по которым идёт сортировка (на всех уровнях).</summary>
@@ -566,7 +568,13 @@ namespace RASv2.ModelHistory.UI
         {
             foreach (var column in LogGrid.Columns)
             {
-                var level = _sortFields.TryGetValue(column, out var f) ? _vm.SortLevels.FirstOrDefault(l => l.Field == f) : null;
+                SortLevel level = null;
+                if (_paramColumns.TryGetValue(column, out var param))
+                {
+                    if (string.Equals(param, _vm.ParamColumnName, StringComparison.CurrentCultureIgnoreCase))
+                        level = _vm.SortLevels.FirstOrDefault(l => l.Field == SortField.Param);
+                }
+                else if (_sortFields.TryGetValue(column, out var f)) level = _vm.SortLevels.FirstOrDefault(l => l.Field == f);
                 column.SortDirection = level == null
                     ? (ListSortDirection?)null
                     : level.Descending ? ListSortDirection.Descending : ListSortDirection.Ascending;

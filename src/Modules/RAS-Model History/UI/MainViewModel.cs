@@ -24,6 +24,8 @@ namespace RASv2.ModelHistory.UI
         private readonly SpySettings _settings;
         private readonly RevitActions _actions;
         private readonly UiState _uiState;
+        /// <summary>«Нет сведений» об удалённом — сведения из других записей журнала об этом элементе.</summary>
+        private UnknownElementResolver _unknowns = new UnknownElementResolver();
 
         private readonly List<ChangeRecord> _all = new List<ChangeRecord>();
         /// <summary>Растёт при каждом изменении _all — по нему видно, что расчёты по журналу (_journal) устарели.</summary>
@@ -44,6 +46,7 @@ namespace RASv2.ModelHistory.UI
             _settings = settings;
             _actions = actions;
             _uiState = uiState ?? new UiState();
+            foreach (var name in _uiState.ParamColumns) if (!string.IsNullOrWhiteSpace(name) && !ParamColumns.Contains(name)) ParamColumns.Add(name);
             _groupByOperation = _uiState.GroupByOperation;
             _followSelection = _uiState.FollowSelection;
             _preferredTab = _uiState.DetailsTab;
@@ -73,6 +76,7 @@ namespace RASv2.ModelHistory.UI
             SelectAllInModelCommand = new RelayCommand(SelectAllInModel, () => _flat.Count > 0 && IsChangesView);
             RowActivatedCommand = new RelayCommand(RowActivated);
             ToggleGroupCommand = new RelayCommand(p => ToggleGroup(p as ChangeRow ?? SelectedRow));
+            GoToParentCommand = new RelayCommand(p => GoToParent(p as ChangeRow ?? SelectedRow));
             CardHistoryCommand = new RelayCommand(ShowCardHistory, () => Card != null);
             ClearElementFilterCommand = new RelayCommand(() => SetElementFilter(null, null));
             ResetFiltersCommand = new RelayCommand(ResetFilters);
@@ -203,6 +207,12 @@ namespace RASv2.ModelHistory.UI
 
         public bool HasWarmup => !string.IsNullOrEmpty(WarmupText);
 
+        private bool _isWarmupDone;
+        /// <summary>Модель запомнена полностью — полоска не нужна, остаётся «✓ Модель запомнена».</summary>
+        public bool IsWarmupDone { get => _isWarmupDone; private set => Set(ref _isWarmupDone, value); }
+
+        public string WarmupToolTip => WarmupProgress.ToolTip;
+
         private string _summaryText = "";
         /// <summary>Строка состояния: «записей: 1 245» / «показаны последние …» / предпросмотр актуализации.</summary>
         public string SummaryText { get => _summaryText; private set => Set(ref _summaryText, value); }
@@ -233,7 +243,7 @@ namespace RASv2.ModelHistory.UI
         {
             get
             {
-                if (!HasModel) return "Откройте модель Revit — здесь появится журнал её изменений.";
+                if (!HasModel) return _tracker.UntrackedNote ?? "Откройте модель Revit — здесь появится журнал её изменений.";
                 if (IsEventsView)
                     return "Событий модели за выбранный период нет." + Environment.NewLine +
                            "Здесь видно, кто открывал, синхронизировал, сохранял и закрывал модель.";
@@ -438,6 +448,12 @@ namespace RASv2.ModelHistory.UI
                 Add("Сотрудник", _employees.Describe(r),
                     "Полное имя и учётная запись Windows автора — по ним сотрудника находят в каталоге компании");
                 Add("Время", row.TimeText);
+                if (row.HasParentLink)
+                    Add("Удалён вместе с", row.ParentText.Substring("Удалён вместе с: ".Length),
+                        "Элемент удалён не сам: Revit удалил его вместе с элементом, от которого он зависел. Ссылка — в «Что изменилось».");
+                if (r.InfoFromJournal)
+                    Add("Сведения", "из прежних записей журнала об этом элементе",
+                        "Модуль не успел запомнить элемент до удаления; имя, категория и тип взяты из прежних записей журнала о нём.");
                 if (r.Kind == ChangeKind.Event)
                 {
                     Add("Событие", row.EventTypeText);
@@ -556,8 +572,44 @@ namespace RASv2.ModelHistory.UI
         public ObservableCollection<string> ParamNames { get; } = new ObservableCollection<string>();
         private readonly HashSet<string> _journalParamNames = new HashSet<string>(StringComparer.CurrentCultureIgnoreCase);
 
+        /// <summary>
+        /// Столбцы параметров модели в таблице (правый щелчок по заголовку → «Добавить столбец параметра…»);
+        /// запоминаются в ui.json. Таблицу по ним строит окно (SpyPane).
+        /// </summary>
+        public ObservableCollection<string> ParamColumns { get; } = new ObservableCollection<string>();
+
+        public void AddParamColumn(string name)
+        {
+            name = (name ?? "").Trim();
+            if (name.Length == 0 || ParamColumns.Contains(name, StringComparer.CurrentCultureIgnoreCase)) return;
+            ParamColumns.Add(name);
+            SaveParamColumns();
+        }
+
+        public void RemoveParamColumn(string name)
+        {
+            var existing = ParamColumns.FirstOrDefault(x => string.Equals(x, name, StringComparison.CurrentCultureIgnoreCase));
+            if (existing == null) return;
+            ParamColumns.Remove(existing);
+            if (string.Equals(ParamColumnName, existing, StringComparison.CurrentCultureIgnoreCase)) ParamColumnName = "";
+            SaveParamColumns();
+        }
+
+        /// <summary>Щелчок по заголовку столбца параметра: сортировать по нему.</summary>
+        public void SortByParam(string name)
+        {
+            ParamColumnName = name;
+            SortByColumn(SortField.Param);
+        }
+
+        private void SaveParamColumns()
+        {
+            _uiState.ParamColumns = ParamColumns.ToList();
+            RequestUiSave?.Invoke();
+        }
+
         private string _paramColumnName = "";
-        /// <summary>Параметр, значение которого показывается в отдельном столбце.</summary>
+        /// <summary>Параметр, по которому сортируют (столбец параметра, по заголовку которого щёлкнули).</summary>
         public string ParamColumnName
         {
             get => _paramColumnName;
@@ -635,25 +687,22 @@ namespace RASv2.ModelHistory.UI
         }
 
         // кэш значений для столбца параметра (сортировка / экспорт не читают диск повторно)
-        private readonly Dictionary<long, string> _paramValueCache = new Dictionary<long, string>();
-        private string _paramValueCacheName;
+        private readonly Dictionary<(string, long), string> _paramValueCache = new Dictionary<(string, long), string>();
         private string _paramValueCacheModel;
         private int _paramValueCacheStamp = -1;
 
         private string CachedLookup(string modelKey, long id, string name)
         {
-            if (_paramValueCacheStamp != _tracker.ChangeStamp ||
-                !string.Equals(_paramValueCacheName, name, StringComparison.CurrentCultureIgnoreCase) ||
-                _paramValueCacheModel != modelKey)
+            if (_paramValueCacheStamp != _tracker.ChangeStamp || _paramValueCacheModel != modelKey)
             {
                 _paramValueCache.Clear();
                 _paramValueCacheStamp = _tracker.ChangeStamp;
-                _paramValueCacheName = name;
                 _paramValueCacheModel = modelKey;
             }
-            if (_paramValueCache.TryGetValue(id, out var cached)) return cached;
+            var key = ((name ?? "").ToLowerInvariant(), id);
+            if (_paramValueCache.TryGetValue(key, out var cached)) return cached;
             var v = _tracker.LookupParam(modelKey, id, name);
-            _paramValueCache[id] = v;
+            _paramValueCache[key] = v;
             return v;
         }
 
@@ -1151,7 +1200,6 @@ namespace RASv2.ModelHistory.UI
                 more++;
                 list.Add(new FilterChip("Служебные элементы", null, () => ShowNoise = false));
             }
-            if (HasParamColumn) more++; // столбец не фильтр: он виден в таблице и не сбрасывается «Сбросить все»
             MoreText = more > 0 ? $"Ещё ({more})" : "Ещё";
             if (Chips.Select(c => c.Text).SequenceEqual(list.Select(c => c.Text)))
             {
@@ -1407,6 +1455,8 @@ namespace RASv2.ModelHistory.UI
         public RelayCommand RowActivatedCommand { get; }
         /// <summary>▸ / ▾ у операции.</summary>
         public RelayCommand ToggleGroupCommand { get; }
+        /// <summary>«Удалён вместе с: …» — к строке удаления родителя.</summary>
+        public RelayCommand GoToParentCommand { get; }
 
         // ───────────────────────────── актуализация журнала ─────────────────────────────
 
@@ -1770,6 +1820,7 @@ namespace RASv2.ModelHistory.UI
                 ModelMode = "";
                 _reader = null;
                 _all.Clear();
+                _unknowns = new UnknownElementResolver();
                 _allVersion++;
                 Rows = new List<ChangeRow>();
                 _flat = new List<ChangeRow>();
@@ -1804,12 +1855,11 @@ namespace RASv2.ModelHistory.UI
         private void UpdateWarmupText(DocumentTracker t)
         {
             if (t == null || !ReferenceEquals(t, _tracker.Active)) return;
-            if (!_settings.SnapshotOnOpen || t.WarmupDone || t.WarmupTotal == 0) { WarmupText = ""; return; }
-            var pct = (int)(100.0 * t.WarmupProgress / Math.Max(1, t.WarmupTotal));
-            WarmupPercent = Math.Max(0, Math.Min(100, pct));
-            WarmupText = t.WarmupPhase <= 1
-                ? $"Подготовка: сведения об элементах {pct}%"
-                : string.Format(Ru, "Подготовка: параметры {0}% ({1:N0} из {2:N0})", pct, t.WarmupProgress, t.WarmupTotal);
+            if (!_settings.SnapshotOnOpen) { WarmupText = ""; return; }
+            var pct = WarmupProgress.Percent(t.WarmupPhase, t.WarmupProgress, t.WarmupTotal, t.WarmupDone);
+            WarmupPercent = pct;
+            IsWarmupDone = t.WarmupDone;
+            WarmupText = WarmupProgress.Text(pct, t.WarmupDone);
         }
 
         private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
@@ -1877,6 +1927,7 @@ namespace RASv2.ModelHistory.UI
             }
             _reader = new LogReader(DataFolders.LogFolder, _modelKey, since, _legacyKeys, _tracker.CurrentUser);
             _all.Clear();
+            _unknowns = new UnknownElementResolver();
             _liveBefore = new List<string>();
             _liveDeletedBefore = new List<long>();
             _allVersion++;
@@ -1912,6 +1963,7 @@ namespace RASv2.ModelHistory.UI
                         if (!ReferenceEquals(reader, _reader)) return; // период или модель сменились
                         FolderProblem = error; // держится, пока связи с общей папкой нет; null — всё в порядке
                         if (fresh.Count == 0 && !initial) return;
+                        _unknowns.Add(fresh); // до показа: «нет сведений» — из прежних записей журнала
                         _all.AddRange(fresh);
                         _employees.Add(fresh);
                         _liveBefore = liveBefore;
@@ -2646,6 +2698,21 @@ namespace RASv2.ModelHistory.UI
             ScrollRequested?.Invoke(row);
         }
 
+        /// <summary>«Удалён вместе с: …» → строка удаления родителя (раскрыть операцию, если свёрнута).</summary>
+        private void GoToParent(ChangeRow row)
+        {
+            var r = row?.Record;
+            if (r == null || string.IsNullOrEmpty(r.ParentRecord)) return;
+            var parent = _all.FirstOrDefault(x => x.RecordId == r.ParentRecord);
+            if (parent == null)
+            {
+                Status = "Запись об удалении «" + (r.ParentName ?? "элемента ID " + r.ParentId) +
+                         "» не найдена в выбранном периоде — увеличьте период.";
+                return;
+            }
+            SelectRecord(parent);
+        }
+
         /// <summary>Выбрать запись в списке; если она внутри свёрнутой операции — раскрыть операцию.</summary>
         public void SelectRecord(ChangeRecord record)
         {
@@ -2732,7 +2799,7 @@ namespace RASv2.ModelHistory.UI
                 var rows = _filtered.Count > _flat.Count
                     ? _filtered.Select(r => new ChangeRow(r, _filteredContext)).ToList()
                     : _flat;
-                CsvExporter.Export(path, rows, HasParamColumn ? ParamColumnName : null);
+                CsvExporter.Export(path, rows, ParamColumns.ToList());
                 Status = string.Format(Ru, "Экспортировано строк: {0:N0} → {1}", rows.Count, path);
             }
             catch (Exception ex)

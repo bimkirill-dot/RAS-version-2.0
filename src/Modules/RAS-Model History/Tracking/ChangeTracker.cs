@@ -41,6 +41,12 @@ namespace RASv2.ModelHistory.Tracking
         /// <summary>Изменилось состояние фоновой подготовки (для строки состояния).</summary>
         public event Action<DocumentTracker> WarmupProgressChanged;
 
+        /// <summary>Почему открытую модель журнал не ведёт (отсоединена, не сохранена…); null — ведёт или моделей нет.</summary>
+        public string UntrackedNote { get; private set; }
+
+        /// <summary>Открытые отсоединённые модели: сохранят хранилищем или новым файлом — журнал начнётся с границы.</summary>
+        private readonly List<Document> _detached = new List<Document>();
+
         // ───────────────────────────── документы ─────────────────────────────
 
         public DocumentTracker Find(Document doc)
@@ -72,12 +78,36 @@ namespace RASv2.ModelHistory.Tracking
             {
                 if (doc == null || !doc.IsValidObject || doc.IsLinked) return false;
                 if (doc.IsFamilyDocument && !_s.TrackFamilyDocuments) return false;
+                // отсоединённая копия помнит своё хранилище: без этой проверки её правки ушли бы в журнал основной модели
+                if (doc.IsDetached) return false;
                 return !string.IsNullOrEmpty(doc.PathName); // несохранённые документы не отслеживаем
             }
             catch
             {
                 return false;
             }
+        }
+
+        /// <summary>Почему журнал не ведётся для этой модели — для надписи в журнале.</summary>
+        private string NoteFor(Document doc)
+        {
+            try
+            {
+                if (doc == null || !doc.IsValidObject) return null;
+                if (doc.IsDetached) return "Модель отсоединена от хранилища — журнал не ведётся. Сохраните её хранилищем или новым файлом — журнал начнётся с этого момента.";
+                if (doc.IsFamilyDocument && !_s.TrackFamilyDocuments) return "Это семейство — журнал ведётся только для моделей.";
+                if (string.IsNullOrEmpty(doc.PathName)) return "Модель ещё не сохранена — журнал начнётся после сохранения.";
+            }
+            catch { /* ignore */ }
+            return null;
+        }
+
+        private bool IsKnownDetached(Document doc) => _detached.Any(d => SameDocument(d, doc));
+
+        private static bool SameDocument(Document a, Document b)
+        {
+            try { return ReferenceEquals(a, b) || (a.IsValidObject && b.IsValidObject && a.Equals(b)); }
+            catch { return false; }
         }
 
         private void UpdateUser(Document doc)
@@ -104,11 +134,22 @@ namespace RASv2.ModelHistory.Tracking
             Guard("DocumentOpened", () =>
             {
                 if (e.Status != RevitAPIEventStatus.Succeeded) return;
+                try
+                {
+                    if (e.Document.IsDetached)
+                    {
+                        _detached.Add(e.Document);
+                        Diag.Log("Detached model opened — journal is not kept: " + e.Document.Title);
+                        return;
+                    }
+                }
+                catch { /* ignore */ }
                 var t = GetOrCreate(e.Document);
                 if (t == null) return;
                 try { t.LocalPath = e.Document.PathName; } catch { /* ignore */ }
                 WriteEvent(t, "Открытие модели", ModelEventType.Open);
                 CheckPendingLocal(t);
+                AbandonOtherLocalCopies(t);
                 // Подготовку и разбор «что изменилось с прошлого сеанса» делаем при первой активации вида:
                 // документы, открытые другими плагинами в фоне (без окна), так не нагружаются.
                 t.PendingActivation = true;
@@ -309,6 +350,7 @@ namespace RASv2.ModelHistory.Tracking
         {
             Guard("DocumentClosing", () =>
             {
+                _detached.RemoveAll(d => SameDocument(d, e.Document));
                 var t = Find(e.Document);
                 if (t == null) return;
                 SaveVersionState(t); // документ ещё доступен
@@ -332,6 +374,7 @@ namespace RASv2.ModelHistory.Tracking
                 WriteEvent(t, CloseEventName(t), ModelEventType.Close);
                 t.IsClosed = true;
                 _docs.Remove(t);
+                t.SaveInfoCache(); // что за элементы в модели — для следующего открытия
                 t.Dispose(); // удалить временный файл снимков
                 if (ReferenceEquals(Active, t)) SetActive(null); // следующий активный документ придёт через ViewActivated
             });
@@ -355,10 +398,20 @@ namespace RASv2.ModelHistory.Tracking
             Guard("DocumentSavedAs", () =>
             {
                 if (e.Status != RevitAPIEventStatus.Succeeded) return;
+                var fromDetached = IsKnownDetached(e.Document);
                 var t = GetOrCreate(e.Document);
                 if (t == null) return;
                 t.Model = ModelIdentity.From(e.Document);
                 try { t.LocalPath = e.Document.PathName; } catch { /* ignore */ }
+                if (fromDetached)
+                {
+                    // граница журнала: отсоединённую копию журнал не вёл — что было с моделью до этого, он не знает
+                    _detached.RemoveAll(d => SameDocument(d, e.Document));
+                    WriteEvent(t, t.Model.IsWorkshared
+                        ? "Хранилище создано из отсоединённой копии: что менялось в копии до этого, журнал не знает"
+                        : "Модель сохранена из отсоединённой копии: что менялось в копии до этого, журнал не знает",
+                        ModelEventType.FromDetached);
+                }
                 OnSavedCommon(t, "Сохранение как");
                 MarkSnapshotsSaved(t);
                 if (ReferenceEquals(Active, t)) ActiveModelChanged?.Invoke(t);
@@ -507,6 +560,7 @@ namespace RASv2.ModelHistory.Tracking
                 foreach (var id in deleted) t.UnsavedIds.Add(id.Value);
                 var batch = new RecordBatch(this, t, ChangeSource.Live, op, tx, CurrentUser,
                     added.Count + modified.Count + deleted.Count);
+                batch.PrepareCascade(new HashSet<long>(deleted.Select(x => x.Value)));
                 foreach (var id in added) SafeAdd(batch, ChangeKind.Created, id);
                 foreach (var id in modified) SafeAdd(batch, ChangeKind.Modified, id);
                 foreach (var id in deleted) SafeAdd(batch, ChangeKind.Deleted, id);
@@ -544,6 +598,12 @@ namespace RASv2.ModelHistory.Tracking
             Guard("ViewActivated", () =>
             {
                 var t = GetOrCreate(e.Document);
+                var note = t == null ? NoteFor(e.Document) : null;
+                if (!string.Equals(note, UntrackedNote, StringComparison.Ordinal))
+                {
+                    UntrackedNote = note;
+                    if (ReferenceEquals(Active, t)) ActiveModelChanged?.Invoke(t); // надпись в журнале сменилась
+                }
                 SetActive(t);
                 if (t == null) return;
                 if (t.PendingActivation) OnFirstActivation(t);
@@ -589,8 +649,53 @@ namespace RASv2.ModelHistory.Tracking
                     if (immediate.Count > 20) _idle.EnqueueFirst(new SnapshotJob(this, t, immediate.Skip(20).ToList()));
                 }
 
+                RememberSelection(t, doc, ids);
                 SelectionCardChanged?.Invoke(BuildCard(t, ids));
             });
+        }
+
+        /// <summary>Сколько элементов описывать за одно выделение: выделение не должно тормозить Revit.</summary>
+        private const int SelectionDescribeBudget = 3000;
+
+        /// <summary>
+        /// Выделенное, скорее всего, сейчас удалят: сведения о нём и обо всём, что от него зависит (марки, размеры, проёмы,
+        /// вложенные), запоминаются сразу, не дожидаясь подготовки модели, — иначе удалённое сразу после открытия было бы
+        /// «нет сведений». Зависимость «зависимый → выделенный» — для «удалён вместе с …». У типов, уровней и видов
+        /// зависимых слишком много (все экземпляры, всё на уровне) — их связь и так известна по сведениям элементов.
+        /// </summary>
+        private void RememberSelection(DocumentTracker t, Document doc, List<ElementId> ids)
+        {
+            var budget = SelectionDescribeBudget;
+            foreach (var id in ids.Take(Math.Max(1, _s.MaxSelectionSnapshot)))
+            {
+                Element el;
+                try { el = doc.GetElement(id); } catch { continue; }
+                if (el == null) continue;
+                if (budget-- > 0)
+                {
+                    var info = ElementDescriber.Describe(doc, el, t);
+                    if (t.Info.TryGetValue(info.Id, out var prev)) info.Creator = prev.Creator;
+                    t.Info[info.Id] = info;
+                }
+                if (el is ElementType || el is Level || el is View || el is Family || el is Material) continue;
+                ICollection<ElementId> dependents;
+                try { dependents = el.GetDependentElements(null); } catch { continue; }
+                foreach (var d in dependents)
+                {
+                    if (d.Value == id.Value) continue;
+                    t.DependsOn[d.Value] = id.Value;
+                    if (t.Info.ContainsKey(d.Value) || budget <= 0) continue;
+                    try
+                    {
+                        var de = doc.GetElement(d);
+                        if (de == null) continue;
+                        budget--;
+                        var info = ElementDescriber.Describe(doc, de, t, compact: true);
+                        if (!info.IsNoise || _s.RecordNoise) t.Info[d.Value] = info;
+                    }
+                    catch { /* зависимый не описать — у него просто не будет сведений */ }
+                }
+            }
         }
 
         private SelectionCard BuildCard(DocumentTracker t, List<ElementId> ids)
@@ -878,6 +983,24 @@ namespace RASv2.ModelHistory.Tracking
                 WriteEvent(t, "Локальная копия заменена: несинхронизированные изменения прошлых сеансов не попали в хранилище",
                     ModelEventType.Lost, new List<string>(entry.Sessions));
                 LocalState.SetPending(t.LocalPath, null);
+            }
+        }
+
+        /// <summary>
+        /// Открыта другая локальная копия той же модели (например, новая — со штампом даты и времени при каждом открытии):
+        /// несинхронизированное, оставшееся в прежних копиях на этом компьютере, считается брошенным — «✗ не попало
+        /// в хранилище». Иначе оно навсегда осталось бы «только в локальной копии».
+        /// </summary>
+        private void AbandonOtherLocalCopies(DocumentTracker t)
+        {
+            if (!t.Model.IsWorkshared || string.IsNullOrEmpty(t.LocalPath)) return;
+            foreach (var other in LocalState.PendingOf(t.Model.HasKey, t.LocalPath))
+            {
+                if (other.Value.Sessions == null || other.Value.Sessions.Count == 0) continue;
+                WriteEvent(t, "Открыта другая локальная копия: несинхронизированные изменения в прежней копии (" +
+                              System.IO.Path.GetFileName(other.Key) + ") не попали в хранилище",
+                    ModelEventType.Lost, new List<string>(other.Value.Sessions));
+                LocalState.SetPending(other.Key, null);
             }
         }
 

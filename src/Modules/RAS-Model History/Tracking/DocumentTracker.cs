@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using Autodesk.Revit.DB;
+using RASv2.ModelHistory.Storage;
 
 namespace RASv2.ModelHistory.Tracking
 {
@@ -13,6 +16,8 @@ namespace RASv2.ModelHistory.Tracking
             Model = model;
             var persistent = settings.PersistSnapshots && settings.TrackParameters;
             Snapshots = new SnapshotStore(model.Key, settings.MaxSnapshotElements, persistent, settings.SnapshotCacheDays);
+            _persistentInfo = settings.PersistSnapshots;
+            if (_persistentInfo) LoadCachedInfo();
         }
 
         public Document Doc { get; }
@@ -30,6 +35,62 @@ namespace RASv2.ModelHistory.Tracking
 
         /// <summary>Сведения обо всех известных элементах — чтобы описать удалённые.</summary>
         public Dictionary<long, ElementInfo> Info { get; } = new Dictionary<long, ElementInfo>();
+
+        /// <summary>
+        /// Сведения из прошлых сеансов (ElementInfoCache) — запасной источник: элемент удалили раньше, чем подготовка
+        /// описала его заново, или он в закрытом рабочем наборе.
+        /// </summary>
+        public Dictionary<long, ElementInfo> CachedInfo { get; private set; } = new Dictionary<long, ElementInfo>();
+
+        /// <summary>Зависимый → выделенный элемент, от которого он зависит (Element.GetDependentElements при выделении).</summary>
+        public Dictionary<long, long> DependsOn { get; } = new Dictionary<long, long>();
+
+        /// <summary>Удалённые в этом сеансе (своими правками и пришедшие от коллег) — в кэш сведений не пишутся.</summary>
+        public HashSet<long> DeletedIds { get; } = new HashSet<long>();
+
+        private readonly bool _persistentInfo;
+
+        /// <summary>Что известно об элементе: сведения этого сеанса, затем — из прошлых.</summary>
+        public bool TryKnow(long id, out ElementInfo info) => Info.TryGetValue(id, out info) || CachedInfo.TryGetValue(id, out info);
+
+        /// <summary>От чего зависит элемент: из его сведений и из выделения.</summary>
+        public IEnumerable<long> ParentsOf(long id)
+        {
+            if (TryKnow(id, out var info) && info.Parents != null)
+                foreach (var p in info.Parents) yield return p;
+            if (DependsOn.TryGetValue(id, out var selected)) yield return selected;
+        }
+
+        private string InfoCachePath => Path.Combine(DataFolders.LocalDataDir, "Cache", ModelIdentity.Sanitize(Model.Key), "elements.dat");
+
+        private void LoadCachedInfo()
+        {
+            try { CachedInfo = ElementInfoCache.Load(InfoCachePath); }
+            catch (Exception ex)
+            {
+                Diag.Log("Element info cache is damaged, starting over (" + Model.Title + ")", ex);
+                CachedInfo = new Dictionary<long, ElementInfo>();
+            }
+        }
+
+        /// <summary>
+        /// Сохранить сведения для следующего сеанса: этого сеанса — главные, из прошлых — для элементов, которых в этом
+        /// сеансе не видели (закрытые рабочие наборы); удалённые — не пишутся.
+        /// </summary>
+        public void SaveInfoCache()
+        {
+            if (!_persistentInfo || Info.Count == 0) return;
+            try
+            {
+                var items = Info.Values.Where(i => !DeletedIds.Contains(i.Id)).ToList();
+                items.AddRange(CachedInfo.Values.Where(i => !Info.ContainsKey(i.Id) && !DeletedIds.Contains(i.Id)));
+                ElementInfoCache.Save(InfoCachePath, items);
+            }
+            catch (Exception ex)
+            {
+                Diag.Log("Element info cache save failed (" + Model.Title + ")", ex);
+            }
+        }
 
         /// <summary>Снимки параметров элементов (последнее известное состояние) — на диске.</summary>
         public SnapshotStore Snapshots { get; }

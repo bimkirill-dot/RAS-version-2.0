@@ -45,6 +45,12 @@ namespace RASv2.ModelHistory.Storage
         /// <summary>Открытая вкладка подробностей: 0 — «Запись», 1 — «Было → стало», 2 — «Все параметры», 3 — «История».</summary>
         public int DetailsTab { get; set; } = 1;
 
+        /// <summary>
+        /// Столбцы параметров модели в таблице (правый щелчок по заголовку → «Добавить столбец параметра…»), по порядку
+        /// добавления; их ширина и место — в Columns с ключом «Param:&lt;имя&gt;».
+        /// </summary>
+        public List<string> ParamColumns { get; set; } = new List<string>();
+
         /// <summary>Журнал открывается в отдельном окне (по умолчанию) или в панели Revit — кнопка в окне / панели.</summary>
         public bool OpenInWindow { get; set; } = true;
 
@@ -74,6 +80,7 @@ namespace RASv2.ModelHistory.Storage
                     {
                         s.Columns ??= new List<ColumnState>();
                         s.Sort ??= new List<SortLevelState>();
+                        s.ParamColumns ??= new List<string>();
                         s.DetailsWidth = Clamp(s.DetailsWidth, 260, 3000, 380);
                         s.DetailsHeight = Clamp(s.DetailsHeight, 80, 3000, 240);
                         if (s.DetailsTab < 0 || s.DetailsTab > 3) s.DetailsTab = 1;

@@ -16,11 +16,12 @@ namespace RASv2.ModelHistory.UI
             "Последним синхронизировал", "Компьютер", "Изменения параметров"
         };
 
-        /// <param name="paramName">Параметр из столбца «значение параметра» (null — без столбца).</param>
-        public static void Export(string path, IEnumerable<ChangeRow> rows, string paramName = null)
+        /// <param name="paramNames">Столбцы параметров таблицы (null — без них).</param>
+        public static void Export(string path, IEnumerable<ChangeRow> rows, IReadOnlyList<string> paramNames = null)
         {
             var sb = new StringBuilder();
-            var header = string.IsNullOrEmpty(paramName) ? Header : Header.Concat(new[] { paramName }).ToArray();
+            var extra = paramNames ?? new List<string>();
+            var header = Header.Concat(extra).ToArray();
             sb.AppendLine(string.Join(";", header.Select(Escape)));
             foreach (var r in rows)
             {
@@ -34,7 +35,7 @@ namespace RASv2.ModelHistory.UI
                     r.IdText, rec.UniqueId, rec.Level, rec.Workset, rec.OwnerView, rec.Transaction, r.SourceText,
                     rec.Creator, rec.LastChangedBy, rec.Machine, parameters
                 };
-                if (!string.IsNullOrEmpty(paramName)) cells = cells.Concat(new[] { r.ParamValue }).ToArray();
+                if (extra.Count > 0) cells = cells.Concat(extra.Select(r.ParamValueOf)).ToArray();
                 sb.AppendLine(string.Join(";", cells.Select(Escape)));
             }
             File.WriteAllText(path, sb.ToString(), new UTF8Encoding(true));
