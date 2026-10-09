@@ -40,30 +40,28 @@
 
     @if (_view.Tab != 3)
     {
-        @* основная лента: критичность (число — активные); «Все» — все критичности *@
-        <div class="ribbon main-ribbon" role="tablist" aria-label="Критичность">
-            @foreach (var cr in _criticalities)
-            {
-                <button class="crit @(cr == _filter.Criticality ? "on" : "") @CriticalityClass(cr)" @onclick="() => SetScope(cr, null, null)">
-                    @CriticalityTitle(cr) <b>@ActiveIn(cr, null, null)</b>
-                </button>
-            }
-            @if (ShowAllCriticalities)
-            {
-                <button class="crit @(_filter.Criticality == null ? "on" : "")" @onclick="() => SetScope(null, null, null)">
-                    Все <b>@ActiveIn(null, null, null)</b>
-                </button>
-            }
-            @if (_criticalities.Count == 0)
-            {
-                <span class="muted">Отчётов ещё нет — «Отчёты» на боковой панели, «Проверить папку сейчас».</span>
-            }
-        </div>
+        @if (_criticalities.Count == 0)
+        {
+            <p class="muted">Отчётов ещё нет — «Отчёты» на боковой панели, «Проверить папку сейчас».</p>
+        }
 
-        @* дополнительная лента: отборы одной строкой — дата (прогон), тип проверки, блок, раздел, уровень, статус, поиск *@
+        @* строка отборов: критичность, дата, тип проверки, блок, раздел, уровень, статус, поиск — всё выпадающими списками *@
         @if (_criticalities.Count > 0)
         {
             <div class="ribbon sub-ribbon">
+                @if (ShowAllCriticalities)
+                {
+                    <label class="dd crit-dd @CriticalityClass(_filter.Criticality)">
+                        <span>Критичность</span>
+                        <select value="@(_filter.Criticality == null ? "*" : _filter.Criticality == "" ? "-" : _filter.Criticality)" @onchange="OnCriticalityChanged">
+                            @foreach (var cr in _criticalities)
+                            {
+                                <option value="@(cr == "" ? "-" : cr)">@(cr == "" ? "Без критичности" : cr) (@ActiveIn(cr, null, null))</option>
+                            }
+                            <option value="*">Все (@ActiveIn(null, null, null))</option>
+                        </select>
+                    </label>
+                }
                 <label class="dd" title="За какой прогон: последний (что сейчас), любой прошлый или все">
                     <span>Дата</span>
                     <select value="@_view.RunDate" @onchange="OnRunDateChanged">
@@ -868,6 +866,13 @@
     private bool ShowAllCriticalities => _criticalities.Count > 1 || (_criticalities.Count == 1 && _criticalities[0] != "");
 
     private string BlockValue => _filter.Block == null ? "*" : _filter.Block == "" ? "-" : _filter.Block;
+
+    /// <summary>Другая критичность — тип проверки и блок «все».</summary>
+    private void OnCriticalityChanged(ChangeEventArgs e)
+    {
+        var v = e.Value?.ToString();
+        SetScope(v == "*" ? null : v == "-" ? "" : v, null, null);
+    }
 
     private void OnTestChanged(ChangeEventArgs e)
     {
