@@ -101,7 +101,11 @@ public sealed class ClashFilter
     public string Criticality { get; set; }
     /// <summary>Блок («S1», "" — без блока); null — любой.</summary>
     public string Block { get; set; }
-    public long? TestId { get; set; }
+    /// <summary>
+    /// Тип проверки — название проверки Navisworks («АР Стены/МЕР Трубы»); одинаковое в разных блоках и критичностях —
+    /// один тип (решение разработчика). null — все.
+    /// </summary>
+    public string TestName { get; set; }
     public ClashState? State { get; set; }
     /// <summary>Выбранные значения полей (Logic.ClashFacets.Level / Category / Discipline / Report → ключи значений).</summary>
     public Dictionary<string, HashSet<string>> Facets { get; } = new Dictionary<string, HashSet<string>>();

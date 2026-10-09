@@ -48,11 +48,11 @@
             <div class="ribbon sub-ribbon">
                 <label class="dd">
                     <span>Тип проверки</span>
-                    <select value="@(_filter.TestId?.ToString() ?? "")" @onchange="OnTestChanged">
+                    <select value="@(_filter.TestName ?? "")" @onchange="OnTestChanged">
                         <option value="">Все проверки (@ActiveIn(_filter.Criticality, _filter.Block, null))</option>
-                        @foreach (var t in DropdownTests)
+                        @foreach (var (name, active) in TestTypes)
                         {
-                            <option value="@t.Id">@TestOptionTitle(t) (@t.Counts.Active)</option>
+                            <option value="@name">@name (@active)</option>
                         }
                     </select>
                 </label>
@@ -78,7 +78,7 @@
             <aside class="side" aria-label="Разделы проекта">
                 <div class="side-title">Проект</div>
                 <button class="side-btn @(_view.Tab == 0 ? "on" : "")" @onclick="() => _view.Tab = 0" title="Коллизии — список и карточка">
-                    <span>Коллизии</span><b>@ActiveIn(_filter.Criticality, _filter.Block, _filter.TestId)</b>
+                    <span>Коллизии</span><b>@ActiveIn(_filter.Criticality, _filter.Block, _filter.TestName)</b>
                 </button>
                 <button class="side-btn @(_view.Tab == 1 ? "on" : "")" @onclick="() => _view.Tab = 1" title="Проверки Navisworks — сколько коллизий в каждой">
                     <span>Проверки</span><b>@ScopeTests.Count()</b>
@@ -362,7 +362,7 @@
     private IEnumerable<ReportRow> ScopeReports => _reports.Where(r => (_filter.Criticality == null || r.Criticality == _filter.Criticality)
                                                                       && (_filter.Block == null || r.Block == _filter.Block));
     /// <summary>Блок у строки — когда выбрана вся критичность, а блоков несколько.</summary>
-    private bool ShowBlock => _filter.Block == null && _filter.TestId == null && BlocksOf(_filter.Criticality).Count > 1;
+    private bool ShowBlock => _filter.Block == null && BlocksOf(_filter.Criticality).Count > 1;
 
     private string ScopeTitle
     {
@@ -370,8 +370,7 @@
         {
             var parts = new List<string> { _filter.Criticality == null ? "Все критичности" : CriticalityTitle(_filter.Criticality) };
             if (!string.IsNullOrEmpty(_filter.Block)) parts.Add(_filter.Block);
-            var test = _tests.FirstOrDefault(t => t.Id == _filter.TestId);
-            if (test != null) parts.Add(test.Name);
+            if (_filter.TestName != null) parts.Add(_filter.TestName);
             return string.Join(" › ", parts);
         }
     }
@@ -399,11 +398,11 @@
             // при открытии — первая критичность (высокая), все блоки
             _filter.Criticality = _criticalities.FirstOrDefault();
             _filter.Block = null;
-            _filter.TestId = null;
+            _filter.TestName = null;
             _view.ScopeChosen = _criticalities.Count > 0;
         }
         if (_filter.Block != null && !BlocksOf(_filter.Criticality).Contains(_filter.Block)) _filter.Block = null;
-        if (_filter.TestId.HasValue && !_tests.Any(t => t.Id == _filter.TestId && InScope(t))) _filter.TestId = null;
+        if (_filter.TestName != null && !_tests.Any(t => t.Name == _filter.TestName && InScope(t))) _filter.TestName = null;
         _maxActive = ScopeTests.Select(t => t.Counts.Active).DefaultIfEmpty(0).Max();
         _base = _criticalities.Count == 0 ? new List<ClashRow>() : Store.Clashes(Id, _filter);
         Recompute();
@@ -452,22 +451,19 @@
 
     private bool InScope(TestRow t) => (_filter.Criticality == null || t.Criticality == _filter.Criticality)
                                        && (_filter.Block == null || t.Block == _filter.Block)
-                                       && (_filter.TestId == null || t.Id == _filter.TestId);
+                                       && (_filter.TestName == null || t.Name == _filter.TestName);
 
-    private bool IsScope(string criticality, string block, long? testId) =>
-        _filter.Criticality == criticality && _filter.Block == block && _filter.TestId == testId;
-
-    /// <summary>Активные в критичности, блоке (null — во всех), проверке (null — во всех).</summary>
-    private int ActiveIn(string criticality, string block, long? testId) =>
-        _tests.Where(t => (criticality == null || t.Criticality == criticality) && (block == null || t.Block == block) && (testId == null || t.Id == testId))
+    /// <summary>Активные в критичности, блоке, типе проверки (null — во всех).</summary>
+    private int ActiveIn(string criticality, string block, string testName) =>
+        _tests.Where(t => (criticality == null || t.Criticality == criticality) && (block == null || t.Block == block) && (testName == null || t.Name == testName))
             .Sum(t => t.Counts.Active);
 
     /// <summary>Другая критичность, блок или проверка — другая работа: отметки и выбранная коллизия сбрасываются, отборы — нет.</summary>
-    private void SetScope(string criticality, string block, long? testId)
+    private void SetScope(string criticality, string block, string testName)
     {
         _filter.Criticality = criticality;
         _filter.Block = block;
-        _filter.TestId = testId;
+        _filter.TestName = testName;
         _view.ScopeChosen = true;
         _view.SelectedId = null;
         _selected.Clear();
@@ -476,11 +472,15 @@
         LoadAll();
     }
 
-    /// <summary>Проверки в списке «Тип проверки»: выбранной критичности и выбранного блока (или всех блоков).</summary>
-    private IEnumerable<TestRow> DropdownTests => _tests
+    /// <summary>
+    /// «Тип проверки»: каждое название проверки — один раз, сколько бы блоков и критичностей его ни имели;
+    /// число — активные по всем таким проверкам в выбранной критичности и блоке.
+    /// </summary>
+    private IEnumerable<(string Name, int Active)> TestTypes => _tests
         .Where(t => (_filter.Criticality == null || t.Criticality == _filter.Criticality) && (_filter.Block == null || t.Block == _filter.Block))
-        .OrderBy(t => ReportPath.CriticalityOrder(t.Criticality))
-        .ThenBy(t => ReportPath.BlockOrder(t.Block)).ThenBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase);
+        .GroupBy(t => t.Name)
+        .Select(g => (g.Key, g.Sum(t => t.Counts.Active)))
+        .OrderBy(x => x.Key, StringComparer.CurrentCultureIgnoreCase);
 
     /// <summary>Список «Блок» — когда в папках выбранной критичности блоки есть.</summary>
     private bool ShowBlocks
@@ -495,31 +495,23 @@
     /// <summary>«Все» на основной ленте — когда в папках есть критичность (иначе кнопка повторяла бы единственную).</summary>
     private bool ShowAllCriticalities => _criticalities.Count > 1 || (_criticalities.Count == 1 && _criticalities[0] != "");
 
-    /// <summary>Подпись проверки в «Тип проверки»: при «Все» — с критичностью, при «Все блоки» — с блоком.</summary>
-    private string TestOptionTitle(TestRow t)
-    {
-        var parts = new List<string>();
-        if (_filter.Criticality == null && _criticalities.Count > 1 && t.Criticality != "") parts.Add(t.Criticality);
-        if (_filter.Block == null && t.Block != "") parts.Add(t.Block);
-        parts.Add(t.Name);
-        return string.Join(" · ", parts);
-    }
-
     private string BlockValue => _filter.Block == null ? "*" : _filter.Block == "" ? "-" : _filter.Block;
 
     private void OnTestChanged(ChangeEventArgs e)
     {
-        long? testId = long.TryParse(e.Value?.ToString(), out var id) ? id : null;
-        SetScope(_filter.Criticality, _filter.Block, testId);
+        var name = e.Value?.ToString();
+        SetScope(_filter.Criticality, _filter.Block, string.IsNullOrEmpty(name) ? null : name);
     }
 
-    /// <summary>Другой блок: выбранная проверка остаётся, если она в этом блоке.</summary>
+    /// <summary>Другой блок: выбранный тип проверки остаётся, если он есть в этом блоке.</summary>
     private void OnBlockChanged(ChangeEventArgs e)
     {
         var v = e.Value?.ToString();
         var block = v == "*" ? null : v == "-" ? "" : v;
-        var test = _tests.FirstOrDefault(t => t.Id == _filter.TestId);
-        SetScope(_filter.Criticality, block, test != null && (block == null || test.Block == block) ? test.Id : null);
+        var keep = _filter.TestName != null && _tests.Any(t => t.Name == _filter.TestName
+                                                              && (_filter.Criticality == null || t.Criticality == _filter.Criticality)
+                                                              && (block == null || t.Block == block));
+        SetScope(_filter.Criticality, block, keep ? _filter.TestName : null);
     }
 
     // ───── отчёты: сортировка и группировка ─────
@@ -615,7 +607,7 @@
     {
         _view.Tab = 0;
         var flat = BlocksOf(t.Criticality).Count == 1 && t.Block == "";
-        SetScope(t.Criticality, flat ? null : t.Block, t.Id);
+        SetScope(t.Criticality, flat ? null : t.Block, t.Name);
     }
 
     private static string CriticalityTitle(string c) => string.IsNullOrEmpty(c) ? "Все проверки" : ReportPath.CriticalityTitle(c);

@@ -114,7 +114,7 @@ public sealed class ClashStore
         var args = new List<(string, object)> { ("$p", projectId) };
         if (f.Criticality != null) { sql += " AND t.Criticality = $cr"; args.Add(("$cr", f.Criticality)); }
         if (f.Block != null) { sql += " AND t.Block = $bl"; args.Add(("$bl", f.Block)); }
-        if (f.TestId.HasValue) { sql += " AND c.TestId = $t"; args.Add(("$t", f.TestId.Value)); }
+        if (f.TestName != null) { sql += " AND t.Name = $tn"; args.Add(("$tn", f.TestName)); }
 
         using var c = _db.Open();
         var list = new List<ClashRow>();
