@@ -17,7 +17,8 @@
                     }
                     else
                     {
-                        @($"новых {r.New}, снова в отчёте {r.Again}, появились снова {r.Reappeared}, исправлены {r.Fixed}")
+                        @($"новых {r.New}, снова в отчёте {r.Again}, вернулись после исправления {r.Reappeared}, исправлены {r.Fixed}{(r.Confirmed > 0 ? $" (из них подтверждено {r.Confirmed})" : "")}")
+                        if (r.Warning != null) { <div class="warn">⚠ @r.Warning</div> }
                         if (r.Rekeyed > 0) { <span class="muted"> · @r.Rekeyed узнаны по паре элементов (номера Navisworks сменились)</span> }
                     }
                 </li>

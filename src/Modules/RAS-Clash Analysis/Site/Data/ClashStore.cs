@@ -56,13 +56,17 @@ public sealed class ClashStore
     {
         using var c = _db.Open();
         var list = new List<TestRow>();
-        using (var r = Query(c, "SELECT Id, Name, LeftSet, RightSet, LastReportDate, Criticality, Block FROM Tests WHERE ProjectId = $p", ("$p", projectId)))
+        using (var r = Query(c, """
+            SELECT t.Id, t.Name, t.LeftSet, t.RightSet, t.LastReportDate, t.Criticality, t.Block, COALESCE(tn.TypeName, t.Name)
+            FROM Tests t LEFT JOIN TypeNames tn ON tn.ProjectId = t.ProjectId AND tn.Name = t.Name
+            WHERE t.ProjectId = $p
+            """, ("$p", projectId)))
             while (r.Read())
                 list.Add(new TestRow
                 {
                     Id = r.GetInt64(0), Name = r.GetString(1), LeftSet = Str(r, 2), RightSet = Str(r, 3),
                     LastReport = r.IsDBNull(4) ? null : Database.Time(r.GetString(4)),
-                    Criticality = r.GetString(5), Block = r.GetString(6),
+                    Criticality = r.GetString(5), Block = r.GetString(6), Type = r.GetString(7),
                 });
         var byId = list.ToDictionary(t => t.Id);
         using (var r = Query(c, "SELECT TestId, State, COUNT(*) FROM Clashes WHERE ProjectId = $p GROUP BY TestId, State", ("$p", projectId)))
@@ -77,7 +81,7 @@ public sealed class ClashStore
         using var c = _db.Open();
         var list = new List<ReportRow>();
         using var r = Query(c, """
-            SELECT Id, FilePath, ReportDate, DateFromReport, Imported, Results, Criticality, Block, DateSource
+            SELECT Id, FilePath, ReportDate, DateFromReport, Imported, Results, Criticality, Block, DateSource, Warning
             FROM Reports WHERE ProjectId = $p ORDER BY ReportDate DESC, Id DESC
             """, ("$p", projectId));
         while (r.Read())
@@ -85,7 +89,7 @@ public sealed class ClashStore
             {
                 Id = r.GetInt64(0), FilePath = r.GetString(1), ReportDate = Database.Time(r.GetString(2)), DateFromReport = r.GetInt32(3) != 0,
                 Imported = Database.Time(r.GetString(4)), Results = r.GetInt32(5), Criticality = r.GetString(6), Block = r.GetString(7),
-                DateSource = r.GetString(8),
+                DateSource = r.GetString(8), Warning = Str(r, 9),
             });
         return list;
     }
@@ -96,9 +100,13 @@ public sealed class ClashStore
         SELECT c.Id, o.Name, c.TestId, t.Name, c.State, c.InLastReport, c.FirstSeen, c.LastSeen,
                a.ModelFile, a.Level, a.LevelKey, a.Category, a.Family, a.Type, a.Name, a.ElementId,
                b.ModelFile, b.Level, b.LevelKey, b.Category, b.Family, b.Type, b.Name, b.ElementId,
-               t.Criticality, t.Block
+               t.Criticality, t.Block, COALESCE(tn.TypeName, t.Name), c.ReturnCount,
+               CASE WHEN c.FirstSeen = t.LastReportDate THEN 1 ELSE 0 END,
+               EXISTS(SELECT 1 FROM Events e WHERE e.ClashId = c.Id AND e.ReportId = t.LastReportId AND e.Kind IN ('gone', 'confirmed')),
+               EXISTS(SELECT 1 FROM Events e WHERE e.ClashId = c.Id AND e.ReportId = t.LastReportId AND e.Kind = 'reappeared')
         FROM Clashes c
         JOIN Tests t ON t.Id = c.TestId
+        LEFT JOIN TypeNames tn ON tn.ProjectId = c.ProjectId AND tn.Name = t.Name
         LEFT JOIN Occurrences o ON o.Id = c.LastOccurrenceId
         LEFT JOIN Elements a ON a.OccurrenceId = o.Id AND a.Idx = 0
         LEFT JOIN Elements b ON b.OccurrenceId = o.Id AND b.Idx = 1
@@ -114,7 +122,7 @@ public sealed class ClashStore
         var args = new List<(string, object)> { ("$p", projectId) };
         if (f.Criticality != null) { sql += " AND t.Criticality = $cr"; args.Add(("$cr", f.Criticality)); }
         if (f.Block != null) { sql += " AND t.Block = $bl"; args.Add(("$bl", f.Block)); }
-        if (f.TestName != null) { sql += " AND t.Name = $tn"; args.Add(("$tn", f.TestName)); }
+        if (f.TestType != null) { sql += " AND COALESCE(tn.TypeName, t.Name) = $tn"; args.Add(("$tn", f.TestType)); }
 
         using var c = _db.Open();
         var list = new List<ClashRow>();
@@ -133,8 +141,10 @@ public sealed class ClashStore
         ClashCard card;
         using (var r = Query(c, """
             SELECT c.Id, c.ProjectId, p.Name, t.Name, t.LeftSet, t.RightSet, c.State, c.InLastReport, c.FirstSeen, c.LastSeen,
-                   t.Criticality, t.Block
-            FROM Clashes c JOIN Projects p ON p.Id = c.ProjectId JOIN Tests t ON t.Id = c.TestId WHERE c.Id = $id
+                   t.Criticality, t.Block, COALESCE(tn.TypeName, t.Name), c.ReturnCount
+            FROM Clashes c JOIN Projects p ON p.Id = c.ProjectId JOIN Tests t ON t.Id = c.TestId
+            LEFT JOIN TypeNames tn ON tn.ProjectId = c.ProjectId AND tn.Name = t.Name
+            WHERE c.Id = $id
             """, ("$id", id)))
         {
             if (!r.Read()) return null;
@@ -143,7 +153,7 @@ public sealed class ClashStore
                 Id = r.GetInt64(0), ProjectId = r.GetInt64(1), ProjectName = r.GetString(2), TestName = r.GetString(3),
                 LeftSet = Str(r, 4), RightSet = Str(r, 5), State = (ClashState)r.GetInt32(6), InLastReport = r.GetInt32(7) != 0,
                 FirstSeen = Database.Time(r.GetString(8)), LastSeen = Database.Time(r.GetString(9)),
-                Criticality = r.GetString(10), Block = r.GetString(11),
+                Criticality = r.GetString(10), Block = r.GetString(11), Type = r.GetString(12), ReturnCount = r.GetInt32(13),
             };
         }
         var byId = new Dictionary<long, OccurrenceView>();
@@ -187,6 +197,22 @@ public sealed class ClashStore
         using var c = _db.Open();
         using var cmd = Command(c, "SELECT Image FROM Occurrences WHERE Id = $id", ("$id", occurrenceId));
         return cmd.ExecuteScalar() as string;
+    }
+
+    // ───────────── типы проверок ─────────────
+
+    /// <summary>
+    /// Своё название типа для всех проверок с этим названием в проекте (все блоки и критичности, и будущие отчёты).
+    /// Название другого типа — объединение; пусто или как у проверки — своё название снимается.
+    /// </summary>
+    public void SetTestType(long projectId, string testName, string typeName)
+    {
+        using var c = _db.Open();
+        var value = typeName?.Trim();
+        using var cmd = string.IsNullOrEmpty(value) || value == testName
+            ? Command(c, "DELETE FROM TypeNames WHERE ProjectId = $p AND Name = $n", ("$p", projectId), ("$n", testName))
+            : Command(c, "INSERT OR REPLACE INTO TypeNames(ProjectId, Name, TypeName) VALUES($p, $n, $t)", ("$p", projectId), ("$n", testName), ("$t", value));
+        cmd.ExecuteNonQuery();
     }
 
     // ───────────── действия ─────────────
@@ -255,7 +281,8 @@ public sealed class ClashStore
         InLastReport = r.GetInt32(5) != 0, FirstSeen = Database.Time(r.GetString(6)), LastSeen = Database.Time(r.GetString(7)),
         A = r.IsDBNull(8) && r.IsDBNull(15) ? null : ReadElement(r, 8),
         B = r.IsDBNull(16) && r.IsDBNull(23) ? null : ReadElement(r, 16),
-        Criticality = r.GetString(24), Block = r.GetString(25),
+        Criticality = r.GetString(24), Block = r.GetString(25), Type = r.GetString(26), ReturnCount = r.GetInt32(27),
+        NewInLastRun = r.GetInt32(28) != 0, FixedInLastRun = r.GetInt32(29) != 0, ReturnedInLastRun = r.GetInt32(30) != 0,
     };
 
     private static ElementView ReadElement(SqliteDataReader r, int i) => new ElementView

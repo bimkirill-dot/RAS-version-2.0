@@ -77,6 +77,7 @@ namespace RASv2.ClashAnalysis.Reports
             // коллизии бывают и внутри групп Navisworks (clashgroup) — берём все
             foreach (var r in t.Descendants("clashresult"))
             {
+                test.ResultsInFile++;
                 var result = ReadResult(r);
                 if (result.Elements.Count == 0)
                     warn?.Invoke("Проверка «" + test.Name + "», «" + result.Name + "»: нет элементов — пропущена.");

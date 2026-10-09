@@ -21,7 +21,7 @@ else
                 <th>Проект</th>
                 @if (_crits.Count == 0) { <th class="num">Активные</th> }
                 @foreach (var cr in _crits) { <th class="num">Активные · @(cr == "" ? "без критичности" : cr.ToLowerInvariant())</th> }
-                <th class="num">Исправлены</th><th class="num">Допущены</th><th>Последний отчёт</th><th>Папка проекта</th>
+                <th class="num">Ждут проверки</th><th class="num">Исправлены</th><th class="num">Допущены</th><th>Последний отчёт</th><th>Папка проекта</th>
             </tr>
         </thead>
         <tbody>
@@ -34,6 +34,7 @@ else
                     {
                         <td class="num"><span class="badge state-active">@(p.ActiveByCriticality.TryGetValue(cr, out var n) ? n : 0)</span></td>
                     }
+                    <td class="num">@p.Counts.Pending</td>
                     <td class="num">@p.Counts.Fixed</td>
                     <td class="num">@p.Counts.Accepted</td>
                     <td>@Fmt.Date(p.LastReport)</td>

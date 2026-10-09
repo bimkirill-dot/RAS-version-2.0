@@ -34,6 +34,8 @@ namespace RASv2.ClashAnalysis.Reports
         /// <summary>Итог Navisworks: всего, новые, активные, проверенные, подтверждённые, исправленные.</summary>
         public ClashSummary Summary { get; set; } = new ClashSummary();
         public List<ClashResult> Results { get; } = new List<ClashResult>();
+        /// <summary>Сколько коллизий в файле, включая пропущенные (без элементов), — для проверки полноты отчёта.</summary>
+        public int ResultsInFile { get; set; }
     }
 
     public sealed class ClashSummary

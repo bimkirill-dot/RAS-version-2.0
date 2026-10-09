@@ -10,9 +10,11 @@ namespace RASv2.ClashAnalysis.Site.Data;
 public sealed class StateCounts
 {
     public int Active { get; set; }
+    /// <summary>Отмечены «Исправлена» — ждут следующего прогона.</summary>
+    public int Pending { get; set; }
     public int Fixed { get; set; }
     public int Accepted { get; set; }
-    public int Total => Active + Fixed + Accepted;
+    public int Total => Active + Pending + Fixed + Accepted;
 
     public void Add(ClashState state, int count)
     {
@@ -20,6 +22,7 @@ public sealed class StateCounts
         {
             case ClashState.Fixed: Fixed += count; break;
             case ClashState.Accepted: Accepted += count; break;
+            case ClashState.Pending: Pending += count; break;
             default: Active += count; break;
         }
     }
@@ -42,6 +45,8 @@ public sealed class TestRow
     public string Criticality { get; set; } = "";
     public string Block { get; set; } = "";
     public string Name { get; set; }
+    /// <summary>Тип проверки: своё название в проекте (TypeNames) или название проверки.</summary>
+    public string Type { get; set; }
     public string LeftSet { get; set; }
     public string RightSet { get; set; }
     public StateCounts Counts { get; } = new StateCounts();
@@ -58,6 +63,8 @@ public sealed class ReportRow
     public bool DateFromReport { get; set; }
     /// <summary>Откуда дата отчёта: Logic.ReportPath.DateFromXml / DateFromFolder / DateFromFile.</summary>
     public string DateSource { get; set; }
+    /// <summary>Предупреждение загрузки (неполный отчёт); null — нет.</summary>
+    public string Warning { get; set; }
     public DateTime Imported { get; set; }
     public int Results { get; set; }
 }
@@ -81,9 +88,17 @@ public sealed class ClashRow
     public string Name { get; set; }
     public long TestId { get; set; }
     public string TestName { get; set; }
+    /// <summary>Тип проверки (своё название в проекте или название проверки).</summary>
+    public string Type { get; set; }
     public string Criticality { get; set; } = "";
     public string Block { get; set; } = "";
     public ClashState State { get; set; }
+    /// <summary>Сколько раз возвращалась после исправления.</summary>
+    public int ReturnCount { get; set; }
+    /// <summary>В последнем прогоне своей проверки: появилась / исправлена / вернулась.</summary>
+    public bool NewInLastRun { get; set; }
+    public bool FixedInLastRun { get; set; }
+    public bool ReturnedInLastRun { get; set; }
     public bool InLastReport { get; set; }
     public DateTime FirstSeen { get; set; }
     public DateTime LastSeen { get; set; }
@@ -102,10 +117,10 @@ public sealed class ClashFilter
     /// <summary>Блок («S1», "" — без блока); null — любой.</summary>
     public string Block { get; set; }
     /// <summary>
-    /// Тип проверки — название проверки Navisworks («АР Стены/МЕР Трубы»); одинаковое в разных блоках и критичностях —
-    /// один тип (решение разработчика). null — все.
+    /// Тип проверки — название проверки Navisworks («АР Стены/МЕР Трубы») или своё название в проекте (TypeNames);
+    /// одинаковое в разных блоках и критичностях — один тип (решение разработчика). null — все.
     /// </summary>
-    public string TestName { get; set; }
+    public string TestType { get; set; }
     public ClashState? State { get; set; }
     /// <summary>Выбранные значения полей (Logic.ClashFacets.Level / Category / Discipline / Report → ключи значений).</summary>
     public Dictionary<string, HashSet<string>> Facets { get; } = new Dictionary<string, HashSet<string>>();
@@ -150,8 +165,10 @@ public sealed class ClashCard
     public long ProjectId { get; set; }
     public string ProjectName { get; set; }
     public string TestName { get; set; }
+    public string Type { get; set; }
     public string Criticality { get; set; } = "";
     public string Block { get; set; } = "";
+    public int ReturnCount { get; set; }
     public string LeftSet { get; set; }
     public string RightSet { get; set; }
     public ClashState State { get; set; }
@@ -173,6 +190,8 @@ public static class EventKinds
     public const string Gone = "gone";
     public const string Status = "status";
     public const string Comment = "comment";
+    /// <summary>Исправление подтверждено прогоном: была «Ждёт проверки», в отчёте её нет.</summary>
+    public const string Confirmed = "confirmed";
     /// <summary>Номер Navisworks сменился — коллизия узнана по паре элементов.</summary>
     public const string Rekey = "rekey";
 }

@@ -20,6 +20,7 @@ public static class Fmt
     {
         ClashState.Fixed => "state-fixed",
         ClashState.Accepted => "state-accepted",
+        ClashState.Pending => "state-pending",
         _ => "state-active",
     };
 

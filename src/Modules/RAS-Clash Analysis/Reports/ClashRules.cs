@@ -8,8 +8,11 @@ using System.Text.RegularExpressions;
 
 namespace RASv2.ClashAnalysis.Reports
 {
-    /// <summary>Наш статус коллизии (DECISIONS.md, «Статусы»).</summary>
-    public enum ClashState { Active, Fixed, Accepted }
+    /// <summary>
+    /// Наш статус коллизии (DECISIONS.md, «Статусы»; числа — в базе, не менять). Pending — человек отметил «Исправлена»,
+    /// ждёт следующего прогона: нет в нём — Fixed (подтверждено), есть — снова Active («вернулась»).
+    /// </summary>
+    public enum ClashState { Active = 0, Fixed = 1, Accepted = 2, Pending = 3 }
 
     /// <summary>
     /// Правила над отчётом: что считать той же коллизией в следующем прогоне, тем же уровнем, каким статусом.
@@ -109,6 +112,7 @@ namespace RASv2.ClashAnalysis.Reports
             {
                 case ClashState.Fixed: return "Исправлена";
                 case ClashState.Accepted: return "Допущена";
+                case ClashState.Pending: return "Ждёт проверки";
                 default: return "Активная";
             }
         }

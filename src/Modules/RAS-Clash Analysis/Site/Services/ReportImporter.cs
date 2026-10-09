@@ -16,8 +16,13 @@ public sealed class ImportResult
     public string Message { get; set; }
     public int New { get; set; }
     public int Again { get; set; }
+    /// <summary>Вернулись после исправления.</summary>
     public int Reappeared { get; set; }
     public int Fixed { get; set; }
+    /// <summary>Из них — «Ждёт проверки», исправление подтверждено прогоном.</summary>
+    public int Confirmed { get; set; }
+    /// <summary>Предупреждение (неполный отчёт); null — нет.</summary>
+    public string Warning { get; set; }
     /// <summary>Узнаны по паре элементов: номер Navisworks сменился.</summary>
     public int Rekeyed { get; set; }
 }
@@ -186,8 +191,17 @@ public sealed class ReportImporter
             var latest = lastDate == null || string.CompareOrdinal(reportDate, lastDate) >= 0;
             var known = KnownClashes(c, tx, testId, test.Name);
             var dateText = date.ToString(dateSource == ReportPath.DateFromFolder ? "dd.MM.yyyy" : "dd.MM.yyyy HH:mm");
+            // неполный отчёт (выгружены не все статусы): пропавшие не считаем исправленными — DECISIONS.md, «Неполный отчёт»
+            var complete = ReportMerge.IsComplete(test);
+            if (!complete)
+            {
+                var warning = $"«{test.Name}»: отчёт неполный — в проверке {test.Summary.Total} коллизий, в отчёте {test.ResultsInFile}. "
+                              + "Пропавшие из отчёта не считаются исправленными. Выгрузите отчёт со всеми статусами.";
+                result.Warning = result.Warning == null ? warning : result.Warning + " " + warning;
+                _log.LogWarning("{File}: {Warning}", path, warning);
+            }
 
-            foreach (var step in ReportMerge.Plan(test.Name, known, test.Results))
+            foreach (var step in ReportMerge.Plan(test.Name, known, test.Results, complete))
             {
                 if (!latest)
                 {
@@ -219,8 +233,10 @@ public sealed class ReportImporter
                     case MergeAction.Reappeared:
                         AddOccurrence(c, tx, step.Known.Id, reportId, report, step.Result, makeLast: true, reportDate);
                         Exec(c, tx, "UPDATE Clashes SET State = $s, InLastReport = 1 WHERE Id = $id", ("$s", (int)step.NewState), ("$id", step.Known.Id));
+                        if (step.Returned)
+                            Exec(c, tx, "UPDATE Clashes SET ReturnCount = ReturnCount + 1 WHERE Id = $id", ("$id", step.Known.Id));
                         if (step.StateChanged)
-                            ClashStore.AddEvent(c, tx, step.Known.Id, now, EventKinds.Reappeared, "Снова в отчёте от " + dateText,
+                            ClashStore.AddEvent(c, tx, step.Known.Id, now, EventKinds.Reappeared, "Вернулась после исправления: снова в отчёте от " + dateText,
                                 (int)step.Known.State, (int)step.NewState, null, reportId);
                         if (step.Action == MergeAction.Again) result.Again++;
                         else result.Reappeared++;
@@ -231,10 +247,12 @@ public sealed class ReportImporter
                         Exec(c, tx, "UPDATE Clashes SET State = $s, InLastReport = 0 WHERE Id = $id", ("$s", (int)step.NewState), ("$id", step.Known.Id));
                         if (step.StateChanged)
                         {
-                            ClashStore.AddEvent(c, tx, step.Known.Id, now, EventKinds.Gone,
-                                step.Result != null ? "Исправлена в Navisworks (отчёт от " + dateText + ")" : "Нет в отчёте от " + dateText,
+                            var why = step.Result != null ? "Navisworks пишет «Исправлено» (отчёт от " + dateText + ")" : "нет в отчёте от " + dateText;
+                            ClashStore.AddEvent(c, tx, step.Known.Id, now, step.Confirmed ? EventKinds.Confirmed : EventKinds.Gone,
+                                (step.Confirmed ? "Исправление подтверждено: " : "Исправлена: ") + why,
                                 (int)step.Known.State, (int)step.NewState, null, reportId);
                             result.Fixed++;
+                            if (step.Confirmed) result.Confirmed++;
                         }
                         break;
                 }
@@ -242,6 +260,8 @@ public sealed class ReportImporter
             if (latest)
                 Exec(c, tx, "UPDATE Tests SET LastReportId = $r, LastReportDate = $d WHERE Id = $id", ("$r", reportId), ("$d", reportDate), ("$id", testId));
         }
+        if (result.Warning != null)
+            Exec(c, tx, "UPDATE Reports SET Warning = $w WHERE Id = $id", ("$w", result.Warning), ("$id", reportId));
         tx.Commit();
         return result;
     }

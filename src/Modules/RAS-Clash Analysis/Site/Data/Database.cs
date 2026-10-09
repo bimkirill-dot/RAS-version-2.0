@@ -170,6 +170,23 @@ public sealed class Database
         -- настройки сайта; «папку со всеми проектами» отменили в тот же день (DECISIONS.md) — таблица пока пустая
         CREATE TABLE Settings(Key TEXT PRIMARY KEY, Value TEXT);
         """,
+
+        // 3 — 09.10.2026: «Ждёт проверки» (ручные «Исправлена» — к ней), сколько раз коллизия возвращалась после исправления,
+        // свои названия типов проверок в проекте (объединение одинаковых с опечатками), предупреждение у неполного отчёта
+        """
+        ALTER TABLE Clashes ADD COLUMN ReturnCount INTEGER NOT NULL DEFAULT 0;
+        UPDATE Clashes SET ReturnCount = (SELECT COUNT(*) FROM Events e WHERE e.ClashId = Clashes.Id AND e.Kind = 'reappeared');
+        UPDATE Clashes SET State = 3 WHERE State = 1 AND (
+            SELECT e.Kind FROM Events e WHERE e.ClashId = Clashes.Id AND e.NewState IS NOT NULL ORDER BY e.Time DESC, e.Id DESC LIMIT 1) = 'status';
+
+        CREATE TABLE TypeNames(
+            ProjectId INTEGER NOT NULL REFERENCES Projects(Id),
+            Name TEXT NOT NULL,
+            TypeName TEXT NOT NULL,
+            PRIMARY KEY(ProjectId, Name));
+
+        ALTER TABLE Reports ADD COLUMN Warning TEXT;
+        """,
     };
 
     /// <summary>Шаг 2: критичность и блок у уже загруженных отчётов и проверок — по пути отчёта внутри папки проекта.</summary>

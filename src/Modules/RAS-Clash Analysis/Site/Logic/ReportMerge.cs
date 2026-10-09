@@ -43,6 +43,10 @@ namespace RASv2.ClashAnalysis.Site.Logic
         public bool StateChanged { get; set; }
         /// <summary>Коллизия в отчёте и не исправлена — «есть в последнем отчёте».</summary>
         public bool Present { get; set; }
+        /// <summary>Вернулась после исправления: была «Ждёт проверки» или «Исправлена» — и снова в отчёте.</summary>
+        public bool Returned { get; set; }
+        /// <summary>Исправление подтверждено прогоном: была «Ждёт проверки» — в отчёте её нет.</summary>
+        public bool Confirmed { get; set; }
     }
 
     /// <summary>
@@ -54,13 +58,16 @@ namespace RASv2.ClashAnalysis.Site.Logic
     /// пересоздали или собрали новый файл Navisworks, и без этого все коллизии стали бы «новыми», а старые — «исправленными».</item>
     /// <item>Новая «личность» — новая коллизия; статус — из Navisworks («Подтверждено» → «Допущена», «Исправлено» → «Исправлена»).</item>
     /// <item>Известная — статус на сайте главнее статуса Navisworks: «Допущена» остаётся «Допущена».</item>
-    /// <item>«Активная», которой нет в отчёте (или Navisworks пишет «Исправлено»), — «Исправлена».</item>
-    /// <item>«Исправлена», которая снова в отчёте, — опять «Активная».</item>
+    /// <item>«Активная» или «Ждёт проверки», которой нет в отчёте (или Navisworks пишет «Исправлено»), — «Исправлена»
+    /// (у «Ждёт проверки» — исправление подтверждено).</item>
+    /// <item>«Исправлена» или «Ждёт проверки», которая снова в отчёте, — опять «Активная», «вернулась после исправления».</item>
+    /// <item>Отчёт неполный (в нём меньше коллизий, чем Navisworks насчитал в проверке, — выгружены не все статусы):
+    /// пропавшие ничего не меняют — неизвестно, исправлены они или просто не попали в отчёт.</item>
     /// </list>
     /// </summary>
     public static class ReportMerge
     {
-        public static List<MergeStep> Plan(string testName, IEnumerable<KnownClash> known, IEnumerable<ClashResult> results)
+        public static List<MergeStep> Plan(string testName, IEnumerable<KnownClash> known, IEnumerable<ClashResult> results, bool complete = true)
         {
             var knownList = known.ToList();
             var byKey = new Dictionary<string, KnownClash>(StringComparer.Ordinal);
@@ -121,23 +128,32 @@ namespace RASv2.ClashAnalysis.Site.Logic
                     steps.Add(gone);
                     continue;
                 }
-                var reappeared = k.State == ClashState.Fixed;
+                var reappeared = k.State == ClashState.Fixed || k.State == ClashState.Pending;
                 steps.Add(new MergeStep
                 {
                     Action = reappeared ? MergeAction.Reappeared : MergeAction.Again, Result = r, Known = k, IdentityKey = key, Rekeyed = rekeyed,
-                    NewState = reappeared ? ClashState.Active : k.State, StateChanged = reappeared, Present = true,
+                    NewState = reappeared ? ClashState.Active : k.State, StateChanged = reappeared, Present = true, Returned = reappeared,
                 });
             }
-            foreach (var k in knownList.Where(k => !matched.Contains(k.Id)))
-                steps.Add(Gone(k, null));
+            // неполный отчёт: про пропавшие ничего не известно — не трогаем
+            if (complete)
+                foreach (var k in knownList.Where(k => !matched.Contains(k.Id)))
+                    steps.Add(Gone(k, null));
             return steps;
         }
 
-        private static MergeStep Gone(KnownClash k, ClashResult r) => new MergeStep
+        /// <summary>Отчёт полный — в нём все коллизии проверки (итог Navisworks «всего» не больше, чем коллизий в отчёте; итога нет — полный).</summary>
+        public static bool IsComplete(ClashTest test) => test.Summary == null || test.Summary.Total <= Math.Max(test.ResultsInFile, test.Results.Count);
+
+        private static MergeStep Gone(KnownClash k, ClashResult r)
         {
-            Action = MergeAction.Gone, Result = r, Known = k, IdentityKey = k.IdentityKey,
-            NewState = k.State == ClashState.Active ? ClashState.Fixed : k.State,
-            StateChanged = k.State == ClashState.Active, Present = false,
-        };
+            var open = k.State == ClashState.Active || k.State == ClashState.Pending;
+            return new MergeStep
+            {
+                Action = MergeAction.Gone, Result = r, Known = k, IdentityKey = k.IdentityKey,
+                NewState = open ? ClashState.Fixed : k.State, StateChanged = open, Present = false,
+                Confirmed = k.State == ClashState.Pending,
+            };
+        }
     }
 }

@@ -121,6 +121,32 @@ namespace RASv2.Tests
                 Check(steps.Any(s => s.Action == MergeAction.New) && steps.Any(s => s.Action == MergeAction.Gone), "новая + пропавшая");
                 Check(!ClashRules.HasFullPair(r.Elements), "пара неполная");
             });
+            yield return Case("«Ждёт проверки»: нет в прогоне — исправление подтверждено, есть — вернулась", () =>
+            {
+                var steps = ReportMerge.Plan(Test, new[] { Known("p", ClashState.Pending), Known("q", ClashState.Pending) }, new[] { Result("q") });
+                var p = Step(steps, "p");
+                Check(p.Action == MergeAction.Gone && p.NewState == ClashState.Fixed && p.StateChanged && p.Confirmed, "подтверждено");
+                var q = Step(steps, "q");
+                Check(q.Action == MergeAction.Reappeared && q.NewState == ClashState.Active && q.Returned && !q.Confirmed, "вернулась");
+            });
+            yield return Case("исправленная прогоном снова в отчёте — тоже «вернулась»; активная — нет", () =>
+            {
+                var steps = ReportMerge.Plan(Test, new[] { Known("f", ClashState.Fixed), Known("a", ClashState.Active) }, new[] { Result("f"), Result("a") });
+                Check(Step(steps, "f").Returned && !Step(steps, "a").Returned, "вернулась только исправленная");
+                Check(!Step(steps, "a").Confirmed, "подтверждения нет");
+            });
+            yield return Case("неполный отчёт: пропавшие не трогаем, найденные — как обычно", () =>
+            {
+                var steps = ReportMerge.Plan(Test, new[] { Known("a", ClashState.Active), Known("p", ClashState.Pending), Known("f", ClashState.Fixed) },
+                    new[] { Result("f") }, complete: false);
+                Check(steps.Count == 1 && Step(steps, "f").Returned, "только найденная: " + steps.Count);
+                var test = new ClashTest { Summary = new ClashSummary { Total = 5 } };
+                test.Results.Add(Result("x"));
+                test.ResultsInFile = 3;
+                Check(!ReportMerge.IsComplete(test), "в проверке 5, в файле 3 — неполный");
+                test.ResultsInFile = 5;
+                Check(ReportMerge.IsComplete(test), "в файле все 5 (одна без элементов пропущена) — полный");
+            });
         }
     }
 }

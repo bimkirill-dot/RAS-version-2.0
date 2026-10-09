@@ -29,7 +29,8 @@ namespace RASv2.ClashAnalysis.Site.Logic
         public const string InLastReport = "in";
         public const string NotInLastReport = "out";
 
-        public static readonly string[] All = { Level, Category, Discipline, Report };
+        /// <summary>Поля на странице; «Отчёт» убран (решение разработчика 09.10.2026) — проверки его остались.</summary>
+        public static readonly string[] All = { Level, Category, Discipline };
 
         public static string Title(string facet) => facet switch
         {

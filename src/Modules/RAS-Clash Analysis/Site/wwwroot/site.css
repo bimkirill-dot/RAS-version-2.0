@@ -13,6 +13,8 @@
     --fixed-bg: #e3f2e4;
     --accepted: #5b5f97;
     --accepted-bg: #e8e8f6;
+    --pending: #a16207;
+    --pending-bg: #fdf3d7;
     --error: #b42318;
     --row-hover: #eef3f9;
     --row-selected: #dbe8f7;
@@ -35,6 +37,8 @@
         --fixed-bg: #1f3a22;
         --accepted: #a5a9e6;
         --accepted-bg: #2b2c4a;
+        --pending: #e3b341;
+        --pending-bg: #3d3216;
         --error: #f2867a;
         --row-hover: #262c33;
         --row-selected: #213651;
@@ -96,6 +100,7 @@ th.sortable:hover, th.sorted { color: var(--text); }
 .badge.state-active { background: var(--active-bg); color: var(--active); }
 .badge.state-fixed { background: var(--fixed-bg); color: var(--fixed); }
 .badge.state-accepted { background: var(--accepted-bg); color: var(--accepted); }
+.badge.state-pending { background: var(--pending-bg); color: var(--pending); }
 
 /* вкладки */
 .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
@@ -122,11 +127,13 @@ textarea { width: 100%; resize: vertical; }
 .btn.state-active { color: var(--active); }
 .btn.state-fixed { color: var(--fixed); }
 .btn.state-accepted { color: var(--accepted); }
+.btn.state-pending { color: var(--fixed); }
 /* текущий статус в карточке — залитая кнопка */
 .btn.state.current { opacity: 1; font-weight: 600; cursor: default; }
 .btn.state-active.current { background: var(--active-bg); border-color: var(--active); }
 .btn.state-fixed.current { background: var(--fixed-bg); border-color: var(--fixed); }
 .btn.state-accepted.current { background: var(--accepted-bg); border-color: var(--accepted); }
+.btn.state-pending.current { background: var(--fixed-bg); border-color: var(--fixed); }
 
 .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
 .check { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); cursor: pointer; }
@@ -196,6 +203,26 @@ table.reports th:nth-child(5) { width: 150px; }
 .stab.on.state-active { border-bottom-color: var(--active); }
 .stab.on.state-fixed { border-bottom-color: var(--fixed); }
 .stab.on.state-accepted { border-bottom-color: var(--accepted); }
+.stab.on.state-pending { border-bottom-color: var(--pending); }
+
+/* последний прогон: новые / исправлено / вернулось — щелчок показывает их */
+.run-strip { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 2px 0 8px; flex: none; }
+.run-chip {
+    font: inherit; font-size: 13px; cursor: pointer; padding: 3px 12px; border-radius: 14px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--muted);
+}
+.run-chip b { color: var(--text); }
+.run-chip:hover:not(:disabled) { border-color: var(--accent); }
+.run-chip:disabled { opacity: .45; cursor: default; }
+.run-chip.new b { color: var(--active); }
+.run-chip.fixed b { color: var(--fixed); }
+.run-chip.returned b { color: var(--pending); }
+.run-chip.on { background: var(--accent-bg); border-color: var(--accent); color: var(--text); }
+.tag.returned { background: var(--pending-bg); color: var(--pending); font-weight: 600; }
+.returned-note { color: var(--pending); font-size: 13px; margin-top: 4px; }
+.warn { color: var(--pending); }
+td.type-cell input { width: 260px; }
+.renamed { font-style: italic; }
 .stab.on b { color: var(--text); }
 .scope-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 45%; }
 

@@ -21,6 +21,14 @@ public sealed class ProjectView
     public bool ReportSortDesc { get; set; } = true;
     public string ReportGroup { get; set; } = "";
     public HashSet<string> ReportCollapsed { get; } = new HashSet<string>();
+
+    /// <summary>Отбор последнего прогона: null — нет, new / fixed / returned.</summary>
+    public string RunFilter { get; set; }
+    /// <summary>Группировка списка: "" — нет, element — по элементу; свёрнутые группы элементов.</summary>
+    public string GroupBy { get; set; } = "";
+    public HashSet<string> ElementCollapsed { get; } = new HashSet<string>();
+    /// <summary>Показан отбор «Категория» (спрятан под «Ещё»).</summary>
+    public bool MoreFilters { get; set; }
 }
 
 /// <summary>
