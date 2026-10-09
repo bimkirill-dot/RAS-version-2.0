@@ -70,7 +70,7 @@
 ## Планы
 
 - **Ядро** — выключение модулей: первый этап (у всех, `Config\modules.txt`, предохранитель) сделан; личное и выборочное — `src\Core\DECISIONS.md`.
-- **RAS-Clash Analysis** — единая база коллизий компании: сайт во внутренней сети + мост в Revit (модуль), как в статье «Clash Analytics»; решения и этапы — `src\Modules\RAS-Clash Analysis\DECISIONS.md`. Есть разбор отчётов; дальше — сайт (этап 1), до него — правка PRINCIPLES.md про сайт.
+- **RAS-Clash Analysis** — единая база коллизий компании: сайт во внутренней сети + мост в Revit (модуль), как в статье «Clash Analytics»; решения и этапы — `src\Modules\RAS-Clash Analysis\DECISIONS.md`. Есть разбор отчётов; дальше — сайт (этап 1, пилот только для разработчика). Сайт — часть модуля (PRINCIPLES.md, «Сайт модуля», ред. 8).
 - **RAS-Model History** — планы (связь журналов, «хранилище заменено», аналитика) — в его `DECISIONS.md`; шаги 6–7 переезда — в `MODULE.md`.
 - **Перенос уже написанных функций.** В RAS v. 2.0 будут переезжать готовые функции: их нужно адаптировать под `PRINCIPLES.md` и оформить модулями (порядок — `PRINCIPLES.md`, раздел 4, «Встроить существующий отдельный плагин»; образец — RAS-Model History). Какие функции и в каком порядке — решает разработчик; без его выбора не начинать. Кандидаты:
   - прежний плагин RAS, `D:\Code\RasPlugin`: AssemblyGrouping, FireCouplingPlacement, SleevePlacement, Kj (PartitionReinforcement, StructuralDataKj, WorksetsDistributorKj), LevelNameChecker, Ov, IntehPlus, BIM_otdela_checkRas, FilterDiagnostics, Common. Там три копии кода (`RAS`, `RAS_2023`, `RAS_2026`) — перед переносом сравнить и взять актуальную;
