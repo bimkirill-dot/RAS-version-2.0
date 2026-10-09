@@ -21,7 +21,6 @@
         <div class="tabs">
             <button class="@Tab(0)" @onclick="() => _view.Tab = 0">Коллизии</button>
             <button class="@Tab(1)" @onclick="() => _view.Tab = 1">Проверки</button>
-            <button class="@Tab(2)" @onclick="() => _view.Tab = 2">Отчёты</button>
             <button class="@Tab(3)" @onclick="() => _view.Tab = 3">Проект</button>
         </div>
     </div>
@@ -85,7 +84,9 @@
             @* боковая панель — кнопки, которые относятся только к этому проекту; пока место под них *@
             <aside class="side" aria-label="Кнопки проекта">
                 <div class="side-title">Проект</div>
-                <p class="muted small">Здесь будут кнопки этого проекта.</p>
+                <button class="side-btn @(_view.Tab == 2 ? "on" : "")" @onclick="() => _view.Tab = 2" title="Загруженные отчёты Navisworks этого проекта">
+                    <span>Отчёты</span><b>@ScopeReports.Count()</b>
+                </button>
             </aside>
 
             @if (_view.Tab == 0)
@@ -244,23 +245,62 @@
                 <section class="content scroll">
                     <div class="toolbar">
                         <button class="btn" disabled="@Importer.Busy" @onclick="Scan">@(Importer.Busy ? "Проверяем папку…" : "Проверить папку сейчас")</button>
-                        <span class="path">@_project.Folder</span>
+                        <label class="dd">
+                            <span>Группировка</span>
+                            <select value="@_view.ReportGroup" @onchange="OnReportGroupChanged">
+                                <option value="">Без группировки</option>
+                                <option value="block">По блоку</option>
+                                <option value="date">По дате отчёта</option>
+                                <option value="file">По файлу</option>
+                                <option value="imported">По дню загрузки</option>
+                            </select>
+                        </label>
+                        <span class="spacer"></span>
+                        <span class="path" title="Папка проекта">@_project.Folder</span>
                     </div>
                     <ImportResults Results="Importer.LastResults" />
-                    <table class="grid">
-                        <thead><tr><th>Дата отчёта</th><th>Блок</th><th>Файл</th><th class="num">Коллизий</th><th>Загружен</th></tr></thead>
-                        <tbody>
-                            @foreach (var r in ScopeReports)
-                            {
-                                <tr>
-                                    <td title="@DateSourceTitle(r.DateSource)">@(r.DateSource == ReportPath.DateFromFolder ? Fmt.Day(r.ReportDate) : Fmt.Date(r.ReportDate))@(r.DateSource == ReportPath.DateFromXml ? "" : "*")</td>
-                                    <td>@ReportPath.BlockTitle(r.Block)</td>
-                                    <td class="path">@r.FilePath</td>
-                                    <td class="num">@r.Results</td>
-                                    <td>@Fmt.Date(r.Imported)</td>
-                                </tr>
-                            }
-                        </tbody>
+                    <table class="grid reports">
+                        <thead>
+                            <tr>
+                                @ReportSortHeader("date", "Дата отчёта")
+                                @ReportSortHeader("block", "Блок")
+                                @ReportSortHeader("file", "Файл")
+                                @ReportSortHeader("count", "Коллизий", "num")
+                                @ReportSortHeader("imported", "Загружен")
+                            </tr>
+                        </thead>
+                        @foreach (var g in ReportGroups())
+                        {
+                            var collapsed = g.Key != null && _view.ReportCollapsed.Contains(g.Key);
+                            <tbody class="group">
+                                @if (g.Key != null)
+                                {
+                                    <tr class="group-row" @onclick="() => ToggleReportGroup(g.Key)">
+                                        <td colspan="5">
+                                            <span class="caret">@(collapsed ? "▸" : "▾")</span>
+                                            <span class="group-title">@g.Title</span>
+                                            <span class="group-count">@Fmt.Plural(g.Reports.Count, "отчёт", "отчёта", "отчётов") · @Fmt.Plural(g.Reports.Sum(r => r.Results), "коллизия", "коллизии", "коллизий") в отчётах</span>
+                                        </td>
+                                    </tr>
+                                }
+                                @if (!collapsed)
+                                {
+                                    foreach (var r in g.Reports)
+                                    {
+                                        <tr>
+                                            <td title="@DateSourceTitle(r.DateSource)">@(r.DateSource == ReportPath.DateFromFolder ? Fmt.Day(r.ReportDate) : Fmt.Date(r.ReportDate))@(r.DateSource == ReportPath.DateFromXml ? "" : "*")</td>
+                                            <td>@ReportPath.BlockTitle(r.Block)</td>
+                                            <td class="file" title="@r.FilePath">
+                                                <div class="cut">@System.IO.Path.GetFileName(r.FilePath)</div>
+                                                <div class="el-sub cut">@ReportFolder(r)</div>
+                                            </td>
+                                            <td class="num">@r.Results</td>
+                                            <td>@Fmt.Date(r.Imported)</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        }
                     </table>
                     @if (ScopeReports.Any(r => r.DateSource != ReportPath.DateFromXml))
                     {
@@ -456,6 +496,95 @@
         var block = v == "*" ? null : v == "-" ? "" : v;
         var test = _tests.FirstOrDefault(t => t.Id == _filter.TestId);
         SetScope(_filter.Criticality, block, test != null && (block == null || test.Block == block) ? test.Id : null);
+    }
+
+    // ───── отчёты: сортировка и группировка ─────
+
+    private sealed class ReportGroup
+    {
+        /// <summary>null — без группировки (одна группа без заголовка).</summary>
+        public string Key;
+        public string Title;
+        public List<ReportRow> Reports;
+    }
+
+    private RenderFragment ReportSortHeader(string key, string title, string css = null) => __builder =>
+    {
+        var on = _view.ReportSortKey == key;
+        <th class="sortable @(on ? "sorted" : "") @css" @onclick="() => SortReports(key)" title="Сортировать">
+            @title @(on ? (_view.ReportSortDesc ? "▼" : "▲") : "")
+        </th>
+    };
+
+    private void SortReports(string key)
+    {
+        if (_view.ReportSortKey == key) _view.ReportSortDesc = !_view.ReportSortDesc;
+        else
+        {
+            _view.ReportSortKey = key;
+            // даты и числа — сначала новые и большие, остальное — по алфавиту
+            _view.ReportSortDesc = key == "date" || key == "imported" || key == "count";
+        }
+    }
+
+    private List<ReportRow> SortedReports(IEnumerable<ReportRow> reports)
+    {
+        Func<ReportRow, IComparable> key = _view.ReportSortKey switch
+        {
+            "block" => r => ReportPath.BlockOrder(r.Block),
+            "file" => r => ReportFolder(r) + "\\" + System.IO.Path.GetFileName(r.FilePath),
+            "count" => r => r.Results,
+            "imported" => r => r.Imported,
+            _ => r => r.ReportDate,
+        };
+        return (_view.ReportSortDesc ? reports.OrderByDescending(key) : reports.OrderBy(key)).ThenByDescending(r => r.ReportDate).ToList();
+    }
+
+    /// <summary>Группы отчётов по выбранному параметру; внутри — по выбранной сортировке.</summary>
+    private List<ReportGroup> ReportGroups()
+    {
+        var reports = ScopeReports.ToList();
+        switch (_view.ReportGroup)
+        {
+            case "block":
+                return reports.GroupBy(r => r.Block).OrderBy(g => ReportPath.BlockOrder(g.Key))
+                    .Select(g => new ReportGroup { Key = "b:" + g.Key, Title = ReportPath.BlockTitle(g.Key), Reports = SortedReports(g) }).ToList();
+            case "date":
+                return reports.GroupBy(r => r.ReportDate.Date).OrderByDescending(g => g.Key)
+                    .Select(g => new ReportGroup { Key = "d:" + g.Key.ToString("yyyyMMdd"), Title = "Отчёты от " + Fmt.Day(g.Key), Reports = SortedReports(g) }).ToList();
+            case "file":
+                return reports.GroupBy(r => r.FilePath, StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(g => ReportFolder(g.First()) + "\\" + System.IO.Path.GetFileName(g.Key), StringComparer.CurrentCultureIgnoreCase)
+                    .Select(g => new ReportGroup
+                    {
+                        Key = "f:" + g.Key, Title = System.IO.Path.GetFileName(g.Key) + (ReportFolder(g.First()) == "" ? "" : " — " + ReportFolder(g.First())),
+                        Reports = SortedReports(g),
+                    }).ToList();
+            case "imported":
+                return reports.GroupBy(r => r.Imported.Date).OrderByDescending(g => g.Key)
+                    .Select(g => new ReportGroup { Key = "i:" + g.Key.ToString("yyyyMMdd"), Title = "Загружены " + Fmt.Day(g.Key), Reports = SortedReports(g) }).ToList();
+            default:
+                return new List<ReportGroup> { new ReportGroup { Key = null, Reports = SortedReports(reports) } };
+        }
+    }
+
+    private void OnReportGroupChanged(ChangeEventArgs e)
+    {
+        _view.ReportGroup = e.Value?.ToString() ?? "";
+        _view.ReportCollapsed.Clear();
+    }
+
+    private void ToggleReportGroup(string key)
+    {
+        if (!_view.ReportCollapsed.Remove(key)) _view.ReportCollapsed.Add(key);
+    }
+
+    /// <summary>Папка отчёта — от папки проекта («08.10.2026\Высокая критичность\XML\S6»): полный путь — в подсказке.</summary>
+    private string ReportFolder(ReportRow r)
+    {
+        var dir = System.IO.Path.GetDirectoryName(r.FilePath) ?? "";
+        var root = (_project?.Folder ?? "").TrimEnd('\\', '/');
+        return root.Length > 0 && dir.StartsWith(root, StringComparison.OrdinalIgnoreCase) ? dir.Substring(root.Length).TrimStart('\\', '/') : dir;
     }
 
     private void ShowTest(TestRow t)

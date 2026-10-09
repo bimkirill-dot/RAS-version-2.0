@@ -161,6 +161,28 @@ textarea { width: 100%; resize: vertical; }
 /* боковая панель проекта */
 .side { overflow: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 10px 12px; }
 .side-title { font-weight: 600; margin-bottom: 6px; }
+.side-btn {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
+    font: inherit; text-align: left; cursor: pointer; padding: 7px 10px; margin-top: 4px;
+    border: 1px solid transparent; border-radius: 6px; background: none; color: var(--text);
+}
+.side-btn b { font-weight: 500; font-size: 12px; color: var(--muted); }
+.side-btn:hover { background: var(--row-hover); }
+.side-btn.on { background: var(--row-selected); border-color: var(--accent); }
+
+/* группы в таблицах (отчёты) */
+tbody.group tr.group-row { cursor: pointer; background: var(--bg); }
+tbody.group tr.group-row:hover { background: var(--row-hover); }
+tbody.group tr.group-row td { padding: 7px 10px; }
+.group-row .caret { display: inline-block; width: 14px; color: var(--muted); }
+.group-title { font-weight: 600; }
+.group-count { margin-left: 10px; color: var(--muted); font-size: 12px; }
+table.reports { table-layout: fixed; }
+table.reports td.file { max-width: 0; }
+table.reports th:nth-child(1) { width: 140px; }
+table.reports th:nth-child(2) { width: 90px; }
+table.reports th:nth-child(4) { width: 100px; }
+table.reports th:nth-child(5) { width: 150px; }
 
 /* статус — вкладками над списком */
 .state-tabs { display: flex; align-items: center; gap: 2px; border-bottom: 1px solid var(--line); flex: none; }

@@ -53,6 +53,15 @@ public static class Fmt
     /// <summary>«у 1 коллизии», «у 21 коллизии», «у 5 коллизий» — после «у».</summary>
     public static string Clashes(int n) => n + (n % 10 == 1 && n % 100 != 11 ? " коллизии" : " коллизий");
 
+    /// <summary>Число со словом: Plural(1, "отчёт", "отчёта", "отчётов") → «1 отчёт», 3 → «3 отчёта», 5 → «5 отчётов».</summary>
+    public static string Plural(int n, string one, string few, string many)
+    {
+        var tens = n % 100;
+        var last = n % 10;
+        var word = tens >= 11 && tens <= 14 ? many : last == 1 ? one : last >= 2 && last <= 4 ? few : many;
+        return n + " " + word;
+    }
+
     /// <summary>Модель — имя файла без расширения.</summary>
     public static string Model(string modelFile) => string.IsNullOrEmpty(modelFile) ? "—" : ClashRules.ModelName(modelFile);
 }

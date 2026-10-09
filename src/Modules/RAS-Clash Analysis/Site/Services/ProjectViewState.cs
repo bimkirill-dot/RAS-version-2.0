@@ -15,6 +15,12 @@ public sealed class ProjectView
     public int Tab { get; set; }
     /// <summary>После смены статуса в карточке — сразу к следующей коллизии.</summary>
     public bool AutoNext { get; set; } = true;
+
+    /// <summary>Отчёты: сортировка (date / block / file / count / imported), группировка ("" — нет, block / date / file / imported), свёрнутые группы.</summary>
+    public string ReportSortKey { get; set; } = "date";
+    public bool ReportSortDesc { get; set; } = true;
+    public string ReportGroup { get; set; } = "";
+    public HashSet<string> ReportCollapsed { get; } = new HashSet<string>();
 }
 
 /// <summary>
