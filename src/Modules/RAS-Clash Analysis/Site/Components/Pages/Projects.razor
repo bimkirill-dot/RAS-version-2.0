@@ -9,22 +9,55 @@
 
 <h1>Проекты</h1>
 
+@* папка со всеми проектами: каждая папка внутри неё с отчётами XML становится проектом сама *@
+<div class="root-folder">
+    @if (_editRoot)
+    {
+        <div class="form">
+            <label>
+                Папка со всеми проектами — каждая папка внутри неё (например, «Арман Кала») станет проектом с тем же названием
+                <input class="wide" @bind="_rootInput" placeholder="\\сервер\BIM\Коллизии" />
+            </label>
+            <div class="actions">
+                <button class="btn primary" @onclick="SaveRoot">Сохранить и найти проекты</button>
+                @if (!string.IsNullOrEmpty(_root)) { <button class="btn link" @onclick="() => { _editRoot = false; _rootError = null; }">Отмена</button> }
+                @if (!string.IsNullOrEmpty(_root)) { <button class="btn link" @onclick="ClearRoot">Не искать проекты сами</button> }
+            </div>
+            @if (_rootError != null) { <p class="error">@_rootError</p> }
+        </div>
+    }
+    else
+    {
+        <span class="muted">Папка со всеми проектами:</span> <span class="path">@_root</span>
+        <button class="btn link small" @onclick="() => { _editRoot = true; _rootInput = _root; }">изменить</button>
+    }
+</div>
+
 @if (_projects.Count == 0)
 {
-    <p class="muted">Проектов ещё нет. Создайте первый: название и папка, куда Navisworks кладёт отчёты XML.</p>
+    <p class="muted">Проектов ещё нет. Укажите папку со всеми проектами выше или создайте проект вручную: название и папка, куда кладутся отчёты XML.</p>
 }
 else
 {
     <table class="grid">
         <thead>
-            <tr><th>Проект</th><th class="num">Активные</th><th class="num">Исправлены</th><th class="num">Допущены</th><th>Последний отчёт</th><th>Папка отчётов</th></tr>
+            <tr>
+                <th>Проект</th>
+                @if (_crits.Count == 0) { <th class="num">Активные</th> }
+                @foreach (var cr in _crits) { <th class="num">Активные · @(cr == "" ? "без критичности" : cr.ToLowerInvariant())</th> }
+                <th class="num">Исправлены</th><th class="num">Допущены</th><th>Последний отчёт</th><th>Папка отчётов</th>
+            </tr>
         </thead>
         <tbody>
             @foreach (var p in _projects)
             {
                 <tr class="clickable" @onclick="@(() => Nav.NavigateTo("project/" + p.Id))">
                     <td><a href="project/@p.Id" @onclick:stopPropagation="true">@p.Name</a></td>
-                    <td class="num"><span class="badge state-active">@p.Counts.Active</span></td>
+                    @if (_crits.Count == 0) { <td class="num"><span class="badge state-active">@p.Counts.Active</span></td> }
+                    @foreach (var cr in _crits)
+                    {
+                        <td class="num"><span class="badge state-active">@(p.ActiveByCriticality.TryGetValue(cr, out var n) ? n : 0)</span></td>
+                    }
                     <td class="num">@p.Counts.Fixed</td>
                     <td class="num">@p.Counts.Accepted</td>
                     <td>@Fmt.Date(p.LastReport)</td>
@@ -87,13 +120,48 @@ else
     private string _folder;
     private string _error;
     private bool _showNew;
+    private string _root, _rootInput, _rootError;
+    private bool _editRoot;
+    /// <summary>Критичности, которые есть в проектах (столбцы активных); пусто — один столбец «Активные».</summary>
+    private List<string> _crits = new();
 
-    protected override void OnInitialized() => _projects = Store.Projects();
+    protected override void OnInitialized()
+    {
+        _root = Store.Setting(ReportImporter.ProjectsRootKey);
+        _editRoot = string.IsNullOrEmpty(_root);
+        Load();
+    }
+
+    private void Load()
+    {
+        _projects = Store.Projects();
+        var all = _projects.SelectMany(p => p.ActiveByCriticality.Keys).Distinct().ToList();
+        _crits = all.Count == 1 && all[0] == "" ? new List<string>() : all.OrderBy(ReportPath.CriticalityOrder).ToList();
+    }
+
+    private async Task SaveRoot()
+    {
+        _rootError = null;
+        var folder = (_rootInput ?? "").Trim().Trim('"');
+        if (folder.Length == 0) { _rootError = "Укажите папку."; return; }
+        if (!Directory.Exists(folder)) { _rootError = "Папка не найдена или недоступна: " + folder; return; }
+        Store.SetSetting(ReportImporter.ProjectsRootKey, folder);
+        _root = folder;
+        _editRoot = false;
+        await ScanAll();
+    }
+
+    private void ClearRoot()
+    {
+        Store.SetSetting(ReportImporter.ProjectsRootKey, "");
+        _root = "";
+        _rootInput = "";
+    }
 
     private async Task ScanAll()
     {
         await Importer.ScanAsync();
-        _projects = Store.Projects();
+        Load();
     }
 
     private async Task Create()
@@ -110,5 +178,6 @@ else
         _showNew = false;
         await Importer.ScanAsync(id);
         Nav.NavigateTo("project/" + id);
+        Load();
     }
 }

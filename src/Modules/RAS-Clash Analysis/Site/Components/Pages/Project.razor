@@ -17,10 +17,32 @@
 <div class="project-head">
     <nav class="crumbs"><a href="/">Проекты</a> ›</nav>
     <h1>@_project.Name</h1>
+    @* критичность и блок — разделение проекта (из названий папок с отчётами); у каждого — активные *@
+    @if (ShowCriticalities)
+    {
+        <div class="scope">
+            @foreach (var cr in _criticalities)
+            {
+                <button class="seg @(cr == _filter.Criticality ? "on" : "") @CriticalityClass(cr)" @onclick="() => SetCriticality(cr)">
+                    @ReportPath.CriticalityTitle(cr) <b>@ActiveIn(cr, null)</b>
+                </button>
+            }
+        </div>
+    }
+    @if (ShowBlocks)
+    {
+        <div class="scope blocks">
+            <button class="seg @(_filter.Block == null ? "on" : "")" @onclick="() => SetBlock(null)">Все блоки <b>@ActiveIn(_filter.Criticality, null)</b></button>
+            @foreach (var b in _blocks)
+            {
+                <button class="seg @(b == _filter.Block ? "on" : "")" @onclick="() => SetBlock(b)">@ReportPath.BlockTitle(b) <b>@ActiveIn(_filter.Criticality, b)</b></button>
+            }
+        </div>
+    }
     <div class="tabs">
         <button class="@Tab(0)" @onclick="() => _view.Tab = 0">Коллизии</button>
-        <button class="@Tab(1)" @onclick="() => _view.Tab = 1">Проверки (@_tests.Count)</button>
-        <button class="@Tab(2)" @onclick="() => _view.Tab = 2">Отчёты (@_reports.Count)</button>
+        <button class="@Tab(1)" @onclick="() => _view.Tab = 1">Проверки (@ScopeTests.Count())</button>
+        <button class="@Tab(2)" @onclick="() => _view.Tab = 2">Отчёты (@ScopeReports.Count())</button>
         <button class="@Tab(3)" @onclick="() => _view.Tab = 3">Проект</button>
     </div>
 </div>
@@ -39,7 +61,7 @@
         </div>
         <select @bind="TestFilter" @bind:after="Reload" title="Проверка">
             <option value="">Все проверки</option>
-            @foreach (var t in _tests) { <option value="@t.Id">@t.Name</option> }
+            @foreach (var t in ScopeTests) { <option value="@t.Id">@(_filter.Block == null && t.Block != "" ? t.Block + " · " : "")@t.Name</option> }
         </select>
         <select @bind="_filter.LevelKey" @bind:after="Reload" title="Уровень">
             <option value="">Все уровни</option>
@@ -87,7 +109,7 @@
         @if (_notice != null) { <span class="notice">@_notice</span> }
     </div>
 
-    <div class="work @(SelectedVisible ? "with-panel" : "")">
+    <div class="work @(SelectedVisible ? "with-panel" : "") scopes-@((ShowCriticalities ? 1 : 0) + (ShowBlocks ? 1 : 0))">
         <div class="list" tabindex="0" @onkeydown="ListKey">
             @if (_clashes.Count == 0)
             {
@@ -127,7 +149,7 @@
                                 <td class="sel" @onclick:stopPropagation="true">
                                     <input type="checkbox" checked="@_selected.Contains(x.Id)" @onchange="e => Toggle(x.Id, e)" />
                                 </td>
-                                <td class="name">@(x.Name ?? "—")</td>
+                                <td class="name">@(x.Name ?? "—")@if (ShowBlock) { <span class="tag">@x.Block</span> }</td>
                                 @if (Wide) { <td class="cut" title="@x.TestName">@x.TestName</td> }
                                 <td class="cut" title="@Level(x)">@Level(x)</td>
                                 <td><ElementCell E="x.A" /></td>
@@ -169,10 +191,10 @@ else if (_view.Tab == 1)
     <table class="grid">
         <thead><tr><th>Проверка</th><th>Наборы</th><th class="num">Активные</th><th class="num">Исправлены</th><th class="num">Допущены</th><th>Последний отчёт</th></tr></thead>
         <tbody>
-            @foreach (var t in _tests)
+            @foreach (var t in ScopeTests)
             {
                 <tr class="clickable" @onclick="() => ShowTest(t.Id)" title="Показать коллизии этой проверки">
-                    <td>@t.Name</td>
+                    <td>@if (_filter.Block == null && t.Block != "") { <span class="tag">@t.Block</span> }@t.Name</td>
                     <td class="muted">@t.LeftSet ↔ @t.RightSet</td>
                     <td class="num"><Bar Value="t.Counts.Active" Max="_maxActive" /></td>
                     <td class="num">@t.Counts.Fixed</td>
@@ -191,12 +213,13 @@ else if (_view.Tab == 2)
     </div>
     <ImportResults Results="Importer.LastResults" />
     <table class="grid">
-        <thead><tr><th>Дата отчёта</th><th>Файл</th><th class="num">Коллизий</th><th>Загружен</th></tr></thead>
+        <thead><tr><th>Дата отчёта</th><th>Блок</th><th>Файл</th><th class="num">Коллизий</th><th>Загружен</th></tr></thead>
         <tbody>
-            @foreach (var r in _reports)
+            @foreach (var r in ScopeReports)
             {
                 <tr>
-                    <td>@Fmt.Date(r.ReportDate)@(r.DateFromReport ? "" : "*")</td>
+                    <td title="@DateSourceTitle(r.DateSource)">@(r.DateSource == ReportPath.DateFromFolder ? Fmt.Day(r.ReportDate) : Fmt.Date(r.ReportDate))@(r.DateSource == ReportPath.DateFromXml ? "" : "*")</td>
+                    <td>@ReportPath.BlockTitle(r.Block)</td>
                     <td class="path">@r.FilePath</td>
                     <td class="num">@r.Results</td>
                     <td>@Fmt.Date(r.Imported)</td>
@@ -204,9 +227,9 @@ else if (_view.Tab == 2)
             }
         </tbody>
     </table>
-    @if (_reports.Any(r => !r.DateFromReport))
+    @if (ScopeReports.Any(r => r.DateSource != ReportPath.DateFromXml))
     {
-        <p class="muted">* — в отчёте нет даты обнаружения коллизий, взято время файла. Дату можно включить в настройках отчёта Navisworks.</p>
+        <p class="muted">* — в отчёте нет даты обнаружения коллизий: дата — из названия папки прогона, а если её нет — время файла. Дату можно включить в настройках отчёта Navisworks.</p>
     }
 }
 else
@@ -230,6 +253,9 @@ else
     private List<TestRow> _tests = new();
     private List<ReportRow> _reports = new();
     private List<KeyValuePair<string, string>> _levels = new();
+    /// <summary>Критичности проекта и блоки выбранной критичности — по порядку.</summary>
+    private List<string> _criticalities = new();
+    private List<string> _blocks = new();
     private List<string> _categories = new();
     /// <summary>Все коллизии при текущем отборе, кроме статуса (для счётчиков), и список на экране.</summary>
     private List<ClashRow> _all = new();
@@ -254,6 +280,13 @@ else
                                 || !string.IsNullOrWhiteSpace(_filter.Search) || _filter.OnlyInLastReport;
 
     private bool AllSelected => _clashes.Count > 0 && _clashes.All(c => _selected.Contains(c.Id));
+    private IEnumerable<TestRow> ScopeTests => _tests.Where(InScope);
+    private IEnumerable<ReportRow> ScopeReports => _reports.Where(r => (_filter.Criticality == null || r.Criticality == _filter.Criticality)
+                                                                      && (_filter.Block == null || r.Block == _filter.Block));
+    private bool ShowCriticalities => _criticalities.Count > 1 || (_criticalities.Count == 1 && _criticalities[0] != "");
+    private bool ShowBlocks => _blocks.Count > 1 || (_blocks.Count == 1 && _blocks[0] != "");
+    /// <summary>Блок у строки — когда показаны все блоки, а их несколько.</summary>
+    private bool ShowBlock => _filter.Block == null && _blocks.Count > 1;
     private int SelectedIndex => _view.SelectedId.HasValue ? _clashes.FindIndex(c => c.Id == _view.SelectedId.Value) : -1;
     private bool SelectedVisible => _view.SelectedId.HasValue;
     /// <summary>Список во всю ширину (карточка закрыта) — со всеми столбцами.</summary>
@@ -271,7 +304,19 @@ else
         _project = Store.Project(Id);
         if (_project == null) return;
         _tests = Store.Tests(Id);
-        _maxActive = _tests.Count == 0 ? 0 : _tests.Max(t => t.Counts.Active);
+        _criticalities = _tests.Select(t => t.Criticality).Distinct().OrderBy(ReportPath.CriticalityOrder).ToList();
+        if (!_view.ScopeChosen || (_filter.Criticality != null && !_criticalities.Contains(_filter.Criticality)))
+        {
+            // при открытии — первая критичность (высокая), все блоки
+            _filter.Criticality = _criticalities.FirstOrDefault();
+            _filter.Block = null;
+            _view.ScopeChosen = _criticalities.Count > 0;
+        }
+        _blocks = _tests.Where(t => t.Criticality == _filter.Criticality).Select(t => t.Block).Distinct()
+            .OrderBy(ReportPath.BlockOrder).ThenBy(b => b, StringComparer.CurrentCultureIgnoreCase).ToList();
+        if (_filter.Block != null && !_blocks.Contains(_filter.Block)) _filter.Block = null;
+        if (_filter.TestId.HasValue && !_tests.Any(t => t.Id == _filter.TestId && InScope(t))) _filter.TestId = null;
+        _maxActive = ScopeTests.Select(t => t.Counts.Active).DefaultIfEmpty(0).Max();
         _reports = Store.Reports(Id);
         _levels = Store.Levels(Id);
         _categories = Store.Categories(Id);
@@ -298,6 +343,45 @@ else
         yield return (ClashState.Accepted, "Допущены", _all.Count(c => c.State == ClashState.Accepted));
         yield return (null, "Все", _all.Count);
     }
+
+    private bool InScope(TestRow t) => (_filter.Criticality == null || t.Criticality == _filter.Criticality) && (_filter.Block == null || t.Block == _filter.Block);
+
+    /// <summary>Активные в критичности (null — во всех) и блоке (null — во всех).</summary>
+    private int ActiveIn(string criticality, string block) =>
+        _tests.Where(t => (criticality == null || t.Criticality == criticality) && (block == null || t.Block == block)).Sum(t => t.Counts.Active);
+
+    private void SetCriticality(string criticality)
+    {
+        _filter.Criticality = criticality;
+        _filter.Block = null;
+        ScopeChanged();
+    }
+
+    private void SetBlock(string block)
+    {
+        _filter.Block = block;
+        ScopeChanged();
+    }
+
+    /// <summary>Другая критичность или блок — другая работа: отметки и выбранная коллизия сбрасываются.</summary>
+    private void ScopeChanged()
+    {
+        _view.ScopeChosen = true;
+        _view.SelectedId = null;
+        _selected.Clear();
+        _notice = null;
+        _filter.TestId = null;
+        LoadAll();
+    }
+
+    private static string CriticalityClass(string c) => c == "Высокая" ? "crit-high" : c == "Средняя" ? "crit-mid" : "";
+
+    private static string DateSourceTitle(string source) => source switch
+    {
+        ReportPath.DateFromXml => "Дата — из отчёта (дата обнаружения коллизий)",
+        ReportPath.DateFromFolder => "Дата — из названия папки прогона",
+        _ => "Дата — время файла отчёта",
+    };
 
     private void SetStateFilter(ClashState? state)
     {

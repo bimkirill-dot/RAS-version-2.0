@@ -23,6 +23,12 @@ public sealed class ClashStore
         using (var r = Query(c, "SELECT ProjectId, State, COUNT(*) FROM Clashes GROUP BY ProjectId, State"))
             while (r.Read())
                 if (byId.TryGetValue(r.GetInt64(0), out var p)) p.Counts.Add((ClashState)r.GetInt32(1), r.GetInt32(2));
+        using (var r = Query(c, """
+            SELECT c.ProjectId, t.Criticality, COUNT(*) FROM Clashes c JOIN Tests t ON t.Id = c.TestId
+            WHERE c.State = 0 GROUP BY c.ProjectId, t.Criticality
+            """))
+            while (r.Read())
+                if (byId.TryGetValue(r.GetInt64(0), out var p)) p.ActiveByCriticality[r.GetString(1)] = r.GetInt32(2);
         using (var r = Query(c, "SELECT ProjectId, MAX(ReportDate) FROM Reports GROUP BY ProjectId"))
             while (r.Read())
                 if (byId.TryGetValue(r.GetInt64(0), out var p) && !r.IsDBNull(1)) p.LastReport = Database.Time(r.GetString(1));
@@ -50,31 +56,36 @@ public sealed class ClashStore
     {
         using var c = _db.Open();
         var list = new List<TestRow>();
-        using (var r = Query(c, "SELECT Id, Name, LeftSet, RightSet, LastReportDate FROM Tests WHERE ProjectId = $p", ("$p", projectId)))
+        using (var r = Query(c, "SELECT Id, Name, LeftSet, RightSet, LastReportDate, Criticality, Block FROM Tests WHERE ProjectId = $p", ("$p", projectId)))
             while (r.Read())
                 list.Add(new TestRow
                 {
                     Id = r.GetInt64(0), Name = r.GetString(1), LeftSet = Str(r, 2), RightSet = Str(r, 3),
                     LastReport = r.IsDBNull(4) ? null : Database.Time(r.GetString(4)),
+                    Criticality = r.GetString(5), Block = r.GetString(6),
                 });
         var byId = list.ToDictionary(t => t.Id);
         using (var r = Query(c, "SELECT TestId, State, COUNT(*) FROM Clashes WHERE ProjectId = $p GROUP BY TestId, State", ("$p", projectId)))
             while (r.Read())
                 if (byId.TryGetValue(r.GetInt64(0), out var t)) t.Counts.Add((ClashState)r.GetInt32(1), r.GetInt32(2));
-        return list.OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+        return list.OrderBy(t => Logic.ReportPath.CriticalityOrder(t.Criticality)).ThenBy(t => Logic.ReportPath.BlockOrder(t.Block))
+            .ThenBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
     }
 
     public List<ReportRow> Reports(long projectId)
     {
         using var c = _db.Open();
         var list = new List<ReportRow>();
-        using var r = Query(c, "SELECT Id, FilePath, ReportDate, DateFromReport, Imported, Results FROM Reports WHERE ProjectId = $p ORDER BY ReportDate DESC, Id DESC",
-            ("$p", projectId));
+        using var r = Query(c, """
+            SELECT Id, FilePath, ReportDate, DateFromReport, Imported, Results, Criticality, Block, DateSource
+            FROM Reports WHERE ProjectId = $p ORDER BY ReportDate DESC, Id DESC
+            """, ("$p", projectId));
         while (r.Read())
             list.Add(new ReportRow
             {
                 Id = r.GetInt64(0), FilePath = r.GetString(1), ReportDate = Database.Time(r.GetString(2)), DateFromReport = r.GetInt32(3) != 0,
-                Imported = Database.Time(r.GetString(4)), Results = r.GetInt32(5),
+                Imported = Database.Time(r.GetString(4)), Results = r.GetInt32(5), Criticality = r.GetString(6), Block = r.GetString(7),
+                DateSource = r.GetString(8),
             });
         return list;
     }
@@ -84,7 +95,8 @@ public sealed class ClashStore
     private const string ClashSelect = """
         SELECT c.Id, o.Name, c.TestId, t.Name, c.State, c.InLastReport, c.FirstSeen, c.LastSeen,
                a.ModelFile, a.Level, a.LevelKey, a.Category, a.Family, a.Type, a.Name, a.ElementId,
-               b.ModelFile, b.Level, b.LevelKey, b.Category, b.Family, b.Type, b.Name, b.ElementId
+               b.ModelFile, b.Level, b.LevelKey, b.Category, b.Family, b.Type, b.Name, b.ElementId,
+               t.Criticality, t.Block
         FROM Clashes c
         JOIN Tests t ON t.Id = c.TestId
         LEFT JOIN Occurrences o ON o.Id = c.LastOccurrenceId
@@ -97,6 +109,8 @@ public sealed class ClashStore
     {
         var sql = ClashSelect + " WHERE c.ProjectId = $p";
         var args = new List<(string, object)> { ("$p", projectId) };
+        if (f.Criticality != null) { sql += " AND t.Criticality = $cr"; args.Add(("$cr", f.Criticality)); }
+        if (f.Block != null) { sql += " AND t.Block = $bl"; args.Add(("$bl", f.Block)); }
         if (f.TestId.HasValue) { sql += " AND c.TestId = $t"; args.Add(("$t", f.TestId.Value)); }
         if (f.State.HasValue) { sql += " AND c.State = $s"; args.Add(("$s", (int)f.State.Value)); }
         if (f.OnlyInLastReport) sql += " AND c.InLastReport = 1";
@@ -111,7 +125,8 @@ public sealed class ClashStore
         var search = f.Search?.Trim();
         if (!string.IsNullOrEmpty(search))
             list = list.Where(x => Matches(x, search)).ToList();
-        return list.OrderBy(x => x.TestName, StringComparer.CurrentCultureIgnoreCase).ThenBy(x => NameNumber(x.Name)).ThenBy(x => x.Name).ToList();
+        return list.OrderBy(x => Logic.ReportPath.BlockOrder(x.Block)).ThenBy(x => x.TestName, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(x => NameNumber(x.Name)).ThenBy(x => x.Name).ToList();
     }
 
     /// <summary>Уровни проекта для отбора: ключ («5 этаж») → как показывать (самое частое написание).</summary>
@@ -152,7 +167,8 @@ public sealed class ClashStore
         using var c = _db.Open();
         ClashCard card;
         using (var r = Query(c, """
-            SELECT c.Id, c.ProjectId, p.Name, t.Name, t.LeftSet, t.RightSet, c.State, c.InLastReport, c.FirstSeen, c.LastSeen
+            SELECT c.Id, c.ProjectId, p.Name, t.Name, t.LeftSet, t.RightSet, c.State, c.InLastReport, c.FirstSeen, c.LastSeen,
+                   t.Criticality, t.Block
             FROM Clashes c JOIN Projects p ON p.Id = c.ProjectId JOIN Tests t ON t.Id = c.TestId WHERE c.Id = $id
             """, ("$id", id)))
         {
@@ -162,6 +178,7 @@ public sealed class ClashStore
                 Id = r.GetInt64(0), ProjectId = r.GetInt64(1), ProjectName = r.GetString(2), TestName = r.GetString(3),
                 LeftSet = Str(r, 4), RightSet = Str(r, 5), State = (ClashState)r.GetInt32(6), InLastReport = r.GetInt32(7) != 0,
                 FirstSeen = Database.Time(r.GetString(8)), LastSeen = Database.Time(r.GetString(9)),
+                Criticality = r.GetString(10), Block = r.GetString(11),
             };
         }
         var byId = new Dictionary<long, OccurrenceView>();
@@ -205,6 +222,22 @@ public sealed class ClashStore
         using var c = _db.Open();
         using var cmd = Command(c, "SELECT Image FROM Occurrences WHERE Id = $id", ("$id", occurrenceId));
         return cmd.ExecuteScalar() as string;
+    }
+
+    // ───────────── настройки сайта ─────────────
+
+    public string Setting(string key)
+    {
+        using var c = _db.Open();
+        using var cmd = Command(c, "SELECT Value FROM Settings WHERE Key = $k", ("$k", key));
+        return cmd.ExecuteScalar() as string;
+    }
+
+    public void SetSetting(string key, string value)
+    {
+        using var c = _db.Open();
+        using var cmd = Command(c, "INSERT OR REPLACE INTO Settings(Key, Value) VALUES($k, $v)", ("$k", key), ("$v", value));
+        cmd.ExecuteNonQuery();
     }
 
     // ───────────── действия ─────────────
@@ -273,6 +306,7 @@ public sealed class ClashStore
         InLastReport = r.GetInt32(5) != 0, FirstSeen = Database.Time(r.GetString(6)), LastSeen = Database.Time(r.GetString(7)),
         A = r.IsDBNull(8) && r.IsDBNull(15) ? null : ReadElement(r, 8),
         B = r.IsDBNull(16) && r.IsDBNull(23) ? null : ReadElement(r, 16),
+        Criticality = r.GetString(24), Block = r.GetString(25),
     };
 
     private static ElementView ReadElement(SqliteDataReader r, int i) => new ElementView

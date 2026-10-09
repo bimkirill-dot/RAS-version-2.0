@@ -20,6 +20,8 @@ public sealed class ImportResult
     public int Fixed { get; set; }
     /// <summary>Узнаны по паре элементов: номер Navisworks сменился.</summary>
     public int Rekeyed { get; set; }
+    /// <summary>Не отчёт, а новый проект: папка появилась в папке со всеми проектами.</summary>
+    public bool NewProject { get; set; }
 }
 
 /// <summary>
@@ -29,6 +31,12 @@ public sealed class ImportResult
 /// </summary>
 public sealed class ReportImporter
 {
+    /// <summary>Настройка сайта: папка со всеми проектами — каждая папка внутри неё с отчётами становится проектом.</summary>
+    public const string ProjectsRootKey = "ProjectsRoot";
+
+    /// <summary>Обход папок: недоступные подпапки пропускаются, а не обрывают проверку всего проекта.</summary>
+    private static readonly EnumerationOptions Deep = new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true };
+
     private readonly Database _db;
     private readonly SiteOptions _options;
     private readonly ILogger<ReportImporter> _log;
@@ -66,7 +74,7 @@ public sealed class ReportImporter
 
     private List<ImportResult> Scan(long? projectId)
     {
-        var results = new List<ImportResult>();
+        var results = projectId == null ? AutoProjects() : new List<ImportResult>();
         var projects = new List<(long Id, string Name, string Folder)>();
         using (var c = _db.Open())
         using (var cmd = ClashStore.Command(c, "SELECT Id, Name, Folder FROM Projects"))
@@ -82,7 +90,7 @@ public sealed class ReportImporter
                 results.Add(new ImportResult { ProjectName = p.Name, File = p.Folder, Error = true, Message = "Папка отчётов не найдена или недоступна." });
                 continue;
             }
-            var candidates = new List<(string Path, string Hash, DateTime FileTime, ClashReport Report)>();
+            var candidates = new List<(string Path, string Hash, DateTime FileTime, ClashReport Report, ReportPlace Place, DateTime Date, string DateSource)>();
             foreach (var file in ReportFiles(p.Folder))
             {
                 try
@@ -106,7 +114,10 @@ public sealed class ReportImporter
                         results.Add(new ImportResult { ProjectName = p.Name, File = file, Error = true, Message = ex.Message });
                         continue;
                     }
-                    candidates.Add((file, hash, fileTime, report));
+                    // критичность, блок и дата прогона — из названий папок (ReportPath)
+                    var place = ReportPath.Parse(p.Folder, file);
+                    var date = ReportPath.ReportDate(report, fileTime, place.RunDate, out var dateSource);
+                    candidates.Add((file, hash, fileTime, report, place, date, dateSource));
                 }
                 catch (IOException ex)
                 {
@@ -119,11 +130,11 @@ public sealed class ReportImporter
                 }
             }
             // по дате отчёта: история коллизий складывается в том порядке, в каком шли прогоны
-            foreach (var x in candidates.OrderBy(x => x.Report.Date))
+            foreach (var x in candidates.OrderBy(x => x.Date).ThenBy(x => x.Path, StringComparer.OrdinalIgnoreCase))
             {
                 try
                 {
-                    var result = Import(p.Id, x.Path, x.Hash, x.FileTime, x.Report);
+                    var result = Import(p.Id, x.Path, x.Hash, x.FileTime, x.Report, x.Place, x.Date, x.DateSource);
                     result.ProjectName = p.Name;
                     results.Add(result);
                     _log.LogInformation("Загружен отчёт {File}: новых {New}, снова {Again}, появились снова {Reappeared}, исправлены {Fixed}, узнаны по паре элементов {Rekeyed}",
@@ -140,9 +151,57 @@ public sealed class ReportImporter
     }
 
     private static IEnumerable<string> ReportFiles(string folder) =>
-        Directory.EnumerateFiles(folder, "*.xml", SearchOption.AllDirectories)
+        Directory.EnumerateFiles(folder, "*.xml", Deep)
             .Where(f => !Path.GetDirectoryName(f)!.Split(Path.DirectorySeparatorChar)
                 .Any(d => d.EndsWith("_files", StringComparison.OrdinalIgnoreCase)));
+
+    /// <summary>
+    /// Проекты из папки со всеми проектами: каждая папка внутри неё, где есть отчёты XML, — проект с тем же названием
+    /// (название можно поменять на сайте, связь — по папке). Проекты не удаляются, если папка пропала.
+    /// </summary>
+    private List<ImportResult> AutoProjects()
+    {
+        var results = new List<ImportResult>();
+        string root;
+        var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        using (var c = _db.Open())
+        {
+            using (var cmd = ClashStore.Command(c, "SELECT Value FROM Settings WHERE Key = $k", ("$k", ProjectsRootKey)))
+                root = cmd.ExecuteScalar() as string;
+            using (var cmd = ClashStore.Command(c, "SELECT Folder FROM Projects"))
+            using (var r = cmd.ExecuteReader())
+                while (r.Read()) known.Add(Normalize(r.GetString(0)));
+        }
+        if (string.IsNullOrWhiteSpace(root)) return results;
+        if (!Directory.Exists(root))
+        {
+            results.Add(new ImportResult { ProjectName = "Папка со всеми проектами", File = root, Error = true, Message = "Не найдена или недоступна." });
+            return results;
+        }
+        IEnumerable<string> folders;
+        try { folders = Directory.EnumerateDirectories(root).ToList(); }
+        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+        {
+            results.Add(new ImportResult { ProjectName = "Папка со всеми проектами", File = root, Error = true, Message = ex.Message });
+            return results;
+        }
+        foreach (var folder in folders)
+        {
+            if (known.Contains(Normalize(folder))) continue;
+            var name = Path.GetFileName(folder.TrimEnd('\\', '/'));
+            if (name.StartsWith(".", StringComparison.Ordinal) || name.StartsWith("_", StringComparison.Ordinal)) continue;
+            if (!ReportFiles(folder).Any()) continue;
+            using var c = _db.Open();
+            using var cmd = ClashStore.Command(c, "INSERT INTO Projects(Name, Folder, Created) VALUES($n, $f, $t)",
+                ("$n", name), ("$f", folder), ("$t", Database.Time(DateTime.Now)));
+            cmd.ExecuteNonQuery();
+            _log.LogInformation("Новый проект из папки со всеми проектами: {Name} ({Folder})", name, folder);
+            results.Add(new ImportResult { ProjectName = name, File = folder, NewProject = true, Message = "Новый проект" });
+        }
+        return results;
+    }
+
+    private static string Normalize(string folder) => Path.GetFullPath(folder.Trim()).TrimEnd('\\', '/');
 
     /// <summary>
     /// Файл уже загружен в этом виде — сравнение только с последним загруженным вариантом файла: прогон может вернуть
@@ -156,27 +215,30 @@ public sealed class ReportImporter
         return cmd.ExecuteScalar() as string == hash;
     }
 
-    private ImportResult Import(long projectId, string path, string hash, DateTime fileTime, ClashReport report)
+    private ImportResult Import(long projectId, string path, string hash, DateTime fileTime, ClashReport report, ReportPlace place,
+        DateTime date, string dateSource)
     {
         var result = new ImportResult { File = path, Message = "Загружен" };
-        var reportDate = Database.Time(report.Date);
+        var reportDate = Database.Time(date);
         var now = Database.Time(DateTime.Now);
         using var c = _db.Open();
         using var tx = c.BeginTransaction();
 
         var reportId = Insert(c, tx, """
-            INSERT INTO Reports(ProjectId, FilePath, FileHash, FileTime, ReportDate, DateFromReport, Units, Imported, Results)
-            VALUES($p, $f, $h, $ft, $d, $dr, $u, $i, $n)
+            INSERT INTO Reports(ProjectId, FilePath, FileHash, FileTime, ReportDate, DateFromReport, Units, Imported, Results, Criticality, Block, DateSource)
+            VALUES($p, $f, $h, $ft, $d, $dr, $u, $i, $n, $cr, $bl, $ds)
             """, ("$p", projectId), ("$f", path), ("$h", hash), ("$ft", Database.Time(fileTime)), ("$d", reportDate),
-            ("$dr", report.DateFromReport ? 1 : 0), ("$u", report.Units ?? "m"), ("$i", now), ("$n", report.Tests.Sum(t => t.Results.Count)));
+            ("$dr", report.DateFromReport ? 1 : 0), ("$u", report.Units ?? "m"), ("$i", now), ("$n", report.Tests.Sum(t => t.Results.Count)),
+            ("$cr", place.Criticality), ("$bl", place.Block), ("$ds", dateSource));
 
         foreach (var test in report.Tests)
         {
-            var (testId, lastDate) = EnsureTest(c, tx, projectId, test);
+            // проверка — в своей критичности и своём блоке: «АР Стены/МЕР Трубы» в S1 и в S2 — разные проверки
+            var (testId, lastDate) = EnsureTest(c, tx, projectId, test, place);
             // отчёт старше уже загруженного по этой проверке: только дополняет историю, статусы не трогает
             var latest = lastDate == null || string.CompareOrdinal(reportDate, lastDate) >= 0;
             var known = KnownClashes(c, tx, testId, test.Name);
-            var dateText = report.Date.ToString("dd.MM.yyyy HH:mm");
+            var dateText = date.ToString(dateSource == ReportPath.DateFromFolder ? "dd.MM.yyyy" : "dd.MM.yyyy HH:mm");
 
             foreach (var step in ReportMerge.Plan(test.Name, known, test.Results))
             {
@@ -237,9 +299,10 @@ public sealed class ReportImporter
         return result;
     }
 
-    private static (long Id, string LastDate) EnsureTest(SqliteConnection c, SqliteTransaction tx, long projectId, ClashTest test)
+    private static (long Id, string LastDate) EnsureTest(SqliteConnection c, SqliteTransaction tx, long projectId, ClashTest test, ReportPlace place)
     {
-        using (var cmd = ClashStore.Command(c, "SELECT Id, LastReportDate FROM Tests WHERE ProjectId = $p AND Name = $n", ("$p", projectId), ("$n", test.Name ?? "")))
+        using (var cmd = ClashStore.Command(c, "SELECT Id, LastReportDate FROM Tests WHERE ProjectId = $p AND Criticality = $cr AND Block = $bl AND Name = $n",
+                   ("$p", projectId), ("$cr", place.Criticality), ("$bl", place.Block), ("$n", test.Name ?? "")))
         {
             cmd.Transaction = tx;
             using var r = cmd.ExecuteReader();
@@ -253,8 +316,8 @@ public sealed class ReportImporter
                 return (id, last);
             }
         }
-        var newId = Insert(c, tx, "INSERT INTO Tests(ProjectId, Name, LeftSet, RightSet) VALUES($p, $n, $l, $rs)",
-            ("$p", projectId), ("$n", test.Name ?? ""), ("$l", test.LeftSet), ("$rs", test.RightSet));
+        var newId = Insert(c, tx, "INSERT INTO Tests(ProjectId, Criticality, Block, Name, LeftSet, RightSet) VALUES($p, $cr, $bl, $n, $l, $rs)",
+            ("$p", projectId), ("$cr", place.Criticality), ("$bl", place.Block), ("$n", test.Name ?? ""), ("$l", test.LeftSet), ("$rs", test.RightSet));
         return (newId, null);
     }
 

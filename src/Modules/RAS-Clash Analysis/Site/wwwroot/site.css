@@ -150,8 +150,25 @@ textarea { width: 100%; resize: vertical; }
 .chip.state-fixed.on { background: var(--fixed-bg); border-color: var(--fixed); }
 .chip.state-accepted.on { background: var(--accepted-bg); border-color: var(--accepted); }
 
+/* критичность и блок — разделение проекта */
+.scope { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 6px; }
+.seg {
+    font: inherit; cursor: pointer; padding: 5px 14px; border-radius: 6px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--muted);
+}
+.seg b { color: var(--text); margin-left: 6px; }
+.seg:hover { border-color: var(--accent); }
+.seg.on { background: var(--accent-bg); border-color: var(--accent); color: var(--text); font-weight: 500; }
+.seg.crit-high.on { background: var(--active-bg); border-color: var(--active); }
+.scope.blocks .seg { padding: 3px 10px; font-size: 13px; }
+.tag { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 4px; font-size: 11px; background: var(--accent-bg); color: var(--muted); vertical-align: 1px; }
+td .tag:first-child { margin: 0 6px 0 0; }
+
 /* список + карточка: на всю оставшуюся высоту окна, прокрутка у каждого своя */
 .work { display: grid; grid-template-columns: 1fr; gap: 12px; height: calc(100vh - 262px); min-height: 360px; }
+/* строки переключателей критичности и блоков над списком */
+.work.scopes-1 { height: calc(100vh - 302px); }
+.work.scopes-2 { height: calc(100vh - 338px); }
 .work.with-panel { grid-template-columns: minmax(420px, 1fr) minmax(380px, 520px); }
 .list { overflow: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
 .panel { overflow: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 0 14px 14px; }
@@ -219,6 +236,8 @@ ul.history .ev-comment .text { font-style: italic; }
 .form { display: flex; flex-direction: column; gap: 8px; max-width: 760px; }
 .form label { display: flex; flex-direction: column; gap: 3px; color: var(--muted); font-size: 13px; }
 .form input { color: var(--text); }
+
+.root-folder { margin: 0 0 12px; }
 
 details.import { margin: 8px 0; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; }
 details.import ul { margin: 6px 0; padding-left: 18px; }

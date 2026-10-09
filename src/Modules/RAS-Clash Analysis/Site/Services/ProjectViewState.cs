@@ -7,6 +7,8 @@ namespace RASv2.ClashAnalysis.Site.Services;
 public sealed class ProjectView
 {
     public ClashFilter Filter { get; } = new ClashFilter { State = ClashState.Active };
+    /// <summary>Критичность и блок уже выбраны (иначе при открытии проекта — первая критичность, все блоки).</summary>
+    public bool ScopeChosen { get; set; }
     public string SortKey { get; set; }
     public bool SortDesc { get; set; }
     public long? SelectedId { get; set; }

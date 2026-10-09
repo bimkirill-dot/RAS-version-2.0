@@ -27,12 +27,16 @@ public sealed class ProjectRow
     public string Name { get; set; }
     public string Folder { get; set; }
     public StateCounts Counts { get; } = new StateCounts();
+    /// <summary>Активные по критичности («Высокая» → 12); "" — без критичности.</summary>
+    public Dictionary<string, int> ActiveByCriticality { get; } = new Dictionary<string, int>();
     public DateTime? LastReport { get; set; }
 }
 
 public sealed class TestRow
 {
     public long Id { get; set; }
+    public string Criticality { get; set; } = "";
+    public string Block { get; set; } = "";
     public string Name { get; set; }
     public string LeftSet { get; set; }
     public string RightSet { get; set; }
@@ -44,8 +48,12 @@ public sealed class ReportRow
 {
     public long Id { get; set; }
     public string FilePath { get; set; }
+    public string Criticality { get; set; } = "";
+    public string Block { get; set; } = "";
     public DateTime ReportDate { get; set; }
     public bool DateFromReport { get; set; }
+    /// <summary>Откуда дата отчёта: Logic.ReportPath.DateFromXml / DateFromFolder / DateFromFile.</summary>
+    public string DateSource { get; set; }
     public DateTime Imported { get; set; }
     public int Results { get; set; }
 }
@@ -69,6 +77,8 @@ public sealed class ClashRow
     public string Name { get; set; }
     public long TestId { get; set; }
     public string TestName { get; set; }
+    public string Criticality { get; set; } = "";
+    public string Block { get; set; } = "";
     public ClashState State { get; set; }
     public bool InLastReport { get; set; }
     public DateTime FirstSeen { get; set; }
@@ -80,6 +90,10 @@ public sealed class ClashRow
 /// <summary>Отбор в списке коллизий; пустое поле — без отбора.</summary>
 public sealed class ClashFilter
 {
+    /// <summary>Критичность («Высокая», "" — без критичности); null — любая.</summary>
+    public string Criticality { get; set; }
+    /// <summary>Блок («S1», "" — без блока); null — любой.</summary>
+    public string Block { get; set; }
     public long? TestId { get; set; }
     public ClashState? State { get; set; }
     public string LevelKey { get; set; }
@@ -126,6 +140,8 @@ public sealed class ClashCard
     public long ProjectId { get; set; }
     public string ProjectName { get; set; }
     public string TestName { get; set; }
+    public string Criticality { get; set; } = "";
+    public string Block { get; set; } = "";
     public string LeftSet { get; set; }
     public string RightSet { get; set; }
     public ClashState State { get; set; }

@@ -124,6 +124,87 @@ public sealed class Database
             ReportId INTEGER REFERENCES Reports(Id));
         CREATE INDEX EventsClash ON Events(ClashId);
         """,
+
+        // 2 — 09.10.2026: критичность и блок у проверки (одна и та же проверка в блоках S1 и S2 — разные проверки);
+        // «личность» коллизии уникальна в своей проверке, а не во всём проекте; настройки сайта (папка со всеми проектами).
+        // Критичность и блок у уже загруженного — по пути отчёта (FillPlaces).
+        """
+        CREATE TABLE Tests_new(
+            Id INTEGER PRIMARY KEY,
+            ProjectId INTEGER NOT NULL REFERENCES Projects(Id),
+            Criticality TEXT NOT NULL DEFAULT '',
+            Block TEXT NOT NULL DEFAULT '',
+            Name TEXT NOT NULL,
+            LeftSet TEXT,
+            RightSet TEXT,
+            LastReportId INTEGER REFERENCES Reports(Id),
+            LastReportDate TEXT,
+            UNIQUE(ProjectId, Criticality, Block, Name));
+        INSERT INTO Tests_new(Id, ProjectId, Name, LeftSet, RightSet, LastReportId, LastReportDate)
+            SELECT Id, ProjectId, Name, LeftSet, RightSet, LastReportId, LastReportDate FROM Tests;
+        DROP TABLE Tests;
+        ALTER TABLE Tests_new RENAME TO Tests;
+
+        CREATE TABLE Clashes_new(
+            Id INTEGER PRIMARY KEY,
+            ProjectId INTEGER NOT NULL REFERENCES Projects(Id),
+            TestId INTEGER NOT NULL REFERENCES Tests(Id),
+            IdentityKey TEXT NOT NULL,
+            State INTEGER NOT NULL,
+            InLastReport INTEGER NOT NULL,
+            FirstSeen TEXT NOT NULL,
+            LastSeen TEXT NOT NULL,
+            LastOccurrenceId INTEGER,
+            UNIQUE(TestId, IdentityKey));
+        INSERT INTO Clashes_new SELECT Id, ProjectId, TestId, IdentityKey, State, InLastReport, FirstSeen, LastSeen, LastOccurrenceId FROM Clashes;
+        DROP TABLE Clashes;
+        ALTER TABLE Clashes_new RENAME TO Clashes;
+        CREATE INDEX ClashesTest ON Clashes(TestId);
+        CREATE INDEX ClashesProject ON Clashes(ProjectId);
+
+        ALTER TABLE Reports ADD COLUMN Criticality TEXT NOT NULL DEFAULT '';
+        ALTER TABLE Reports ADD COLUMN Block TEXT NOT NULL DEFAULT '';
+        ALTER TABLE Reports ADD COLUMN DateSource TEXT NOT NULL DEFAULT 'file';
+        UPDATE Reports SET DateSource = 'xml' WHERE DateFromReport = 1;
+
+        CREATE TABLE Settings(Key TEXT PRIMARY KEY, Value TEXT);
+        """,
+    };
+
+    /// <summary>Шаг 2: критичность и блок у уже загруженных отчётов и проверок — по пути отчёта внутри папки проекта.</summary>
+    private static void FillPlaces(SqliteConnection c, SqliteTransaction tx)
+    {
+        var reports = new List<(long Id, string Folder, string Path)>();
+        using (var cmd = c.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = "SELECT r.Id, p.Folder, r.FilePath FROM Reports r JOIN Projects p ON p.Id = r.ProjectId";
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) reports.Add((r.GetInt64(0), r.GetString(1), r.GetString(2)));
+        }
+        foreach (var (id, folder, path) in reports)
+        {
+            var place = Logic.ReportPath.Parse(folder, path);
+            using var cmd = c.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = "UPDATE Reports SET Criticality = $c, Block = $b WHERE Id = $id";
+            cmd.Parameters.AddWithValue("$c", place.Criticality);
+            cmd.Parameters.AddWithValue("$b", place.Block);
+            cmd.Parameters.AddWithValue("$id", id);
+            cmd.ExecuteNonQuery();
+        }
+        // проверка — там же, где её последний отчёт (до этого шага одна проверка не могла жить в двух блоках сразу)
+        Exec(c, """
+            UPDATE Tests SET
+                Criticality = COALESCE((SELECT r.Criticality FROM Reports r WHERE r.Id = Tests.LastReportId), ''),
+                Block = COALESCE((SELECT r.Block FROM Reports r WHERE r.Id = Tests.LastReportId), '')
+            """, tx);
+    }
+
+    /// <summary>Дополнительная работа шага (по номеру шага, с 1), после его SQL — в той же транзакции.</summary>
+    private static readonly Dictionary<int, Action<SqliteConnection, SqliteTransaction>> MigrationCode = new()
+    {
+        [2] = FillPlaces,
     };
 
     /// <summary>Создать базу или довести её до текущей версии. Перед переносом — копия рядом с базой.</summary>
@@ -147,13 +228,31 @@ public sealed class Database
             }
             log.LogInformation("Копия базы перед переносом: {Copy}", copy);
         }
-        for (var v = version; v < Migrations.Length; v++)
+        // таблицы пересоздаются (SQLite не умеет менять ограничения) — проверка ссылок на время переноса выключается,
+        // а перед записью шага ссылки проверяются целиком
+        Exec(c, "PRAGMA foreign_keys = OFF;");
+        try
         {
-            using var tx = c.BeginTransaction();
-            Exec(c, Migrations[v], tx);
-            Exec(c, $"INSERT OR REPLACE INTO Meta(Key, Value) VALUES('Version', '{v + 1}')", tx);
-            tx.Commit();
-            log.LogInformation("База: версия {Version}", v + 1);
+            for (var v = version; v < Migrations.Length; v++)
+            {
+                using var tx = c.BeginTransaction();
+                Exec(c, Migrations[v], tx);
+                if (MigrationCode.TryGetValue(v + 1, out var code)) code(c, tx);
+                using (var check = c.CreateCommand())
+                {
+                    check.Transaction = tx;
+                    check.CommandText = "PRAGMA foreign_key_check;";
+                    using var r = check.ExecuteReader();
+                    if (r.Read()) throw new InvalidOperationException($"Перенос базы на версию {v + 1}: нарушены связи таблиц ({r.GetString(0)}). База не изменена.");
+                }
+                Exec(c, $"INSERT OR REPLACE INTO Meta(Key, Value) VALUES('Version', '{v + 1}')", tx);
+                tx.Commit();
+                log.LogInformation("База: версия {Version}", v + 1);
+            }
+        }
+        finally
+        {
+            Exec(c, "PRAGMA foreign_keys = ON;");
         }
     }
 
