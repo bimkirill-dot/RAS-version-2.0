@@ -37,44 +37,56 @@
     }
     else
     {
-        <div class="body @(_view.Tab == 0 && SelectedVisible ? "with-panel" : "")">
-            @* дерево: критичность → блок → проверка (как список проверок в Navisworks); число — активные *@
-            <nav class="tree" aria-label="Критичность, блоки, проверки">
-                @foreach (var cr in _criticalities)
-                {
-                    <button class="node lvl0 @(IsScope(cr, null, null) ? "on" : "") @CriticalityClass(cr)" @onclick="() => SetScope(cr, null, null)"
-                            title="@CriticalityTitle(cr)">
-                        <span class="t">@CriticalityTitle(cr)</span><b>@ActiveIn(cr, null, null)</b>
-                    </button>
-                    @if (cr == _filter.Criticality)
-                    {
-                        var blocks = BlocksOf(cr);
-                        var flat = blocks.Count == 1 && blocks[0] == "";
-                        foreach (var b in blocks)
+        @* основная лента: критичность (число — активные) *@
+        <div class="ribbon main-ribbon" role="tablist" aria-label="Критичность">
+            @foreach (var cr in _criticalities)
+            {
+                <button class="crit @(cr == _filter.Criticality ? "on" : "") @CriticalityClass(cr)" @onclick="() => SetScope(cr, null, null)">
+                    @CriticalityTitle(cr) <b>@ActiveIn(cr, null, null)</b>
+                </button>
+            }
+            @if (_criticalities.Count == 0)
+            {
+                <span class="muted">Отчётов ещё нет — вкладка «Отчёты», «Проверить папку сейчас».</span>
+            }
+        </div>
+
+        @* дополнительная лента: тип проверки и блок — выпадающими списками *@
+        @if (_criticalities.Count > 0)
+        {
+            <div class="ribbon sub-ribbon">
+                <label class="dd">
+                    <span>Тип проверки</span>
+                    <select value="@(_filter.TestId?.ToString() ?? "")" @onchange="OnTestChanged">
+                        <option value="">Все проверки (@ActiveIn(_filter.Criticality, _filter.Block, null))</option>
+                        @foreach (var t in DropdownTests)
                         {
-                            if (!flat)
-                            {
-                                <button class="node lvl1 @(IsScope(cr, b, null) ? "on" : "")" @onclick="() => SetScope(cr, b, null)">
-                                    <span class="t">@ReportPath.BlockTitle(b)</span><b>@ActiveIn(cr, b, null)</b>
-                                </button>
-                            }
-                            if (flat || b == _filter.Block)
-                            {
-                                foreach (var t in TestsOf(cr, b))
-                                {
-                                    <button class="node @(flat ? "lvl1" : "lvl2") @(_filter.TestId == t.Id ? "on" : "")" @onclick="() => SetScope(cr, flat ? null : b, t.Id)" title="@t.Name">
-                                        <span class="t">@t.Name</span><b>@t.Counts.Active</b>
-                                    </button>
-                                }
-                            }
+                            <option value="@t.Id">@(_filter.Block == null && t.Block != "" ? t.Block + " · " : "")@t.Name (@t.Counts.Active)</option>
                         }
-                    }
-                }
-                @if (_criticalities.Count == 0)
+                    </select>
+                </label>
+                @if (ShowBlocks)
                 {
-                    <div class="muted small">Отчётов ещё нет. Вкладка «Отчёты» — «Проверить папку сейчас».</div>
+                    <label class="dd">
+                        <span>Блок</span>
+                        <select value="@BlockValue" @onchange="OnBlockChanged">
+                            <option value="*">Все блоки (@ActiveIn(_filter.Criticality, null, null))</option>
+                            @foreach (var b in BlocksOf(_filter.Criticality))
+                            {
+                                <option value="@(b == "" ? "-" : b)">@ReportPath.BlockTitle(b) (@ActiveIn(_filter.Criticality, b, null))</option>
+                            }
+                        </select>
+                    </label>
                 }
-            </nav>
+            </div>
+        }
+
+        <div class="body @(_view.Tab == 0 && SelectedVisible ? "with-panel" : "")">
+            @* боковая панель — кнопки, которые относятся только к этому проекту; пока место под них *@
+            <aside class="side" aria-label="Кнопки проекта">
+                <div class="side-title">Проект</div>
+                <p class="muted small">Здесь будут кнопки этого проекта.</p>
+            </aside>
 
             @if (_view.Tab == 0)
             {
@@ -412,6 +424,38 @@
         _notice = null;
         _shown = PageSize;
         LoadAll();
+    }
+
+    /// <summary>Проверки в списке «Тип проверки»: выбранной критичности и выбранного блока (или всех блоков).</summary>
+    private IEnumerable<TestRow> DropdownTests => _tests
+        .Where(t => t.Criticality == _filter.Criticality && (_filter.Block == null || t.Block == _filter.Block))
+        .OrderBy(t => ReportPath.BlockOrder(t.Block)).ThenBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase);
+
+    /// <summary>Список «Блок» — когда в папках выбранной критичности блоки есть.</summary>
+    private bool ShowBlocks
+    {
+        get
+        {
+            var blocks = BlocksOf(_filter.Criticality);
+            return blocks.Count > 1 || (blocks.Count == 1 && blocks[0] != "");
+        }
+    }
+
+    private string BlockValue => _filter.Block == null ? "*" : _filter.Block == "" ? "-" : _filter.Block;
+
+    private void OnTestChanged(ChangeEventArgs e)
+    {
+        long? testId = long.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        SetScope(_filter.Criticality, _filter.Block, testId);
+    }
+
+    /// <summary>Другой блок: выбранная проверка остаётся, если она в этом блоке.</summary>
+    private void OnBlockChanged(ChangeEventArgs e)
+    {
+        var v = e.Value?.ToString();
+        var block = v == "*" ? null : v == "-" ? "" : v;
+        var test = _tests.FirstOrDefault(t => t.Id == _filter.TestId);
+        SetScope(_filter.Criticality, block, test != null && (block == null || test.Block == block) ? test.Id : null);
     }
 
     private void ShowTest(TestRow t)
