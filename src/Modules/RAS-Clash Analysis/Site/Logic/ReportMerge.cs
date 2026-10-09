@@ -11,6 +11,8 @@ namespace RASv2.ClashAnalysis.Site.Logic
         public long Id { get; set; }
         public string IdentityKey { get; set; }
         public ClashState State { get; set; }
+        /// <summary>Проверка + пара элементов последнего появления (ClashRules.PairKey); null — пара неполная, по ней не узнаём.</summary>
+        public string PairKey { get; set; }
     }
 
     public enum MergeAction
@@ -32,7 +34,10 @@ namespace RASv2.ClashAnalysis.Site.Logic
         public ClashResult Result { get; set; }
         /// <summary>Известная коллизия; у New — null.</summary>
         public KnownClash Known { get; set; }
+        /// <summary>Ключ «личности» после слияния (у узнанной по паре — новый, с новым номером Navisworks).</summary>
         public string IdentityKey { get; set; }
+        /// <summary>Узнана по паре элементов: номер Navisworks сменился — ключ «личности» обновить на IdentityKey.</summary>
+        public bool Rekeyed { get; set; }
         public ClashState NewState { get; set; }
         /// <summary>Статус меняется (событие в истории коллизии).</summary>
         public bool StateChanged { get; set; }
@@ -44,6 +49,9 @@ namespace RASv2.ClashAnalysis.Site.Logic
     /// Слияние нового отчёта одной проверки с тем, что уже известно (DECISIONS.md модуля: «личность», статусы).
     /// Без базы — проверяется тестами.
     /// <list type="bullet">
+    /// <item>Коллизия узнаётся по ключу «личности» (номер Navisworks), а если номер незнакомый — по паре элементов
+    /// «файл модели + номер» среди ещё не узнанных коллизий той же проверки: номер Navisworks меняется, если проверку
+    /// пересоздали или собрали новый файл Navisworks, и без этого все коллизии стали бы «новыми», а старые — «исправленными».</item>
     /// <item>Новая «личность» — новая коллизия; статус — из Navisworks («Подтверждено» → «Допущена», «Исправлено» → «Исправлена»).</item>
     /// <item>Известная — статус на сайте главнее статуса Navisworks: «Допущена» остаётся «Допущена».</item>
     /// <item>«Активная», которой нет в отчёте (или Navisworks пишет «Исправлено»), — «Исправлена».</item>
@@ -54,20 +62,47 @@ namespace RASv2.ClashAnalysis.Site.Logic
     {
         public static List<MergeStep> Plan(string testName, IEnumerable<KnownClash> known, IEnumerable<ClashResult> results)
         {
+            var knownList = known.ToList();
             var byKey = new Dictionary<string, KnownClash>(StringComparer.Ordinal);
-            foreach (var k in known) byKey[k.IdentityKey] = k;
+            foreach (var k in knownList) byKey[k.IdentityKey] = k;
+            var matched = new HashSet<long>();
+            var seenKeys = new HashSet<string>(StringComparer.Ordinal);
+            var resultList = results.ToList();
+
+            // сначала — все узнанные по ключу: пара не должна «перехватить» коллизию, которая в этом же отчёте есть со своим номером
+            var byResult = new Dictionary<ClashResult, (KnownClash Known, bool ByPair)>();
+            foreach (var r in resultList)
+                if (byKey.TryGetValue(ClashRules.IdentityKey(testName, r), out var k) && matched.Add(k.Id))
+                    byResult[r] = (k, false);
+
+            // затем — по паре элементов, среди ещё не узнанных
+            var byPair = knownList.Where(k => k.PairKey != null && !matched.Contains(k.Id))
+                .GroupBy(k => k.PairKey, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => new Queue<KnownClash>(g), StringComparer.Ordinal);
+            foreach (var r in resultList)
+            {
+                if (byResult.ContainsKey(r) || !ClashRules.HasFullPair(r.Elements)) continue;
+                if (byKey.ContainsKey(ClashRules.IdentityKey(testName, r))) continue;
+                if (!byPair.TryGetValue(ClashRules.PairKey(testName, r.Elements), out var queue)) continue;
+                while (queue.Count > 0)
+                {
+                    var k = queue.Dequeue();
+                    if (!matched.Add(k.Id)) continue;
+                    byResult[r] = (k, true);
+                    break;
+                }
+            }
 
             var steps = new List<MergeStep>();
-            var seen = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var r in results)
+            foreach (var r in resultList)
             {
                 var key = ClashRules.IdentityKey(testName, r);
                 // та же «личность» дважды в одном отчёте (без guid, та же пара элементов) — одна коллизия
-                if (!seen.Add(key)) continue;
+                if (!seenKeys.Add(key)) continue;
                 // «Исправлено» в Navisworks — коллизии в модели уже нет, хоть она и в отчёте
                 var present = r.Status != NavisworksStatus.Resolved;
 
-                if (!byKey.TryGetValue(key, out var k))
+                if (!byResult.TryGetValue(r, out var hit))
                 {
                     steps.Add(new MergeStep
                     {
@@ -76,19 +111,24 @@ namespace RASv2.ClashAnalysis.Site.Logic
                     });
                     continue;
                 }
+                var k = hit.Known;
+                var rekeyed = hit.ByPair && key != k.IdentityKey;
                 if (!present)
                 {
-                    steps.Add(Gone(k, r));
+                    var gone = Gone(k, r);
+                    gone.IdentityKey = key;
+                    gone.Rekeyed = rekeyed;
+                    steps.Add(gone);
                     continue;
                 }
                 var reappeared = k.State == ClashState.Fixed;
                 steps.Add(new MergeStep
                 {
-                    Action = reappeared ? MergeAction.Reappeared : MergeAction.Again, Result = r, Known = k, IdentityKey = key,
+                    Action = reappeared ? MergeAction.Reappeared : MergeAction.Again, Result = r, Known = k, IdentityKey = key, Rekeyed = rekeyed,
                     NewState = reappeared ? ClashState.Active : k.State, StateChanged = reappeared, Present = true,
                 });
             }
-            foreach (var k in byKey.Values.Where(k => !seen.Contains(k.IdentityKey)))
+            foreach (var k in knownList.Where(k => !matched.Contains(k.Id)))
                 steps.Add(Gone(k, null));
             return steps;
         }

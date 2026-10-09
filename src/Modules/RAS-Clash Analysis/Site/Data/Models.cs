@@ -147,4 +147,6 @@ public static class EventKinds
     public const string Gone = "gone";
     public const string Status = "status";
     public const string Comment = "comment";
+    /// <summary>Номер Navisworks сменился — коллизия узнана по паре элементов.</summary>
+    public const string Rekey = "rekey";
 }

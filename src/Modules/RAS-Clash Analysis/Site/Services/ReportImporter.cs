@@ -18,6 +18,8 @@ public sealed class ImportResult
     public int Again { get; set; }
     public int Reappeared { get; set; }
     public int Fixed { get; set; }
+    /// <summary>Узнаны по паре элементов: номер Navisworks сменился.</summary>
+    public int Rekeyed { get; set; }
 }
 
 /// <summary>
@@ -124,8 +126,8 @@ public sealed class ReportImporter
                     var result = Import(p.Id, x.Path, x.Hash, x.FileTime, x.Report);
                     result.ProjectName = p.Name;
                     results.Add(result);
-                    _log.LogInformation("Загружен отчёт {File}: новых {New}, снова {Again}, появились снова {Reappeared}, исправлены {Fixed}",
-                        x.Path, result.New, result.Again, result.Reappeared, result.Fixed);
+                    _log.LogInformation("Загружен отчёт {File}: новых {New}, снова {Again}, появились снова {Reappeared}, исправлены {Fixed}, узнаны по паре элементов {Rekeyed}",
+                        x.Path, result.New, result.Again, result.Reappeared, result.Fixed, result.Rekeyed);
                 }
                 catch (Exception ex)
                 {
@@ -173,7 +175,7 @@ public sealed class ReportImporter
             var (testId, lastDate) = EnsureTest(c, tx, projectId, test);
             // отчёт старше уже загруженного по этой проверке: только дополняет историю, статусы не трогает
             var latest = lastDate == null || string.CompareOrdinal(reportDate, lastDate) >= 0;
-            var known = KnownClashes(c, tx, testId);
+            var known = KnownClashes(c, tx, testId, test.Name);
             var dateText = report.Date.ToString("dd.MM.yyyy HH:mm");
 
             foreach (var step in ReportMerge.Plan(test.Name, known, test.Results))
@@ -185,6 +187,14 @@ public sealed class ReportImporter
                         step.Present ? ClashState.Fixed : step.NewState, inLastReport: false, reportDate, reportId, "Найдена в более раннем отчёте от " + dateText);
                     AddOccurrence(c, tx, cid, reportId, report, step.Result, makeLast: step.Known == null, reportDate);
                     continue;
+                }
+                if (step.Rekeyed)
+                {
+                    // номер Navisworks сменился (проверку пересоздали / новый файл Navisworks) — та же коллизия, новый ключ
+                    Exec(c, tx, "UPDATE Clashes SET IdentityKey = $k WHERE Id = $id", ("$k", step.IdentityKey), ("$id", step.Known.Id));
+                    ClashStore.AddEvent(c, tx, step.Known.Id, now, EventKinds.Rekey,
+                        "Номер Navisworks сменился — узнана по паре элементов (отчёт от " + dateText + ")", null, null, null, reportId);
+                    result.Rekeyed++;
                 }
                 switch (step.Action)
                 {
@@ -248,14 +258,34 @@ public sealed class ReportImporter
         return (newId, null);
     }
 
-    private static List<KnownClash> KnownClashes(SqliteConnection c, SqliteTransaction tx, long testId)
+    /// <summary>Известные коллизии проверки — с парой элементов последнего появления (узнавание при смене номера Navisworks).</summary>
+    private static List<KnownClash> KnownClashes(SqliteConnection c, SqliteTransaction tx, long testId, string testName)
     {
-        var list = new List<KnownClash>();
-        using var cmd = ClashStore.Command(c, "SELECT Id, IdentityKey, State FROM Clashes WHERE TestId = $t", ("$t", testId));
-        cmd.Transaction = tx;
-        using var r = cmd.ExecuteReader();
-        while (r.Read()) list.Add(new KnownClash { Id = r.GetInt64(0), IdentityKey = r.GetString(1), State = (ClashState)r.GetInt32(2) });
-        return list;
+        var byId = new Dictionary<long, KnownClash>();
+        using (var cmd = ClashStore.Command(c, "SELECT Id, IdentityKey, State FROM Clashes WHERE TestId = $t", ("$t", testId)))
+        {
+            cmd.Transaction = tx;
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) byId[r.GetInt64(0)] = new KnownClash { Id = r.GetInt64(0), IdentityKey = r.GetString(1), State = (ClashState)r.GetInt32(2) };
+        }
+        var elements = new Dictionary<long, List<ClashElement>>();
+        using (var cmd = ClashStore.Command(c, """
+            SELECT c.Id, e.ModelFile, e.ElementId FROM Clashes c JOIN Elements e ON e.OccurrenceId = c.LastOccurrenceId
+            WHERE c.TestId = $t ORDER BY c.Id, e.Idx
+            """, ("$t", testId)))
+        {
+            cmd.Transaction = tx;
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                if (!elements.TryGetValue(r.GetInt64(0), out var list)) elements[r.GetInt64(0)] = list = new List<ClashElement>();
+                list.Add(new ClashElement { ModelFile = r.IsDBNull(1) ? null : r.GetString(1), ElementId = r.IsDBNull(2) ? null : r.GetInt64(2) });
+            }
+        }
+        foreach (var (id, list) in elements)
+            if (byId.TryGetValue(id, out var k) && ClashRules.HasFullPair(list))
+                k.PairKey = ClashRules.PairKey(testName, list);
+        return byId.Values.ToList();
     }
 
     private static long NewClash(SqliteConnection c, SqliteTransaction tx, long projectId, long testId, string key, ClashState state,

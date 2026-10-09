@@ -18,6 +18,7 @@
                     else
                     {
                         @($"новых {r.New}, снова в отчёте {r.Again}, появились снова {r.Reappeared}, исправлены {r.Fixed}")
+                        if (r.Rekeyed > 0) { <span class="muted"> · @r.Rekeyed узнаны по паре элементов (номера Navisworks сменились)</span> }
                     }
                 </li>
             }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -19,13 +20,25 @@ namespace RASv2.ClashAnalysis.Reports
         /// <summary>
         /// «Личность» коллизии — одна через все прогоны: постоянный номер Navisworks (guid), а без него —
         /// проверка + пара элементов «файл модели + номер» (порядок элементов не важен).
+        /// Номер Navisworks меняется, если проверку пересоздали или собрали новый файл Navisworks, — тогда коллизию
+        /// узнают по паре (<see cref="PairKey"/>, ReportMerge сайта).
         /// </summary>
-        public static string IdentityKey(string testName, ClashResult result)
+        public static string IdentityKey(string testName, ClashResult result) =>
+            !string.IsNullOrEmpty(result.Guid) ? "guid:" + result.Guid : PairKey(testName, result.Elements);
+
+        /// <summary>Проверка + пара элементов «файл модели + номер», порядок элементов не важен.</summary>
+        public static string PairKey(string testName, IEnumerable<ClashElement> elements)
         {
-            if (!string.IsNullOrEmpty(result.Guid)) return "guid:" + result.Guid;
-            var pair = result.Elements.Select(ElementKey).OrderBy(k => k, StringComparer.Ordinal);
+            var pair = elements.Select(ElementKey).OrderBy(k => k, StringComparer.Ordinal);
             return "pair:" + Simplify(testName) + "|" + string.Join("|", pair);
         }
+
+        /// <summary>
+        /// По паре можно узнавать коллизию, только если у всех элементов есть файл модели и номер:
+        /// иначе разные коллизии дали бы одинаковую пару («?»).
+        /// </summary>
+        public static bool HasFullPair(IReadOnlyCollection<ClashElement> elements) =>
+            elements.Count > 0 && elements.All(e => e.ElementId.HasValue && !string.IsNullOrEmpty(e.ModelFile));
 
         /// <summary>Элемент — «файл модели + номер»: номер уникален только внутри своего файла.</summary>
         public static string ElementKey(ClashElement e) =>
