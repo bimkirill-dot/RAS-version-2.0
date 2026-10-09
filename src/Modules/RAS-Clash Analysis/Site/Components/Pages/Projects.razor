@@ -9,33 +9,9 @@
 
 <h1>Проекты</h1>
 
-@* папка со всеми проектами: каждая папка внутри неё с отчётами XML становится проектом сама *@
-<div class="root-folder">
-    @if (_editRoot)
-    {
-        <div class="form">
-            <label>
-                Папка со всеми проектами — каждая папка внутри неё (например, «Арман Кала») станет проектом с тем же названием
-                <input class="wide" @bind="_rootInput" placeholder="\\сервер\BIM\Коллизии" />
-            </label>
-            <div class="actions">
-                <button class="btn primary" @onclick="SaveRoot">Сохранить и найти проекты</button>
-                @if (!string.IsNullOrEmpty(_root)) { <button class="btn link" @onclick="() => { _editRoot = false; _rootError = null; }">Отмена</button> }
-                @if (!string.IsNullOrEmpty(_root)) { <button class="btn link" @onclick="ClearRoot">Не искать проекты сами</button> }
-            </div>
-            @if (_rootError != null) { <p class="error">@_rootError</p> }
-        </div>
-    }
-    else
-    {
-        <span class="muted">Папка со всеми проектами:</span> <span class="path">@_root</span>
-        <button class="btn link small" @onclick="() => { _editRoot = true; _rootInput = _root; }">изменить</button>
-    }
-</div>
-
 @if (_projects.Count == 0)
 {
-    <p class="muted">Проектов ещё нет. Укажите папку со всеми проектами выше или создайте проект вручную: название и папка, куда кладутся отчёты XML.</p>
+    <p class="muted">Проектов ещё нет. Добавьте первый: укажите папку проекта, куда кладутся отчёты Navisworks.</p>
 }
 else
 {
@@ -45,7 +21,7 @@ else
                 <th>Проект</th>
                 @if (_crits.Count == 0) { <th class="num">Активные</th> }
                 @foreach (var cr in _crits) { <th class="num">Активные · @(cr == "" ? "без критичности" : cr.ToLowerInvariant())</th> }
-                <th class="num">Исправлены</th><th class="num">Допущены</th><th>Последний отчёт</th><th>Папка отчётов</th>
+                <th class="num">Исправлены</th><th class="num">Допущены</th><th>Последний отчёт</th><th>Папка проекта</th>
             </tr>
         </thead>
         <tbody>
@@ -71,11 +47,11 @@ else
 <div class="actions">
     @if (_projects.Count > 0 && !_showNew)
     {
-        <button class="btn primary" @onclick="() => _showNew = true">+ Новый проект</button>
+        <button class="btn primary" @onclick="() => _showNew = true">+ Добавить проект</button>
     }
     <button class="btn" disabled="@Importer.Busy" @onclick="ScanAll">@(Importer.Busy ? "Проверяем папки…" : "Проверить папки сейчас")</button>
     <span class="muted">
-        Новые отчёты сайт ищет и сам — @(Options.ScanMinutes > 0 ? $"каждые {Options.ScanMinutes} мин" : "выключено")@(Importer.LastScan.HasValue ? $"; последняя проверка — {Fmt.Date(Importer.LastScan)}" : "").
+        Новые отчёты в папках проектов сайт ищет и сам — @(Options.ScanMinutes > 0 ? $"каждые {Options.ScanMinutes} мин" : "выключено")@(Importer.LastScan.HasValue ? $"; последняя проверка — {Fmt.Date(Importer.LastScan)}" : "").
     </span>
 </div>
 
@@ -85,13 +61,19 @@ else
 {
     <h2>Новый проект</h2>
     <div class="form">
-        <label>Название <input @bind="_name" placeholder="Например: Апорт · Высокая · S08" /></label>
         <label>
-            Папка с отчётами XML — скопируйте путь из проводника
-            <input class="wide" @bind="_folder" placeholder="\\сервер\Проекты\…\XML" />
+            Папка проекта — скопируйте путь из проводника (например, …\Коллизии\Арман Кала)
+            <input class="wide" value="@_folder" @onchange="FolderChanged" placeholder="\\сервер\…\Арман Кала" />
         </label>
+        <label>
+            Название — как у папки; можно поменять
+            <input @bind="_name" placeholder="Арман Кала" />
+        </label>
+        <p class="muted small">
+            Внутри папки проекта сайт сам разберёт даты прогонов, критичность («Высокая…», «Средняя…»), блоки (S1, S2…) и найдёт все отчёты XML.
+        </p>
         <div class="actions">
-            <button class="btn primary" @onclick="Create">Создать и загрузить отчёты</button>
+            <button class="btn primary" @onclick="Create">Добавить и загрузить отчёты</button>
             @if (_projects.Count > 0) { <button class="btn link" @onclick="() => { _showNew = false; _error = null; }">Отмена</button> }
         </div>
         @if (_error != null) { <p class="error">@_error</p> }
@@ -118,19 +100,14 @@ else
     private List<ProjectRow> _projects = new();
     private string _name;
     private string _folder;
+    /// <summary>Название, подставленное из папки: пока человек его не менял, оно следует за папкой.</summary>
+    private string _autoName;
     private string _error;
     private bool _showNew;
-    private string _root, _rootInput, _rootError;
-    private bool _editRoot;
     /// <summary>Критичности, которые есть в проектах (столбцы активных); пусто — один столбец «Активные».</summary>
     private List<string> _crits = new();
 
-    protected override void OnInitialized()
-    {
-        _root = Store.Setting(ReportImporter.ProjectsRootKey);
-        _editRoot = string.IsNullOrEmpty(_root);
-        Load();
-    }
+    protected override void OnInitialized() => Load();
 
     private void Load()
     {
@@ -139,23 +116,17 @@ else
         _crits = all.Count == 1 && all[0] == "" ? new List<string>() : all.OrderBy(ReportPath.CriticalityOrder).ToList();
     }
 
-    private async Task SaveRoot()
+    /// <summary>Папку ввели — название проекта берётся из её имени (если название ещё не меняли руками).</summary>
+    private void FolderChanged(ChangeEventArgs e)
     {
-        _rootError = null;
-        var folder = (_rootInput ?? "").Trim().Trim('"');
-        if (folder.Length == 0) { _rootError = "Укажите папку."; return; }
-        if (!Directory.Exists(folder)) { _rootError = "Папка не найдена или недоступна: " + folder; return; }
-        Store.SetSetting(ReportImporter.ProjectsRootKey, folder);
-        _root = folder;
-        _editRoot = false;
-        await ScanAll();
-    }
-
-    private void ClearRoot()
-    {
-        Store.SetSetting(ReportImporter.ProjectsRootKey, "");
-        _root = "";
-        _rootInput = "";
+        _folder = e.Value?.ToString();
+        var folder = (_folder ?? "").Trim().Trim('"').TrimEnd('\\', '/');
+        var fromFolder = folder.Length == 0 ? null : Path.GetFileName(folder);
+        if (string.IsNullOrWhiteSpace(_name) || _name == _autoName)
+        {
+            _name = fromFolder;
+            _autoName = fromFolder;
+        }
     }
 
     private async Task ScanAll()
@@ -167,17 +138,18 @@ else
     private async Task Create()
     {
         _error = null;
-        if (string.IsNullOrWhiteSpace(_name)) { _error = "Укажите название проекта."; return; }
-        if (string.IsNullOrWhiteSpace(_folder)) { _error = "Укажите папку с отчётами."; return; }
-        var folder = _folder.Trim().Trim('"');
+        var folder = (_folder ?? "").Trim().Trim('"').TrimEnd('\\', '/');
+        if (folder.Length == 0) { _error = "Укажите папку проекта."; return; }
         if (!Directory.Exists(folder)) { _error = "Папка не найдена или недоступна: " + folder; return; }
+        if (string.IsNullOrWhiteSpace(_name)) { _error = "Укажите название проекта."; return; }
         if (_projects.Any(p => string.Equals(p.Name, _name.Trim(), StringComparison.CurrentCultureIgnoreCase)))
         { _error = "Проект с таким названием уже есть."; return; }
+        if (_projects.Any(p => string.Equals(p.Folder.TrimEnd('\\', '/'), folder, StringComparison.OrdinalIgnoreCase)))
+        { _error = "Эта папка уже добавлена как проект."; return; }
         var id = Store.AddProject(_name, folder);
-        _name = _folder = null;
+        _name = _folder = _autoName = null;
         _showNew = false;
         await Importer.ScanAsync(id);
         Nav.NavigateTo("project/" + id);
-        Load();
     }
 }

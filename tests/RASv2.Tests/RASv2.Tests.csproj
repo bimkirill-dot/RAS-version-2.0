@@ -24,6 +24,7 @@
   <ItemGroup>
     <Compile Include="..\..\src\Modules\RAS-Clash Analysis\Reports\*.cs" LinkBase="ClashAnalysis" />
     <Compile Include="..\..\src\Modules\RAS-Clash Analysis\Site\Logic\*.cs" LinkBase="ClashAnalysis\Site" />
+    <Compile Include="..\..\src\Modules\RAS-Clash Analysis\Site\Data\Models.cs" Link="ClashAnalysis\Site\Models.cs" />
   </ItemGroup>
 
   <!-- логика RAS-Model History: модуль пока только для Revit 2026 (.NET 8) -->

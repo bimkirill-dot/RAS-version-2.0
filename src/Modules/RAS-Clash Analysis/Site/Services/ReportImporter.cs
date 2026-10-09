@@ -20,8 +20,6 @@ public sealed class ImportResult
     public int Fixed { get; set; }
     /// <summary>Узнаны по паре элементов: номер Navisworks сменился.</summary>
     public int Rekeyed { get; set; }
-    /// <summary>Не отчёт, а новый проект: папка появилась в папке со всеми проектами.</summary>
-    public bool NewProject { get; set; }
 }
 
 /// <summary>
@@ -31,9 +29,6 @@ public sealed class ImportResult
 /// </summary>
 public sealed class ReportImporter
 {
-    /// <summary>Настройка сайта: папка со всеми проектами — каждая папка внутри неё с отчётами становится проектом.</summary>
-    public const string ProjectsRootKey = "ProjectsRoot";
-
     /// <summary>Обход папок: недоступные подпапки пропускаются, а не обрывают проверку всего проекта.</summary>
     private static readonly EnumerationOptions Deep = new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true };
 
@@ -74,7 +69,7 @@ public sealed class ReportImporter
 
     private List<ImportResult> Scan(long? projectId)
     {
-        var results = projectId == null ? AutoProjects() : new List<ImportResult>();
+        var results = new List<ImportResult>();
         var projects = new List<(long Id, string Name, string Folder)>();
         using (var c = _db.Open())
         using (var cmd = ClashStore.Command(c, "SELECT Id, Name, Folder FROM Projects"))
@@ -154,54 +149,6 @@ public sealed class ReportImporter
         Directory.EnumerateFiles(folder, "*.xml", Deep)
             .Where(f => !Path.GetDirectoryName(f)!.Split(Path.DirectorySeparatorChar)
                 .Any(d => d.EndsWith("_files", StringComparison.OrdinalIgnoreCase)));
-
-    /// <summary>
-    /// Проекты из папки со всеми проектами: каждая папка внутри неё, где есть отчёты XML, — проект с тем же названием
-    /// (название можно поменять на сайте, связь — по папке). Проекты не удаляются, если папка пропала.
-    /// </summary>
-    private List<ImportResult> AutoProjects()
-    {
-        var results = new List<ImportResult>();
-        string root;
-        var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        using (var c = _db.Open())
-        {
-            using (var cmd = ClashStore.Command(c, "SELECT Value FROM Settings WHERE Key = $k", ("$k", ProjectsRootKey)))
-                root = cmd.ExecuteScalar() as string;
-            using (var cmd = ClashStore.Command(c, "SELECT Folder FROM Projects"))
-            using (var r = cmd.ExecuteReader())
-                while (r.Read()) known.Add(Normalize(r.GetString(0)));
-        }
-        if (string.IsNullOrWhiteSpace(root)) return results;
-        if (!Directory.Exists(root))
-        {
-            results.Add(new ImportResult { ProjectName = "Папка со всеми проектами", File = root, Error = true, Message = "Не найдена или недоступна." });
-            return results;
-        }
-        IEnumerable<string> folders;
-        try { folders = Directory.EnumerateDirectories(root).ToList(); }
-        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
-        {
-            results.Add(new ImportResult { ProjectName = "Папка со всеми проектами", File = root, Error = true, Message = ex.Message });
-            return results;
-        }
-        foreach (var folder in folders)
-        {
-            if (known.Contains(Normalize(folder))) continue;
-            var name = Path.GetFileName(folder.TrimEnd('\\', '/'));
-            if (name.StartsWith(".", StringComparison.Ordinal) || name.StartsWith("_", StringComparison.Ordinal)) continue;
-            if (!ReportFiles(folder).Any()) continue;
-            using var c = _db.Open();
-            using var cmd = ClashStore.Command(c, "INSERT INTO Projects(Name, Folder, Created) VALUES($n, $f, $t)",
-                ("$n", name), ("$f", folder), ("$t", Database.Time(DateTime.Now)));
-            cmd.ExecuteNonQuery();
-            _log.LogInformation("Новый проект из папки со всеми проектами: {Name} ({Folder})", name, folder);
-            results.Add(new ImportResult { ProjectName = name, File = folder, NewProject = true, Message = "Новый проект" });
-        }
-        return results;
-    }
-
-    private static string Normalize(string folder) => Path.GetFullPath(folder.Trim()).TrimEnd('\\', '/');
 
     /// <summary>
     /// Файл уже загружен в этом виде — сравнение только с последним загруженным вариантом файла: прогон может вернуть

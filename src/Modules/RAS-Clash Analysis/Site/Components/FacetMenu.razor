@@ -1,0 +1,77 @@
+@* Поле отбора — кнопка со списком значений: флажки, число коллизий у каждого, поиск в длинном списке.
+   Выбранное — на самой кнопке («Уровень: 2 Этаж, 3 Этаж +1»), ✕ — убрать отбор. *@
+
+<div class="facet @(Selected.Count > 0 ? "active" : "")">
+    <button class="facet-btn" @onclick="Toggle" title="@Title — выбрать значения">
+        <span>@Title@(Selected.Count > 0 ? ": " : "")</span>
+        @if (Selected.Count > 0) { <b>@ClashFacets.Summary(Selected, Values)</b> }
+        <span class="caret">▾</span>
+    </button>
+    @if (Selected.Count > 0)
+    {
+        <button class="facet-clear" title="Убрать отбор «@Title»" @onclick="Clear">✕</button>
+    }
+    @if (_open)
+    {
+        <div class="facet-backdrop" @onclick="() => _open = false"></div>
+        <div class="facet-menu">
+            @if (Values.Count > 8)
+            {
+                <input class="facet-search" placeholder="Найти…" @bind="_find" @bind:event="oninput" />
+            }
+            <div class="facet-list">
+                @foreach (var v in Shown)
+                {
+                    <label class="facet-item @(v.Count == 0 ? "empty" : "")">
+                        <input type="checkbox" checked="@Selected.Contains(v.Key)" @onchange="e => Set(v.Key, e)" />
+                        <span class="t" title="@v.Title">@v.Title</span>
+                        <span class="n">@v.Count</span>
+                    </label>
+                }
+                @if (!Shown.Any())
+                {
+                    <div class="muted small facet-none">Нет значений</div>
+                }
+            </div>
+            <div class="facet-foot">
+                <button class="btn link small" disabled="@(Selected.Count == 0)" @onclick="Clear">Очистить</button>
+                <button class="btn small" @onclick="() => _open = false">Готово</button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; }
+    /// <summary>Значения с числами коллизий (с учётом остальных отборов).</summary>
+    [Parameter] public List<FacetValue> Values { get; set; } = new();
+    /// <summary>Выбранные ключи — меняются здесь же.</summary>
+    [Parameter] public HashSet<string> Selected { get; set; } = new();
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private bool _open;
+    private string _find;
+
+    private IEnumerable<FacetValue> Shown => string.IsNullOrWhiteSpace(_find)
+        ? Values
+        : Values.Where(v => (v.Title ?? "").Contains(_find.Trim(), StringComparison.CurrentCultureIgnoreCase));
+
+    private void Toggle()
+    {
+        _open = !_open;
+        _find = null;
+    }
+
+    private async Task Set(string key, ChangeEventArgs e)
+    {
+        if (e.Value is bool on && on) Selected.Add(key);
+        else Selected.Remove(key);
+        await Changed.InvokeAsync();
+    }
+
+    private async Task Clear()
+    {
+        Selected.Clear();
+        await Changed.InvokeAsync();
+    }
+}

@@ -1,3 +1,7 @@
+// явные using — файл подключают и проверки (tests\RASv2.Tests, .NET Framework 4.8 без неявных using)
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using RASv2.ClashAnalysis.Reports;
 
 namespace RASv2.ClashAnalysis.Site.Data;
@@ -87,7 +91,10 @@ public sealed class ClashRow
     public ElementView B { get; set; }
 }
 
-/// <summary>Отбор в списке коллизий; пустое поле — без отбора.</summary>
+/// <summary>
+/// Отбор в списке коллизий; пустое поле — без отбора. Критичность, блок, проверка — в базе (ClashStore.Clashes);
+/// статус, поля и поиск — на странице (Logic.ClashFacets), чтобы считать числа у значений.
+/// </summary>
 public sealed class ClashFilter
 {
     /// <summary>Критичность («Высокая», "" — без критичности); null — любая.</summary>
@@ -96,9 +103,8 @@ public sealed class ClashFilter
     public string Block { get; set; }
     public long? TestId { get; set; }
     public ClashState? State { get; set; }
-    public string LevelKey { get; set; }
-    public string Category { get; set; }
-    public bool OnlyInLastReport { get; set; }
+    /// <summary>Выбранные значения полей (Logic.ClashFacets.Level / Category / Discipline / Report → ключи значений).</summary>
+    public Dictionary<string, HashSet<string>> Facets { get; } = new Dictionary<string, HashSet<string>>();
     /// <summary>Номер элемента, имя, тип, семейство, файл модели, имя коллизии — без учёта регистра.</summary>
     public string Search { get; set; }
 }

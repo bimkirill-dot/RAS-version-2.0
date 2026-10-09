@@ -14,252 +14,274 @@
     return;
 }
 
-<div class="project-head">
-    <nav class="crumbs"><a href="/">Проекты</a> ›</nav>
-    <h1>@_project.Name</h1>
-    @* критичность и блок — разделение проекта (из названий папок с отчётами); у каждого — активные *@
-    @if (ShowCriticalities)
+<div class="project-page">
+    <div class="project-head">
+        <nav class="crumbs"><a href="/">Проекты</a> ›</nav>
+        <h1>@_project.Name</h1>
+        <div class="tabs">
+            <button class="@Tab(0)" @onclick="() => _view.Tab = 0">Коллизии</button>
+            <button class="@Tab(1)" @onclick="() => _view.Tab = 1">Проверки</button>
+            <button class="@Tab(2)" @onclick="() => _view.Tab = 2">Отчёты</button>
+            <button class="@Tab(3)" @onclick="() => _view.Tab = 3">Проект</button>
+        </div>
+    </div>
+
+    @if (_view.Tab == 3)
     {
-        <div class="scope">
-            @foreach (var cr in _criticalities)
-            {
-                <button class="seg @(cr == _filter.Criticality ? "on" : "") @CriticalityClass(cr)" @onclick="() => SetCriticality(cr)">
-                    @ReportPath.CriticalityTitle(cr) <b>@ActiveIn(cr, null)</b>
-                </button>
-            }
+        <div class="form">
+            <label>Название <input @bind="_editName" /></label>
+            <label>Папка с отчётами проекта <input class="wide" @bind="_editFolder" /></label>
+            <button class="btn primary" @onclick="SaveProject">Сохранить</button>
+            @if (_editMessage != null) { <p class="@(_editError ? "error" : "muted")">@_editMessage</p> }
         </div>
     }
-    @if (ShowBlocks)
+    else
     {
-        <div class="scope blocks">
-            <button class="seg @(_filter.Block == null ? "on" : "")" @onclick="() => SetBlock(null)">Все блоки <b>@ActiveIn(_filter.Criticality, null)</b></button>
-            @foreach (var b in _blocks)
+        <div class="body @(_view.Tab == 0 && SelectedVisible ? "with-panel" : "")">
+            @* дерево: критичность → блок → проверка (как список проверок в Navisworks); число — активные *@
+            <nav class="tree" aria-label="Критичность, блоки, проверки">
+                @foreach (var cr in _criticalities)
+                {
+                    <button class="node lvl0 @(IsScope(cr, null, null) ? "on" : "") @CriticalityClass(cr)" @onclick="() => SetScope(cr, null, null)"
+                            title="@CriticalityTitle(cr)">
+                        <span class="t">@CriticalityTitle(cr)</span><b>@ActiveIn(cr, null, null)</b>
+                    </button>
+                    @if (cr == _filter.Criticality)
+                    {
+                        var blocks = BlocksOf(cr);
+                        var flat = blocks.Count == 1 && blocks[0] == "";
+                        foreach (var b in blocks)
+                        {
+                            if (!flat)
+                            {
+                                <button class="node lvl1 @(IsScope(cr, b, null) ? "on" : "")" @onclick="() => SetScope(cr, b, null)">
+                                    <span class="t">@ReportPath.BlockTitle(b)</span><b>@ActiveIn(cr, b, null)</b>
+                                </button>
+                            }
+                            if (flat || b == _filter.Block)
+                            {
+                                foreach (var t in TestsOf(cr, b))
+                                {
+                                    <button class="node @(flat ? "lvl1" : "lvl2") @(_filter.TestId == t.Id ? "on" : "")" @onclick="() => SetScope(cr, flat ? null : b, t.Id)" title="@t.Name">
+                                        <span class="t">@t.Name</span><b>@t.Counts.Active</b>
+                                    </button>
+                                }
+                            }
+                        }
+                    }
+                }
+                @if (_criticalities.Count == 0)
+                {
+                    <div class="muted small">Отчётов ещё нет. Вкладка «Отчёты» — «Проверить папку сейчас».</div>
+                }
+            </nav>
+
+            @if (_view.Tab == 0)
             {
-                <button class="seg @(b == _filter.Block ? "on" : "")" @onclick="() => SetBlock(b)">@ReportPath.BlockTitle(b) <b>@ActiveIn(_filter.Criticality, b)</b></button>
+                <section class="content">
+                    @* статус — вкладками, как «Открытые / Закрытые» в списках задач *@
+                    <div class="state-tabs">
+                        @foreach (var (state, title) in States)
+                        {
+                            <button class="stab @(_filter.State == state ? "on" : "") @(state.HasValue ? Fmt.StateClass(state.Value) : "")" @onclick="() => SetStateFilter(state)">
+                                @title <b>@StateCount(state)</b>
+                            </button>
+                        }
+                        <span class="spacer"></span>
+                        <span class="muted small scope-title">@ScopeTitle</span>
+                    </div>
+
+                    @if (_selected.Count > 0)
+                    {
+                        <div class="toolbar bulk">
+                            @if (_pendingState.HasValue)
+                            {
+                                <span class="confirm">
+                                    Сделать «@Fmt.State(_pendingState.Value)» у @Fmt.Clashes(_selected.Count)?
+                                    <button class="btn primary" @onclick="ConfirmBulk">Да</button>
+                                    <button class="btn" @onclick="() => _pendingState = null">Отмена</button>
+                                </span>
+                            }
+                            else
+                            {
+                                <span>Отмечено: <b>@_selected.Count</b></span>
+                                <input class="comment" placeholder="Комментарий ко всем (необязательно)" @bind="_bulkComment" />
+                                <button class="btn state-fixed" @onclick="() => AskBulk(ClashState.Fixed)">Исправлена</button>
+                                <button class="btn state-accepted" @onclick="() => AskBulk(ClashState.Accepted)">Допущена</button>
+                                <button class="btn state-active" @onclick="() => AskBulk(ClashState.Active)">Активная</button>
+                                <button class="btn link" @onclick="() => _selected.Clear()">Снять отметки</button>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="toolbar">
+                            <input class="search" type="search" placeholder="Поиск: номер элемента, тип, имя…" value="@_filter.Search" @oninput="OnSearch" />
+                            @foreach (var f in ClashFacets.All)
+                            {
+                                <FacetMenu Title="@ClashFacets.Title(f)" Values="_facetValues[f]" Selected="FacetSet(f)" Changed="Recompute" />
+                            }
+                            @if (FilterIsSet)
+                            {
+                                <button class="btn link" @onclick="ResetFilter">Сбросить отборы</button>
+                            }
+                            @if (_notice != null) { <span class="notice">@_notice</span> }
+                        </div>
+                    }
+
+                    <div class="list" tabindex="0" @onkeydown="ListKey">
+                        @if (_clashes.Count == 0)
+                        {
+                            <div class="empty">
+                                Ничего не найдено.
+                                @if (FilterIsSet) { <button class="btn link" @onclick="ResetFilter">Сбросить отборы</button> }
+                                @if (_filter.State.HasValue) { <button class="btn link" @onclick="() => SetStateFilter(null)">Показать все статусы</button> }
+                            </div>
+                        }
+                        else
+                        {
+                            <table class="grid clashes">
+                                @* при открытой карточке список уже — без «Проверки» и «Впервые» (они есть в карточке) *@
+                                <colgroup>
+                                    <col class="c-sel" /><col class="c-name" />
+                                    @if (Wide) { <col class="c-test" /> }
+                                    <col class="c-level" /><col class="c-el" /><col class="c-el" /><col class="c-state" />
+                                    @if (Wide) { <col class="c-date" /> }
+                                </colgroup>
+                                <thead>
+                                    <tr>
+                                        <th class="sel" @onclick:stopPropagation="true">
+                                            <input type="checkbox" checked="@AllSelected" @onchange="ToggleAll" title="Отметить все найденные (@_clashes.Count)" />
+                                        </th>
+                                        @SortHeader("name", "Коллизия")
+                                        @if (Wide) { @SortHeader("test", "Проверка") }
+                                        @SortHeader("level", "Уровень")
+                                        @SortHeader("a", "Элемент 1")
+                                        @SortHeader("b", "Элемент 2")
+                                        @SortHeader("state", "Статус")
+                                        @if (Wide) { @SortHeader("first", "Впервые") }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var x in _clashes.Take(_shown))
+                                    {
+                                        <tr id="row-@x.Id" class="@(x.Id == _view.SelectedId ? "selected" : "") @(x.InLastReport ? "" : "gone")" @onclick="() => Select(x.Id)">
+                                            <td class="sel" @onclick:stopPropagation="true">
+                                                <input type="checkbox" checked="@_selected.Contains(x.Id)" @onchange="e => Toggle(x.Id, e)" />
+                                            </td>
+                                            <td class="name">@(x.Name ?? "—")@if (ShowBlock) { <span class="tag">@x.Block</span> }</td>
+                                            @if (Wide) { <td class="cut" title="@x.TestName">@x.TestName</td> }
+                                            <td class="cut" title="@Level(x)">@Level(x)</td>
+                                            <td><ElementCell E="x.A" /></td>
+                                            <td><ElementCell E="x.B" /></td>
+                                            <td><span class="badge @Fmt.StateClass(x.State)">@Fmt.State(x.State)</span></td>
+                                            @if (Wide) { <td title="Последний раз — @Fmt.Day(x.LastSeen)">@Fmt.Day(x.FirstSeen)</td> }
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                            @if (_clashes.Count > _shown)
+                            {
+                                <div class="more"><button class="btn" @onclick="() => _shown += PageSize">Показать ещё (осталось @(_clashes.Count - _shown))</button></div>
+                            }
+                        }
+                    </div>
+                </section>
+
+                @if (SelectedVisible)
+                {
+                    <aside class="panel">
+                        <div class="panel-nav">
+                            <button class="btn small" disabled="@(SelectedIndex <= 0)" @onclick="() => Move(-1)" title="Предыдущая (↑)">‹</button>
+                            <span class="muted small">@(SelectedIndex >= 0 ? $"{SelectedIndex + 1} из {_clashes.Count}" : "нет в списке")</span>
+                            <button class="btn small" disabled="@(SelectedIndex < 0 || SelectedIndex >= _clashes.Count - 1)" @onclick="() => Move(1)" title="Следующая (↓)">›</button>
+                            <label class="check small" title="После смены статуса сразу открывать следующую коллизию">
+                                <input type="checkbox" @bind="_view.AutoNext" /> после статуса — к следующей
+                            </label>
+                            <span class="spacer"></span>
+                            <a class="small" href="clash/@_view.SelectedId">отдельно</a>
+                            <button class="btn link small" title="Закрыть карточку (Esc)" @onclick="() => _view.SelectedId = null">✕</button>
+                        </div>
+                        <ClashPanel ClashId="_view.SelectedId.Value" Compact="true" Changed="OnPanelChanged" />
+                    </aside>
+                }
             }
-        </div>
-    }
-    <div class="tabs">
-        <button class="@Tab(0)" @onclick="() => _view.Tab = 0">Коллизии</button>
-        <button class="@Tab(1)" @onclick="() => _view.Tab = 1">Проверки (@ScopeTests.Count())</button>
-        <button class="@Tab(2)" @onclick="() => _view.Tab = 2">Отчёты (@ScopeReports.Count())</button>
-        <button class="@Tab(3)" @onclick="() => _view.Tab = 3">Проект</button>
-    </div>
-</div>
-
-@if (_view.Tab == 0)
-{
-    @* статус — нажимаемые счётчики: сколько при текущем отборе *@
-    <div class="filters">
-        <div class="chips">
-            @foreach (var (state, title, count) in Chips())
+            else if (_view.Tab == 1)
             {
-                <button class="chip @(state.HasValue ? Fmt.StateClass(state.Value) : "") @(_filter.State == state ? "on" : "")" @onclick="() => SetStateFilter(state)">
-                    @title <b>@count</b>
-                </button>
-            }
-        </div>
-        <select @bind="TestFilter" @bind:after="Reload" title="Проверка">
-            <option value="">Все проверки</option>
-            @foreach (var t in ScopeTests) { <option value="@t.Id">@(_filter.Block == null && t.Block != "" ? t.Block + " · " : "")@t.Name</option> }
-        </select>
-        <select @bind="_filter.LevelKey" @bind:after="Reload" title="Уровень">
-            <option value="">Все уровни</option>
-            @foreach (var l in _levels) { <option value="@l.Key">@l.Value</option> }
-        </select>
-        <select @bind="_filter.Category" @bind:after="Reload" title="Категория">
-            <option value="">Все категории</option>
-            @foreach (var c in _categories) { <option value="@c">@c</option> }
-        </select>
-        <input class="search" type="search" placeholder="Поиск: номер элемента, тип, имя…" value="@_filter.Search" @oninput="OnSearch" />
-        <label class="check" title="Скрыть коллизии, которых нет в последнем отчёте своей проверки">
-            <input type="checkbox" @bind="_filter.OnlyInLastReport" @bind:after="Reload" /> только из последних отчётов
-        </label>
-        @if (FilterIsSet)
-        {
-            <button class="btn link" @onclick="ResetFilter">Сбросить отбор</button>
-        }
-    </div>
-
-    <div class="bulk">
-        @if (_pendingState.HasValue)
-        {
-            <span class="confirm">
-                Сделать «@Fmt.State(_pendingState.Value)» у @Fmt.Clashes(_selected.Count)?
-                <button class="btn primary" @onclick="ConfirmBulk">Да</button>
-                <button class="btn" @onclick="() => _pendingState = null">Отмена</button>
-            </span>
-        }
-        else if (_selected.Count > 0)
-        {
-            <span>Отмечено: <b>@_selected.Count</b></span>
-            <input class="comment" placeholder="Комментарий ко всем (необязательно)" @bind="_bulkComment" />
-            <button class="btn state-fixed" @onclick="() => AskBulk(ClashState.Fixed)">Исправлена</button>
-            <button class="btn state-accepted" @onclick="() => AskBulk(ClashState.Accepted)">Допущена</button>
-            <button class="btn state-active" @onclick="() => AskBulk(ClashState.Active)">Активная</button>
-            <button class="btn link" @onclick="() => _selected.Clear()">Снять отметки</button>
-        }
-        else
-        {
-            <span class="muted">
-                Найдено: @_clashes.Count. Щёлкните строку — карточка справа; ↑ ↓ — к соседней коллизии.
-                Отметьте флажками несколько — статус можно сменить всем сразу.
-            </span>
-        }
-        @if (_notice != null) { <span class="notice">@_notice</span> }
-    </div>
-
-    <div class="work @(SelectedVisible ? "with-panel" : "") scopes-@((ShowCriticalities ? 1 : 0) + (ShowBlocks ? 1 : 0))">
-        <div class="list" tabindex="0" @onkeydown="ListKey">
-            @if (_clashes.Count == 0)
-            {
-                <div class="empty">
-                    Ничего не найдено.
-                    @if (FilterIsSet || _filter.State.HasValue) { <button class="btn link" @onclick="ShowAll">Показать все коллизии проекта</button> }
-                </div>
+                <section class="content scroll">
+                    <table class="grid">
+                        <thead><tr><th>Проверка</th><th>Наборы</th><th class="num">Активные</th><th class="num">Исправлены</th><th class="num">Допущены</th><th>Последний отчёт</th></tr></thead>
+                        <tbody>
+                            @foreach (var t in ScopeTests)
+                            {
+                                <tr class="clickable" @onclick="() => ShowTest(t)" title="Показать коллизии этой проверки">
+                                    <td>@if (_filter.Block == null && t.Block != "") { <span class="tag">@t.Block</span> }@t.Name</td>
+                                    <td class="muted">@t.LeftSet ↔ @t.RightSet</td>
+                                    <td class="num"><Bar Value="t.Counts.Active" Max="_maxActive" /></td>
+                                    <td class="num">@t.Counts.Fixed</td>
+                                    <td class="num">@t.Counts.Accepted</td>
+                                    <td>@Fmt.Date(t.LastReport)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </section>
             }
             else
             {
-                <table class="grid clashes">
-                    @* при открытой карточке список уже — без «Проверки» и «Впервые» (они есть в карточке) *@
-                    <colgroup>
-                        <col class="c-sel" /><col class="c-name" />
-                        @if (Wide) { <col class="c-test" /> }
-                        <col class="c-level" /><col class="c-el" /><col class="c-el" /><col class="c-state" />
-                        @if (Wide) { <col class="c-date" /> }
-                    </colgroup>
-                    <thead>
-                        <tr>
-                            <th class="sel" @onclick:stopPropagation="true">
-                                <input type="checkbox" checked="@AllSelected" @onchange="ToggleAll" title="Отметить все найденные (@_clashes.Count)" />
-                            </th>
-                            @SortHeader("name", "Коллизия")
-                            @if (Wide) { @SortHeader("test", "Проверка") }
-                            @SortHeader("level", "Уровень")
-                            @SortHeader("a", "Элемент 1")
-                            @SortHeader("b", "Элемент 2")
-                            @SortHeader("state", "Статус")
-                            @if (Wide) { @SortHeader("first", "Впервые") }
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var x in _clashes.Take(_shown))
-                        {
-                            <tr id="row-@x.Id" class="@(x.Id == _view.SelectedId ? "selected" : "") @(x.InLastReport ? "" : "gone")" @onclick="() => Select(x.Id)">
-                                <td class="sel" @onclick:stopPropagation="true">
-                                    <input type="checkbox" checked="@_selected.Contains(x.Id)" @onchange="e => Toggle(x.Id, e)" />
-                                </td>
-                                <td class="name">@(x.Name ?? "—")@if (ShowBlock) { <span class="tag">@x.Block</span> }</td>
-                                @if (Wide) { <td class="cut" title="@x.TestName">@x.TestName</td> }
-                                <td class="cut" title="@Level(x)">@Level(x)</td>
-                                <td><ElementCell E="x.A" /></td>
-                                <td><ElementCell E="x.B" /></td>
-                                <td><span class="badge @Fmt.StateClass(x.State)">@Fmt.State(x.State)</span></td>
-                                @if (Wide) { <td title="Последний раз — @Fmt.Day(x.LastSeen)">@Fmt.Day(x.FirstSeen)</td> }
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-                @if (_clashes.Count > _shown)
-                {
-                    <div class="more"><button class="btn" @onclick="() => _shown += PageSize">Показать ещё (осталось @(_clashes.Count - _shown))</button></div>
-                }
+                <section class="content scroll">
+                    <div class="toolbar">
+                        <button class="btn" disabled="@Importer.Busy" @onclick="Scan">@(Importer.Busy ? "Проверяем папку…" : "Проверить папку сейчас")</button>
+                        <span class="path">@_project.Folder</span>
+                    </div>
+                    <ImportResults Results="Importer.LastResults" />
+                    <table class="grid">
+                        <thead><tr><th>Дата отчёта</th><th>Блок</th><th>Файл</th><th class="num">Коллизий</th><th>Загружен</th></tr></thead>
+                        <tbody>
+                            @foreach (var r in ScopeReports)
+                            {
+                                <tr>
+                                    <td title="@DateSourceTitle(r.DateSource)">@(r.DateSource == ReportPath.DateFromFolder ? Fmt.Day(r.ReportDate) : Fmt.Date(r.ReportDate))@(r.DateSource == ReportPath.DateFromXml ? "" : "*")</td>
+                                    <td>@ReportPath.BlockTitle(r.Block)</td>
+                                    <td class="path">@r.FilePath</td>
+                                    <td class="num">@r.Results</td>
+                                    <td>@Fmt.Date(r.Imported)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (ScopeReports.Any(r => r.DateSource != ReportPath.DateFromXml))
+                    {
+                        <p class="muted">* — в отчёте нет даты обнаружения коллизий: дата — из названия папки прогона, а если её нет — время файла. Дату можно включить в настройках отчёта Navisworks.</p>
+                    }
+                </section>
             }
         </div>
-
-        @if (SelectedVisible)
-        {
-            <aside class="panel">
-                <div class="panel-nav">
-                    <button class="btn small" disabled="@(SelectedIndex <= 0)" @onclick="() => Move(-1)" title="Предыдущая (↑)">‹</button>
-                    <span class="muted small">@(SelectedIndex >= 0 ? $"{SelectedIndex + 1} из {_clashes.Count}" : "нет в списке")</span>
-                    <button class="btn small" disabled="@(SelectedIndex < 0 || SelectedIndex >= _clashes.Count - 1)" @onclick="() => Move(1)" title="Следующая (↓)">›</button>
-                    <label class="check small" title="После смены статуса сразу открывать следующую коллизию">
-                        <input type="checkbox" @bind="_view.AutoNext" /> после статуса — к следующей
-                    </label>
-                    <span class="spacer"></span>
-                    <a class="small" href="clash/@_view.SelectedId">отдельно</a>
-                    <button class="btn link small" title="Закрыть карточку" @onclick="() => _view.SelectedId = null">✕</button>
-                </div>
-                <ClashPanel ClashId="_view.SelectedId.Value" Compact="true" Changed="OnPanelChanged" />
-            </aside>
-        }
-    </div>
-}
-else if (_view.Tab == 1)
-{
-    <table class="grid">
-        <thead><tr><th>Проверка</th><th>Наборы</th><th class="num">Активные</th><th class="num">Исправлены</th><th class="num">Допущены</th><th>Последний отчёт</th></tr></thead>
-        <tbody>
-            @foreach (var t in ScopeTests)
-            {
-                <tr class="clickable" @onclick="() => ShowTest(t.Id)" title="Показать коллизии этой проверки">
-                    <td>@if (_filter.Block == null && t.Block != "") { <span class="tag">@t.Block</span> }@t.Name</td>
-                    <td class="muted">@t.LeftSet ↔ @t.RightSet</td>
-                    <td class="num"><Bar Value="t.Counts.Active" Max="_maxActive" /></td>
-                    <td class="num">@t.Counts.Fixed</td>
-                    <td class="num">@t.Counts.Accepted</td>
-                    <td>@Fmt.Date(t.LastReport)</td>
-                </tr>
-            }
-        </tbody>
-    </table>
-}
-else if (_view.Tab == 2)
-{
-    <div class="actions">
-        <button class="btn" disabled="@Importer.Busy" @onclick="Scan">@(Importer.Busy ? "Проверяем папку…" : "Проверить папку сейчас")</button>
-        <span class="path">@_project.Folder</span>
-    </div>
-    <ImportResults Results="Importer.LastResults" />
-    <table class="grid">
-        <thead><tr><th>Дата отчёта</th><th>Блок</th><th>Файл</th><th class="num">Коллизий</th><th>Загружен</th></tr></thead>
-        <tbody>
-            @foreach (var r in ScopeReports)
-            {
-                <tr>
-                    <td title="@DateSourceTitle(r.DateSource)">@(r.DateSource == ReportPath.DateFromFolder ? Fmt.Day(r.ReportDate) : Fmt.Date(r.ReportDate))@(r.DateSource == ReportPath.DateFromXml ? "" : "*")</td>
-                    <td>@ReportPath.BlockTitle(r.Block)</td>
-                    <td class="path">@r.FilePath</td>
-                    <td class="num">@r.Results</td>
-                    <td>@Fmt.Date(r.Imported)</td>
-                </tr>
-            }
-        </tbody>
-    </table>
-    @if (ScopeReports.Any(r => r.DateSource != ReportPath.DateFromXml))
-    {
-        <p class="muted">* — в отчёте нет даты обнаружения коллизий: дата — из названия папки прогона, а если её нет — время файла. Дату можно включить в настройках отчёта Navisworks.</p>
     }
-}
-else
-{
-    <div class="form">
-        <label>Название <input @bind="_editName" /></label>
-        <label>Папка с отчётами XML <input class="wide" @bind="_editFolder" /></label>
-        <button class="btn primary" @onclick="SaveProject">Сохранить</button>
-        @if (_editMessage != null) { <p class="@(_editError ? "error" : "muted")">@_editMessage</p> }
-    </div>
-}
+</div>
 
 @code {
     [Parameter] public long Id { get; set; }
 
     private const int PageSize = 300;
 
+    private static readonly (ClashState? State, string Title)[] States =
+    {
+        (ClashState.Active, "Активные"), (ClashState.Fixed, "Исправлены"), (ClashState.Accepted, "Допущены"), (null, "Все"),
+    };
+
     private ProjectView _view;
     private ClashFilter _filter;
     private ProjectRow _project;
     private List<TestRow> _tests = new();
     private List<ReportRow> _reports = new();
-    private List<KeyValuePair<string, string>> _levels = new();
-    /// <summary>Критичности проекта и блоки выбранной критичности — по порядку.</summary>
     private List<string> _criticalities = new();
-    private List<string> _blocks = new();
-    private List<string> _categories = new();
-    /// <summary>Все коллизии при текущем отборе, кроме статуса (для счётчиков), и список на экране.</summary>
-    private List<ClashRow> _all = new();
+    /// <summary>Коллизии выбранной критичности / блока / проверки — из базы; дальше — отборы на странице.</summary>
+    private List<ClashRow> _base = new();
+    /// <summary>После поиска и полей, без статуса (числа на вкладках статуса).</summary>
+    private List<ClashRow> _faceted = new();
     private List<ClashRow> _clashes = new();
+    private readonly Dictionary<string, List<FacetValue>> _facetValues = ClashFacets.All.ToDictionary(f => f, _ => new List<FacetValue>());
     private readonly HashSet<long> _selected = new();
     private int _shown = PageSize;
     private string _bulkComment;
@@ -270,27 +292,29 @@ else
     private bool _editError;
     private CancellationTokenSource _searchDelay;
 
-    private string TestFilter
-    {
-        get => _filter.TestId?.ToString() ?? "";
-        set => _filter.TestId = long.TryParse(value, out var v) ? v : null;
-    }
-
-    private bool FilterIsSet => _filter.TestId.HasValue || !string.IsNullOrEmpty(_filter.LevelKey) || !string.IsNullOrEmpty(_filter.Category)
-                                || !string.IsNullOrWhiteSpace(_filter.Search) || _filter.OnlyInLastReport;
-
+    private bool FilterIsSet => !string.IsNullOrWhiteSpace(_filter.Search) || _filter.Facets.Values.Any(v => v.Count > 0);
     private bool AllSelected => _clashes.Count > 0 && _clashes.All(c => _selected.Contains(c.Id));
-    private IEnumerable<TestRow> ScopeTests => _tests.Where(InScope);
-    private IEnumerable<ReportRow> ScopeReports => _reports.Where(r => (_filter.Criticality == null || r.Criticality == _filter.Criticality)
-                                                                      && (_filter.Block == null || r.Block == _filter.Block));
-    private bool ShowCriticalities => _criticalities.Count > 1 || (_criticalities.Count == 1 && _criticalities[0] != "");
-    private bool ShowBlocks => _blocks.Count > 1 || (_blocks.Count == 1 && _blocks[0] != "");
-    /// <summary>Блок у строки — когда показаны все блоки, а их несколько.</summary>
-    private bool ShowBlock => _filter.Block == null && _blocks.Count > 1;
     private int SelectedIndex => _view.SelectedId.HasValue ? _clashes.FindIndex(c => c.Id == _view.SelectedId.Value) : -1;
     private bool SelectedVisible => _view.SelectedId.HasValue;
     /// <summary>Список во всю ширину (карточка закрыта) — со всеми столбцами.</summary>
     private bool Wide => !SelectedVisible;
+    private IEnumerable<TestRow> ScopeTests => _tests.Where(InScope);
+    private IEnumerable<ReportRow> ScopeReports => _reports.Where(r => (_filter.Criticality == null || r.Criticality == _filter.Criticality)
+                                                                      && (_filter.Block == null || r.Block == _filter.Block));
+    /// <summary>Блок у строки — когда выбрана вся критичность, а блоков несколько.</summary>
+    private bool ShowBlock => _filter.Block == null && _filter.TestId == null && BlocksOf(_filter.Criticality).Count > 1;
+
+    private string ScopeTitle
+    {
+        get
+        {
+            var parts = new List<string> { CriticalityTitle(_filter.Criticality ?? "") };
+            if (!string.IsNullOrEmpty(_filter.Block)) parts.Add(_filter.Block);
+            var test = _tests.FirstOrDefault(t => t.Id == _filter.TestId);
+            if (test != null) parts.Add(test.Name);
+            return string.Join(" › ", parts);
+        }
+    }
 
     protected override void OnParametersSet()
     {
@@ -299,95 +323,133 @@ else
         LoadAll();
     }
 
+    // ───── загрузка ─────
+
     private void LoadAll()
     {
         _project = Store.Project(Id);
         if (_project == null) return;
+        _editName ??= _project.Name;
+        _editFolder ??= _project.Folder;
         _tests = Store.Tests(Id);
+        _reports = Store.Reports(Id);
         _criticalities = _tests.Select(t => t.Criticality).Distinct().OrderBy(ReportPath.CriticalityOrder).ToList();
-        if (!_view.ScopeChosen || (_filter.Criticality != null && !_criticalities.Contains(_filter.Criticality)))
+        if (!_view.ScopeChosen || _filter.Criticality == null || !_criticalities.Contains(_filter.Criticality))
         {
             // при открытии — первая критичность (высокая), все блоки
             _filter.Criticality = _criticalities.FirstOrDefault();
             _filter.Block = null;
+            _filter.TestId = null;
             _view.ScopeChosen = _criticalities.Count > 0;
         }
-        _blocks = _tests.Where(t => t.Criticality == _filter.Criticality).Select(t => t.Block).Distinct()
-            .OrderBy(ReportPath.BlockOrder).ThenBy(b => b, StringComparer.CurrentCultureIgnoreCase).ToList();
-        if (_filter.Block != null && !_blocks.Contains(_filter.Block)) _filter.Block = null;
+        if (_filter.Block != null && !BlocksOf(_filter.Criticality).Contains(_filter.Block)) _filter.Block = null;
         if (_filter.TestId.HasValue && !_tests.Any(t => t.Id == _filter.TestId && InScope(t))) _filter.TestId = null;
         _maxActive = ScopeTests.Select(t => t.Counts.Active).DefaultIfEmpty(0).Max();
-        _reports = Store.Reports(Id);
-        _levels = Store.Levels(Id);
-        _categories = Store.Categories(Id);
-        _editName ??= _project.Name;
-        _editFolder ??= _project.Folder;
-        Reload();
+        _base = _filter.Criticality == null ? new List<ClashRow>() : Store.Clashes(Id, _filter);
+        Recompute();
     }
 
-    private void Reload()
+    /// <summary>Отборы на странице: поиск → поля → статус; числа у значений полей и у статусов.</summary>
+    private void Recompute()
     {
+        var searched = _base.Where(c => ClashFacets.MatchesSearch(c, _filter.Search)).ToList();
+        _faceted = searched.Where(c => ClashFacets.Matches(c, _filter.Facets)).ToList();
         var state = _filter.State;
-        _filter.State = null;
-        _all = Store.Clashes(Id, _filter);
-        _filter.State = state;
-        _clashes = Sort(state.HasValue ? _all.Where(c => c.State == state.Value).ToList() : _all);
+        _clashes = Sort(state.HasValue ? _faceted.Where(c => c.State == state.Value).ToList() : _faceted);
+        foreach (var f in ClashFacets.All)
+        {
+            var values = ClashFacets.Count(searched.Where(c => (!state.HasValue || c.State == state.Value) && ClashFacets.Matches(c, _filter.Facets, except: f)), f);
+            // выбранное, которого сейчас нет в списке (другие отборы), — тоже видно, с нулём: его можно снять
+            var missing = FacetSet(f).Where(k => values.All(v => v.Key != k)).ToList();
+            if (missing.Count > 0)
+            {
+                var all = ClashFacets.Count(_base, f);
+                foreach (var key in missing)
+                    values.Add(new FacetValue { Key = key, Title = all.FirstOrDefault(v => v.Key == key)?.Title ?? key, Count = 0 });
+            }
+            _facetValues[f] = values;
+        }
         _selected.IntersectWith(_clashes.Select(c => c.Id));
         _shown = Math.Max(PageSize, Math.Min(_shown, _clashes.Count));
     }
 
-    private IEnumerable<(ClashState? State, string Title, int Count)> Chips()
+    private HashSet<string> FacetSet(string facet)
     {
-        yield return (ClashState.Active, "Активные", _all.Count(c => c.State == ClashState.Active));
-        yield return (ClashState.Fixed, "Исправлены", _all.Count(c => c.State == ClashState.Fixed));
-        yield return (ClashState.Accepted, "Допущены", _all.Count(c => c.State == ClashState.Accepted));
-        yield return (null, "Все", _all.Count);
+        if (!_filter.Facets.TryGetValue(facet, out var set)) _filter.Facets[facet] = set = new HashSet<string>();
+        return set;
     }
 
-    private bool InScope(TestRow t) => (_filter.Criticality == null || t.Criticality == _filter.Criticality) && (_filter.Block == null || t.Block == _filter.Block);
+    private int StateCount(ClashState? state) => state.HasValue ? _faceted.Count(c => c.State == state.Value) : _faceted.Count;
 
-    /// <summary>Активные в критичности (null — во всех) и блоке (null — во всех).</summary>
-    private int ActiveIn(string criticality, string block) =>
-        _tests.Where(t => (criticality == null || t.Criticality == criticality) && (block == null || t.Block == block)).Sum(t => t.Counts.Active);
+    // ───── дерево: критичность, блок, проверка ─────
 
-    private void SetCriticality(string criticality)
+    private List<string> BlocksOf(string criticality) => _tests.Where(t => t.Criticality == criticality).Select(t => t.Block).Distinct()
+        .OrderBy(ReportPath.BlockOrder).ThenBy(b => b, StringComparer.CurrentCultureIgnoreCase).ToList();
+
+    private IEnumerable<TestRow> TestsOf(string criticality, string block) =>
+        _tests.Where(t => t.Criticality == criticality && t.Block == block).OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase);
+
+    private bool InScope(TestRow t) => (_filter.Criticality == null || t.Criticality == _filter.Criticality)
+                                       && (_filter.Block == null || t.Block == _filter.Block)
+                                       && (_filter.TestId == null || t.Id == _filter.TestId);
+
+    private bool IsScope(string criticality, string block, long? testId) =>
+        _filter.Criticality == criticality && _filter.Block == block && _filter.TestId == testId;
+
+    /// <summary>Активные в критичности, блоке (null — во всех), проверке (null — во всех).</summary>
+    private int ActiveIn(string criticality, string block, long? testId) =>
+        _tests.Where(t => t.Criticality == criticality && (block == null || t.Block == block) && (testId == null || t.Id == testId)).Sum(t => t.Counts.Active);
+
+    /// <summary>Другая критичность, блок или проверка — другая работа: отметки и выбранная коллизия сбрасываются, отборы — нет.</summary>
+    private void SetScope(string criticality, string block, long? testId)
     {
         _filter.Criticality = criticality;
-        _filter.Block = null;
-        ScopeChanged();
-    }
-
-    private void SetBlock(string block)
-    {
         _filter.Block = block;
-        ScopeChanged();
-    }
-
-    /// <summary>Другая критичность или блок — другая работа: отметки и выбранная коллизия сбрасываются.</summary>
-    private void ScopeChanged()
-    {
+        _filter.TestId = testId;
         _view.ScopeChosen = true;
         _view.SelectedId = null;
         _selected.Clear();
         _notice = null;
-        _filter.TestId = null;
+        _shown = PageSize;
         LoadAll();
     }
 
+    private void ShowTest(TestRow t)
+    {
+        _view.Tab = 0;
+        var flat = BlocksOf(t.Criticality).Count == 1 && t.Block == "";
+        SetScope(t.Criticality, flat ? null : t.Block, t.Id);
+    }
+
+    private static string CriticalityTitle(string c) => string.IsNullOrEmpty(c) ? "Все проверки" : ReportPath.CriticalityTitle(c);
+
     private static string CriticalityClass(string c) => c == "Высокая" ? "crit-high" : c == "Средняя" ? "crit-mid" : "";
 
-    private static string DateSourceTitle(string source) => source switch
-    {
-        ReportPath.DateFromXml => "Дата — из отчёта (дата обнаружения коллизий)",
-        ReportPath.DateFromFolder => "Дата — из названия папки прогона",
-        _ => "Дата — время файла отчёта",
-    };
+    // ───── статус, поиск, сброс ─────
 
     private void SetStateFilter(ClashState? state)
     {
         _filter.State = state;
         _notice = null;
-        Reload();
+        Recompute();
+    }
+
+    private async Task OnSearch(ChangeEventArgs e)
+    {
+        _filter.Search = e.Value?.ToString();
+        // не пересчитывать на каждую букву: ждём паузу в наборе
+        _searchDelay?.Cancel();
+        var delay = _searchDelay = new CancellationTokenSource();
+        try { await Task.Delay(250, delay.Token); }
+        catch (TaskCanceledException) { return; }
+        Recompute();
+    }
+
+    private void ResetFilter()
+    {
+        _filter.Search = null;
+        foreach (var set in _filter.Facets.Values) set.Clear();
+        Recompute();
     }
 
     // ───── сортировка ─────
@@ -407,7 +469,7 @@ else
         _clashes = Sort(_clashes);
     }
 
-    /// <summary>Без выбранной сортировки — как пришло из базы: по проверке и номеру коллизии.</summary>
+    /// <summary>Без выбранной сортировки — как пришло из базы: по блоку, проверке и номеру коллизии.</summary>
     private List<ClashRow> Sort(List<ClashRow> list)
     {
         Func<ClashRow, IComparable> key = _view.SortKey switch
@@ -512,47 +574,12 @@ else
 
     private void ApplyBulk(ClashState state)
     {
+        var total = _selected.Count;
         var changed = Store.SetState(_selected, state, _bulkComment, null);
-        _notice = $"«{Fmt.State(state)}»: изменено {changed} из {_selected.Count}.";
+        _notice = $"«{Fmt.State(state)}»: изменено {changed} из {total}.";
         _selected.Clear();
         _bulkComment = null;
         LoadAll();
-    }
-
-    // ───── отбор ─────
-
-    private async Task OnSearch(ChangeEventArgs e)
-    {
-        _filter.Search = e.Value?.ToString();
-        // не перечитывать на каждую букву: ждём паузу в наборе
-        _searchDelay?.Cancel();
-        var delay = _searchDelay = new CancellationTokenSource();
-        try { await Task.Delay(300, delay.Token); }
-        catch (TaskCanceledException) { return; }
-        Reload();
-    }
-
-    private void ResetFilter()
-    {
-        _filter.TestId = null;
-        _filter.LevelKey = null;
-        _filter.Category = null;
-        _filter.OnlyInLastReport = false;
-        _filter.Search = null;
-        Reload();
-    }
-
-    private void ShowAll()
-    {
-        ResetFilter();
-        SetStateFilter(null);
-    }
-
-    private void ShowTest(long testId)
-    {
-        _filter.TestId = testId;
-        _view.Tab = 0;
-        Reload();
     }
 
     // ───── прочее ─────
@@ -576,6 +603,13 @@ else
     }
 
     private string Tab(int i) => _view.Tab == i ? "tab active" : "tab";
+
+    private static string DateSourceTitle(string source) => source switch
+    {
+        ReportPath.DateFromXml => "Дата — из отчёта (дата обнаружения коллизий)",
+        ReportPath.DateFromFolder => "Дата — из названия папки прогона",
+        _ => "Дата — время файла отчёта",
+    };
 
     /// <summary>Уровень коллизии: у обоих элементов один — он; разные — «А / Б».</summary>
     private static string Level(ClashRow x)

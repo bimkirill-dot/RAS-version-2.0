@@ -167,6 +167,7 @@ public sealed class Database
         ALTER TABLE Reports ADD COLUMN DateSource TEXT NOT NULL DEFAULT 'file';
         UPDATE Reports SET DateSource = 'xml' WHERE DateFromReport = 1;
 
+        -- настройки сайта; «папку со всеми проектами» отменили в тот же день (DECISIONS.md) — таблица пока пустая
         CREATE TABLE Settings(Key TEXT PRIMARY KEY, Value TEXT);
         """,
     };

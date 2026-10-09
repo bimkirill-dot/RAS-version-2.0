@@ -104,7 +104,10 @@ public sealed class ClashStore
         LEFT JOIN Elements b ON b.OccurrenceId = o.Id AND b.Idx = 1
         """;
 
-    /// <summary>Коллизии проекта по отбору: по проверке, затем по номеру в имени («Конфликт2» раньше «Конфликт10»).</summary>
+    /// <summary>
+    /// Коллизии проекта в критичности, блоке, проверке (статус, поля и поиск — на странице, Logic.ClashFacets):
+    /// по блоку, проверке, затем по номеру в имени («Конфликт2» раньше «Конфликт10»).
+    /// </summary>
     public List<ClashRow> Clashes(long projectId, ClashFilter f)
     {
         var sql = ClashSelect + " WHERE c.ProjectId = $p";
@@ -112,52 +115,14 @@ public sealed class ClashStore
         if (f.Criticality != null) { sql += " AND t.Criticality = $cr"; args.Add(("$cr", f.Criticality)); }
         if (f.Block != null) { sql += " AND t.Block = $bl"; args.Add(("$bl", f.Block)); }
         if (f.TestId.HasValue) { sql += " AND c.TestId = $t"; args.Add(("$t", f.TestId.Value)); }
-        if (f.State.HasValue) { sql += " AND c.State = $s"; args.Add(("$s", (int)f.State.Value)); }
-        if (f.OnlyInLastReport) sql += " AND c.InLastReport = 1";
-        if (!string.IsNullOrEmpty(f.LevelKey)) { sql += " AND (a.LevelKey = $l OR b.LevelKey = $l)"; args.Add(("$l", f.LevelKey)); }
-        if (!string.IsNullOrEmpty(f.Category)) { sql += " AND (a.Category = $cat OR b.Category = $cat)"; args.Add(("$cat", f.Category)); }
 
         using var c = _db.Open();
         var list = new List<ClashRow>();
         using (var r = Query(c, sql, args.ToArray()))
             while (r.Read()) list.Add(ReadRow(r));
 
-        var search = f.Search?.Trim();
-        if (!string.IsNullOrEmpty(search))
-            list = list.Where(x => Matches(x, search)).ToList();
         return list.OrderBy(x => Logic.ReportPath.BlockOrder(x.Block)).ThenBy(x => x.TestName, StringComparer.CurrentCultureIgnoreCase)
             .ThenBy(x => NameNumber(x.Name)).ThenBy(x => x.Name).ToList();
-    }
-
-    /// <summary>Уровни проекта для отбора: ключ («5 этаж») → как показывать (самое частое написание).</summary>
-    public List<KeyValuePair<string, string>> Levels(long projectId)
-    {
-        using var c = _db.Open();
-        var counts = new Dictionary<string, Dictionary<string, int>>();
-        using (var r = Query(c, """
-            SELECT e.LevelKey, e.Level, COUNT(*) FROM Clashes c JOIN Elements e ON e.OccurrenceId = c.LastOccurrenceId
-            WHERE c.ProjectId = $p AND e.LevelKey <> '' GROUP BY e.LevelKey, e.Level
-            """, ("$p", projectId)))
-            while (r.Read())
-            {
-                if (!counts.TryGetValue(r.GetString(0), out var v)) counts[r.GetString(0)] = v = new Dictionary<string, int>();
-                v[r.GetString(1)] = r.GetInt32(2);
-            }
-        return counts
-            .Select(kv => new KeyValuePair<string, string>(kv.Key, kv.Value.OrderByDescending(x => x.Value).First().Key))
-            .OrderBy(kv => LevelOrder(kv.Key)).ThenBy(kv => kv.Value, StringComparer.CurrentCultureIgnoreCase).ToList();
-    }
-
-    public List<string> Categories(long projectId)
-    {
-        using var c = _db.Open();
-        var list = new List<string>();
-        using var r = Query(c, """
-            SELECT DISTINCT e.Category FROM Clashes c JOIN Elements e ON e.OccurrenceId = c.LastOccurrenceId
-            WHERE c.ProjectId = $p AND e.Category IS NOT NULL
-            """, ("$p", projectId));
-        while (r.Read()) list.Add(r.GetString(0));
-        return list.OrderBy(x => x, StringComparer.CurrentCultureIgnoreCase).ToList();
     }
 
     // ───────────── карточка ─────────────
@@ -222,22 +187,6 @@ public sealed class ClashStore
         using var c = _db.Open();
         using var cmd = Command(c, "SELECT Image FROM Occurrences WHERE Id = $id", ("$id", occurrenceId));
         return cmd.ExecuteScalar() as string;
-    }
-
-    // ───────────── настройки сайта ─────────────
-
-    public string Setting(string key)
-    {
-        using var c = _db.Open();
-        using var cmd = Command(c, "SELECT Value FROM Settings WHERE Key = $k", ("$k", key));
-        return cmd.ExecuteScalar() as string;
-    }
-
-    public void SetSetting(string key, string value)
-    {
-        using var c = _db.Open();
-        using var cmd = Command(c, "INSERT OR REPLACE INTO Settings(Key, Value) VALUES($k, $v)", ("$k", key), ("$v", value));
-        cmd.ExecuteNonQuery();
     }
 
     // ───────────── действия ─────────────
@@ -315,26 +264,12 @@ public sealed class ClashStore
         Type = Str(r, i + 5), Name = Str(r, i + 6), ElementId = r.IsDBNull(i + 7) ? null : r.GetInt64(i + 7),
     };
 
-    private static bool Matches(ClashRow x, string s)
-    {
-        bool Has(string v) => v != null && v.Contains(s, StringComparison.CurrentCultureIgnoreCase);
-        bool El(ElementView e) => e != null && (Has(e.ElementId?.ToString()) || Has(e.Name) || Has(e.Type) || Has(e.Family) || Has(e.ModelFile) || Has(e.Category));
-        return Has(x.Name) || El(x.A) || El(x.B);
-    }
-
     private static readonly Regex Digits = new Regex(@"\d+", RegexOptions.CultureInvariant);
 
     private static long NameNumber(string name)
     {
         var m = name == null ? null : Digits.Match(name);
         return m != null && m.Success && long.TryParse(m.Value, out var n) ? n : long.MaxValue;
-    }
-
-    /// <summary>Уровни по номеру: «-1 подвал», «1 этаж», …, «100 кровля»; без номера — в конце.</summary>
-    private static double LevelOrder(string key)
-    {
-        var m = Regex.Match(key ?? "", @"^-?\d+");
-        return m.Success && double.TryParse(m.Value, out var v) ? v : double.MaxValue;
     }
 
     private static string Str(SqliteDataReader r, int i) => r.IsDBNull(i) ? null : r.GetString(i);

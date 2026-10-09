@@ -4,7 +4,7 @@
 {
     <details class="import" open="@Results.Any(r => r.Error)">
         <summary>
-            Последняя проверка: загружено отчётов — @Results.Count(r => !r.Error && !r.NewProject)@(Results.Any(r => r.NewProject) ? $", новых проектов — {Results.Count(r => r.NewProject)}" : "")@(Results.Any(r => r.Error) ? $", не загружено — {Results.Count(r => r.Error)}" : "")
+            Последняя проверка: загружено отчётов — @Results.Count(r => !r.Error)@(Results.Any(r => r.Error) ? $", не загружено — {Results.Count(r => r.Error)}" : "")
         </summary>
         <ul>
             @foreach (var r in Results)
@@ -14,10 +14,6 @@
                     @if (r.Error)
                     {
                         @r.Message
-                    }
-                    else if (r.NewProject)
-                    {
-                        <span>новый проект — папка с отчётами в папке со всеми проектами</span>
                     }
                     else
                     {
