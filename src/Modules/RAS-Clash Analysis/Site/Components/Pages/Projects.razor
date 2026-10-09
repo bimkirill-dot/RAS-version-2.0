@@ -3,6 +3,7 @@
 @inject ReportImporter Importer
 @inject BackupService Backup
 @inject SiteOptions Options
+@inject NavigationManager Nav
 
 <PageTitle>Проекты · Коллизии</PageTitle>
 
@@ -21,8 +22,8 @@ else
         <tbody>
             @foreach (var p in _projects)
             {
-                <tr>
-                    <td><a href="project/@p.Id">@p.Name</a></td>
+                <tr class="clickable" @onclick="@(() => Nav.NavigateTo("project/" + p.Id))">
+                    <td><a href="project/@p.Id" @onclick:stopPropagation="true">@p.Name</a></td>
                     <td class="num"><span class="badge state-active">@p.Counts.Active</span></td>
                     <td class="num">@p.Counts.Fixed</td>
                     <td class="num">@p.Counts.Accepted</td>
@@ -35,19 +36,34 @@ else
 }
 
 <div class="actions">
+    @if (_projects.Count > 0 && !_showNew)
+    {
+        <button class="btn primary" @onclick="() => _showNew = true">+ Новый проект</button>
+    }
     <button class="btn" disabled="@Importer.Busy" @onclick="ScanAll">@(Importer.Busy ? "Проверяем папки…" : "Проверить папки сейчас")</button>
-    <span class="muted">Папки проверяются и сами — @(Options.ScanMinutes > 0 ? $"каждые {Options.ScanMinutes} мин" : "выключено")@(Importer.LastScan.HasValue ? $"; последняя проверка — {Fmt.Date(Importer.LastScan)}" : "").</span>
+    <span class="muted">
+        Новые отчёты сайт ищет и сам — @(Options.ScanMinutes > 0 ? $"каждые {Options.ScanMinutes} мин" : "выключено")@(Importer.LastScan.HasValue ? $"; последняя проверка — {Fmt.Date(Importer.LastScan)}" : "").
+    </span>
 </div>
 
 <ImportResults Results="Importer.LastResults" />
 
-<h2>Новый проект</h2>
-<div class="form">
-    <label>Название <input @bind="_name" placeholder="Апорт · Высокая · S08" /></label>
-    <label>Папка с отчётами XML <input class="wide" @bind="_folder" placeholder="\\сервер\Проекты\…\XML" /></label>
-    <button class="btn primary" @onclick="Create">Создать</button>
-    @if (_error != null) { <p class="error">@_error</p> }
-</div>
+@if (_projects.Count == 0 || _showNew)
+{
+    <h2>Новый проект</h2>
+    <div class="form">
+        <label>Название <input @bind="_name" placeholder="Например: Апорт · Высокая · S08" /></label>
+        <label>
+            Папка с отчётами XML — скопируйте путь из проводника
+            <input class="wide" @bind="_folder" placeholder="\\сервер\Проекты\…\XML" />
+        </label>
+        <div class="actions">
+            <button class="btn primary" @onclick="Create">Создать и загрузить отчёты</button>
+            @if (_projects.Count > 0) { <button class="btn link" @onclick="() => { _showNew = false; _error = null; }">Отмена</button> }
+        </div>
+        @if (_error != null) { <p class="error">@_error</p> }
+    </div>
+}
 
 <footer class="status">
     База: <span class="path">@Options.DatabaseFile</span>.
@@ -70,6 +86,7 @@ else
     private string _name;
     private string _folder;
     private string _error;
+    private bool _showNew;
 
     protected override void OnInitialized() => _projects = Store.Projects();
 
@@ -90,7 +107,8 @@ else
         { _error = "Проект с таким названием уже есть."; return; }
         var id = Store.AddProject(_name, folder);
         _name = _folder = null;
+        _showNew = false;
         await Importer.ScanAsync(id);
-        _projects = Store.Projects();
+        Nav.NavigateTo("project/" + id);
     }
 }

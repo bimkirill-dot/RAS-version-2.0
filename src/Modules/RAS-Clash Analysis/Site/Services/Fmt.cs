@@ -50,6 +50,9 @@ public static class Fmt
         return parts.Count == 0 ? e.Name ?? "—" : string.Join(" · ", parts);
     }
 
+    /// <summary>«у 1 коллизии», «у 21 коллизии», «у 5 коллизий» — после «у».</summary>
+    public static string Clashes(int n) => n + (n % 10 == 1 && n % 100 != 11 ? " коллизии" : " коллизий");
+
     /// <summary>Модель — имя файла без расширения.</summary>
     public static string Model(string modelFile) => string.IsNullOrEmpty(modelFile) ? "—" : ClashRules.ModelName(modelFile);
 }

@@ -1,6 +1,9 @@
 @page "/project/{Id:long}"
+@implements IDisposable
 @inject ClashStore Store
 @inject ReportImporter Importer
+@inject ProjectViewState ViewState
+@inject IJSRuntime JS
 
 <PageTitle>@(_project?.Name ?? "Проект") · Коллизии</PageTitle>
 
@@ -11,97 +14,165 @@
     return;
 }
 
-<nav class="crumbs"><a href="/">Проекты</a> ›</nav>
-<h1>@_project.Name</h1>
-
-<div class="tiles">
-    <div class="tile state-active"><div class="value">@_project.Counts.Active</div><div class="label">Активные</div></div>
-    <div class="tile state-fixed"><div class="value">@_project.Counts.Fixed</div><div class="label">Исправлены</div></div>
-    <div class="tile state-accepted"><div class="value">@_project.Counts.Accepted</div><div class="label">Допущены</div></div>
-    <div class="tile"><div class="value">@_project.Counts.Total</div><div class="label">Всего</div></div>
+<div class="project-head">
+    <nav class="crumbs"><a href="/">Проекты</a> ›</nav>
+    <h1>@_project.Name</h1>
+    <div class="tabs">
+        <button class="@Tab(0)" @onclick="() => _view.Tab = 0">Коллизии</button>
+        <button class="@Tab(1)" @onclick="() => _view.Tab = 1">Проверки (@_tests.Count)</button>
+        <button class="@Tab(2)" @onclick="() => _view.Tab = 2">Отчёты (@_reports.Count)</button>
+        <button class="@Tab(3)" @onclick="() => _view.Tab = 3">Проект</button>
+    </div>
 </div>
 
-<div class="tabs">
-    <button class="@Tab(0)" @onclick="() => _tab = 0">Коллизии</button>
-    <button class="@Tab(1)" @onclick="() => _tab = 1">Проверки</button>
-    <button class="@Tab(2)" @onclick="() => _tab = 2">Отчёты (@_reports.Count)</button>
-    <button class="@Tab(3)" @onclick="() => _tab = 3">Проект</button>
-</div>
-
-@if (_tab == 0)
+@if (_view.Tab == 0)
 {
+    @* статус — нажимаемые счётчики: сколько при текущем отборе *@
     <div class="filters">
-        <select @bind="TestFilter" @bind:after="Reload">
+        <div class="chips">
+            @foreach (var (state, title, count) in Chips())
+            {
+                <button class="chip @(state.HasValue ? Fmt.StateClass(state.Value) : "") @(_filter.State == state ? "on" : "")" @onclick="() => SetStateFilter(state)">
+                    @title <b>@count</b>
+                </button>
+            }
+        </div>
+        <select @bind="TestFilter" @bind:after="Reload" title="Проверка">
             <option value="">Все проверки</option>
             @foreach (var t in _tests) { <option value="@t.Id">@t.Name</option> }
         </select>
-        <select @bind="StateFilter" @bind:after="Reload">
-            <option value="">Все статусы</option>
-            <option value="0">Активные</option>
-            <option value="1">Исправлены</option>
-            <option value="2">Допущены</option>
-        </select>
-        <select @bind="_filter.LevelKey" @bind:after="Reload">
+        <select @bind="_filter.LevelKey" @bind:after="Reload" title="Уровень">
             <option value="">Все уровни</option>
             @foreach (var l in _levels) { <option value="@l.Key">@l.Value</option> }
         </select>
-        <select @bind="_filter.Category" @bind:after="Reload">
+        <select @bind="_filter.Category" @bind:after="Reload" title="Категория">
             <option value="">Все категории</option>
             @foreach (var c in _categories) { <option value="@c">@c</option> }
         </select>
-        <label class="check"><input type="checkbox" @bind="_filter.OnlyInLastReport" @bind:after="Reload" /> только в последнем отчёте</label>
-        <input class="search" placeholder="Номер элемента, тип, имя…" @bind="_filter.Search" @bind:event="oninput" @bind:after="Reload" />
-        <button class="btn link" @onclick="ResetFilter">Сбросить</button>
-    </div>
-
-    <div class="bulk">
-        <span>Найдено: @_clashes.Count@(_selected.Count > 0 ? $", отмечено: {_selected.Count}" : "")</span>
-        @if (_selected.Count > 0)
+        <input class="search" type="search" placeholder="Поиск: номер элемента, тип, имя…" value="@_filter.Search" @oninput="OnSearch" />
+        <label class="check" title="Скрыть коллизии, которых нет в последнем отчёте своей проверки">
+            <input type="checkbox" @bind="_filter.OnlyInLastReport" @bind:after="Reload" /> только из последних отчётов
+        </label>
+        @if (FilterIsSet)
         {
-            <input class="comment" placeholder="Комментарий (необязательно)" @bind="_bulkComment" />
-            <button class="btn state-fixed" @onclick="() => SetState(ClashState.Fixed)">Исправлена</button>
-            <button class="btn state-accepted" @onclick="() => SetState(ClashState.Accepted)">Допущена</button>
-            <button class="btn state-active" @onclick="() => SetState(ClashState.Active)">Активная</button>
-            <button class="btn link" @onclick="() => _selected.Clear()">Снять отметки</button>
+            <button class="btn link" @onclick="ResetFilter">Сбросить отбор</button>
         }
     </div>
 
-    <div class="table-wrap">
-        <table class="grid clashes">
-            <thead>
-                <tr>
-                    <th class="sel"><input type="checkbox" checked="@AllSelected" @onchange="ToggleAll" title="Отметить все найденные" /></th>
-                    <th>Коллизия</th><th>Проверка</th><th>Уровень</th><th>Элемент 1</th><th>Элемент 2</th><th>Статус</th><th>Впервые</th><th>Последний раз</th>
-                </tr>
-            </thead>
-            <tbody>
-                <Virtualize Items="_clashes" Context="x" SpacerElement="tr" ItemSize="38">
-                    <tr class="@(x.InLastReport ? "" : "gone")">
-                        <td class="sel"><input type="checkbox" checked="@_selected.Contains(x.Id)" @onchange="e => Toggle(x.Id, e)" /></td>
-                        <td><a href="clash/@x.Id">@(x.Name ?? "—")</a></td>
-                        <td class="test">@x.TestName</td>
-                        <td>@Level(x)</td>
-                        <td><ElementCell E="x.A" /></td>
-                        <td><ElementCell E="x.B" /></td>
-                        <td><span class="badge @Fmt.StateClass(x.State)">@Fmt.State(x.State)</span></td>
-                        <td>@Fmt.Day(x.FirstSeen)</td>
-                        <td>@Fmt.Day(x.LastSeen)</td>
-                    </tr>
-                </Virtualize>
-            </tbody>
-        </table>
+    <div class="bulk">
+        @if (_pendingState.HasValue)
+        {
+            <span class="confirm">
+                Сделать «@Fmt.State(_pendingState.Value)» у @Fmt.Clashes(_selected.Count)?
+                <button class="btn primary" @onclick="ConfirmBulk">Да</button>
+                <button class="btn" @onclick="() => _pendingState = null">Отмена</button>
+            </span>
+        }
+        else if (_selected.Count > 0)
+        {
+            <span>Отмечено: <b>@_selected.Count</b></span>
+            <input class="comment" placeholder="Комментарий ко всем (необязательно)" @bind="_bulkComment" />
+            <button class="btn state-fixed" @onclick="() => AskBulk(ClashState.Fixed)">Исправлена</button>
+            <button class="btn state-accepted" @onclick="() => AskBulk(ClashState.Accepted)">Допущена</button>
+            <button class="btn state-active" @onclick="() => AskBulk(ClashState.Active)">Активная</button>
+            <button class="btn link" @onclick="() => _selected.Clear()">Снять отметки</button>
+        }
+        else
+        {
+            <span class="muted">
+                Найдено: @_clashes.Count. Щёлкните строку — карточка справа; ↑ ↓ — к соседней коллизии.
+                Отметьте флажками несколько — статус можно сменить всем сразу.
+            </span>
+        }
+        @if (_notice != null) { <span class="notice">@_notice</span> }
     </div>
-    <p class="muted">Серым — коллизии, которых нет в последнем отчёте своей проверки.</p>
+
+    <div class="work @(SelectedVisible ? "with-panel" : "")">
+        <div class="list" tabindex="0" @onkeydown="ListKey">
+            @if (_clashes.Count == 0)
+            {
+                <div class="empty">
+                    Ничего не найдено.
+                    @if (FilterIsSet || _filter.State.HasValue) { <button class="btn link" @onclick="ShowAll">Показать все коллизии проекта</button> }
+                </div>
+            }
+            else
+            {
+                <table class="grid clashes">
+                    @* при открытой карточке список уже — без «Проверки» и «Впервые» (они есть в карточке) *@
+                    <colgroup>
+                        <col class="c-sel" /><col class="c-name" />
+                        @if (Wide) { <col class="c-test" /> }
+                        <col class="c-level" /><col class="c-el" /><col class="c-el" /><col class="c-state" />
+                        @if (Wide) { <col class="c-date" /> }
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th class="sel" @onclick:stopPropagation="true">
+                                <input type="checkbox" checked="@AllSelected" @onchange="ToggleAll" title="Отметить все найденные (@_clashes.Count)" />
+                            </th>
+                            @SortHeader("name", "Коллизия")
+                            @if (Wide) { @SortHeader("test", "Проверка") }
+                            @SortHeader("level", "Уровень")
+                            @SortHeader("a", "Элемент 1")
+                            @SortHeader("b", "Элемент 2")
+                            @SortHeader("state", "Статус")
+                            @if (Wide) { @SortHeader("first", "Впервые") }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var x in _clashes.Take(_shown))
+                        {
+                            <tr id="row-@x.Id" class="@(x.Id == _view.SelectedId ? "selected" : "") @(x.InLastReport ? "" : "gone")" @onclick="() => Select(x.Id)">
+                                <td class="sel" @onclick:stopPropagation="true">
+                                    <input type="checkbox" checked="@_selected.Contains(x.Id)" @onchange="e => Toggle(x.Id, e)" />
+                                </td>
+                                <td class="name">@(x.Name ?? "—")</td>
+                                @if (Wide) { <td class="cut" title="@x.TestName">@x.TestName</td> }
+                                <td class="cut" title="@Level(x)">@Level(x)</td>
+                                <td><ElementCell E="x.A" /></td>
+                                <td><ElementCell E="x.B" /></td>
+                                <td><span class="badge @Fmt.StateClass(x.State)">@Fmt.State(x.State)</span></td>
+                                @if (Wide) { <td title="Последний раз — @Fmt.Day(x.LastSeen)">@Fmt.Day(x.FirstSeen)</td> }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_clashes.Count > _shown)
+                {
+                    <div class="more"><button class="btn" @onclick="() => _shown += PageSize">Показать ещё (осталось @(_clashes.Count - _shown))</button></div>
+                }
+            }
+        </div>
+
+        @if (SelectedVisible)
+        {
+            <aside class="panel">
+                <div class="panel-nav">
+                    <button class="btn small" disabled="@(SelectedIndex <= 0)" @onclick="() => Move(-1)" title="Предыдущая (↑)">‹</button>
+                    <span class="muted small">@(SelectedIndex >= 0 ? $"{SelectedIndex + 1} из {_clashes.Count}" : "нет в списке")</span>
+                    <button class="btn small" disabled="@(SelectedIndex < 0 || SelectedIndex >= _clashes.Count - 1)" @onclick="() => Move(1)" title="Следующая (↓)">›</button>
+                    <label class="check small" title="После смены статуса сразу открывать следующую коллизию">
+                        <input type="checkbox" @bind="_view.AutoNext" /> после статуса — к следующей
+                    </label>
+                    <span class="spacer"></span>
+                    <a class="small" href="clash/@_view.SelectedId">отдельно</a>
+                    <button class="btn link small" title="Закрыть карточку" @onclick="() => _view.SelectedId = null">✕</button>
+                </div>
+                <ClashPanel ClashId="_view.SelectedId.Value" Compact="true" Changed="OnPanelChanged" />
+            </aside>
+        }
+    </div>
 }
-else if (_tab == 1)
+else if (_view.Tab == 1)
 {
     <table class="grid">
         <thead><tr><th>Проверка</th><th>Наборы</th><th class="num">Активные</th><th class="num">Исправлены</th><th class="num">Допущены</th><th>Последний отчёт</th></tr></thead>
         <tbody>
             @foreach (var t in _tests)
             {
-                <tr>
-                    <td><a href="" @onclick="() => ShowTest(t.Id)" @onclick:preventDefault>@t.Name</a></td>
+                <tr class="clickable" @onclick="() => ShowTest(t.Id)" title="Показать коллизии этой проверки">
+                    <td>@t.Name</td>
                     <td class="muted">@t.LeftSet ↔ @t.RightSet</td>
                     <td class="num"><Bar Value="t.Counts.Active" Max="_maxActive" /></td>
                     <td class="num">@t.Counts.Fixed</td>
@@ -112,7 +183,7 @@ else if (_tab == 1)
         </tbody>
     </table>
 }
-else if (_tab == 2)
+else if (_view.Tab == 2)
 {
     <div class="actions">
         <button class="btn" disabled="@Importer.Busy" @onclick="Scan">@(Importer.Busy ? "Проверяем папку…" : "Проверить папку сейчас")</button>
@@ -133,7 +204,10 @@ else if (_tab == 2)
             }
         </tbody>
     </table>
-    <p class="muted">* — в отчёте нет даты обнаружения коллизий, взято время файла. Дату можно включить в настройках отчёта Navisworks.</p>
+    @if (_reports.Any(r => !r.DateFromReport))
+    {
+        <p class="muted">* — в отчёте нет даты обнаружения коллизий, взято время файла. Дату можно включить в настройках отчёта Navisworks.</p>
+    }
 }
 else
 {
@@ -148,19 +222,27 @@ else
 @code {
     [Parameter] public long Id { get; set; }
 
+    private const int PageSize = 300;
+
+    private ProjectView _view;
+    private ClashFilter _filter;
     private ProjectRow _project;
     private List<TestRow> _tests = new();
     private List<ReportRow> _reports = new();
     private List<KeyValuePair<string, string>> _levels = new();
     private List<string> _categories = new();
+    /// <summary>Все коллизии при текущем отборе, кроме статуса (для счётчиков), и список на экране.</summary>
+    private List<ClashRow> _all = new();
     private List<ClashRow> _clashes = new();
-    private readonly ClashFilter _filter = new() { State = ClashState.Active };
     private readonly HashSet<long> _selected = new();
+    private int _shown = PageSize;
     private string _bulkComment;
-    private int _tab;
+    private ClashState? _pendingState;
+    private string _notice;
     private int _maxActive;
     private string _editName, _editFolder, _editMessage;
     private bool _editError;
+    private CancellationTokenSource _searchDelay;
 
     private string TestFilter
     {
@@ -168,15 +250,21 @@ else
         set => _filter.TestId = long.TryParse(value, out var v) ? v : null;
     }
 
-    private string StateFilter
-    {
-        get => _filter.State.HasValue ? ((int)_filter.State.Value).ToString() : "";
-        set => _filter.State = int.TryParse(value, out var v) ? (ClashState)v : null;
-    }
+    private bool FilterIsSet => _filter.TestId.HasValue || !string.IsNullOrEmpty(_filter.LevelKey) || !string.IsNullOrEmpty(_filter.Category)
+                                || !string.IsNullOrWhiteSpace(_filter.Search) || _filter.OnlyInLastReport;
 
     private bool AllSelected => _clashes.Count > 0 && _clashes.All(c => _selected.Contains(c.Id));
+    private int SelectedIndex => _view.SelectedId.HasValue ? _clashes.FindIndex(c => c.Id == _view.SelectedId.Value) : -1;
+    private bool SelectedVisible => _view.SelectedId.HasValue;
+    /// <summary>Список во всю ширину (карточка закрыта) — со всеми столбцами.</summary>
+    private bool Wide => !SelectedVisible;
 
-    protected override void OnParametersSet() => LoadAll();
+    protected override void OnParametersSet()
+    {
+        _view = ViewState.For(Id);
+        _filter = _view.Filter;
+        LoadAll();
+    }
 
     private void LoadAll()
     {
@@ -194,14 +282,175 @@ else
 
     private void Reload()
     {
-        _clashes = Store.Clashes(Id, _filter);
+        var state = _filter.State;
+        _filter.State = null;
+        _all = Store.Clashes(Id, _filter);
+        _filter.State = state;
+        _clashes = Sort(state.HasValue ? _all.Where(c => c.State == state.Value).ToList() : _all);
         _selected.IntersectWith(_clashes.Select(c => c.Id));
+        _shown = Math.Max(PageSize, Math.Min(_shown, _clashes.Count));
+    }
+
+    private IEnumerable<(ClashState? State, string Title, int Count)> Chips()
+    {
+        yield return (ClashState.Active, "Активные", _all.Count(c => c.State == ClashState.Active));
+        yield return (ClashState.Fixed, "Исправлены", _all.Count(c => c.State == ClashState.Fixed));
+        yield return (ClashState.Accepted, "Допущены", _all.Count(c => c.State == ClashState.Accepted));
+        yield return (null, "Все", _all.Count);
+    }
+
+    private void SetStateFilter(ClashState? state)
+    {
+        _filter.State = state;
+        _notice = null;
+        Reload();
+    }
+
+    // ───── сортировка ─────
+
+    private RenderFragment SortHeader(string key, string title) => __builder =>
+    {
+        var on = _view.SortKey == key;
+        <th class="sortable @(on ? "sorted" : "")" @onclick="() => SortBy(key)" title="Сортировать">
+            @title @(on ? (_view.SortDesc ? "▼" : "▲") : "")
+        </th>
+    };
+
+    private void SortBy(string key)
+    {
+        if (_view.SortKey == key) _view.SortDesc = !_view.SortDesc;
+        else { _view.SortKey = key; _view.SortDesc = false; }
+        _clashes = Sort(_clashes);
+    }
+
+    /// <summary>Без выбранной сортировки — как пришло из базы: по проверке и номеру коллизии.</summary>
+    private List<ClashRow> Sort(List<ClashRow> list)
+    {
+        Func<ClashRow, IComparable> key = _view.SortKey switch
+        {
+            "name" => c => NameNumber(c.Name),
+            "test" => c => c.TestName,
+            "level" => c => LevelOrder(c),
+            "a" => c => Fmt.Element(c.A),
+            "b" => c => Fmt.Element(c.B),
+            "state" => c => (int)c.State,
+            "first" => c => c.FirstSeen,
+            _ => null,
+        };
+        if (key == null) return list.ToList();
+        return (_view.SortDesc ? list.OrderByDescending(key) : list.OrderBy(key)).ToList();
+    }
+
+    private static long NameNumber(string name)
+    {
+        var digits = new string((name ?? "").Where(char.IsDigit).ToArray());
+        return long.TryParse(digits, out var n) ? n : long.MaxValue;
+    }
+
+    /// <summary>Уровень по номеру («-1 подвал» раньше «1 этаж», «100 кровля» последней).</summary>
+    private static double LevelOrder(ClashRow c)
+    {
+        var key = c.A?.LevelKey ?? c.B?.LevelKey ?? "";
+        var end = 0;
+        while (end < key.Length && (char.IsDigit(key[end]) || (end == 0 && key[end] == '-'))) end++;
+        return double.TryParse(key.Substring(0, end), out var v) ? v : double.MaxValue;
+    }
+
+    // ───── выбор и карточка ─────
+
+    private void Select(long id)
+    {
+        _view.SelectedId = id;
+        _notice = null;
+    }
+
+    private async Task Move(int step)
+    {
+        var i = SelectedIndex;
+        var next = i < 0 ? 0 : i + step;
+        if (next < 0 || next >= _clashes.Count) return;
+        _view.SelectedId = _clashes[next].Id;
+        if (next >= _shown) _shown = next + 1;
+        StateHasChanged();
+        await JS.InvokeVoidAsync("ras.reveal", "row-" + _view.SelectedId);
+    }
+
+    private async Task ListKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "ArrowDown") await Move(1);
+        else if (e.Key == "ArrowUp") await Move(-1);
+        else if (e.Key == "Escape") _view.SelectedId = null;
+    }
+
+    /// <summary>В карточке сменили статус или добавили комментарий: обновить список; по желанию — к следующей.</summary>
+    private async Task OnPanelChanged(ClashState? state)
+    {
+        var index = SelectedIndex;
+        LoadAll();
+        if (state == null || !_view.AutoNext) return;
+        // коллизия могла пропасть из списка (отбор по статусу) — тогда «следующая» стоит на её месте
+        var now = SelectedIndex;
+        var next = now >= 0 ? now + 1 : index;
+        if (next < 0 || next >= _clashes.Count) return;
+        _view.SelectedId = _clashes[next].Id;
+        StateHasChanged();
+        await JS.InvokeVoidAsync("ras.reveal", "row-" + _view.SelectedId);
+    }
+
+    // ───── отметки и статус многим ─────
+
+    private void Toggle(long id, ChangeEventArgs e)
+    {
+        if (e.Value is bool on && on) _selected.Add(id);
+        else _selected.Remove(id);
+        _notice = null;
+    }
+
+    private void ToggleAll(ChangeEventArgs e)
+    {
+        if (e.Value is bool on && on) _selected.UnionWith(_clashes.Select(c => c.Id));
+        else _selected.Clear();
+        _notice = null;
+    }
+
+    /// <summary>Немного коллизий — сразу; много — с вопросом: одно нажатие не должно переписать весь проект.</summary>
+    private void AskBulk(ClashState state)
+    {
+        if (_selected.Count > 10) _pendingState = state;
+        else ApplyBulk(state);
+    }
+
+    private void ConfirmBulk()
+    {
+        if (_pendingState.HasValue) ApplyBulk(_pendingState.Value);
+        _pendingState = null;
+    }
+
+    private void ApplyBulk(ClashState state)
+    {
+        var changed = Store.SetState(_selected, state, _bulkComment, null);
+        _notice = $"«{Fmt.State(state)}»: изменено {changed} из {_selected.Count}.";
+        _selected.Clear();
+        _bulkComment = null;
+        LoadAll();
+    }
+
+    // ───── отбор ─────
+
+    private async Task OnSearch(ChangeEventArgs e)
+    {
+        _filter.Search = e.Value?.ToString();
+        // не перечитывать на каждую букву: ждём паузу в наборе
+        _searchDelay?.Cancel();
+        var delay = _searchDelay = new CancellationTokenSource();
+        try { await Task.Delay(300, delay.Token); }
+        catch (TaskCanceledException) { return; }
+        Reload();
     }
 
     private void ResetFilter()
     {
         _filter.TestId = null;
-        _filter.State = null;
         _filter.LevelKey = null;
         _filter.Category = null;
         _filter.OnlyInLastReport = false;
@@ -209,32 +458,20 @@ else
         Reload();
     }
 
+    private void ShowAll()
+    {
+        ResetFilter();
+        SetStateFilter(null);
+    }
+
     private void ShowTest(long testId)
     {
         _filter.TestId = testId;
-        _tab = 0;
+        _view.Tab = 0;
         Reload();
     }
 
-    private void Toggle(long id, ChangeEventArgs e)
-    {
-        if (e.Value is bool on && on) _selected.Add(id);
-        else _selected.Remove(id);
-    }
-
-    private void ToggleAll(ChangeEventArgs e)
-    {
-        if (e.Value is bool on && on) _selected.UnionWith(_clashes.Select(c => c.Id));
-        else _selected.Clear();
-    }
-
-    private void SetState(ClashState state)
-    {
-        Store.SetState(_selected, state, _bulkComment, null);
-        _selected.Clear();
-        _bulkComment = null;
-        LoadAll();
-    }
+    // ───── прочее ─────
 
     private async Task Scan()
     {
@@ -254,7 +491,7 @@ else
         LoadAll();
     }
 
-    private string Tab(int i) => _tab == i ? "tab active" : "tab";
+    private string Tab(int i) => _view.Tab == i ? "tab active" : "tab";
 
     /// <summary>Уровень коллизии: у обоих элементов один — он; разные — «А / Б».</summary>
     private static string Level(ClashRow x)
@@ -265,4 +502,6 @@ else
         if (string.IsNullOrEmpty(b) || x.A.LevelKey == x.B.LevelKey) return a;
         return a + " / " + b;
     }
+
+    public void Dispose() => _searchDelay?.Cancel();
 }

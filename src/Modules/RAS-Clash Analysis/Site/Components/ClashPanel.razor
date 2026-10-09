@@ -1,0 +1,180 @@
+@* Карточка коллизии: справа от списка в проекте (Compact) и отдельной страницей. *@
+@inject ClashStore Store
+@inject IJSRuntime JS
+
+@if (_card == null)
+{
+    <p class="muted">Коллизия не найдена.</p>
+    return;
+}
+
+<div class="clash-view @(Compact ? "compact" : "wide")">
+    <div class="cv-head">
+        <h2>
+            @(_card.Last?.Name ?? "Коллизия")
+            <span class="badge big @Fmt.StateClass(_card.State)">@Fmt.State(_card.State)</span>
+        </h2>
+        <div class="muted small">
+            @_card.TestName · впервые @Fmt.Day(_card.FirstSeen)@(_card.LastSeen != _card.FirstSeen ? " · последний раз " + Fmt.Day(_card.LastSeen) : "")
+            @if (!_card.InLastReport) { <span> · <b>нет в последнем отчёте</b></span> }
+        </div>
+    </div>
+
+    <div class="cv-actions">
+        <div class="state-buttons">
+            @foreach (var s in new[] { ClashState.Active, ClashState.Fixed, ClashState.Accepted })
+            {
+                <button class="btn state @Fmt.StateClass(s) @(s == _card.State ? "current" : "")" disabled="@(s == _card.State)"
+                        title="@(s == _card.State ? "Текущий статус" : "Сделать «" + Fmt.State(s) + "»")" @onclick="() => SetState(s)">@Fmt.State(s)</button>
+            }
+        </div>
+        <textarea rows="2" placeholder="Комментарий. Нажмёте статус — комментарий добавится к нему; Ctrl+Enter — просто добавить комментарий"
+                  @bind="_comment" @bind:event="oninput" @onkeydown="CommentKey"></textarea>
+        @if (!string.IsNullOrWhiteSpace(_comment))
+        {
+            <button class="btn" @onclick="AddComment">Добавить комментарий</button>
+        }
+    </div>
+
+    <div class="cv-shot">
+        @if (_card.Last?.HasImage == true)
+        {
+            <a href="snimok/@_card.Last.Id" target="_blank" title="Открыть снимок целиком"><img src="snimok/@_card.Last.Id" alt="Снимок коллизии" /></a>
+        }
+        else
+        {
+            <div class="no-shot">Снимка нет</div>
+        }
+    </div>
+
+    <div class="cv-elements">
+        @if (_card.Last != null)
+        {
+            for (var i = 0; i < _card.Last.Elements.Count; i++)
+            {
+                var e = _card.Last.Elements[i];
+                var key = i;
+                <div class="element">
+                    <div class="el-title" title="@e.Family">@Fmt.Element(e)</div>
+                    <div class="el-sub">@Fmt.Model(e.ModelFile) · @(e.Level ?? "уровень неизвестен")</div>
+                    <div class="el-id">
+                        <span class="mono">@(e.ElementId?.ToString() ?? "без номера")</span>
+                        @if (e.ElementId.HasValue)
+                        {
+                            <button class="btn small" title="Скопировать номер — в Revit «Выбор по коду»" @onclick="() => Copy(key, e.ElementId.Value)">
+                                @(_copied == key ? "Скопировано ✓" : "Копировать номер")
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
+    <details class="cv-more">
+        <summary>Подробнее</summary>
+        @if (_card.Last != null)
+        {
+            <dl class="facts">
+                <dt>Расстояние</dt><dd>@Fmt.Mm(_card.Last.Distance, _card.Units)</dd>
+                <dt>Оси</dt><dd>@(_card.Last.GridLocation ?? "—")</dd>
+                @if (_card.Last.GroupName != null) { <dt>Группа</dt><dd>@_card.Last.GroupName</dd> }
+                @if (_card.Last.Description != null) { <dt>Описание</dt><dd>@_card.Last.Description</dd> }
+                <dt>Статус Navisworks</dt><dd>@Fmt.Navis(_card.Last.NavisStatus)</dd>
+                <dt>Наборы</dt><dd>@_card.LeftSet ↔ @_card.RightSet</dd>
+                @foreach (var e in _card.Last.Elements)
+                {
+                    <dt>@Fmt.Model(e.ModelFile)</dt><dd>@e.Family · @e.Type · @e.Name</dd>
+                }
+                <dt>Точка Navisworks, м</dt><dd>@Fmt.Meters(_card.Last.X, _card.Units); @Fmt.Meters(_card.Last.Y, _card.Units); @Fmt.Meters(_card.Last.Z, _card.Units)</dd>
+            </dl>
+        }
+        <table class="grid small">
+            <thead><tr><th>Отчёт</th><th>Имя</th><th>Navisworks</th></tr></thead>
+            <tbody>
+                @foreach (var o in _card.Occurrences)
+                {
+                    <tr title="@o.ReportFile"><td>@Fmt.Date(o.ReportDate)</td><td>@(o.Name ?? "—")</td><td>@Fmt.Navis(o.NavisStatus)</td></tr>
+                }
+            </tbody>
+        </table>
+    </details>
+
+    <div class="cv-history">
+        <h3>История</h3>
+        <ul class="history">
+            @foreach (var e in _card.Events)
+            {
+                <li class="ev-@e.Kind">
+                    <span class="when">@Fmt.Date(e.Time)</span>
+                    <span class="what">
+                        @if (e.NewState.HasValue && e.Kind != EventKinds.Found)
+                        {
+                            <span>@Fmt.State(e.OldState) → <span class="badge @Fmt.StateClass(e.NewState.Value)">@Fmt.State(e.NewState.Value)</span></span>
+                        }
+                        @if (e.Text != null) { <span class="text">@e.Text</span> }
+                        @if (e.Author != null) { <span class="muted">· @e.Author</span> }
+                    </span>
+                </li>
+            }
+        </ul>
+    </div>
+</div>
+
+@code {
+    [Parameter] public long ClashId { get; set; }
+    /// <summary>Узкая — справа от списка; иначе — отдельная страница.</summary>
+    [Parameter] public bool Compact { get; set; }
+    /// <summary>Статус изменён (новый статус) или добавлен комментарий (null).</summary>
+    [Parameter] public EventCallback<ClashState?> Changed { get; set; }
+
+    private ClashCard _card;
+    private long _loadedId = -1;
+    private string _comment;
+    private int _copied = -1;
+
+    protected override void OnParametersSet()
+    {
+        if (ClashId == _loadedId) return;
+        _loadedId = ClashId;
+        _comment = null;
+        _copied = -1;
+        _card = Store.Card(ClashId);
+    }
+
+    /// <summary>Перечитать (после смены статуса из списка).</summary>
+    public void Refresh() => _card = Store.Card(ClashId);
+
+    private async Task SetState(ClashState state)
+    {
+        Store.SetState(new[] { ClashId }, state, _comment, null);
+        _comment = null;
+        _card = Store.Card(ClashId);
+        await Changed.InvokeAsync(state);
+    }
+
+    private async Task AddComment()
+    {
+        if (string.IsNullOrWhiteSpace(_comment)) return;
+        Store.AddComment(ClashId, _comment, null);
+        _comment = null;
+        _card = Store.Card(ClashId);
+        await Changed.InvokeAsync(null);
+    }
+
+    private async Task CommentKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && e.CtrlKey) await AddComment();
+    }
+
+    private async Task Copy(int index, long id)
+    {
+        if (await JS.InvokeAsync<bool>("ras.copy", id.ToString()))
+        {
+            _copied = index;
+            StateHasChanged();
+            await Task.Delay(2000);
+            if (_copied == index) _copied = -1;
+        }
+    }
+}

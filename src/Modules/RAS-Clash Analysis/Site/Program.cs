@@ -26,6 +26,7 @@ builder.Services.AddSingleton<ReportImporter>();
 builder.Services.AddSingleton<BackupService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<BackupService>());
 builder.Services.AddHostedService<ImportScheduler>();
+builder.Services.AddScoped<ProjectViewState>();
 
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 

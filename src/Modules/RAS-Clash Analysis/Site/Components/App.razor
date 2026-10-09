@@ -4,7 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
-    <link rel="stylesheet" href="site.css" />
+    <link rel="stylesheet" href="site.css?v=@AppVersion.Tag" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <HeadOutlet @rendermode="InteractiveServer" />
 </head>
 <body>
@@ -18,6 +19,7 @@
             <p class="reconnect-rejected">Сайт перезапущен. <a href="javascript:location.reload()">Обновить страницу</a></p>
         </div>
     </div>
+    <script src="site.js?v=@AppVersion.Tag"></script>
     <script src="_framework/blazor.web.js"></script>
 </body>
 </html>

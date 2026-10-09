@@ -1,4 +1,4 @@
-@* Элемент коллизии в списке: категория · тип, ниже — модель и номер *@
+@* Элемент коллизии в списке: категория · тип, ниже — модель и номер; длинное обрезается, целиком — в подсказке *@
 
 @if (E == null)
 {
@@ -6,8 +6,8 @@
 }
 else
 {
-    <div class="el">@Fmt.Element(E)</div>
-    <div class="el-sub">@Fmt.Model(E.ModelFile) · @(E.ElementId?.ToString() ?? "без номера")</div>
+    <div class="el cut" title="@Fmt.Element(E)">@Fmt.Element(E)</div>
+    <div class="el-sub cut" title="@Fmt.Model(E.ModelFile)">@(E.ElementId?.ToString() ?? "без номера") · @Fmt.Model(E.ModelFile)</div>
 }
 
 @code {

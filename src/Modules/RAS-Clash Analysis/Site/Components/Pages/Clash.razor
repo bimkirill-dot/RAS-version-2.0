@@ -1,134 +1,32 @@
 @page "/clash/{Id:long}"
 @inject ClashStore Store
 
-<PageTitle>@(_card?.Last?.Name ?? "Коллизия") · Коллизии</PageTitle>
+<PageTitle>@(_title ?? "Коллизия") · Коллизии</PageTitle>
 
-@if (_card == null)
+@if (_projectId == null)
 {
     <h1>Коллизия не найдена</h1>
     <p><a href="/">К проектам</a></p>
     return;
 }
 
-<nav class="crumbs"><a href="/">Проекты</a> › <a href="project/@_card.ProjectId">@_card.ProjectName</a> ›</nav>
-<h1>@(_card.Last?.Name ?? "Коллизия") <span class="badge big @Fmt.StateClass(_card.State)">@Fmt.State(_card.State)</span></h1>
-<p class="muted">
-    @_card.TestName · впервые @Fmt.Date(_card.FirstSeen) · последний раз @Fmt.Date(_card.LastSeen)
-    @(_card.InLastReport ? "" : " · нет в последнем отчёте проверки")
-</p>
+<nav class="crumbs"><a href="/">Проекты</a> › <a href="project/@_projectId">@_projectName</a> ›</nav>
+<p><a href="project/@_projectId">← К списку коллизий</a></p>
 
-<div class="card-layout">
-    <section class="shot">
-        @if (_card.Last?.HasImage == true)
-        {
-            <a href="snimok/@_card.Last.Id" target="_blank"><img src="snimok/@_card.Last.Id" alt="Снимок коллизии" /></a>
-        }
-        else
-        {
-            <div class="no-shot">Снимка нет</div>
-        }
-    </section>
-
-    <section class="side">
-        <h2>Статус</h2>
-        <div class="state-buttons">
-            @foreach (var s in new[] { ClashState.Active, ClashState.Fixed, ClashState.Accepted })
-            {
-                <button class="btn @Fmt.StateClass(s) @(s == _card.State ? "current" : "")" disabled="@(s == _card.State)" @onclick="() => SetState(s)">@Fmt.State(s)</button>
-            }
-        </div>
-        <textarea rows="3" placeholder="Комментарий — к смене статуса или сам по себе" @bind="_comment"></textarea>
-        <button class="btn" @onclick="AddComment" disabled="@string.IsNullOrWhiteSpace(_comment)">Добавить комментарий</button>
-
-        @if (_card.Last != null)
-        {
-            <h2>Где</h2>
-            <dl class="facts">
-                <dt>Точка, м</dt><dd>@Fmt.Meters(_card.Last.X, _card.Units); @Fmt.Meters(_card.Last.Y, _card.Units); @Fmt.Meters(_card.Last.Z, _card.Units)</dd>
-                <dt>Расстояние</dt><dd>@Fmt.Mm(_card.Last.Distance, _card.Units)</dd>
-                <dt>Оси</dt><dd>@(_card.Last.GridLocation ?? "—")</dd>
-                @if (_card.Last.GroupName != null) { <dt>Группа</dt><dd>@_card.Last.GroupName</dd> }
-                @if (_card.Last.Description != null) { <dt>Описание</dt><dd>@_card.Last.Description</dd> }
-                <dt>Статус Navisworks</dt><dd>@Fmt.Navis(_card.Last.NavisStatus)</dd>
-            </dl>
-        }
-    </section>
-</div>
-
-@if (_card.Last != null)
-{
-    <h2>Элементы</h2>
-    <table class="grid">
-        <thead><tr><th>Модель</th><th>Уровень</th><th>Категория</th><th>Семейство</th><th>Тип</th><th>Имя</th><th>Номер элемента</th></tr></thead>
-        <tbody>
-            @foreach (var e in _card.Last.Elements)
-            {
-                <tr>
-                    <td>@Fmt.Model(e.ModelFile)</td>
-                    <td>@(e.Level ?? "—")</td>
-                    <td>@(e.Category ?? "—")</td>
-                    <td>@(e.Family ?? "—")</td>
-                    <td>@(e.Type ?? "—")</td>
-                    <td>@(e.Name ?? "—")</td>
-                    <td class="mono">@(e.ElementId?.ToString() ?? "—")</td>
-                </tr>
-            }
-        </tbody>
-    </table>
-    <p class="muted">Показать элемент в Revit — мостом (следующие этапы). Пока номер — для «Выбор по коду» в Revit.</p>
-}
-
-<h2>История</h2>
-<ul class="history">
-    @foreach (var e in _card.Events)
-    {
-        <li class="ev-@e.Kind">
-            <span class="when">@Fmt.Date(e.Time)</span>
-            @if (e.NewState.HasValue && e.Kind != EventKinds.Found)
-            {
-                <span>@Fmt.State(e.OldState) → <span class="badge @Fmt.StateClass(e.NewState.Value)">@Fmt.State(e.NewState.Value)</span></span>
-            }
-            @if (e.Text != null) { <span class="text">@e.Text</span> }
-            @if (e.Author != null) { <span class="muted">· @e.Author</span> }
-        </li>
-    }
-</ul>
-
-<h2>В отчётах</h2>
-<table class="grid">
-    <thead><tr><th>Дата отчёта</th><th>Имя в отчёте</th><th>Статус Navisworks</th><th>Файл</th></tr></thead>
-    <tbody>
-        @foreach (var o in _card.Occurrences)
-        {
-            <tr>
-                <td>@Fmt.Date(o.ReportDate)</td>
-                <td>@(o.Name ?? "—")</td>
-                <td>@Fmt.Navis(o.NavisStatus)</td>
-                <td class="path">@System.IO.Path.GetFileName(o.ReportFile)</td>
-            </tr>
-        }
-    </tbody>
-</table>
+<ClashPanel ClashId="Id" />
 
 @code {
     [Parameter] public long Id { get; set; }
 
-    private ClashCard _card;
-    private string _comment;
+    private long? _projectId;
+    private string _projectName;
+    private string _title;
 
-    protected override void OnParametersSet() => _card = Store.Card(Id);
-
-    private void SetState(ClashState state)
+    protected override void OnParametersSet()
     {
-        Store.SetState(new[] { Id }, state, _comment, null);
-        _comment = null;
-        _card = Store.Card(Id);
-    }
-
-    private void AddComment()
-    {
-        Store.AddComment(Id, _comment, null);
-        _comment = null;
-        _card = Store.Card(Id);
+        var card = Store.Card(Id);
+        _projectId = card?.ProjectId;
+        _projectName = card?.ProjectName;
+        _title = card?.Last?.Name;
     }
 }
