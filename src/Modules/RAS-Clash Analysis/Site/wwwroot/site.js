@@ -30,6 +30,12 @@ window.ras = {
         a.click();
         setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
     },
+    // светлая / тёмная тема — переключатель в шапке, выбор запоминается в браузере
+    toggleTheme: function () {
+        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = next;
+        try { localStorage.setItem('ras-theme', next); } catch (e) { }
+    },
     // выбранная строка списка — в видимую часть (стрелки ↑/↓)
     reveal: function (id) {
         const el = document.getElementById(id);

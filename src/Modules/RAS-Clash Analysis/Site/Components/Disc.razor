@@ -1,0 +1,24 @@
+@* Разделы коллизии метками своего цвета («АР», «ОВ») — цвета отделов палитры плагина *@
+
+@if (!string.IsNullOrEmpty(Pair))
+{
+    <span class="discs">
+        @foreach (var d in Pair.Split('-'))
+        {
+            <span class="disc @Css(d)">@d</span>
+        }
+    </span>
+}
+
+@code {
+    /// <summary>«АР-ОВ», «КЖ» — ClashFacets.DisciplinePair.</summary>
+    [Parameter] public string Pair { get; set; }
+
+    private static string Css(string d) => d switch
+    {
+        "АР" => "d-ar",
+        "КЖ" or "КР" or "КМ" => "d-kj",
+        "ОВ" or "ВК" or "ТС" or "ХС" or "АУПТ" or "ПТ" => "d-ov",
+        _ => "d-other",
+    };
+}

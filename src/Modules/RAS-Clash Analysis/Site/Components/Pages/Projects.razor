@@ -7,7 +7,12 @@
 
 <PageTitle>Проекты · RAS Clash Analysis</PageTitle>
 
-<h1>Проекты</h1>
+<div class="page-head">
+    <div>
+        <h1>Проекты</h1>
+        <div class="muted">Коллизии из отчётов Navisworks по всем проектам компании</div>
+    </div>
+</div>
 
 @if (_projects.Count == 0)
 {
@@ -15,34 +20,36 @@
 }
 else
 {
-    <table class="grid">
-        <thead>
-            <tr>
-                <th>Проект</th>
-                @if (_crits.Count == 0) { <th class="num">Активные</th> }
-                @foreach (var cr in _crits) { <th class="num">Активные · @(cr == "" ? "без критичности" : cr.ToLowerInvariant())</th> }
-                <th class="num">Ждут проверки</th><th class="num">Исправлены</th><th class="num">Допущены</th><th>Последний отчёт</th><th>Папка проекта</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var p in _projects)
-            {
-                <tr class="clickable" @onclick="@(() => Nav.NavigateTo("project/" + p.Id))">
-                    <td><a href="project/@p.Id" @onclick:stopPropagation="true">@p.Name</a></td>
-                    @if (_crits.Count == 0) { <td class="num"><span class="badge state-active">@p.Counts.Active</span></td> }
+    @* карточки проектов: активные по критичности, ждут проверки, исправлено % — для показа руководству *@
+    <div class="proj-grid">
+        @foreach (var p in _projects)
+        {
+            var pct = FixedPercent(p);
+            <a class="proj-card" href="project/@p.Id">
+                <div class="pc-name">@p.Name</div>
+                <div class="pc-meta muted small">@(p.LastReport.HasValue ? "Последний отчёт — " + Fmt.Day(p.LastReport.Value) : "Отчётов ещё нет")</div>
+                <div class="pc-nums">
+                    @if (_crits.Count == 0)
+                    {
+                        <div class="pc-num k-active"><b>@p.Counts.Active</b><span>активные</span></div>
+                    }
                     @foreach (var cr in _crits)
                     {
-                        <td class="num"><span class="badge state-active">@(p.ActiveByCriticality.TryGetValue(cr, out var n) ? n : 0)</span></td>
+                        <div class="pc-num k-active @(cr == "Высокая" ? "" : "soft")">
+                            <b>@(p.ActiveByCriticality.TryGetValue(cr, out var n) ? n : 0)</b>
+                            <span>@(cr == "" ? "активные" : cr.ToLowerInvariant() + " крит.")</span>
+                        </div>
                     }
-                    <td class="num">@p.Counts.Pending</td>
-                    <td class="num">@p.Counts.Fixed</td>
-                    <td class="num">@p.Counts.Accepted</td>
-                    <td>@Fmt.Date(p.LastReport)</td>
-                    <td class="path">@p.Folder</td>
-                </tr>
-            }
-        </tbody>
-    </table>
+                    <div class="pc-num k-pending"><b>@p.Counts.Pending</b><span>ждут проверки</span></div>
+                    <div class="pc-num k-fixed"><b>@p.Counts.Fixed</b><span>исправлены</span></div>
+                </div>
+                <div class="pc-progress" title="Исправлено из всех, кроме допущенных">
+                    <div class="kpi-bar"><i style="width:@pct%"></i></div>
+                    <span class="small muted">исправлено @pct %</span>
+                </div>
+            </a>
+        }
+    </div>
 }
 
 <div class="actions">
@@ -109,6 +116,13 @@ else
     private List<string> _crits = new();
 
     protected override void OnInitialized() => Load();
+
+    /// <summary>Сколько исправлено из всех, кроме допущенных, — %.</summary>
+    private static int FixedPercent(ProjectRow p)
+    {
+        var all = p.Counts.Active + p.Counts.Pending + p.Counts.Fixed;
+        return all == 0 ? 0 : (int)Math.Round(100.0 * p.Counts.Fixed / all);
+    }
 
     private void Load()
     {

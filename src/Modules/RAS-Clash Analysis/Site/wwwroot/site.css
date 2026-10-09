@@ -1,50 +1,63 @@
-/* Сайт RAS-Clash Analysis. Цвета — только через переменные; тема — как в системе (светлая / тёмная). */
+/* Сайт RAS-Clash Analysis. Цвета — только через переменные, из палитры плагина (tools\IconBuilder\palette.txt):
+   акцент — отдел BIM (фиолетовый), разделы — цвета отделов, статусы — красный / зелёный палитры.
+   Тема — светлая по умолчанию (для показа), тёмная — переключателем в шапке (html[data-theme="dark"], запоминается). */
 :root {
-    --bg: #f6f7f9;
+    --bg: #f4f6fa;
     --panel: #ffffff;
-    --text: #1d232b;
-    --muted: #66707c;
-    --line: #dde1e6;
-    --accent: #2f6fb0;
-    --accent-bg: #e3edf8;
-    --active: #c2410c;
-    --active-bg: #fdebe2;
-    --fixed: #2e7d32;
-    --fixed-bg: #e3f2e4;
-    --accepted: #5b5f97;
-    --accepted-bg: #e8e8f6;
-    --pending: #a16207;
-    --pending-bg: #fdf3d7;
-    --error: #b42318;
-    --row-hover: #eef3f9;
-    --row-selected: #dbe8f7;
-    --bar: #f3c2ab;
+    --text: #1b2230;
+    --muted: #6b7484;
+    --line: #e3e7ee;
+    --accent: #7b5cf0;
+    --accent-strong: #6544e6;
+    --accent-bg: #efebfe;
+    --active: #e5484d;
+    --active-bg: #fdecec;
+    --fixed: #2e9e5b;
+    --fixed-bg: #e6f6ee;
+    --accepted: #5b6478;
+    --accepted-bg: #eceef3;
+    --pending: #b7791f;
+    --pending-bg: #fdf3dc;
+    --error: #d92d20;
+    --row-hover: #f6f4ff;
+    --row-selected: #ebe6fe;
+    --bar: #f6b8ba;
+    --d-ar: #d63384;
+    --d-kj: #e0731a;
+    --d-ov: #0e9aa7;
+    --d-other: #5b6478;
+    --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 1px 3px rgba(16, 24, 40, .07);
+    --radius: 10px;
     color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-    :root {
-        --bg: #16191d;
-        --panel: #1f2328;
-        --text: #e4e7eb;
-        --muted: #9aa3ad;
-        --line: #343a42;
-        --accent: #6aa7e8;
-        --accent-bg: #1d3047;
-        --active: #f0915f;
-        --active-bg: #47291b;
-        --fixed: #7cc47f;
-        --fixed-bg: #1f3a22;
-        --accepted: #a5a9e6;
-        --accepted-bg: #2b2c4a;
-        --pending: #e3b341;
-        --pending-bg: #3d3216;
-        --error: #f2867a;
-        --row-hover: #262c33;
-        --row-selected: #213651;
-        --bar: #6b3a24;
-        color-scheme: dark;
-    }
+html[data-theme="dark"] {
+    --bg: #14171c;
+    --panel: #1c2027;
+    --text: #e6e9ee;
+    --muted: #9aa3b0;
+    --line: #2f353f;
+    --accent: #9d87f7;
+    --accent-strong: #b3a2fa;
+    --accent-bg: #2a2546;
+    --active: #ff6b6f;
+    --active-bg: #3d2224;
+    --fixed: #4cc38a;
+    --fixed-bg: #1c3a2c;
+    --accepted: #a6aec0;
+    --accepted-bg: #2b303a;
+    --pending: #e3b341;
+    --pending-bg: #3b3218;
+    --error: #ff7b72;
+    --row-hover: #232836;
+    --row-selected: #2d2752;
+    --bar: #6b2f33;
+    --d-ar: #e8679f;
+    --d-kj: #f2924a;
+    --d-ov: #2fc2ce;
+    --d-other: #a6aec0;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3);
+    color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -53,22 +66,33 @@ html, body {
     margin: 0;
     background: var(--bg);
     color: var(--text);
-    font: 14px/1.45 "Segoe UI", system-ui, sans-serif;
+    font: 14px/1.5 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
 }
 
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
+/* шапка: знак и название, справа — тема */
 header.top {
-    background: var(--panel);
-    border-bottom: 1px solid var(--line);
-    padding: 8px 20px;
+    display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 20px;
+    background: var(--panel); border-bottom: 1px solid var(--line); box-shadow: var(--shadow);
 }
-.brand { font-weight: 600; font-size: 15px; color: var(--text); }
+.brand { display: inline-flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; }
+.brand:hover { text-decoration: none; }
+.brand-mark { width: 28px; height: 28px; flex: none; }
+.brand-name { font-weight: 700; font-size: 16px; letter-spacing: .2px; }
+.brand-name span { color: var(--accent); }
+.brand-sub { color: var(--muted); font-size: 12px; border-left: 1px solid var(--line); padding-left: 10px; }
+.theme-toggle {
+    margin-left: auto; font: inherit; font-size: 16px; width: 34px; height: 34px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--panel); color: var(--muted);
+}
+.theme-toggle:hover { color: var(--text); border-color: var(--accent); }
 
-main { padding: 12px 20px 24px; }
+main { padding: 16px 24px 24px; }
 
-h1 { font-size: 21px; margin: 2px 0 10px; display: flex; align-items: center; gap: 12px; }
+h1 { font-size: 24px; font-weight: 700; margin: 2px 0 12px; display: flex; align-items: center; gap: 12px; letter-spacing: -.2px; }
 /* после перехода фокус ставится на заголовок (для чтения с экрана) — рамка не нужна */
 h1:focus { outline: none; }
 h2 { font-size: 16px; margin: 20px 0 8px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -358,6 +382,108 @@ footer.status { margin-top: 28px; font-size: 12px; color: var(--muted); }
 .bar-cell { position: relative; display: inline-block; min-width: 120px; text-align: right; }
 .bar { position: absolute; left: 0; top: 2px; bottom: 2px; background: var(--bar); border-radius: 3px; }
 .bar-value { position: relative; padding-right: 4px; }
+
+/* ───────────── внешний вид для показа: поверхности, таблица, метки, итоги ───────────── */
+
+/* поверхности — белые карточки с мягкой тенью на сером фоне */
+.side, .list, .panel, .sub-ribbon, details.import, .empty-box {
+    border-color: var(--line); border-radius: var(--radius); box-shadow: var(--shadow); background: var(--panel);
+}
+.btn { border-radius: 7px; transition: border-color .12s, background .12s; }
+.btn.primary { background: var(--accent); border-color: var(--accent); }
+.btn.primary:hover:not(:disabled) { background: var(--accent-strong); border-color: var(--accent-strong); }
+input, select, textarea { border-radius: 7px; border-color: var(--line); min-height: 32px; }
+/* флажки — своего размера (общая высота полей им не нужна: строки таблицы становились высокими) */
+input[type="checkbox"] { min-height: 0; width: 15px; height: 15px; accent-color: var(--accent); margin: 0; vertical-align: middle; }
+.list-title .dd select { min-width: 110px; }
+.list-title { row-gap: 6px; }
+input:focus, select:focus, textarea:focus, .list:focus-visible { outline: 2px solid var(--accent-bg); border-color: var(--accent); outline-offset: 0; }
+
+/* шапка проекта: название — слева, итоги — справа */
+.project-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+.project-head h1 { margin-bottom: 2px; }
+.kpis { display: flex; gap: 10px; flex-wrap: wrap; }
+.kpi {
+    min-width: 116px; padding: 10px 14px; border-radius: var(--radius); background: var(--panel);
+    border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.kpi .v { font-size: 24px; font-weight: 700; line-height: 1.15; }
+.kpi .l { font-size: 12px; color: var(--muted); }
+.kpi.k-active .v, .pc-num.k-active b { color: var(--active); }
+.kpi.k-pending .v, .pc-num.k-pending b { color: var(--pending); }
+.kpi.k-fixed .v, .pc-num.k-fixed b { color: var(--fixed); }
+.kpi.k-accepted .v { color: var(--accepted); }
+.kpi.k-progress { min-width: 150px; }
+.kpi-bar { height: 6px; border-radius: 3px; background: var(--accepted-bg); overflow: hidden; margin-top: 6px; }
+.kpi-bar i { display: block; height: 100%; background: var(--fixed); border-radius: 3px; }
+
+/* критичность — крупные кнопки-вкладки */
+.main-ribbon { padding: 0 0 12px; }
+.crit { border-radius: 999px; padding: 8px 20px; background: var(--panel); box-shadow: var(--shadow); }
+.crit.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.crit.on b { color: #fff; }
+.crit.crit-high.on { background: var(--active); border-color: var(--active); color: #fff; }
+.crit.crit-high.on b, .crit.crit-high b { color: inherit; }
+.crit.crit-high:not(.on) b { color: var(--active); }
+
+/* дополнительная лента — строка отборов */
+.sub-ribbon { padding: 10px 12px; }
+.dd span { font-size: 12px; text-transform: none; }
+.facet-btn { border-style: solid; border-radius: 7px; min-height: 32px; }
+
+/* боковая панель — разделы со значками */
+.side { padding: 12px 10px; }
+.side-title { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 2px 6px 8px; }
+.side-btn { padding: 8px 10px; border-radius: 8px; gap: 10px; justify-content: flex-start; }
+.side-btn svg { width: 18px; height: 18px; flex: none; color: var(--muted); }
+.side-btn span { flex: 1; }
+.side-btn.on { background: var(--accent-bg); border-color: transparent; color: var(--accent-strong); font-weight: 600; }
+.side-btn.on svg, .side-btn.on b { color: var(--accent-strong); }
+
+/* таблица коллизий */
+.list-title h2 { font-size: 20px; font-weight: 700; }
+table.grid th { background: var(--panel); color: var(--muted); font-size: 12.5px; font-weight: 600; border-bottom: 1px solid var(--line); }
+table.clashes td { padding: 7px 10px; border-bottom: 1px solid var(--line); }
+table.clashes tbody tr:hover { background: var(--row-hover); }
+table.clashes tbody tr.selected { background: var(--row-selected); }
+
+/* статус — метка с точкой */
+.badge { padding: 2px 10px 2px 8px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+.badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* разделы — цветные метки (цвета отделов палитры плагина) */
+.discs { display: inline-flex; gap: 3px; }
+.disc { border: none; color: #fff; font-weight: 600; padding: 1px 6px; border-radius: 4px; }
+.disc.d-ar { background: var(--d-ar); }
+.disc.d-kj { background: var(--d-kj); }
+.disc.d-ov { background: var(--d-ov); }
+.disc.d-other { background: var(--d-other); }
+
+/* страницы */
+.pager .btn { min-width: 30px; }
+.pager .btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* главная — карточки проектов */
+.page-head { margin-bottom: 16px; }
+.proj-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; margin-bottom: 16px; }
+.proj-card {
+    display: flex; flex-direction: column; gap: 10px; padding: 16px 18px; color: var(--text); text-decoration: none;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
+    transition: transform .12s, box-shadow .12s, border-color .12s;
+}
+.proj-card:hover { text-decoration: none; transform: translateY(-2px); border-color: var(--accent); box-shadow: 0 6px 18px rgba(16, 24, 40, .10); }
+.pc-name { font-size: 17px; font-weight: 700; }
+.pc-nums { display: flex; gap: 18px; flex-wrap: wrap; }
+.pc-num { display: flex; flex-direction: column; }
+.pc-num b { font-size: 22px; line-height: 1.1; }
+.pc-num.soft b { opacity: .75; }
+.pc-num span { font-size: 12px; color: var(--muted); }
+.pc-progress { display: flex; align-items: center; gap: 10px; }
+.pc-progress .kpi-bar { flex: 1; margin: 0; }
+
+/* карточка коллизии */
+.panel { padding: 0 16px 16px; }
+table.facts2 { border-radius: 8px; overflow: hidden; }
 
 @media (max-width: 1100px) {
     .project-page { height: auto; }

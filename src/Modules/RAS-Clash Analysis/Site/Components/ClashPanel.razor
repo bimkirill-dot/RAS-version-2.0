@@ -78,7 +78,7 @@
                     {
                         <span class="muted">без номера</span>
                     }
-                    @if (disc != null) { <span class="disc">@disc</span> }
+                    <Disc Pair="@disc" />
                     @if (_copied == key) { <span class="small notice">скопировано</span> }
                 </div>
                 <div class="obj-path">@string.Join(" → ", new[] { e.Category, e.Family, e.Type }.Where(x => !string.IsNullOrEmpty(x)))</div>
