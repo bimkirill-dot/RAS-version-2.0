@@ -38,6 +38,9 @@ public static class Fmt
     public static string Mm(double? value, string units) =>
         value.HasValue ? (value.Value * ClashRules.MetersPerUnit(units) * 1000).ToString("0", Ru) + " мм" : "—";
 
+    /// <summary>Глубина пересечения без знака, мм: «160 мм».</summary>
+    public static string MmAbs(double? value, string units) => value.HasValue ? Mm(Math.Abs(value.Value), units) : "—";
+
     public static string Meters(double? value, string units) =>
         value.HasValue ? (value.Value * ClashRules.MetersPerUnit(units)).ToString("0.000", Ru) : "—";
 

@@ -99,6 +99,14 @@ public sealed class ClashRow
     public bool NewInLastRun { get; set; }
     public bool FixedInLastRun { get; set; }
     public bool ReturnedInLastRun { get; set; }
+    /// <summary>Расстояние (глубина пересечения) и оси — из последнего появления; null — не включены в отчёт Navisworks.</summary>
+    public double? Distance { get; set; }
+    public string Units { get; set; } = "m";
+    public string GridLocation { get; set; }
+    /// <summary>Дни прогонов («yyyy-MM-dd»), к которым коллизия относится: была в отчёте или исправлена им.</summary>
+    public HashSet<string> Runs { get; } = new HashSet<string>();
+    /// <summary>Повторы — в скольких прогонах (днях отчётов) встречалась.</summary>
+    public int Repeats { get; set; }
     public bool InLastReport { get; set; }
     public DateTime FirstSeen { get; set; }
     public DateTime LastSeen { get; set; }

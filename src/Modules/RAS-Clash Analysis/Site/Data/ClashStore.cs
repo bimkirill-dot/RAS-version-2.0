@@ -103,11 +103,16 @@ public sealed class ClashStore
                t.Criticality, t.Block, COALESCE(tn.TypeName, t.Name), c.ReturnCount,
                CASE WHEN c.FirstSeen = t.LastReportDate THEN 1 ELSE 0 END,
                EXISTS(SELECT 1 FROM Events e WHERE e.ClashId = c.Id AND e.ReportId = t.LastReportId AND e.Kind IN ('gone', 'confirmed')),
-               EXISTS(SELECT 1 FROM Events e WHERE e.ClashId = c.Id AND e.ReportId = t.LastReportId AND e.Kind = 'reappeared')
+               EXISTS(SELECT 1 FROM Events e WHERE e.ClashId = c.Id AND e.ReportId = t.LastReportId AND e.Kind = 'reappeared'),
+               o.Distance, o.GridLocation, rl.Units,
+               (SELECT group_concat(substr(rp.ReportDate, 1, 10)) FROM Occurrences o2 JOIN Reports rp ON rp.Id = o2.ReportId WHERE o2.ClashId = c.Id),
+               (SELECT group_concat(substr(rp.ReportDate, 1, 10)) FROM Events e JOIN Reports rp ON rp.Id = e.ReportId
+                WHERE e.ClashId = c.Id AND e.Kind IN ('gone', 'confirmed'))
         FROM Clashes c
         JOIN Tests t ON t.Id = c.TestId
         LEFT JOIN TypeNames tn ON tn.ProjectId = c.ProjectId AND tn.Name = t.Name
         LEFT JOIN Occurrences o ON o.Id = c.LastOccurrenceId
+        LEFT JOIN Reports rl ON rl.Id = o.ReportId
         LEFT JOIN Elements a ON a.OccurrenceId = o.Id AND a.Idx = 0
         LEFT JOIN Elements b ON b.OccurrenceId = o.Id AND b.Idx = 1
         """;
@@ -283,7 +288,8 @@ public sealed class ClashStore
         B = r.IsDBNull(16) && r.IsDBNull(23) ? null : ReadElement(r, 16),
         Criticality = r.GetString(24), Block = r.GetString(25), Type = r.GetString(26), ReturnCount = r.GetInt32(27),
         NewInLastRun = r.GetInt32(28) != 0, FixedInLastRun = r.GetInt32(29) != 0, ReturnedInLastRun = r.GetInt32(30) != 0,
-    };
+        Distance = Num(r, 31), GridLocation = Str(r, 32), Units = Str(r, 33) ?? "m",
+    }.WithRuns(Str(r, 34), Str(r, 35));
 
     private static ElementView ReadElement(SqliteDataReader r, int i) => new ElementView
     {
@@ -301,7 +307,22 @@ public sealed class ClashStore
 
     private static string Str(SqliteDataReader r, int i) => r.IsDBNull(i) ? null : r.GetString(i);
 
+    /// <summary>Прогоны коллизии: дни отчётов, где она была, и где её исправили (пропала).</summary>
+    internal static ClashRow FillRuns(ClashRow row, string present, string fixedIn)
+    {
+        var seen = (present ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Distinct().ToList();
+        row.Repeats = seen.Count;
+        row.Runs.UnionWith(seen);
+        row.Runs.UnionWith((fixedIn ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries));
+        return row;
+    }
+
     private static double? Num(SqliteDataReader r, int i) => r.IsDBNull(i) ? null : r.GetDouble(i);
 
     private static string NullIfEmpty(string s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+}
+
+internal static class ClashRowRuns
+{
+    public static ClashRow WithRuns(this ClashRow row, string present, string fixedIn) => ClashStore.FillRuns(row, present, fixedIn);
 }

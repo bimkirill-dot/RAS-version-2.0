@@ -25,12 +25,13 @@ namespace RASv2.ClashAnalysis.Site.Logic
         public const string Category = "category";
         public const string Discipline = "discipline";
         public const string Report = "report";
+        public const string State = "state";
 
         public const string InLastReport = "in";
         public const string NotInLastReport = "out";
 
         /// <summary>Поля на странице; «Отчёт» убран (решение разработчика 09.10.2026) — проверки его остались.</summary>
-        public static readonly string[] All = { Level, Category, Discipline };
+        public static readonly string[] All = { Level, Discipline, State };
 
         public static string Title(string facet) => facet switch
         {
@@ -38,6 +39,7 @@ namespace RASv2.ClashAnalysis.Site.Logic
             Category => "Категория",
             Discipline => "Раздел",
             Report => "Отчёт",
+            State => "Статус",
             _ => facet,
         };
 
@@ -63,6 +65,9 @@ namespace RASv2.ClashAnalysis.Site.Logic
                     break;
                 case Report:
                     yield return c.InLastReport ? (InLastReport, "Есть в последнем отчёте") : (NotInLastReport, "Нет в последнем отчёте");
+                    break;
+                case State:
+                    yield return (((int)c.State).ToString(), ClashRules.Title(c.State));
                     break;
             }
         }
@@ -98,6 +103,8 @@ namespace RASv2.ClashAnalysis.Site.Logic
                 Title = kv.Value.Titles.OrderByDescending(t => t.Value).ThenBy(t => t.Key, StringComparer.Ordinal).First().Key,
                 Count = kv.Value.Count,
             });
+            if (facet == State)
+                return list.OrderBy(v => StateOrder(v.Key)).ToList();
             return facet == Level
                 ? list.OrderBy(v => LevelOrder(v.Key)).ThenBy(v => v.Title, StringComparer.CurrentCultureIgnoreCase).ToList()
                 : facet == Report
@@ -129,6 +136,16 @@ namespace RASv2.ClashAnalysis.Site.Logic
         {
             if (c.A != null) yield return c.A;
             if (c.B != null) yield return c.B;
+        }
+
+        /// <summary>Статусы по ходу работы: активная, ждёт проверки, исправлена, допущена.</summary>
+        private static int StateOrder(string key) => key == "0" ? 0 : key == "3" ? 1 : key == "1" ? 2 : 3;
+
+        /// <summary>Раздел коллизии парой — «АР-ОВ» (у двух элементов; один раздел — «КЖ»); не определён — null.</summary>
+        public static string DisciplinePair(ClashRow c)
+        {
+            var list = Elements(c).Select(e => ClashRules.Discipline(e.ModelFile)).Where(d => d != null).Distinct().ToList();
+            return list.Count == 0 ? null : string.Join("-", list);
         }
 
         private static double LevelOrder(string key)

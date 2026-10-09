@@ -24,9 +24,14 @@ public sealed class ProjectView
 
     /// <summary>Отбор последнего прогона: null — нет, new / fixed / returned.</summary>
     public string RunFilter { get; set; }
-    /// <summary>Группировка списка: "" — нет, element — по элементу; свёрнутые группы элементов.</summary>
+    /// <summary>Группировка списка: "" — нет, test — по типу проверки, element — по элементу; свёрнутые группы.</summary>
     public string GroupBy { get; set; } = "";
-    public HashSet<string> ElementCollapsed { get; } = new HashSet<string>();
+    public HashSet<string> GroupCollapsed { get; } = new HashSet<string>();
+    /// <summary>Дата: last — последний прогон, all — все, «yyyy-MM-dd» — прогон этого дня.</summary>
+    public string RunDate { get; set; } = "last";
+    public int PageSize { get; set; } = 50;
+    /// <summary>Отбор по умолчанию (статус — открытые) уже поставлен.</summary>
+    public bool Initialized { get; set; }
     /// <summary>Показан отбор «Категория» (спрятан под «Ещё»).</summary>
     public bool MoreFilters { get; set; }
 }

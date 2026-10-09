@@ -1,4 +1,5 @@
-@* Карточка коллизии: справа от списка в проекте (Compact) и отдельной страницей. *@
+@* Карточка коллизии — по образцу автора статьи: сведения таблицей в два столбца, снимок, объекты А и Б, статус.
+   Справа от списка в проекте (Compact) и отдельной страницей. *@
 @inject ClashStore Store
 @inject IJSRuntime JS
 
@@ -8,18 +9,9 @@
     return;
 }
 
-<div class="clash-view @(Compact ? "compact" : "wide")">
-    <div class="cv-head">
-        <h2>
-            @(_card.Last?.Name ?? "Коллизия")
-            <span class="badge big @Fmt.StateClass(_card.State)">@Fmt.State(_card.State)</span>
-        </h2>
-        <div class="muted small">
-            @if (_card.Criticality != "") { <span>@ReportPath.CriticalityTitle(_card.Criticality) · </span> }
-            @if (_card.Block != "") { <span>@_card.Block · </span> }
-            <span title="@(_card.Type != _card.TestName ? "В Navisworks: " + _card.TestName : "")">@_card.Type</span> · впервые @Fmt.Day(_card.FirstSeen)@(_card.LastSeen != _card.FirstSeen ? " · последний раз " + Fmt.Day(_card.LastSeen) : "")
-            @if (!_card.InLastReport) { <span> · <b>нет в последнем отчёте</b></span> }
-        </div>
+<div class="clash-card @(Compact ? "compact" : "wide")">
+    <div class="cc-head">
+        <h2>@(_card.Last?.Name ?? "Коллизия") <span class="badge big @Fmt.StateClass(_card.State)">@Fmt.State(_card.State)</span></h2>
         @if (_card.ReturnCount > 0)
         {
             <div class="returned-note">↺ Возвращалась после исправления — @Fmt.Plural(_card.ReturnCount, "раз", "раза", "раз")</div>
@@ -30,26 +22,31 @@
         }
     </div>
 
-    <div class="cv-actions">
-        <div class="state-buttons">
-            @* «Исправлена» ставит «Ждёт проверки»: подтверждает прогон (DECISIONS.md, «Исправлена → ждёт проверки») *@
-            @foreach (var (s, title) in Buttons)
-            {
-                var current = s == _card.State || (s == ClashState.Pending && _card.State == ClashState.Fixed);
-                <button class="btn state @Fmt.StateClass(s) @(current ? "current" : "")" disabled="@current"
-                        title="@(current ? "Текущий статус" : s == ClashState.Pending ? "Станет «Исправлена», когда следующий прогон её не найдёт" : "Сделать «" + title + "»")"
-                        @onclick="() => SetState(s)">@title</button>
-            }
-        </div>
-        <textarea rows="2" placeholder="Комментарий. Нажмёте статус — комментарий добавится к нему; Ctrl+Enter — просто добавить комментарий"
-                  @bind="_comment" @bind:event="oninput" @onkeydown="CommentKey"></textarea>
-        @if (!string.IsNullOrWhiteSpace(_comment))
-        {
-            <button class="btn" @onclick="AddComment">Добавить комментарий</button>
-        }
-    </div>
+    @* сведения — таблицей в два столбца *@
+    <table class="facts2">
+        <tr>
+            <th>Расстояние</th><td>@if (_card.Last?.Distance != null) { <span class="dist">@Fmt.MmAbs(_card.Last.Distance, _card.Units)</span> } else { <span class="muted">—</span> }</td>
+            <th>Оси</th><td>@(_card.Last?.GridLocation ?? "—")</td>
+        </tr>
+        <tr>
+            <th>Уровень</th><td>@Level</td>
+            <th>Статус</th><td><span class="badge @Fmt.StateClass(_card.State)">@Fmt.State(_card.State)</span></td>
+        </tr>
+        <tr>
+            <th>Блок</th><td>@(_card.Block == "" ? "—" : _card.Block)</td>
+            <th>Дата</th><td title="Впервые @Fmt.Day(_card.FirstSeen)">@Fmt.Day(_card.LastSeen)</td>
+        </tr>
+        <tr>
+            <th>Встречалась</th><td>@Fmt.Plural(Repeats, "раз", "раза", "раз")</td>
+            <th>Проверка</th><td title="@(_card.Type != _card.TestName ? "В Navisworks: " + _card.TestName : "")">@_card.Type</td>
+        </tr>
+        <tr>
+            <th>Статус Navisworks</th><td>@(_card.Last != null ? Fmt.Navis(_card.Last.NavisStatus) : "—")</td>
+            <th>Критичность</th><td>@(_card.Criticality == "" ? "—" : _card.Criticality)</td>
+        </tr>
+    </table>
 
-    <div class="cv-shot">
+    <div class="cc-shot">
         @if (_card.Last?.HasImage == true)
         {
             <a href="snimok/@_card.Last.Id" target="_blank" title="Открыть снимок целиком"><img src="snimok/@_card.Last.Id" alt="Снимок коллизии" /></a>
@@ -60,48 +57,76 @@
         }
     </div>
 
-    <div class="cv-elements">
-        @if (_card.Last != null)
+    @if (_card.Last != null)
+    {
+        for (var i = 0; i < _card.Last.Elements.Count; i++)
         {
-            for (var i = 0; i < _card.Last.Elements.Count; i++)
-            {
-                var e = _card.Last.Elements[i];
-                var key = i;
-                <div class="element">
-                    <div class="el-title" title="@e.Family">@Fmt.Element(e)</div>
-                    <div class="el-sub">@Fmt.Model(e.ModelFile) · @(e.Level ?? "уровень неизвестен")</div>
-                    <div class="el-id">
-                        <span class="mono">@(e.ElementId?.ToString() ?? "без номера")</span>
-                        @if (e.ElementId.HasValue)
-                        {
-                            <button class="btn small" title="Скопировать номер — в Revit «Выбор по коду»" @onclick="() => Copy(key, e.ElementId.Value)">
-                                @(_copied == key ? "Скопировано ✓" : "Копировать номер")
-                            </button>
-                        }
-                    </div>
+            var e = _card.Last.Elements[i];
+            var key = i;
+            var disc = ClashRules.Discipline(e.ModelFile);
+            <div class="obj">
+                <div class="obj-title">Объект @(i == 0 ? "А" : "Б")</div>
+                <div class="obj-id">
+                    <span>ID:</span>
+                    @if (e.ElementId.HasValue)
+                    {
+                        <button class="copy-id" title="Скопировать номер — в Revit «Выбор по коду»" @onclick="() => Copy(key, e.ElementId.Value)">
+                            <span class="mono">@e.ElementId</span> <span class="copy-icon">@(_copied == key ? "✓" : "⧉")</span>
+                        </button>
+                    }
+                    else
+                    {
+                        <span class="muted">без номера</span>
+                    }
+                    @if (disc != null) { <span class="disc">@disc</span> }
+                    @if (_copied == key) { <span class="small notice">скопировано</span> }
                 </div>
-            }
+                <div class="obj-path">@string.Join(" → ", new[] { e.Category, e.Family, e.Type }.Where(x => !string.IsNullOrEmpty(x)))</div>
+                <div class="muted small">Уровень: @(e.Level ?? "—")@(string.IsNullOrEmpty(e.Name) ? "" : " · " + e.Name)</div>
+                <div class="muted small">Файл: @(e.ModelFile ?? "—")</div>
+            </div>
+        }
+    }
+
+    <div class="state-buttons">
+        @* «Исправлена» ставит «Ждёт проверки»: подтверждает прогон (DECISIONS.md, «Исправлена → ждёт проверки») *@
+        @foreach (var (s, title) in Buttons)
+        {
+            var current = s == _card.State || (s == ClashState.Pending && _card.State == ClashState.Fixed);
+            <button class="btn state @Fmt.StateClass(s) @(current ? "current" : "")" disabled="@current"
+                    title="@(current ? "Текущий статус" : s == ClashState.Pending ? "Станет «Исправлена», когда следующий прогон её не найдёт" : "Сделать «" + title + "»")"
+                    @onclick="() => SetState(s)">@(current ? "✓ " : "")@title</button>
         }
     </div>
+    <textarea rows="2" placeholder="Комментарий. Нажмёте статус — комментарий добавится к нему; Ctrl+Enter — просто добавить комментарий"
+              @bind="_comment" @bind:event="oninput" @onkeydown="CommentKey"></textarea>
+    @if (!string.IsNullOrWhiteSpace(_comment))
+    {
+        <button class="btn" @onclick="AddComment">Добавить комментарий</button>
+    }
 
-    <details class="cv-more">
-        <summary>Подробнее</summary>
-        @if (_card.Last != null)
-        {
-            <dl class="facts">
-                <dt>Расстояние</dt><dd>@Fmt.Mm(_card.Last.Distance, _card.Units)</dd>
-                <dt>Оси</dt><dd>@(_card.Last.GridLocation ?? "—")</dd>
-                @if (_card.Last.GroupName != null) { <dt>Группа</dt><dd>@_card.Last.GroupName</dd> }
-                @if (_card.Last.Description != null) { <dt>Описание</dt><dd>@_card.Last.Description</dd> }
-                <dt>Статус Navisworks</dt><dd>@Fmt.Navis(_card.Last.NavisStatus)</dd>
-                <dt>Наборы</dt><dd>@_card.LeftSet ↔ @_card.RightSet</dd>
-                @foreach (var e in _card.Last.Elements)
-                {
-                    <dt>@Fmt.Model(e.ModelFile)</dt><dd>@e.Family · @e.Type · @e.Name</dd>
-                }
-                <dt>Точка Navisworks, м</dt><dd>@Fmt.Meters(_card.Last.X, _card.Units); @Fmt.Meters(_card.Last.Y, _card.Units); @Fmt.Meters(_card.Last.Z, _card.Units)</dd>
-            </dl>
-        }
+    <details class="cc-more" open="@(!Compact)">
+        <summary>История (@_card.Events.Count)</summary>
+        <ul class="history">
+            @foreach (var ev in _card.Events)
+            {
+                <li class="ev-@ev.Kind">
+                    <span class="when">@Fmt.Date(ev.Time)</span>
+                    <span class="what">
+                        @if (ev.NewState.HasValue && ev.Kind != EventKinds.Found)
+                        {
+                            <span>@Fmt.State(ev.OldState) → <span class="badge @Fmt.StateClass(ev.NewState.Value)">@Fmt.State(ev.NewState.Value)</span></span>
+                        }
+                        @if (ev.Text != null) { <span class="text">@ev.Text</span> }
+                        @if (ev.Author != null) { <span class="muted">· @ev.Author</span> }
+                    </span>
+                </li>
+            }
+        </ul>
+    </details>
+
+    <details class="cc-more">
+        <summary>В отчётах (@_card.Occurrences.Count)</summary>
         <table class="grid small">
             <thead><tr><th>Отчёт</th><th>Имя</th><th>Navisworks</th></tr></thead>
             <tbody>
@@ -111,27 +136,16 @@
                 }
             </tbody>
         </table>
+        @if (_card.Last != null)
+        {
+            <dl class="facts">
+                <dt>Наборы</dt><dd>@_card.LeftSet ↔ @_card.RightSet</dd>
+                @if (_card.Last.GroupName != null) { <dt>Группа</dt><dd>@_card.Last.GroupName</dd> }
+                @if (_card.Last.Description != null) { <dt>Описание</dt><dd>@_card.Last.Description</dd> }
+                <dt>Точка Navisworks, м</dt><dd>@Fmt.Meters(_card.Last.X, _card.Units); @Fmt.Meters(_card.Last.Y, _card.Units); @Fmt.Meters(_card.Last.Z, _card.Units)</dd>
+            </dl>
+        }
     </details>
-
-    <div class="cv-history">
-        <h3>История</h3>
-        <ul class="history">
-            @foreach (var e in _card.Events)
-            {
-                <li class="ev-@e.Kind">
-                    <span class="when">@Fmt.Date(e.Time)</span>
-                    <span class="what">
-                        @if (e.NewState.HasValue && e.Kind != EventKinds.Found)
-                        {
-                            <span>@Fmt.State(e.OldState) → <span class="badge @Fmt.StateClass(e.NewState.Value)">@Fmt.State(e.NewState.Value)</span></span>
-                        }
-                        @if (e.Text != null) { <span class="text">@e.Text</span> }
-                        @if (e.Author != null) { <span class="muted">· @e.Author</span> }
-                    </span>
-                </li>
-            }
-        </ul>
-    </div>
 </div>
 
 @code {
@@ -150,6 +164,20 @@
     private long _loadedId = -1;
     private string _comment;
     private int _copied = -1;
+
+    /// <summary>В скольких прогонах (днях отчётов) встречалась.</summary>
+    private int Repeats => _card.Occurrences.Select(o => o.ReportDate.Date).Distinct().Count();
+
+    /// <summary>Уровень: у обоих элементов один — он; разные — «А / Б».</summary>
+    private string Level
+    {
+        get
+        {
+            var levels = (_card.Last?.Elements ?? new List<ElementView>()).Select(e => e.Level).Where(l => !string.IsNullOrEmpty(l)).ToList();
+            if (levels.Count == 0) return "—";
+            return levels.Select(ClashRules.LevelKey).Distinct().Count() == 1 ? levels[0] : string.Join(" / ", levels);
+        }
+    }
 
     protected override void OnParametersSet()
     {

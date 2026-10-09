@@ -42,14 +42,25 @@
             }
         </div>
 
-        @* дополнительная лента: тип проверки и блок — выпадающими списками *@
+        @* дополнительная лента: отборы одной строкой — дата (прогон), тип проверки, блок, раздел, уровень, статус, поиск *@
         @if (_criticalities.Count > 0)
         {
             <div class="ribbon sub-ribbon">
+                <label class="dd" title="За какой прогон: последний (что сейчас), любой прошлый или все">
+                    <span>Дата</span>
+                    <select value="@_view.RunDate" @onchange="OnRunDateChanged">
+                        <option value="last">Последний прогон@(_lastRun.HasValue ? " — " + Fmt.Day(_lastRun.Value) : "")</option>
+                        @foreach (var d in RunDates)
+                        {
+                            <option value="@d.ToString("yyyy-MM-dd")">Прогон @Fmt.Day(d)</option>
+                        }
+                        <option value="all">Все прогоны</option>
+                    </select>
+                </label>
                 <label class="dd">
                     <span>Тип проверки</span>
                     <select value="@(_filter.TestType ?? "")" @onchange="OnTestChanged">
-                        <option value="">Все проверки (@ActiveIn(_filter.Criticality, _filter.Block, null))</option>
+                        <option value="">Все (@ActiveIn(_filter.Criticality, _filter.Block, null))</option>
                         @foreach (var (name, active) in TestTypes)
                         {
                             <option value="@name">@name (@active)</option>
@@ -61,13 +72,21 @@
                     <label class="dd">
                         <span>Блок</span>
                         <select value="@BlockValue" @onchange="OnBlockChanged">
-                            <option value="*">Все блоки (@ActiveIn(_filter.Criticality, null, null))</option>
+                            <option value="*">Все (@ActiveIn(_filter.Criticality, null, null))</option>
                             @foreach (var b in BlocksOf(_filter.Criticality))
                             {
                                 <option value="@(b == "" ? "-" : b)">@ReportPath.BlockTitle(b) (@ActiveIn(_filter.Criticality, b, null))</option>
                             }
                         </select>
                     </label>
+                }
+                <FacetMenu Title="Раздел" Values="_facetValues[ClashFacets.Discipline]" Selected="FacetSet(ClashFacets.Discipline)" Changed="Recompute" />
+                <FacetMenu Title="Уровень" Values="_facetValues[ClashFacets.Level]" Selected="FacetSet(ClashFacets.Level)" Changed="Recompute" />
+                <FacetMenu Title="Статус" Values="_facetValues[ClashFacets.State]" Selected="FacetSet(ClashFacets.State)" Changed="Recompute" />
+                <input class="search" type="search" placeholder="Поиск: номер элемента, тип, имя…" value="@_filter.Search" @oninput="OnSearch" />
+                @if (FilterIsSet)
+                {
+                    <button class="btn link small" @onclick="ResetFilter">Сбросить</button>
                 }
             </div>
         }
@@ -94,31 +113,31 @@
             @if (_view.Tab == 0)
             {
                 <section class="content">
-                    @* последний прогон: что появилось, исправлено, вернулось — щелчок показывает именно их *@
-                    @if (_lastRun.HasValue)
-                    {
-                        <div class="run-strip">
-                            <span class="muted">Последний прогон — @Fmt.Day(_lastRun.Value):</span>
-                            @RunChip("new", "новых", "+")
-                            @RunChip("fixed", "исправлено", "")
-                            @RunChip("returned", "вернулось после исправления", "↺ ")
-                            @if (_view.RunFilter != null)
-                            {
-                                <button class="btn link small" @onclick="() => SetRunFilter(null)">✕ показать все</button>
-                            }
-                        </div>
-                    }
-
-                    @* статус — вкладками, как «Открытые / Закрытые» в списках задач *@
-                    <div class="state-tabs">
-                        @foreach (var (state, title) in States)
+                    <div class="list-title">
+                        <h2>Коллизии <span class="muted">(@_clashes.Count)</span></h2>
+                        @if (_view.RunDate == "last" && _lastRun.HasValue)
                         {
-                            <button class="stab @(_filter.State == state ? "on" : "") @(state.HasValue ? Fmt.StateClass(state.Value) : "")" @onclick="() => SetStateFilter(state)">
-                                @title <b>@StateCount(state)</b>
-                            </button>
+                            @* что принёс последний прогон — щелчок показывает именно их *@
+                            <div class="run-strip">
+                                @RunChip("new", "новых", "+")
+                                @RunChip("fixed", "исправлено", "")
+                                @RunChip("returned", "вернулось", "↺ ")
+                                @if (_view.RunFilter != null)
+                                {
+                                    <button class="btn link small" @onclick="() => SetRunFilter(null)">✕</button>
+                                }
+                            </div>
                         }
                         <span class="spacer"></span>
-                        <span class="muted small scope-title">@ScopeTitle</span>
+                        <label class="dd">
+                            <span>Группировка</span>
+                            <select value="@_view.GroupBy" @onchange="OnGroupChanged">
+                                <option value="">Нет</option>
+                                <option value="test">По типу проверки</option>
+                                <option value="element">По элементу</option>
+                            </select>
+                        </label>
+                        <button class="btn" title="Скачать список (как сейчас отобран) — откроется в Excel" @onclick="ExportCsv">⤓ Excel</button>
                     </div>
 
                     @if (_selected.Count > 0)
@@ -143,34 +162,9 @@
                             }
                         </div>
                     }
-                    else
+                    else if (_notice != null)
                     {
-                        <div class="toolbar">
-                            <input class="search" type="search" placeholder="Поиск: номер элемента, тип, имя…" value="@_filter.Search" @oninput="OnSearch" />
-                            <FacetMenu Title="Уровень" Values="_facetValues[ClashFacets.Level]" Selected="FacetSet(ClashFacets.Level)" Changed="Recompute" />
-                            <FacetMenu Title="Раздел" Values="_facetValues[ClashFacets.Discipline]" Selected="FacetSet(ClashFacets.Discipline)" Changed="Recompute" />
-                            @if (_view.MoreFilters || FacetSet(ClashFacets.Category).Count > 0)
-                            {
-                                <FacetMenu Title="Категория" Values="_facetValues[ClashFacets.Category]" Selected="FacetSet(ClashFacets.Category)" Changed="Recompute" />
-                            }
-                            else
-                            {
-                                <button class="btn link small" title="Другие отборы" @onclick="() => _view.MoreFilters = true">Ещё ▾</button>
-                            }
-                            @if (FilterIsSet)
-                            {
-                                <button class="btn link" @onclick="ResetFilter">Сбросить отборы</button>
-                            }
-                            <span class="spacer"></span>
-                            <label class="dd">
-                                <span>Группировка</span>
-                                <select value="@_view.GroupBy" @onchange="OnGroupChanged">
-                                    <option value="">Без группировки</option>
-                                    <option value="element">По элементу</option>
-                                </select>
-                            </label>
-                            @if (_notice != null) { <span class="notice">@_notice</span> }
-                        </div>
+                        <div class="toolbar"><span class="notice">@_notice</span></div>
                     }
 
                     <div class="list" tabindex="0" @onkeydown="ListKey">
@@ -179,88 +173,84 @@
                             <div class="empty">
                                 Ничего не найдено.
                                 @if (FilterIsSet) { <button class="btn link" @onclick="ResetFilter">Сбросить отборы</button> }
-                                @if (_view.RunFilter != null) { <button class="btn link" @onclick="() => SetRunFilter(null)">Не только последний прогон</button> }
-                                @if (_filter.State.HasValue) { <button class="btn link" @onclick="() => SetStateFilter(null)">Показать все статусы</button> }
+                                @if (_view.RunDate != "all") { <button class="btn link" @onclick='() => SetRunDate("all")'>Все прогоны</button> }
                             </div>
                         }
                         else
                         {
                             <table class="grid clashes">
-                                @* элементы — в карточке, не в списке (решение разработчика); при открытой карточке — без «Впервые» *@
                                 <colgroup>
-                                    <col class="c-sel" /><col class="c-name" />
-                                    <col class="c-test" />
+                                    <col class="c-sel" /><col class="c-date" /><col class="c-test" />
+                                    @if (Wide) { <col class="c-disc" /> }
+                                    <col class="c-name" /><col class="c-dist" />
+                                    @if (Wide) { <col class="c-grid" /> }
                                     <col class="c-level" /><col class="c-state" />
-                                    @if (Wide) { <col class="c-date" /> }
+                                    @if (Wide) { <col class="c-rep" /> }
                                 </colgroup>
                                 <thead>
                                     <tr>
                                         <th class="sel" @onclick:stopPropagation="true">
                                             <input type="checkbox" checked="@AllSelected" @onchange="ToggleAll" title="Отметить все найденные (@_clashes.Count)" />
                                         </th>
-                                        @SortHeader("name", "Коллизия")
+                                        @SortHeader("date", "Дата", "Последний прогон, где была коллизия")
                                         @SortHeader("test", "Проверка")
+                                        @if (Wide) { @SortHeader("disc", "Раздел") }
+                                        @SortHeader("name", "Имя")
+                                        @SortHeader("dist", "Расстояние", "Глубина пересечения, мм — если включена в отчёт Navisworks")
+                                        @if (Wide) { @SortHeader("grid", "Оси", "Расположение по осям — если включено в отчёт Navisworks") }
                                         @SortHeader("level", "Уровень")
                                         @SortHeader("state", "Статус")
-                                        @if (Wide) { @SortHeader("first", "Впервые") }
+                                        @if (Wide) { @SortHeader("repeats", "Повторы", "В скольких прогонах встречалась") }
                                     </tr>
                                 </thead>
-                                @{ var shown = 0; }
-                                @if (_view.GroupBy == "element")
-                                {
-                                    @* группы одного элемента: одно решение — один статус на всю группу (флажок группы) *@
-                                    foreach (var g in _elementGroups)
+                                <tbody>
+                                    @foreach (var item in PageItems)
                                     {
-                                        var gkey = g.Key ?? "—";
-                                        var collapsed = _view.ElementCollapsed.Contains(gkey);
-                                        <tbody class="group">
-                                            <tr class="group-row" @onclick="() => ToggleElementGroup(gkey)">
+                                        if (item.Group != null)
+                                        {
+                                            var g = item.Group;
+                                            var collapsed = _view.GroupCollapsed.Contains(g.Key);
+                                            <tr class="group-row" @onclick="() => ToggleGroup(g.Key)">
                                                 <td class="sel" @onclick:stopPropagation="true">
                                                     <input type="checkbox" checked="@g.Rows.All(r => _selected.Contains(r.Id))" @onchange="e => ToggleRows(g.Rows, e)"
                                                            title="Отметить всю группу (@g.Rows.Count)" />
                                                 </td>
-                                                <td colspan="@(Wide ? 5 : 4)">
+                                                <td colspan="@(Wide ? 9 : 6)">
                                                     <span class="caret">@(collapsed ? "▸" : "▾")</span>
-                                                    @if (g.Key == null)
-                                                    {
-                                                        <span class="group-title muted">Остальные — по одной коллизии на элемент</span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="group-title">@Fmt.Element(g.Element)</span>
-                                                        <span class="mono small"> · @g.Element.ElementId · @Fmt.Model(g.Element.ModelFile)</span>
-                                                    }
+                                                    <span class="group-title">@g.Title</span>
+                                                    @if (g.Sub != null) { <span class="mono small muted"> · @g.Sub</span> }
                                                     <span class="group-count">@Fmt.Plural(g.Rows.Count, "коллизия", "коллизии", "коллизий")</span>
                                                 </td>
                                             </tr>
-                                            @if (!collapsed)
-                                            {
-                                                foreach (var x in g.Rows)
-                                                {
-                                                    if (shown >= _shown) { break; }
-                                                    shown++;
-                                                    @Row(x)
-                                                }
-                                            }
-                                        </tbody>
-                                    }
-                                }
-                                else
-                                {
-                                    <tbody>
-                                        @foreach (var x in _clashes.Take(_shown))
-                                        {
-                                            @Row(x)
                                         }
-                                    </tbody>
-                                }
+                                        else
+                                        {
+                                            @Row(item.Row)
+                                        }
+                                    }
+                                </tbody>
                             </table>
-                            @if (_visible.Count > _shown)
-                            {
-                                <div class="more"><button class="btn" @onclick="() => _shown += PageSize">Показать ещё (осталось @(_visible.Count - _shown))</button></div>
-                            }
                         }
                     </div>
+
+                    @if (_clashes.Count > 0)
+                    {
+                        <div class="pager">
+                            <span class="muted">@_clashes.Count</span>
+                            <button class="btn small" disabled="@(_page == 0)" @onclick="() => _page--">‹</button>
+                            @foreach (var pg in PageNumbers)
+                            {
+                                if (pg < 0) { <span class="muted">…</span> }
+                                else { <button class="btn small @(pg == _page ? "on" : "")" @onclick="() => _page = pg">@(pg + 1)</button> }
+                            }
+                            <button class="btn small" disabled="@(_page >= PageCount - 1)" @onclick="() => _page++">›</button>
+                            <select class="page-size" value="@_view.PageSize" @onchange="OnPageSizeChanged">
+                                <option value="50">50 на странице</option>
+                                <option value="100">100 на странице</option>
+                                <option value="200">200 на странице</option>
+                            </select>
+                        </div>
+                    }
                 </section>
 
                 @if (SelectedVisible)
@@ -409,12 +399,21 @@
 @code {
     [Parameter] public long Id { get; set; }
 
-    private const int PageSize = 300;
-
-    private static readonly (ClashState? State, string Title)[] States =
+    /// <summary>Строка списка: заголовок группы или коллизия.</summary>
+    private sealed class ListItem
     {
-        (ClashState.Active, "Активные"), (ClashState.Pending, "Ждут проверки"), (ClashState.Fixed, "Исправлены"), (ClashState.Accepted, "Допущены"), (null, "Все"),
-    };
+        public ListGroup Group;
+        public ClashRow Row;
+    }
+
+    /// <summary>Группа списка: по типу проверки или по элементу.</summary>
+    private sealed class ListGroup
+    {
+        public string Key;
+        public string Title;
+        public string Sub;
+        public List<ClashRow> Rows;
+    }
 
     private ProjectView _view;
     private ClashFilter _filter;
@@ -431,13 +430,14 @@
     private List<ClashRow> _runFiltered = new();
     /// <summary>Строки в порядке на экране (в развёрнутых группах) — для ↑ ↓, «N из M», «Показать ещё».</summary>
     private List<ClashRow> _visible = new();
-    private List<ElementGroup> _elementGroups = new();
+    /// <summary>Строки списка с заголовками групп — по ним страницы.</summary>
+    private List<ListItem> _items = new();
+    private int _page;
     /// <summary>Последний прогон выбранного (самый поздний отчёт проверок).</summary>
     private DateTime? _lastRun;
     private string _editingType, _typeInput;
     private readonly Dictionary<string, List<FacetValue>> _facetValues = ClashFacets.All.ToDictionary(f => f, _ => new List<FacetValue>());
     private readonly HashSet<long> _selected = new();
-    private int _shown = PageSize;
     private string _bulkComment;
     private ClashState? _pendingState;
     private string _notice;
@@ -473,6 +473,13 @@
     {
         _view = ViewState.For(Id);
         _filter = _view.Filter;
+        if (!_view.Initialized)
+        {
+            // по умолчанию — то, с чем работать: активные и ждущие проверки
+            FacetSet(ClashFacets.State).UnionWith(new[] { ((int)ClashState.Active).ToString(), ((int)ClashState.Pending).ToString() });
+            _filter.State = null;
+            _view.Initialized = true;
+        }
         LoadAll();
     }
 
@@ -504,42 +511,91 @@
     }
 
     /// <summary>
-    /// Отборы на странице: поиск → поля → последний прогон → статус; числа у значений полей, у прогона и у статусов;
-    /// группы по элементу и порядок строк на экране.
+    /// Отборы на странице: дата (прогон) → поиск → поля (раздел, уровень, статус) → что принёс последний прогон;
+    /// числа у значений полей; группы и строки списка по страницам.
     /// </summary>
     private void Recompute()
     {
-        var searched = _base.Where(c => ClashFacets.MatchesSearch(c, _filter.Search)).ToList();
+        var dated = _base.Where(InDate).ToList();
+        var searched = dated.Where(c => ClashFacets.MatchesSearch(c, _filter.Search)).ToList();
         _faceted = searched.Where(c => ClashFacets.Matches(c, _filter.Facets)).ToList();
-        _runFiltered = _faceted.Where(InRun).ToList();
-        var state = _filter.State;
-        _clashes = Sort(state.HasValue ? _runFiltered.Where(c => c.State == state.Value).ToList() : _runFiltered);
-        if (_view.GroupBy == "element")
-        {
-            _elementGroups = ClashGrouping.ByElement(_clashes);
-            _visible = _elementGroups.Where(g => !_view.ElementCollapsed.Contains(g.Key ?? "—")).SelectMany(g => g.Rows).ToList();
-        }
-        else
-        {
-            _elementGroups = new List<ElementGroup>();
-            _visible = _clashes;
-        }
+        _clashes = Sort(_faceted.Where(InRun).ToList());
         foreach (var f in ClashFacets.All)
         {
-            var values = ClashFacets.Count(searched.Where(c => (!state.HasValue || c.State == state.Value) && InRun(c)
-                                                              && ClashFacets.Matches(c, _filter.Facets, except: f)), f);
+            var values = ClashFacets.Count(searched.Where(c => InRun(c) && ClashFacets.Matches(c, _filter.Facets, except: f)), f);
             // выбранное, которого сейчас нет в списке (другие отборы), — тоже видно, с нулём: его можно снять
             var missing = FacetSet(f).Where(k => values.All(v => v.Key != k)).ToList();
             if (missing.Count > 0)
             {
                 var all = ClashFacets.Count(_base, f);
                 foreach (var key in missing)
-                    values.Add(new FacetValue { Key = key, Title = all.FirstOrDefault(v => v.Key == key)?.Title ?? key, Count = 0 });
+                    values.Add(new FacetValue { Key = key, Title = all.FirstOrDefault(v => v.Key == key)?.Title ?? FacetTitle(f, key), Count = 0 });
             }
             _facetValues[f] = values;
         }
+        BuildItems();
         _selected.IntersectWith(_clashes.Select(c => c.Id));
-        _shown = Math.Max(PageSize, Math.Min(_shown, _visible.Count));
+        _page = Math.Min(_page, Math.Max(PageCount - 1, 0));
+    }
+
+    /// <summary>Строки списка: без группировки — коллизии; с группировкой — заголовок группы и её коллизии (свёрнутая — только заголовок).</summary>
+    private void BuildItems()
+    {
+        List<ListGroup> groups = null;
+        if (_view.GroupBy == "test")
+            groups = _clashes.GroupBy(c => c.Type).OrderBy(g => g.Key, StringComparer.CurrentCultureIgnoreCase)
+                .Select(g => new ListGroup { Key = "t:" + g.Key, Title = g.Key, Rows = g.ToList() }).ToList();
+        else if (_view.GroupBy == "element")
+            groups = ClashGrouping.ByElement(_clashes).Select(g => new ListGroup
+            {
+                Key = "e:" + (g.Key ?? "—"),
+                Title = g.Key == null ? "Остальные — по одной коллизии на элемент" : Fmt.Element(g.Element),
+                Sub = g.Key == null ? null : g.Element.ElementId + " · " + Fmt.Model(g.Element.ModelFile),
+                Rows = g.Rows,
+            }).ToList();
+        _items = new List<ListItem>();
+        if (groups == null)
+        {
+            _items.AddRange(_clashes.Select(c => new ListItem { Row = c }));
+            _visible = _clashes;
+            return;
+        }
+        _visible = new List<ClashRow>();
+        foreach (var g in groups)
+        {
+            _items.Add(new ListItem { Group = g });
+            if (_view.GroupCollapsed.Contains(g.Key)) continue;
+            _items.AddRange(g.Rows.Select(r => new ListItem { Row = r }));
+            _visible.AddRange(g.Rows);
+        }
+    }
+
+    // ───── дата (прогон) ─────
+
+    /// <summary>Дни прогонов выбранного — по отчётам, новые сверху.</summary>
+    private IEnumerable<DateTime> RunDates => ScopeReports.Select(r => r.ReportDate.Date).Distinct().OrderByDescending(d => d);
+
+    /// <summary>
+    /// Коллизия относится к выбранному прогону: «последний» — есть в последнем отчёте своей проверки или исправлена им;
+    /// день — была в отчётах того дня или исправлена ими; «все» — любая.
+    /// </summary>
+    private bool InDate(ClashRow c) => _view.RunDate switch
+    {
+        "all" => true,
+        "last" => c.InLastReport || c.FixedInLastRun,
+        _ => c.Runs.Contains(_view.RunDate),
+    };
+
+    private void OnRunDateChanged(ChangeEventArgs e) => SetRunDate(e.Value?.ToString() ?? "last");
+
+    private void SetRunDate(string date)
+    {
+        _view.RunDate = date;
+        // «что принёс прогон» — только про последний
+        if (date != "last") _view.RunFilter = null;
+        _view.SelectedId = null;
+        _page = 0;
+        Recompute();
     }
 
     // ───── последний прогон ─────
@@ -569,28 +625,30 @@
         </button>
     };
 
-    /// <summary>Отбор прогона: статус — «Все» (исправленные иначе не видны), выбранная коллизия и отметки — сбрасываются.</summary>
+    /// <summary>Что принёс прогон: отбор статуса снимается (исправленные иначе не видны), выбранная коллизия — сбрасывается.</summary>
     private void SetRunFilter(string kind)
     {
         _view.RunFilter = kind;
-        if (kind != null) _filter.State = null;
+        if (kind != null) FacetSet(ClashFacets.State).Clear();
+        _page = 0;
         _view.SelectedId = null;
         _notice = null;
         Recompute();
     }
 
-    // ───── группировка по элементу ─────
+    // ───── группировка ─────
 
     private void OnGroupChanged(ChangeEventArgs e)
     {
         _view.GroupBy = e.Value?.ToString() ?? "";
-        _view.ElementCollapsed.Clear();
+        _view.GroupCollapsed.Clear();
+        _page = 0;
         Recompute();
     }
 
-    private void ToggleElementGroup(string key)
+    private void ToggleGroup(string key)
     {
-        if (!_view.ElementCollapsed.Remove(key)) _view.ElementCollapsed.Add(key);
+        if (!_view.GroupCollapsed.Remove(key)) _view.GroupCollapsed.Add(key);
         Recompute();
     }
 
@@ -601,24 +659,87 @@
         _notice = null;
     }
 
-    /// <summary>Строка списка (с группами и без — одна разметка).</summary>
+    // ───── страницы ─────
+
+    private int PageCount => Math.Max(1, (_items.Count + _view.PageSize - 1) / _view.PageSize);
+
+    private IEnumerable<ListItem> PageItems => _items.Skip(_page * _view.PageSize).Take(_view.PageSize);
+
+    /// <summary>Номера страниц: первая, последняя, соседние с текущей; пропуски — -1 («…»).</summary>
+    private IEnumerable<int> PageNumbers
+    {
+        get
+        {
+            var last = PageCount - 1;
+            var shown = new SortedSet<int> { 0, last };
+            for (var i = _page - 2; i <= _page + 2; i++) if (i >= 0 && i <= last) shown.Add(i);
+            var prev = -1;
+            foreach (var i in shown)
+            {
+                if (prev >= 0 && i - prev > 1) yield return -1;
+                yield return i;
+                prev = i;
+            }
+        }
+    }
+
+    private void OnPageSizeChanged(ChangeEventArgs e)
+    {
+        _view.PageSize = int.TryParse(e.Value?.ToString(), out var n) ? n : 50;
+        _page = 0;
+    }
+
+    /// <summary>Страница, на которой коллизия.</summary>
+    private int PageOf(long id)
+    {
+        var i = _items.FindIndex(x => x.Row != null && x.Row.Id == id);
+        return i < 0 ? _page : i / _view.PageSize;
+    }
+
+    /// <summary>Строка списка.</summary>
     private RenderFragment Row(ClashRow x) => __builder =>
     {
+        var disc = ClashFacets.DisciplinePair(x);
         <tr id="row-@x.Id" class="@(x.Id == _view.SelectedId ? "selected" : "") @(x.InLastReport ? "" : "gone")" @onclick="() => Select(x.Id)">
             <td class="sel" @onclick:stopPropagation="true">
                 <input type="checkbox" checked="@_selected.Contains(x.Id)" @onchange="e => Toggle(x.Id, e)" />
             </td>
+            <td>@Fmt.Day(x.LastSeen)</td>
+            <td class="cut" title="@(x.Type != x.TestName ? x.Type + " (в Navisworks: " + x.TestName + ")" : x.TestName)">
+                @if (ShowBlock) { <span class="tag">@x.Block</span> }@x.Type
+            </td>
+            @if (Wide) { <td>@if (disc != null) { <span class="disc">@disc</span> }</td> }
             <td class="name">
                 @(x.Name ?? "—")
-                @if (ShowBlock) { <span class="tag">@x.Block</span> }
                 @if (x.ReturnCount > 0) { <span class="tag returned" title="Возвращалась после исправления: @x.ReturnCount">↺@(x.ReturnCount > 1 ? x.ReturnCount.ToString() : "")</span> }
             </td>
-            <td class="cut" title="@(x.Type != x.TestName ? x.Type + " (в Navisworks: " + x.TestName + ")" : x.TestName)">@x.Type</td>
+            <td>@if (x.Distance.HasValue) { <span class="dist">@Fmt.MmAbs(x.Distance, x.Units)</span> } else { <span class="muted">—</span> }</td>
+            @if (Wide) { <td class="cut" title="@x.GridLocation">@(x.GridLocation ?? "—")</td> }
             <td class="cut" title="@Level(x)">@Level(x)</td>
             <td><span class="badge @Fmt.StateClass(x.State)">@Fmt.State(x.State)</span></td>
-            @if (Wide) { <td title="Последний раз — @Fmt.Day(x.LastSeen)">@Fmt.Day(x.FirstSeen)</td> }
+            @if (Wide) { <td class="num">@x.Repeats</td> }
         </tr>
     };
+
+    /// <summary>Скачать список, как он сейчас отобран, — CSV для Excel (разделитель «;», UTF-8 с BOM — так Excel открывает кириллицу).</summary>
+    private async Task ExportCsv()
+    {
+        static string Q(string v) => "\"" + (v ?? "").Replace("\"", "\"\"") + "\"";
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine(string.Join(";", new[] { "Дата", "Критичность", "Блок", "Тип проверки", "Проверка в Navisworks", "Раздел", "Имя", "Расстояние, мм", "Оси", "Уровень",
+            "Статус", "Повторы", "Возвращалась", "Элемент 1", "Номер 1", "Модель 1", "Элемент 2", "Номер 2", "Модель 2" }.Select(Q)));
+        foreach (var x in _clashes)
+            sb.AppendLine(string.Join(";", new[]
+            {
+                Fmt.Day(x.LastSeen), x.Criticality, x.Block, x.Type, x.TestName, ClashFacets.DisciplinePair(x), x.Name,
+                x.Distance.HasValue ? Fmt.MmAbs(x.Distance, x.Units).Replace(" мм", "") : "", x.GridLocation, Level(x),
+                Fmt.State(x.State), x.Repeats.ToString(), x.ReturnCount.ToString(),
+                Fmt.Element(x.A), x.A?.ElementId?.ToString(), Fmt.Model(x.A?.ModelFile),
+                Fmt.Element(x.B), x.B?.ElementId?.ToString(), Fmt.Model(x.B?.ModelFile),
+            }.Select(Q)));
+        var name = $"Коллизии — {_project.Name} — {DateTime.Now:yyyy-MM-dd}.csv";
+        await JS.InvokeVoidAsync("ras.download", name, sb.ToString());
+    }
 
     /// <summary>Кнопка статуса: «Исправлена» ставит «Ждёт проверки».</summary>
     private static string StateButtonTitle(ClashState s) => s == ClashState.Pending ? "Исправлена" : Fmt.State(s);
@@ -638,13 +759,16 @@
         LoadAll();
     }
 
+    /// <summary>Подпись значения, которого нет ни у одной коллизии (статус — по названию, остальное — как есть).</summary>
+    private static string FacetTitle(string facet, string key) =>
+        facet == ClashFacets.State && int.TryParse(key, out var n) ? ClashRules.Title((ClashState)n) : key;
+
     private HashSet<string> FacetSet(string facet)
     {
         if (!_filter.Facets.TryGetValue(facet, out var set)) _filter.Facets[facet] = set = new HashSet<string>();
         return set;
     }
 
-    private int StateCount(ClashState? state) => state.HasValue ? _runFiltered.Count(c => c.State == state.Value) : _runFiltered.Count;
 
     // ───── дерево: критичность, блок, проверка ─────
 
@@ -674,7 +798,7 @@
         _view.SelectedId = null;
         _selected.Clear();
         _notice = null;
-        _shown = PageSize;
+        _page = 0;
         LoadAll();
     }
 
@@ -820,14 +944,7 @@
 
     private static string CriticalityClass(string c) => c == "Высокая" ? "crit-high" : c == "Средняя" ? "crit-mid" : "";
 
-    // ───── статус, поиск, сброс ─────
-
-    private void SetStateFilter(ClashState? state)
-    {
-        _filter.State = state;
-        _notice = null;
-        Recompute();
-    }
+    // ───── поиск, сброс ─────
 
     private async Task OnSearch(ChangeEventArgs e)
     {
@@ -840,28 +957,37 @@
         Recompute();
     }
 
+    /// <summary>Сбросить отборы: поиск, раздел, уровень, «что принёс прогон»; статус — к открытым (активные и ждущие проверки).</summary>
     private void ResetFilter()
     {
         _filter.Search = null;
         foreach (var set in _filter.Facets.Values) set.Clear();
+        FacetSet(ClashFacets.State).UnionWith(new[] { ((int)ClashState.Active).ToString(), ((int)ClashState.Pending).ToString() });
         _view.RunFilter = null;
+        _page = 0;
         Recompute();
     }
 
     // ───── сортировка ─────
 
-    private RenderFragment SortHeader(string key, string title) => __builder =>
+    /// <summary>Заголовок столбца с сортировкой: щелчок — по нему, повторный — обратный порядок; ⇅ — можно сортировать.</summary>
+    private RenderFragment SortHeader(string key, string title, string tip = null) => __builder =>
     {
         var on = _view.SortKey == key;
-        <th class="sortable @(on ? "sorted" : "")" @onclick="() => SortBy(key)" title="Сортировать">
-            @title @(on ? (_view.SortDesc ? "▼" : "▲") : "")
+        <th class="sortable @(on ? "sorted" : "")" @onclick="() => SortBy(key)" title="@(tip ?? "Сортировать")">
+            @title <span class="sort-mark">@(on ? (_view.SortDesc ? "▼" : "▲") : "⇅")</span>
         </th>
     };
 
     private void SortBy(string key)
     {
         if (_view.SortKey == key) _view.SortDesc = !_view.SortDesc;
-        else { _view.SortKey = key; _view.SortDesc = false; }
+        else
+        {
+            _view.SortKey = key;
+            // даты, расстояние и повторы — сначала новые и большие
+            _view.SortDesc = key == "date" || key == "dist" || key == "repeats";
+        }
         Recompute();
     }
 
@@ -870,16 +996,29 @@
     {
         Func<ClashRow, IComparable> key = _view.SortKey switch
         {
+            "date" => c => c.LastSeen,
+            "test" => c => c.Type,
+            "disc" => c => ClashFacets.DisciplinePair(c) ?? "",
             "name" => c => NameNumber(c.Name),
-            "test" => c => c.TestName,
+            "dist" => c => c.Distance.HasValue ? Math.Abs(c.Distance.Value) : -1,
+            "grid" => c => c.GridLocation ?? "",
             "level" => c => LevelOrder(c),
-            "state" => c => (int)c.State,
-            "first" => c => c.FirstSeen,
+            "state" => c => StateOrder(c.State),
+            "repeats" => c => c.Repeats,
             _ => null,
         };
         if (key == null) return list.ToList();
-        return (_view.SortDesc ? list.OrderByDescending(key) : list.OrderBy(key)).ToList();
+        var sorted = _view.SortDesc ? list.OrderByDescending(key) : list.OrderBy(key);
+        return sorted.ThenBy(c => NameNumber(c.Name)).ToList();
     }
+
+    private static int StateOrder(ClashState s) => s switch
+    {
+        ClashState.Active => 0,
+        ClashState.Pending => 1,
+        ClashState.Fixed => 2,
+        _ => 3,
+    };
 
     private static long NameNumber(string name)
     {
@@ -910,7 +1049,7 @@
         var next = i < 0 ? 0 : i + step;
         if (next < 0 || next >= _visible.Count) return;
         _view.SelectedId = _visible[next].Id;
-        if (next >= _shown) _shown = next + 1;
+        _page = PageOf(_view.SelectedId.Value);
         StateHasChanged();
         await JS.InvokeVoidAsync("ras.reveal", "row-" + _view.SelectedId);
     }
@@ -933,6 +1072,7 @@
         var next = now >= 0 ? now + 1 : index;
         if (next < 0 || next >= _visible.Count) return;
         _view.SelectedId = _visible[next].Id;
+        _page = PageOf(_view.SelectedId.Value);
         StateHasChanged();
         await JS.InvokeVoidAsync("ras.reveal", "row-" + _view.SelectedId);
     }
