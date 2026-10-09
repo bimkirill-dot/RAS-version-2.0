@@ -18,25 +18,11 @@
     <div class="project-head">
         <nav class="crumbs"><a href="/">Проекты</a> ›</nav>
         <h1>@_project.Name</h1>
-        <div class="tabs">
-            <button class="@Tab(0)" @onclick="() => _view.Tab = 0">Коллизии</button>
-            <button class="@Tab(1)" @onclick="() => _view.Tab = 1">Проверки</button>
-            <button class="@Tab(3)" @onclick="() => _view.Tab = 3">Проект</button>
-        </div>
     </div>
 
-    @if (_view.Tab == 3)
+    @if (_view.Tab != 3)
     {
-        <div class="form">
-            <label>Название <input @bind="_editName" /></label>
-            <label>Папка с отчётами проекта <input class="wide" @bind="_editFolder" /></label>
-            <button class="btn primary" @onclick="SaveProject">Сохранить</button>
-            @if (_editMessage != null) { <p class="@(_editError ? "error" : "muted")">@_editMessage</p> }
-        </div>
-    }
-    else
-    {
-        @* основная лента: критичность (число — активные) *@
+        @* основная лента: критичность (число — активные); «Все» — все критичности *@
         <div class="ribbon main-ribbon" role="tablist" aria-label="Критичность">
             @foreach (var cr in _criticalities)
             {
@@ -44,9 +30,15 @@
                     @CriticalityTitle(cr) <b>@ActiveIn(cr, null, null)</b>
                 </button>
             }
+            @if (ShowAllCriticalities)
+            {
+                <button class="crit @(_filter.Criticality == null ? "on" : "")" @onclick="() => SetScope(null, null, null)">
+                    Все <b>@ActiveIn(null, null, null)</b>
+                </button>
+            }
             @if (_criticalities.Count == 0)
             {
-                <span class="muted">Отчётов ещё нет — вкладка «Отчёты», «Проверить папку сейчас».</span>
+                <span class="muted">Отчётов ещё нет — «Отчёты» на боковой панели, «Проверить папку сейчас».</span>
             }
         </div>
 
@@ -60,7 +52,7 @@
                         <option value="">Все проверки (@ActiveIn(_filter.Criticality, _filter.Block, null))</option>
                         @foreach (var t in DropdownTests)
                         {
-                            <option value="@t.Id">@(_filter.Block == null && t.Block != "" ? t.Block + " · " : "")@t.Name (@t.Counts.Active)</option>
+                            <option value="@t.Id">@TestOptionTitle(t) (@t.Counts.Active)</option>
                         }
                     </select>
                 </label>
@@ -79,13 +71,23 @@
                 }
             </div>
         }
+    }
 
-        <div class="body @(_view.Tab == 0 && SelectedVisible ? "with-panel" : "")">
-            @* боковая панель — кнопки, которые относятся только к этому проекту; пока место под них *@
-            <aside class="side" aria-label="Кнопки проекта">
+    <div class="body @(_view.Tab == 0 && SelectedVisible ? "with-panel" : "")">
+            @* боковая панель — разделы этого проекта *@
+            <aside class="side" aria-label="Разделы проекта">
                 <div class="side-title">Проект</div>
+                <button class="side-btn @(_view.Tab == 0 ? "on" : "")" @onclick="() => _view.Tab = 0" title="Коллизии — список и карточка">
+                    <span>Коллизии</span><b>@ActiveIn(_filter.Criticality, _filter.Block, _filter.TestId)</b>
+                </button>
+                <button class="side-btn @(_view.Tab == 1 ? "on" : "")" @onclick="() => _view.Tab = 1" title="Проверки Navisworks — сколько коллизий в каждой">
+                    <span>Проверки</span><b>@ScopeTests.Count()</b>
+                </button>
                 <button class="side-btn @(_view.Tab == 2 ? "on" : "")" @onclick="() => _view.Tab = 2" title="Загруженные отчёты Navisworks этого проекта">
                     <span>Отчёты</span><b>@ScopeReports.Count()</b>
+                </button>
+                <button class="side-btn @(_view.Tab == 3 ? "on" : "")" @onclick="() => _view.Tab = 3" title="Название и папка проекта">
+                    <span>Проект</span>
                 </button>
             </aside>
 
@@ -240,7 +242,7 @@
                     </table>
                 </section>
             }
-            else
+            else if (_view.Tab == 2)
             {
                 <section class="content scroll">
                     <div class="toolbar">
@@ -308,8 +310,18 @@
                     }
                 </section>
             }
-        </div>
-    }
+            else
+            {
+                <section class="content scroll">
+                    <div class="form">
+                        <label>Название <input @bind="_editName" /></label>
+                        <label>Папка с отчётами проекта <input class="wide" @bind="_editFolder" /></label>
+                        <button class="btn primary" @onclick="SaveProject">Сохранить</button>
+                        @if (_editMessage != null) { <p class="@(_editError ? "error" : "muted")">@_editMessage</p> }
+                    </div>
+                </section>
+            }
+    </div>
 </div>
 
 @code {
@@ -360,7 +372,7 @@
     {
         get
         {
-            var parts = new List<string> { CriticalityTitle(_filter.Criticality ?? "") };
+            var parts = new List<string> { _filter.Criticality == null ? "Все критичности" : CriticalityTitle(_filter.Criticality) };
             if (!string.IsNullOrEmpty(_filter.Block)) parts.Add(_filter.Block);
             var test = _tests.FirstOrDefault(t => t.Id == _filter.TestId);
             if (test != null) parts.Add(test.Name);
@@ -386,7 +398,7 @@
         _tests = Store.Tests(Id);
         _reports = Store.Reports(Id);
         _criticalities = _tests.Select(t => t.Criticality).Distinct().OrderBy(ReportPath.CriticalityOrder).ToList();
-        if (!_view.ScopeChosen || _filter.Criticality == null || !_criticalities.Contains(_filter.Criticality))
+        if (!_view.ScopeChosen || (_filter.Criticality != null && !_criticalities.Contains(_filter.Criticality)))
         {
             // при открытии — первая критичность (высокая), все блоки
             _filter.Criticality = _criticalities.FirstOrDefault();
@@ -397,7 +409,7 @@
         if (_filter.Block != null && !BlocksOf(_filter.Criticality).Contains(_filter.Block)) _filter.Block = null;
         if (_filter.TestId.HasValue && !_tests.Any(t => t.Id == _filter.TestId && InScope(t))) _filter.TestId = null;
         _maxActive = ScopeTests.Select(t => t.Counts.Active).DefaultIfEmpty(0).Max();
-        _base = _filter.Criticality == null ? new List<ClashRow>() : Store.Clashes(Id, _filter);
+        _base = _criticalities.Count == 0 ? new List<ClashRow>() : Store.Clashes(Id, _filter);
         Recompute();
     }
 
@@ -435,11 +447,12 @@
 
     // ───── дерево: критичность, блок, проверка ─────
 
-    private List<string> BlocksOf(string criticality) => _tests.Where(t => t.Criticality == criticality).Select(t => t.Block).Distinct()
+    /// <summary>Блоки критичности (null — всех критичностей).</summary>
+    private List<string> BlocksOf(string criticality) => _tests.Where(t => criticality == null || t.Criticality == criticality).Select(t => t.Block).Distinct()
         .OrderBy(ReportPath.BlockOrder).ThenBy(b => b, StringComparer.CurrentCultureIgnoreCase).ToList();
 
     private IEnumerable<TestRow> TestsOf(string criticality, string block) =>
-        _tests.Where(t => t.Criticality == criticality && t.Block == block).OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase);
+        _tests.Where(t => (criticality == null || t.Criticality == criticality) && t.Block == block).OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase);
 
     private bool InScope(TestRow t) => (_filter.Criticality == null || t.Criticality == _filter.Criticality)
                                        && (_filter.Block == null || t.Block == _filter.Block)
@@ -450,7 +463,8 @@
 
     /// <summary>Активные в критичности, блоке (null — во всех), проверке (null — во всех).</summary>
     private int ActiveIn(string criticality, string block, long? testId) =>
-        _tests.Where(t => t.Criticality == criticality && (block == null || t.Block == block) && (testId == null || t.Id == testId)).Sum(t => t.Counts.Active);
+        _tests.Where(t => (criticality == null || t.Criticality == criticality) && (block == null || t.Block == block) && (testId == null || t.Id == testId))
+            .Sum(t => t.Counts.Active);
 
     /// <summary>Другая критичность, блок или проверка — другая работа: отметки и выбранная коллизия сбрасываются, отборы — нет.</summary>
     private void SetScope(string criticality, string block, long? testId)
@@ -468,8 +482,9 @@
 
     /// <summary>Проверки в списке «Тип проверки»: выбранной критичности и выбранного блока (или всех блоков).</summary>
     private IEnumerable<TestRow> DropdownTests => _tests
-        .Where(t => t.Criticality == _filter.Criticality && (_filter.Block == null || t.Block == _filter.Block))
-        .OrderBy(t => ReportPath.BlockOrder(t.Block)).ThenBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase);
+        .Where(t => (_filter.Criticality == null || t.Criticality == _filter.Criticality) && (_filter.Block == null || t.Block == _filter.Block))
+        .OrderBy(t => ReportPath.CriticalityOrder(t.Criticality))
+        .ThenBy(t => ReportPath.BlockOrder(t.Block)).ThenBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase);
 
     /// <summary>Список «Блок» — когда в папках выбранной критичности блоки есть.</summary>
     private bool ShowBlocks
@@ -479,6 +494,19 @@
             var blocks = BlocksOf(_filter.Criticality);
             return blocks.Count > 1 || (blocks.Count == 1 && blocks[0] != "");
         }
+    }
+
+    /// <summary>«Все» на основной ленте — когда в папках есть критичность (иначе кнопка повторяла бы единственную).</summary>
+    private bool ShowAllCriticalities => _criticalities.Count > 1 || (_criticalities.Count == 1 && _criticalities[0] != "");
+
+    /// <summary>Подпись проверки в «Тип проверки»: при «Все» — с критичностью, при «Все блоки» — с блоком.</summary>
+    private string TestOptionTitle(TestRow t)
+    {
+        var parts = new List<string>();
+        if (_filter.Criticality == null && _criticalities.Count > 1 && t.Criticality != "") parts.Add(t.Criticality);
+        if (_filter.Block == null && t.Block != "") parts.Add(t.Block);
+        parts.Add(t.Name);
+        return string.Join(" · ", parts);
     }
 
     private string BlockValue => _filter.Block == null ? "*" : _filter.Block == "" ? "-" : _filter.Block;
@@ -774,8 +802,6 @@
         _editMessage = "Сохранено.";
         LoadAll();
     }
-
-    private string Tab(int i) => _view.Tab == i ? "tab active" : "tab";
 
     private static string DateSourceTitle(string source) => source switch
     {
