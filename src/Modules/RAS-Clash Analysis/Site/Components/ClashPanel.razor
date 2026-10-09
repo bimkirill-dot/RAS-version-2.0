@@ -17,7 +17,7 @@
         <div class="muted small">
             @if (_card.Criticality != "") { <span>@ReportPath.CriticalityTitle(_card.Criticality) · </span> }
             @if (_card.Block != "") { <span>@_card.Block · </span> }
-            @_card.TestName · впервые @Fmt.Day(_card.FirstSeen)@(_card.LastSeen != _card.FirstSeen ? " · последний раз " + Fmt.Day(_card.LastSeen) : "")
+            @Fmt.Test(_card.TestName) · впервые @Fmt.Day(_card.FirstSeen)@(_card.LastSeen != _card.FirstSeen ? " · последний раз " + Fmt.Day(_card.LastSeen) : "")
             @if (!_card.InLastReport) { <span> · <b>нет в последнем отчёте</b></span> }
         </div>
     </div>

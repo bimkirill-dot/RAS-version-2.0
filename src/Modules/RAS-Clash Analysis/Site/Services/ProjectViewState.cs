@@ -3,23 +3,20 @@ using RASv2.ClashAnalysis.Site.Data;
 
 namespace RASv2.ClashAnalysis.Site.Services;
 
-/// <summary>Как человек смотрит на проект: отбор, сортировка, выбранная коллизия, вкладка.</summary>
+/// <summary>Как человек смотрит на список коллизий проекта: статус, поиск, поля, свёрнутые группы, выбранная коллизия.</summary>
 public sealed class ProjectView
 {
     public ClashFilter Filter { get; } = new ClashFilter { State = ClashState.Active };
-    /// <summary>Критичность и блок уже выбраны (иначе при открытии проекта — первая критичность, все блоки).</summary>
-    public bool ScopeChosen { get; set; }
-    public string SortKey { get; set; }
-    public bool SortDesc { get; set; }
+    /// <summary>Свёрнутые группы «что с чем» (номера проверок).</summary>
+    public HashSet<long> Collapsed { get; } = new HashSet<long>();
     public long? SelectedId { get; set; }
-    public int Tab { get; set; }
     /// <summary>После смены статуса в карточке — сразу к следующей коллизии.</summary>
     public bool AutoNext { get; set; } = true;
 }
 
 /// <summary>
-/// Вид проекта на время работы с сайтом (одна вкладка браузера): ушёл в отдельную карточку коллизии, вернулся —
-/// отбор и выбранная коллизия на месте. Обновление страницы (F5) начинает заново.
+/// Вид списка на время работы с сайтом (одна вкладка браузера): ушёл в отдельную карточку коллизии или в обзор, вернулся —
+/// статус, поиск, поля, свёрнутые группы на месте. Обновление страницы (F5) начинает заново.
 /// </summary>
 public sealed class ProjectViewState
 {
@@ -30,4 +27,18 @@ public sealed class ProjectViewState
         if (!_views.TryGetValue(projectId, out var v)) _views[projectId] = v = new ProjectView();
         return v;
     }
+}
+
+/// <summary>
+/// Адрес списка коллизий: критичность и блок — в адресе (?c=…&amp;b=…), чтобы ссылку можно было открыть снова и переслать.
+/// «*» (или нет параметра) — все, «-» — без критичности / без блока.
+/// </summary>
+public static class ScopeQuery
+{
+    public static string Encode(string value) => value == null ? "*" : value == "" ? "-" : value;
+
+    public static string Decode(string query) => query == null || query == "*" ? null : query == "-" ? "" : query;
+
+    public static string ListLink(long projectId, string criticality, string block) =>
+        $"project/{projectId}/clashes?c={Uri.EscapeDataString(Encode(criticality))}&b={Uri.EscapeDataString(Encode(block))}";
 }

@@ -11,7 +11,7 @@
 }
 
 <nav class="crumbs"><a href="/">Проекты</a> › <a href="project/@_projectId">@_projectName</a> ›</nav>
-<p><a href="project/@_projectId">← К списку коллизий</a></p>
+<p><a href="@_listLink">← К списку коллизий</a></p>
 
 <ClashPanel ClashId="Id" />
 
@@ -21,6 +21,7 @@
     private long? _projectId;
     private string _projectName;
     private string _title;
+    private string _listLink;
 
     protected override void OnParametersSet()
     {
@@ -28,5 +29,6 @@
         _projectId = card?.ProjectId;
         _projectName = card?.ProjectName;
         _title = card?.Last?.Name;
+        _listLink = card == null ? "/" : ScopeQuery.ListLink(card.ProjectId, card.Criticality, card.Block);
     }
 }

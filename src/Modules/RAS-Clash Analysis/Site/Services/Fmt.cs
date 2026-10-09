@@ -50,6 +50,17 @@ public static class Fmt
         return parts.Count == 0 ? e.Name ?? "—" : string.Join(" · ", parts);
     }
 
+    /// <summary>
+    /// Проверка — «что с чем»: «АР Стены/МЕР Трубы» → «АР Стены ↔ МЕР Трубы» (наборы проверки Navisworks через «/»).
+    /// Косая черта больше одного раза — название как есть: не угадываем, где граница.
+    /// </summary>
+    public static string Test(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return "—";
+        var i = name.IndexOf('/');
+        return i > 0 && i == name.LastIndexOf('/') ? name.Substring(0, i).Trim() + " ↔ " + name.Substring(i + 1).Trim() : name;
+    }
+
     /// <summary>«у 1 коллизии», «у 21 коллизии», «у 5 коллизий» — после «у».</summary>
     public static string Clashes(int n) => n + (n % 10 == 1 && n % 100 != 11 ? " коллизии" : " коллизий");
 

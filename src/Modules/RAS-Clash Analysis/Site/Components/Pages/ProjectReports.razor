@@ -1,0 +1,96 @@
+@page "/project/{Id:long}/reports"
+@inject ClashStore Store
+@inject ReportImporter Importer
+
+<PageTitle>Папка и отчёты · @(_project?.Name) · RAS Clash Analysis</PageTitle>
+
+@if (_project == null)
+{
+    <h1>Проект не найден</h1>
+    <p><a href="/">К проектам</a></p>
+    return;
+}
+
+<nav class="crumbs"><a href="/">Проекты</a> › <a href="project/@Id">@_project.Name</a> ›</nav>
+<h1>Папка и отчёты</h1>
+
+<div class="form">
+    <label>Название проекта <input @bind="_editName" /></label>
+    <label>Папка проекта <input class="wide" @bind="_editFolder" /></label>
+    <div class="actions">
+        <button class="btn primary" @onclick="SaveProject">Сохранить</button>
+        @if (_editMessage != null) { <span class="@(_editError ? "error" : "muted")">@_editMessage</span> }
+    </div>
+</div>
+
+<h2>Загруженные отчёты</h2>
+<div class="actions">
+    <button class="btn" disabled="@Importer.Busy" @onclick="Scan">@(Importer.Busy ? "Ищем новые отчёты…" : "Найти новые отчёты сейчас")</button>
+    <span class="muted">Сайт ищет их и сам — раз в несколько минут.</span>
+</div>
+<ImportResults Results="Importer.LastResults" />
+<table class="grid">
+    <thead><tr><th>Дата отчёта</th><th>Критичность</th><th>Блок</th><th>Файл</th><th class="num">Коллизий</th><th>Загружен</th></tr></thead>
+    <tbody>
+        @foreach (var r in _reports)
+        {
+            <tr>
+                <td title="@DateSourceTitle(r.DateSource)">@(r.DateSource == ReportPath.DateFromFolder ? Fmt.Day(r.ReportDate) : Fmt.Date(r.ReportDate))@(r.DateSource == ReportPath.DateFromXml ? "" : "*")</td>
+                <td>@(r.Criticality == "" ? "—" : r.Criticality)</td>
+                <td>@(r.Block == "" ? "—" : r.Block)</td>
+                <td class="path">@r.FilePath</td>
+                <td class="num">@r.Results</td>
+                <td>@Fmt.Date(r.Imported)</td>
+            </tr>
+        }
+    </tbody>
+</table>
+@if (_reports.Any(r => r.DateSource != ReportPath.DateFromXml))
+{
+    <p class="muted small">* — в отчёте нет даты обнаружения коллизий: дата — из названия папки прогона, а если её нет — время файла. Дату можно включить в настройках отчёта Navisworks.</p>
+}
+
+@code {
+    [Parameter] public long Id { get; set; }
+
+    private ProjectRow _project;
+    private List<ReportRow> _reports = new();
+    private string _editName, _editFolder, _editMessage;
+    private bool _editError;
+
+    protected override void OnParametersSet() => Load();
+
+    private void Load()
+    {
+        _project = Store.Project(Id);
+        if (_project == null) return;
+        _editName ??= _project.Name;
+        _editFolder ??= _project.Folder;
+        _reports = Store.Reports(Id);
+    }
+
+    private async Task Scan()
+    {
+        await Importer.ScanAsync(Id);
+        Load();
+    }
+
+    private void SaveProject()
+    {
+        _editError = true;
+        if (string.IsNullOrWhiteSpace(_editName)) { _editMessage = "Укажите название."; return; }
+        var folder = (_editFolder ?? "").Trim().Trim('"');
+        if (!Directory.Exists(folder)) { _editMessage = "Папка не найдена или недоступна: " + folder; return; }
+        Store.UpdateProject(Id, _editName, folder);
+        _editError = false;
+        _editMessage = "Сохранено.";
+        Load();
+    }
+
+    private static string DateSourceTitle(string source) => source switch
+    {
+        ReportPath.DateFromXml => "Дата — из отчёта (дата обнаружения коллизий)",
+        ReportPath.DateFromFolder => "Дата — из названия папки прогона",
+        _ => "Дата — время файла отчёта",
+    };
+}
