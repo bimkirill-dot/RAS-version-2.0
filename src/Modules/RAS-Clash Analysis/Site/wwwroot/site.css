@@ -1,0 +1,182 @@
+/* Сайт RAS-Clash Analysis. Цвета — только через переменные; тема — как в системе (светлая / тёмная). */
+:root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --text: #1d232b;
+    --muted: #66707c;
+    --line: #dde1e6;
+    --accent: #2f6fb0;
+    --active: #c2410c;
+    --active-bg: #fdebe2;
+    --fixed: #2e7d32;
+    --fixed-bg: #e3f2e4;
+    --accepted: #5b5f97;
+    --accepted-bg: #e8e8f6;
+    --error: #b42318;
+    --row-hover: #eef3f9;
+    --bar: #f3c2ab;
+    color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #16191d;
+        --panel: #1f2328;
+        --text: #e4e7eb;
+        --muted: #9aa3ad;
+        --line: #343a42;
+        --accent: #6aa7e8;
+        --active: #f0915f;
+        --active-bg: #47291b;
+        --fixed: #7cc47f;
+        --fixed-bg: #1f3a22;
+        --accepted: #a5a9e6;
+        --accepted-bg: #2b2c4a;
+        --error: #f2867a;
+        --row-hover: #262c33;
+        --bar: #6b3a24;
+        color-scheme: dark;
+    }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.45 "Segoe UI", system-ui, sans-serif;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+header.top {
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    padding: 10px 24px;
+}
+.brand { font-weight: 600; font-size: 15px; color: var(--text); }
+
+main { padding: 16px 24px 40px; max-width: 1600px; }
+
+h1 { font-size: 22px; margin: 4px 0 12px; display: flex; align-items: center; gap: 12px; }
+h2 { font-size: 16px; margin: 24px 0 8px; }
+
+.crumbs { color: var(--muted); font-size: 13px; }
+.muted { color: var(--muted); }
+.error { color: var(--error); }
+.path { font-family: Consolas, monospace; font-size: 12px; color: var(--muted); word-break: break-all; }
+.mono { font-family: Consolas, monospace; }
+
+/* таблицы */
+.table-wrap { max-height: calc(100vh - 330px); overflow: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+table.grid { border-collapse: collapse; width: 100%; background: var(--panel); }
+table.grid th, table.grid td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+table.grid th { position: sticky; top: 0; background: var(--panel); font-weight: 600; font-size: 13px; color: var(--muted); z-index: 1; }
+table.grid tbody tr:hover { background: var(--row-hover); }
+table.grid .num { text-align: right; white-space: nowrap; }
+table.grid .sel { width: 28px; }
+table.clashes tr.gone td { color: var(--muted); }
+table.clashes .test { max-width: 260px; }
+.el-sub { font-size: 12px; color: var(--muted); }
+
+/* статусы */
+.badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; white-space: nowrap; }
+.badge.big { font-size: 14px; padding: 2px 10px; font-weight: 500; }
+.badge.state-active { background: var(--active-bg); color: var(--active); }
+.badge.state-fixed { background: var(--fixed-bg); color: var(--fixed); }
+.badge.state-accepted { background: var(--accepted-bg); color: var(--accepted); }
+
+/* плитки */
+.tiles { display: flex; gap: 12px; margin: 8px 0 16px; flex-wrap: wrap; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 18px; min-width: 130px; }
+.tile .value { font-size: 26px; font-weight: 600; }
+.tile .label { color: var(--muted); font-size: 13px; }
+.tile.state-active .value { color: var(--active); }
+.tile.state-fixed .value { color: var(--fixed); }
+.tile.state-accepted .value { color: var(--accepted); }
+
+/* вкладки */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+.tab { background: none; border: none; border-bottom: 2px solid transparent; padding: 8px 14px; color: var(--muted); cursor: pointer; font: inherit; }
+.tab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+/* поля и кнопки */
+input, select, textarea {
+    font: inherit; color: var(--text); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 5px; padding: 5px 8px;
+}
+textarea { width: 100%; resize: vertical; }
+.btn {
+    font: inherit; cursor: pointer; padding: 5px 12px; border-radius: 5px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--text);
+}
+.btn:hover:not(:disabled) { border-color: var(--accent); }
+.btn:disabled { opacity: .55; cursor: default; }
+.btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn.link { border: none; background: none; color: var(--accent); padding: 5px 6px; }
+.btn.state-active { color: var(--active); }
+.btn.state-fixed { color: var(--fixed); }
+.btn.state-accepted { color: var(--accepted); }
+.btn.current { font-weight: 600; }
+
+.filters, .bulk, .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.filters select { max-width: 280px; }
+.filters .search { min-width: 240px; }
+.check { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
+.bulk .comment { min-width: 280px; }
+
+.form { display: flex; flex-direction: column; gap: 8px; max-width: 760px; }
+.form label { display: flex; flex-direction: column; gap: 3px; color: var(--muted); font-size: 13px; }
+.form input { color: var(--text); }
+.form .btn { align-self: flex-start; }
+
+details.import { margin: 8px 0; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; }
+details.import ul { margin: 6px 0; padding-left: 18px; }
+
+footer.status { margin-top: 32px; font-size: 12px; color: var(--muted); }
+
+/* полоски в таблицах */
+.bar-cell { position: relative; display: inline-block; min-width: 120px; text-align: right; }
+.bar { position: absolute; left: 0; top: 2px; bottom: 2px; background: var(--bar); border-radius: 3px; }
+.bar-value { position: relative; padding-right: 4px; }
+
+/* карточка */
+.card-layout { display: grid; grid-template-columns: minmax(300px, 640px) minmax(260px, 1fr); gap: 20px; align-items: start; }
+.shot img { width: 100%; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); }
+.no-shot { height: 240px; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--line); border-radius: 6px; color: var(--muted); }
+.side h2:first-child { margin-top: 0; }
+.state-buttons { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+.side textarea { margin-bottom: 6px; }
+dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; margin: 0; }
+dl.facts dt { color: var(--muted); }
+dl.facts dd { margin: 0; }
+
+ul.history { list-style: none; padding: 0; margin: 0; }
+ul.history li { padding: 5px 0; border-bottom: 1px solid var(--line); display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; }
+ul.history .when { color: var(--muted); font-size: 12px; min-width: 110px; }
+ul.history .ev-comment .text { font-style: italic; }
+
+@media (max-width: 900px) {
+    .card-layout { grid-template-columns: 1fr; }
+    main { padding: 12px; }
+}
+
+/* ошибка на странице и обрыв связи с сайтом */
+#blazor-error-ui {
+    display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--active-bg); color: var(--text); padding: 10px 24px; border-top: 1px solid var(--line);
+}
+#blazor-error-ui .dismiss { float: right; cursor: pointer; }
+#components-reconnect-modal { display: none; }
+#components-reconnect-modal.components-reconnect-show,
+#components-reconnect-modal.components-reconnect-failed,
+#components-reconnect-modal.components-reconnect-rejected {
+    display: flex; position: fixed; inset: 0; z-index: 1001; align-items: center; justify-content: center; background: rgba(0, 0, 0, .35);
+}
+#components-reconnect-modal .reconnect-box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 24px; }
+#components-reconnect-modal p { display: none; margin: 0; }
+#components-reconnect-modal.components-reconnect-show .reconnect-show,
+#components-reconnect-modal.components-reconnect-failed .reconnect-failed,
+#components-reconnect-modal.components-reconnect-rejected .reconnect-rejected { display: block; }

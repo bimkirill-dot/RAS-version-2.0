@@ -1,0 +1,13 @@
+@* Число с полоской: длина — доля от наибольшего в таблице *@
+
+<span class="bar-cell">
+    <span class="bar" style="width:@Width%"></span>
+    <span class="bar-value">@Value</span>
+</span>
+
+@code {
+    [Parameter] public int Value { get; set; }
+    [Parameter] public int Max { get; set; }
+
+    private string Width => (Max <= 0 ? 0 : Math.Round(100.0 * Value / Max)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+}

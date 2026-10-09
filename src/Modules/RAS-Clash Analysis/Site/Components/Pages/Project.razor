@@ -1,0 +1,268 @@
+@page "/project/{Id:long}"
+@inject ClashStore Store
+@inject ReportImporter Importer
+
+<PageTitle>@(_project?.Name ?? "Проект") · Коллизии</PageTitle>
+
+@if (_project == null)
+{
+    <h1>Проект не найден</h1>
+    <p><a href="/">К проектам</a></p>
+    return;
+}
+
+<nav class="crumbs"><a href="/">Проекты</a> ›</nav>
+<h1>@_project.Name</h1>
+
+<div class="tiles">
+    <div class="tile state-active"><div class="value">@_project.Counts.Active</div><div class="label">Активные</div></div>
+    <div class="tile state-fixed"><div class="value">@_project.Counts.Fixed</div><div class="label">Исправлены</div></div>
+    <div class="tile state-accepted"><div class="value">@_project.Counts.Accepted</div><div class="label">Допущены</div></div>
+    <div class="tile"><div class="value">@_project.Counts.Total</div><div class="label">Всего</div></div>
+</div>
+
+<div class="tabs">
+    <button class="@Tab(0)" @onclick="() => _tab = 0">Коллизии</button>
+    <button class="@Tab(1)" @onclick="() => _tab = 1">Проверки</button>
+    <button class="@Tab(2)" @onclick="() => _tab = 2">Отчёты (@_reports.Count)</button>
+    <button class="@Tab(3)" @onclick="() => _tab = 3">Проект</button>
+</div>
+
+@if (_tab == 0)
+{
+    <div class="filters">
+        <select @bind="TestFilter" @bind:after="Reload">
+            <option value="">Все проверки</option>
+            @foreach (var t in _tests) { <option value="@t.Id">@t.Name</option> }
+        </select>
+        <select @bind="StateFilter" @bind:after="Reload">
+            <option value="">Все статусы</option>
+            <option value="0">Активные</option>
+            <option value="1">Исправлены</option>
+            <option value="2">Допущены</option>
+        </select>
+        <select @bind="_filter.LevelKey" @bind:after="Reload">
+            <option value="">Все уровни</option>
+            @foreach (var l in _levels) { <option value="@l.Key">@l.Value</option> }
+        </select>
+        <select @bind="_filter.Category" @bind:after="Reload">
+            <option value="">Все категории</option>
+            @foreach (var c in _categories) { <option value="@c">@c</option> }
+        </select>
+        <label class="check"><input type="checkbox" @bind="_filter.OnlyInLastReport" @bind:after="Reload" /> только в последнем отчёте</label>
+        <input class="search" placeholder="Номер элемента, тип, имя…" @bind="_filter.Search" @bind:event="oninput" @bind:after="Reload" />
+        <button class="btn link" @onclick="ResetFilter">Сбросить</button>
+    </div>
+
+    <div class="bulk">
+        <span>Найдено: @_clashes.Count@(_selected.Count > 0 ? $", отмечено: {_selected.Count}" : "")</span>
+        @if (_selected.Count > 0)
+        {
+            <input class="comment" placeholder="Комментарий (необязательно)" @bind="_bulkComment" />
+            <button class="btn state-fixed" @onclick="() => SetState(ClashState.Fixed)">Исправлена</button>
+            <button class="btn state-accepted" @onclick="() => SetState(ClashState.Accepted)">Допущена</button>
+            <button class="btn state-active" @onclick="() => SetState(ClashState.Active)">Активная</button>
+            <button class="btn link" @onclick="() => _selected.Clear()">Снять отметки</button>
+        }
+    </div>
+
+    <div class="table-wrap">
+        <table class="grid clashes">
+            <thead>
+                <tr>
+                    <th class="sel"><input type="checkbox" checked="@AllSelected" @onchange="ToggleAll" title="Отметить все найденные" /></th>
+                    <th>Коллизия</th><th>Проверка</th><th>Уровень</th><th>Элемент 1</th><th>Элемент 2</th><th>Статус</th><th>Впервые</th><th>Последний раз</th>
+                </tr>
+            </thead>
+            <tbody>
+                <Virtualize Items="_clashes" Context="x" SpacerElement="tr" ItemSize="38">
+                    <tr class="@(x.InLastReport ? "" : "gone")">
+                        <td class="sel"><input type="checkbox" checked="@_selected.Contains(x.Id)" @onchange="e => Toggle(x.Id, e)" /></td>
+                        <td><a href="clash/@x.Id">@(x.Name ?? "—")</a></td>
+                        <td class="test">@x.TestName</td>
+                        <td>@Level(x)</td>
+                        <td><ElementCell E="x.A" /></td>
+                        <td><ElementCell E="x.B" /></td>
+                        <td><span class="badge @Fmt.StateClass(x.State)">@Fmt.State(x.State)</span></td>
+                        <td>@Fmt.Day(x.FirstSeen)</td>
+                        <td>@Fmt.Day(x.LastSeen)</td>
+                    </tr>
+                </Virtualize>
+            </tbody>
+        </table>
+    </div>
+    <p class="muted">Серым — коллизии, которых нет в последнем отчёте своей проверки.</p>
+}
+else if (_tab == 1)
+{
+    <table class="grid">
+        <thead><tr><th>Проверка</th><th>Наборы</th><th class="num">Активные</th><th class="num">Исправлены</th><th class="num">Допущены</th><th>Последний отчёт</th></tr></thead>
+        <tbody>
+            @foreach (var t in _tests)
+            {
+                <tr>
+                    <td><a href="" @onclick="() => ShowTest(t.Id)" @onclick:preventDefault>@t.Name</a></td>
+                    <td class="muted">@t.LeftSet ↔ @t.RightSet</td>
+                    <td class="num"><Bar Value="t.Counts.Active" Max="_maxActive" /></td>
+                    <td class="num">@t.Counts.Fixed</td>
+                    <td class="num">@t.Counts.Accepted</td>
+                    <td>@Fmt.Date(t.LastReport)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+else if (_tab == 2)
+{
+    <div class="actions">
+        <button class="btn" disabled="@Importer.Busy" @onclick="Scan">@(Importer.Busy ? "Проверяем папку…" : "Проверить папку сейчас")</button>
+        <span class="path">@_project.Folder</span>
+    </div>
+    <ImportResults Results="Importer.LastResults" />
+    <table class="grid">
+        <thead><tr><th>Дата отчёта</th><th>Файл</th><th class="num">Коллизий</th><th>Загружен</th></tr></thead>
+        <tbody>
+            @foreach (var r in _reports)
+            {
+                <tr>
+                    <td>@Fmt.Date(r.ReportDate)@(r.DateFromReport ? "" : "*")</td>
+                    <td class="path">@r.FilePath</td>
+                    <td class="num">@r.Results</td>
+                    <td>@Fmt.Date(r.Imported)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <p class="muted">* — в отчёте нет даты обнаружения коллизий, взято время файла. Дату можно включить в настройках отчёта Navisworks.</p>
+}
+else
+{
+    <div class="form">
+        <label>Название <input @bind="_editName" /></label>
+        <label>Папка с отчётами XML <input class="wide" @bind="_editFolder" /></label>
+        <button class="btn primary" @onclick="SaveProject">Сохранить</button>
+        @if (_editMessage != null) { <p class="@(_editError ? "error" : "muted")">@_editMessage</p> }
+    </div>
+}
+
+@code {
+    [Parameter] public long Id { get; set; }
+
+    private ProjectRow _project;
+    private List<TestRow> _tests = new();
+    private List<ReportRow> _reports = new();
+    private List<KeyValuePair<string, string>> _levels = new();
+    private List<string> _categories = new();
+    private List<ClashRow> _clashes = new();
+    private readonly ClashFilter _filter = new() { State = ClashState.Active };
+    private readonly HashSet<long> _selected = new();
+    private string _bulkComment;
+    private int _tab;
+    private int _maxActive;
+    private string _editName, _editFolder, _editMessage;
+    private bool _editError;
+
+    private string TestFilter
+    {
+        get => _filter.TestId?.ToString() ?? "";
+        set => _filter.TestId = long.TryParse(value, out var v) ? v : null;
+    }
+
+    private string StateFilter
+    {
+        get => _filter.State.HasValue ? ((int)_filter.State.Value).ToString() : "";
+        set => _filter.State = int.TryParse(value, out var v) ? (ClashState)v : null;
+    }
+
+    private bool AllSelected => _clashes.Count > 0 && _clashes.All(c => _selected.Contains(c.Id));
+
+    protected override void OnParametersSet() => LoadAll();
+
+    private void LoadAll()
+    {
+        _project = Store.Project(Id);
+        if (_project == null) return;
+        _tests = Store.Tests(Id);
+        _maxActive = _tests.Count == 0 ? 0 : _tests.Max(t => t.Counts.Active);
+        _reports = Store.Reports(Id);
+        _levels = Store.Levels(Id);
+        _categories = Store.Categories(Id);
+        _editName ??= _project.Name;
+        _editFolder ??= _project.Folder;
+        Reload();
+    }
+
+    private void Reload()
+    {
+        _clashes = Store.Clashes(Id, _filter);
+        _selected.IntersectWith(_clashes.Select(c => c.Id));
+    }
+
+    private void ResetFilter()
+    {
+        _filter.TestId = null;
+        _filter.State = null;
+        _filter.LevelKey = null;
+        _filter.Category = null;
+        _filter.OnlyInLastReport = false;
+        _filter.Search = null;
+        Reload();
+    }
+
+    private void ShowTest(long testId)
+    {
+        _filter.TestId = testId;
+        _tab = 0;
+        Reload();
+    }
+
+    private void Toggle(long id, ChangeEventArgs e)
+    {
+        if (e.Value is bool on && on) _selected.Add(id);
+        else _selected.Remove(id);
+    }
+
+    private void ToggleAll(ChangeEventArgs e)
+    {
+        if (e.Value is bool on && on) _selected.UnionWith(_clashes.Select(c => c.Id));
+        else _selected.Clear();
+    }
+
+    private void SetState(ClashState state)
+    {
+        Store.SetState(_selected, state, _bulkComment, null);
+        _selected.Clear();
+        _bulkComment = null;
+        LoadAll();
+    }
+
+    private async Task Scan()
+    {
+        await Importer.ScanAsync(Id);
+        LoadAll();
+    }
+
+    private void SaveProject()
+    {
+        _editError = true;
+        if (string.IsNullOrWhiteSpace(_editName)) { _editMessage = "Укажите название."; return; }
+        var folder = (_editFolder ?? "").Trim().Trim('"');
+        if (!Directory.Exists(folder)) { _editMessage = "Папка не найдена или недоступна: " + folder; return; }
+        Store.UpdateProject(Id, _editName, folder);
+        _editError = false;
+        _editMessage = "Сохранено.";
+        LoadAll();
+    }
+
+    private string Tab(int i) => _tab == i ? "tab active" : "tab";
+
+    /// <summary>Уровень коллизии: у обоих элементов один — он; разные — «А / Б».</summary>
+    private static string Level(ClashRow x)
+    {
+        var a = x.A?.Level;
+        var b = x.B?.Level;
+        if (string.IsNullOrEmpty(a)) return b ?? "—";
+        if (string.IsNullOrEmpty(b) || x.A.LevelKey == x.B.LevelKey) return a;
+        return a + " / " + b;
+    }
+}

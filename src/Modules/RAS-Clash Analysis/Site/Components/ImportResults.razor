@@ -1,0 +1,30 @@
+@* Итог последней проверки папок: что загружено, что пропущено и почему *@
+
+@if (Results != null && Results.Count > 0)
+{
+    <details class="import" open="@Results.Any(r => r.Error)">
+        <summary>
+            Последняя проверка: загружено отчётов — @Results.Count(r => !r.Error)@(Results.Any(r => r.Error) ? $", не загружено — {Results.Count(r => r.Error)}" : "")
+        </summary>
+        <ul>
+            @foreach (var r in Results)
+            {
+                <li class="@(r.Error ? "error" : "")">
+                    <b>@r.ProjectName</b> · <span class="path">@Path.GetFileName(r.File)</span> —
+                    @if (r.Error)
+                    {
+                        @r.Message
+                    }
+                    else
+                    {
+                        @($"новых {r.New}, снова в отчёте {r.Again}, появились снова {r.Reappeared}, исправлены {r.Fixed}")
+                    }
+                </li>
+            }
+        </ul>
+    </details>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<ImportResult> Results { get; set; }
+}

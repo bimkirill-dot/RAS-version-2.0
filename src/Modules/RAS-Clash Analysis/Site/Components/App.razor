@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <link rel="stylesheet" href="site.css" />
+    <HeadOutlet @rendermode="InteractiveServer" />
+</head>
+<body>
+    <Routes @rendermode="InteractiveServer" />
+
+    @* связь с сайтом прервалась (сайт перезапускают или он выключен) — своё окно по-русски вместо английского *@
+    <div id="components-reconnect-modal">
+        <div class="reconnect-box">
+            <p class="reconnect-show">Связь с сайтом прервалась. Подключаемся снова…</p>
+            <p class="reconnect-failed">Не удалось подключиться. <a href="javascript:location.reload()">Обновить страницу</a></p>
+            <p class="reconnect-rejected">Сайт перезапущен. <a href="javascript:location.reload()">Обновить страницу</a></p>
+        </div>
+    </div>
+    <script src="_framework/blazor.web.js"></script>
+</body>
+</html>

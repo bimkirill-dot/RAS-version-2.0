@@ -23,6 +23,7 @@
   <!-- RAS-Clash Analysis: разбор отчётов Navisworks — без Revit, под обе версии -->
   <ItemGroup>
     <Compile Include="..\..\src\Modules\RAS-Clash Analysis\Reports\*.cs" LinkBase="ClashAnalysis" />
+    <Compile Include="..\..\src\Modules\RAS-Clash Analysis\Site\Logic\*.cs" LinkBase="ClashAnalysis\Site" />
   </ItemGroup>
 
   <!-- логика RAS-Model History: модуль пока только для Revit 2026 (.NET 8) -->

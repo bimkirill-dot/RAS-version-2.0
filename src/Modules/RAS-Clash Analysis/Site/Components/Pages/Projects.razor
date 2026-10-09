@@ -1,0 +1,96 @@
+@page "/"
+@inject ClashStore Store
+@inject ReportImporter Importer
+@inject BackupService Backup
+@inject SiteOptions Options
+
+<PageTitle>Проекты · Коллизии</PageTitle>
+
+<h1>Проекты</h1>
+
+@if (_projects.Count == 0)
+{
+    <p class="muted">Проектов ещё нет. Создайте первый: название и папка, куда Navisworks кладёт отчёты XML.</p>
+}
+else
+{
+    <table class="grid">
+        <thead>
+            <tr><th>Проект</th><th class="num">Активные</th><th class="num">Исправлены</th><th class="num">Допущены</th><th>Последний отчёт</th><th>Папка отчётов</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var p in _projects)
+            {
+                <tr>
+                    <td><a href="project/@p.Id">@p.Name</a></td>
+                    <td class="num"><span class="badge state-active">@p.Counts.Active</span></td>
+                    <td class="num">@p.Counts.Fixed</td>
+                    <td class="num">@p.Counts.Accepted</td>
+                    <td>@Fmt.Date(p.LastReport)</td>
+                    <td class="path">@p.Folder</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<div class="actions">
+    <button class="btn" disabled="@Importer.Busy" @onclick="ScanAll">@(Importer.Busy ? "Проверяем папки…" : "Проверить папки сейчас")</button>
+    <span class="muted">Папки проверяются и сами — @(Options.ScanMinutes > 0 ? $"каждые {Options.ScanMinutes} мин" : "выключено")@(Importer.LastScan.HasValue ? $"; последняя проверка — {Fmt.Date(Importer.LastScan)}" : "").</span>
+</div>
+
+<ImportResults Results="Importer.LastResults" />
+
+<h2>Новый проект</h2>
+<div class="form">
+    <label>Название <input @bind="_name" placeholder="Апорт · Высокая · S08" /></label>
+    <label>Папка с отчётами XML <input class="wide" @bind="_folder" placeholder="\\сервер\Проекты\…\XML" /></label>
+    <button class="btn primary" @onclick="Create">Создать</button>
+    @if (_error != null) { <p class="error">@_error</p> }
+</div>
+
+<footer class="status">
+    База: <span class="path">@Options.DatabaseFile</span>.
+    @if (Backup.LastError != null)
+    {
+        <span class="error">@Backup.LastError</span>
+    }
+    else if (Backup.LastServerCopy.HasValue)
+    {
+        <span>Копия на сервере — @Fmt.Date(Backup.LastServerCopy).</span>
+    }
+    else
+    {
+        <span class="muted">Копия базы на сервер — через 2 минуты после запуска сайта, потом каждый час.</span>
+    }
+</footer>
+
+@code {
+    private List<ProjectRow> _projects = new();
+    private string _name;
+    private string _folder;
+    private string _error;
+
+    protected override void OnInitialized() => _projects = Store.Projects();
+
+    private async Task ScanAll()
+    {
+        await Importer.ScanAsync();
+        _projects = Store.Projects();
+    }
+
+    private async Task Create()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_name)) { _error = "Укажите название проекта."; return; }
+        if (string.IsNullOrWhiteSpace(_folder)) { _error = "Укажите папку с отчётами."; return; }
+        var folder = _folder.Trim().Trim('"');
+        if (!Directory.Exists(folder)) { _error = "Папка не найдена или недоступна: " + folder; return; }
+        if (_projects.Any(p => string.Equals(p.Name, _name.Trim(), StringComparison.CurrentCultureIgnoreCase)))
+        { _error = "Проект с таким названием уже есть."; return; }
+        var id = Store.AddProject(_name, folder);
+        _name = _folder = null;
+        await Importer.ScanAsync(id);
+        _projects = Store.Projects();
+    }
+}

@@ -1,0 +1,15 @@
+@* Элемент коллизии в списке: категория · тип, ниже — модель и номер *@
+
+@if (E == null)
+{
+    <span class="muted">—</span>
+}
+else
+{
+    <div class="el">@Fmt.Element(E)</div>
+    <div class="el-sub">@Fmt.Model(E.ModelFile) · @(E.ElementId?.ToString() ?? "без номера")</div>
+}
+
+@code {
+    [Parameter] public ElementView E { get; set; }
+}
