@@ -187,6 +187,20 @@ public sealed class Database
 
         ALTER TABLE Reports ADD COLUMN Warning TEXT;
         """,
+
+        // 4 — 09.10.2026: у коллизий из более раннего отчёта, которых нет в более позднем, в истории не было, почему они
+        // «Исправлена», — добавить запись «Исправлена: нет в более позднем отчёте от …» (только запись, статусы не меняются)
+        """
+        INSERT INTO Events(ClashId, Time, Kind, Text, OldState, NewState, Author, ReportId)
+        SELECT c.Id, f.Time, 'gone',
+               'Исправлена: нет в более позднем отчёте от ' || substr(t.LastReportDate, 9, 2) || '.' || substr(t.LastReportDate, 6, 2) || '.' || substr(t.LastReportDate, 1, 4),
+               0, 1, NULL, t.LastReportId
+        FROM Clashes c
+        JOIN Tests t ON t.Id = c.TestId
+        JOIN Events f ON f.ClashId = c.Id AND f.Kind = 'found' AND f.Text LIKE 'Найдена в более раннем отчёте%'
+        WHERE c.State = 1 AND t.LastReportDate IS NOT NULL
+          AND NOT EXISTS(SELECT 1 FROM Events e WHERE e.ClashId = c.Id AND e.Kind IN ('gone', 'confirmed'));
+        """,
     };
 
     /// <summary>Шаг 2: критичность и блок у уже загруженных отчётов и проверок — по пути отчёта внутри папки проекта.</summary>

@@ -186,7 +186,7 @@ public sealed class ReportImporter
         foreach (var test in report.Tests)
         {
             // проверка — в своей критичности и своём блоке: «АР Стены/МЕР Трубы» в S1 и в S2 — разные проверки
-            var (testId, lastDate) = EnsureTest(c, tx, projectId, test, place);
+            var (testId, lastDate, lastReportId) = EnsureTest(c, tx, projectId, test, place);
             // отчёт старше уже загруженного по этой проверке: только дополняет историю, статусы не трогает
             var latest = lastDate == null || string.CompareOrdinal(reportDate, lastDate) >= 0;
             var known = KnownClashes(c, tx, testId, test.Name);
@@ -208,6 +208,11 @@ public sealed class ReportImporter
                     if (step.Result == null) continue;
                     var cid = step.Known?.Id ?? NewClash(c, tx, projectId, testId, step.IdentityKey,
                         step.Present ? ClashState.Fixed : step.NewState, inLastReport: false, reportDate, reportId, "Найдена в более раннем отчёте от " + dateText);
+                    // была в более раннем отчёте, а в более позднем её нет — исправлена к нему; в истории — почему (DECISIONS.md, «Более ранний отчёт»)
+                    if (step.Known == null && step.Present)
+                        ClashStore.AddEvent(c, tx, cid, now, EventKinds.Gone,
+                            "Исправлена: нет в более позднем отчёте от " + Database.Time(lastDate).ToString("dd.MM.yyyy"),
+                            (int)ClashState.Active, (int)ClashState.Fixed, null, lastReportId);
                     AddOccurrence(c, tx, cid, reportId, report, step.Result, makeLast: step.Known == null, reportDate);
                     continue;
                 }
@@ -266,9 +271,9 @@ public sealed class ReportImporter
         return result;
     }
 
-    private static (long Id, string LastDate) EnsureTest(SqliteConnection c, SqliteTransaction tx, long projectId, ClashTest test, ReportPlace place)
+    private static (long Id, string LastDate, long? LastReportId) EnsureTest(SqliteConnection c, SqliteTransaction tx, long projectId, ClashTest test, ReportPlace place)
     {
-        using (var cmd = ClashStore.Command(c, "SELECT Id, LastReportDate FROM Tests WHERE ProjectId = $p AND Criticality = $cr AND Block = $bl AND Name = $n",
+        using (var cmd = ClashStore.Command(c, "SELECT Id, LastReportDate, LastReportId FROM Tests WHERE ProjectId = $p AND Criticality = $cr AND Block = $bl AND Name = $n",
                    ("$p", projectId), ("$cr", place.Criticality), ("$bl", place.Block), ("$n", test.Name ?? "")))
         {
             cmd.Transaction = tx;
@@ -277,15 +282,16 @@ public sealed class ReportImporter
             {
                 var id = r.GetInt64(0);
                 var last = r.IsDBNull(1) ? null : r.GetString(1);
+                long? lastReport = r.IsDBNull(2) ? null : r.GetInt64(2);
                 r.Close();
                 Exec(c, tx, "UPDATE Tests SET LeftSet = COALESCE($l, LeftSet), RightSet = COALESCE($rs, RightSet) WHERE Id = $id",
                     ("$l", test.LeftSet), ("$rs", test.RightSet), ("$id", id));
-                return (id, last);
+                return (id, last, lastReport);
             }
         }
         var newId = Insert(c, tx, "INSERT INTO Tests(ProjectId, Criticality, Block, Name, LeftSet, RightSet) VALUES($p, $cr, $bl, $n, $l, $rs)",
             ("$p", projectId), ("$cr", place.Criticality), ("$bl", place.Block), ("$n", test.Name ?? ""), ("$l", test.LeftSet), ("$rs", test.RightSet));
-        return (newId, null);
+        return (newId, null, null);
     }
 
     /// <summary>Известные коллизии проверки — с парой элементов последнего появления (узнавание при смене номера Navisworks).</summary>
