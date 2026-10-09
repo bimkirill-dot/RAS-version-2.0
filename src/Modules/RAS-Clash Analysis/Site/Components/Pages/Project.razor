@@ -156,11 +156,11 @@
                         else
                         {
                             <table class="grid clashes">
-                                @* при открытой карточке список уже — без «Проверки» и «Впервые» (они есть в карточке) *@
+                                @* элементы — в карточке, не в списке (решение разработчика); при открытой карточке — без «Впервые» *@
                                 <colgroup>
                                     <col class="c-sel" /><col class="c-name" />
-                                    @if (Wide) { <col class="c-test" /> }
-                                    <col class="c-level" /><col class="c-el" /><col class="c-el" /><col class="c-state" />
+                                    <col class="c-test" />
+                                    <col class="c-level" /><col class="c-state" />
                                     @if (Wide) { <col class="c-date" /> }
                                 </colgroup>
                                 <thead>
@@ -169,10 +169,8 @@
                                             <input type="checkbox" checked="@AllSelected" @onchange="ToggleAll" title="Отметить все найденные (@_clashes.Count)" />
                                         </th>
                                         @SortHeader("name", "Коллизия")
-                                        @if (Wide) { @SortHeader("test", "Проверка") }
+                                        @SortHeader("test", "Проверка")
                                         @SortHeader("level", "Уровень")
-                                        @SortHeader("a", "Элемент 1")
-                                        @SortHeader("b", "Элемент 2")
                                         @SortHeader("state", "Статус")
                                         @if (Wide) { @SortHeader("first", "Впервые") }
                                     </tr>
@@ -185,10 +183,8 @@
                                                 <input type="checkbox" checked="@_selected.Contains(x.Id)" @onchange="e => Toggle(x.Id, e)" />
                                             </td>
                                             <td class="name">@(x.Name ?? "—")@if (ShowBlock) { <span class="tag">@x.Block</span> }</td>
-                                            @if (Wide) { <td class="cut" title="@x.TestName">@x.TestName</td> }
+                                            <td class="cut" title="@x.TestName">@x.TestName</td>
                                             <td class="cut" title="@Level(x)">@Level(x)</td>
-                                            <td><ElementCell E="x.A" /></td>
-                                            <td><ElementCell E="x.B" /></td>
                                             <td><span class="badge @Fmt.StateClass(x.State)">@Fmt.State(x.State)</span></td>
                                             @if (Wide) { <td title="Последний раз — @Fmt.Day(x.LastSeen)">@Fmt.Day(x.FirstSeen)</td> }
                                         </tr>
@@ -678,8 +674,6 @@
             "name" => c => NameNumber(c.Name),
             "test" => c => c.TestName,
             "level" => c => LevelOrder(c),
-            "a" => c => Fmt.Element(c.A),
-            "b" => c => Fmt.Element(c.B),
             "state" => c => (int)c.State,
             "first" => c => c.FirstSeen,
             _ => null,
