@@ -44,10 +44,21 @@ function Get-SiteUrl {
 # только живой процесс: только что остановленный ещё виден в списке, пока на него есть ссылки
 function Get-SiteProcess { Get-Process -Name $ExeName -ErrorAction SilentlyContinue | Where-Object { -not $_.HasExited } }
 
+# Строка в журнал сайта: остановка через site.cmd — «снаружи», сам сайт о ней не напишет (ExitWatch.cs)
+function Write-SiteLog([string]$text) {
+    try {
+        $folder = Join-Path $SiteHome 'Журнал'
+        New-Item -ItemType Directory -Force $folder | Out-Null
+        $line = (Get-Date).ToString('dd.MM.yyyy HH:mm:ss') + '        Site.ps1: ' + $text + "`r`n"
+        [IO.File]::AppendAllText((Join-Path $folder ('site-' + (Get-Date).ToString('yyyy-MM') + '.log')), $line, (New-Object Text.UTF8Encoding($false)))
+    } catch { }
+}
+
 function Stop-Site {
     $p = Get-SiteProcess
     if (-not $p) { return }
     Write-Host 'Останавливаем сайт...'
+    Write-SiteLog "site.cmd ($Action): сайт остановлен (процесс $($p.Id -join ', '))"
     $p | Stop-Process -Force
     $p | Wait-Process -Timeout 20 -ErrorAction SilentlyContinue
     for ($i = 0; $i -lt 20 -and (Get-SiteProcess); $i++) { Start-Sleep -Milliseconds 500 }

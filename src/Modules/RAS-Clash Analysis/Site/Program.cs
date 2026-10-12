@@ -33,7 +33,9 @@ builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
 var app = builder.Build();
 var log = app.Services.GetRequiredService<ILogger<Program>>();
-log.LogInformation("Сайт запускается. Данные: {Data}; копии базы: {Backups}", options.Data, options.Backups);
+log.LogInformation("Сайт запускается (процесс {Pid}). Данные: {Data}; копии базы: {Backups}", Environment.ProcessId, options.Data, options.Backups);
+ExitWatch.Start(log);
+app.Lifetime.ApplicationStopping.Register(() => log.LogInformation("Сайт останавливается."));
 app.Services.GetRequiredService<Database>().Migrate(log);
 
 app.UseExceptionHandler("/Error", createScopeForErrors: true);

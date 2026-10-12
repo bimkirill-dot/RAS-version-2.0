@@ -75,11 +75,13 @@ public sealed class BackupService : BackgroundService
                 CopyTo(local, daily, _options.NightlyBackups, $"clashes-{now:yyyy-MM-dd}.db");
             LastServerCopy = now;
             LastError = null;
+            // раз в час — и знак, что сайт работает: пропал без записи — видно, до какого часа был жив
+            _log.LogInformation("Копия базы сделана: на этом компьютере и на сервере");
         }
         catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
         {
             LastError = "Копия на сервер не записана (" + ex.Message + "). Копия есть на этом компьютере: " + local;
-            _log.LogWarning("Копия базы на сервер не записана: {Reason}", ex.Message);
+            _log.LogWarning("Копия базы на сервер не записана (на этом компьютере — сделана): {Reason}", ex.Message);
         }
     }
 
