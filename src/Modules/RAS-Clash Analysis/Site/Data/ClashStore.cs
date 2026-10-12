@@ -52,6 +52,57 @@ public sealed class ClashStore
         cmd.ExecuteNonQuery();
     }
 
+    public ProjectContents ProjectContents(long id)
+    {
+        using var c = _db.Open();
+        int Count(string sql)
+        {
+            using var cmd = Command(c, sql, ("$p", id));
+            return Convert.ToInt32(cmd.ExecuteScalar());
+        }
+        return new ProjectContents
+        {
+            Reports = Count("SELECT COUNT(*) FROM Reports WHERE ProjectId = $p"),
+            Clashes = Count("SELECT COUNT(*) FROM Clashes WHERE ProjectId = $p"),
+            Comments = Count("SELECT COUNT(*) FROM Events e JOIN Clashes c ON c.Id = e.ClashId WHERE c.ProjectId = $p AND e.Kind = 'comment'"),
+            ManualStates = Count("SELECT COUNT(*) FROM Events e JOIN Clashes c ON c.Id = e.ClashId WHERE c.ProjectId = $p AND e.Kind = 'status'"),
+        };
+    }
+
+    /// <summary>
+    /// Удалить проект из базы со всем, что к нему относится, — одной транзакцией (сорвалось — не удалено ничего).
+    /// Возвращает номера его отчётов: по ним — папки снимков («Снимки\&lt;отчёт&gt;»). Копию базы делает ProjectRemoval.
+    /// </summary>
+    public List<long> DeleteProject(long id)
+    {
+        using var c = _db.Open();
+        var reports = new List<long>();
+        using (var r = Query(c, "SELECT Id FROM Reports WHERE ProjectId = $p", ("$p", id)))
+            while (r.Read()) reports.Add(r.GetInt64(0));
+        using var tx = c.BeginTransaction();
+        // по ссылкам — снизу вверх: элементы → появления → история → коллизии → проверки → отчёты → проект
+        const string clashes = "SELECT Id FROM Clashes WHERE ProjectId = $p";
+        const string reportIds = "SELECT Id FROM Reports WHERE ProjectId = $p";
+        foreach (var sql in new[]
+        {
+            $"DELETE FROM Elements WHERE OccurrenceId IN (SELECT Id FROM Occurrences WHERE ClashId IN ({clashes}) OR ReportId IN ({reportIds}))",
+            $"DELETE FROM Occurrences WHERE ClashId IN ({clashes}) OR ReportId IN ({reportIds})",
+            $"DELETE FROM Events WHERE ClashId IN ({clashes}) OR ReportId IN ({reportIds})",
+            "DELETE FROM Clashes WHERE ProjectId = $p",
+            "DELETE FROM Tests WHERE ProjectId = $p",
+            "DELETE FROM TypeNames WHERE ProjectId = $p",
+            "DELETE FROM Reports WHERE ProjectId = $p",
+            "DELETE FROM Projects WHERE Id = $p",
+        })
+        {
+            using var cmd = Command(c, sql, ("$p", id));
+            cmd.Transaction = tx;
+            cmd.ExecuteNonQuery();
+        }
+        tx.Commit();
+        return reports;
+    }
+
     public List<TestRow> Tests(long projectId)
     {
         using var c = _db.Open();

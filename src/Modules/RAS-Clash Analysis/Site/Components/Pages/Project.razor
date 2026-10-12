@@ -4,6 +4,8 @@
 @inject ReportImporter Importer
 @inject ProjectViewState ViewState
 @inject IJSRuntime JS
+@inject ProjectRemoval Removal
+@inject NavigationManager Nav
 
 <PageTitle>@(_project?.Name ?? "Проект") · RAS Clash Analysis</PageTitle>
 
@@ -407,10 +409,48 @@
                         <button class="btn primary" @onclick="SaveProject">Сохранить</button>
                         @if (_editMessage != null) { <p class="@(_editError ? "error" : "muted")">@_editMessage</p> }
                     </div>
+                    @* удаление — отдельно от остального, с вопросом (DECISIONS.md модуля, «Удаление проекта») *@
+                    <div class="danger-zone">
+                        <h2>Удалить проект с сайта</h2>
+                        <p class="muted">
+                            С сайта удалятся отчёты, коллизии, история, комментарии и снимки этого проекта.
+                            Папка с отчётами на диске не трогается. Перед удалением сохраняется копия базы.
+                        </p>
+                        <button class="btn danger" @onclick="AskDelete">Удалить проект с сайта</button>
+                    </div>
                 </section>
             }
     </div>
 </div>
+
+@if (_deleteAsk != null)
+{
+    <div class="dialog-back">
+        <div class="dialog" role="dialog" aria-modal="true">
+            <h2>Удалить проект «@_project.Name» с сайта?</h2>
+            <p>
+                Удалится: @Fmt.Plural(_deleteAsk.Reports, "отчёт", "отчёта", "отчётов"), @Fmt.Plural(_deleteAsk.Clashes, "коллизия", "коллизии", "коллизий"),
+                их история, комментарии и снимки.
+            </p>
+            @if (_deleteAsk.Comments > 0 || _deleteAsk.ManualStates > 0)
+            {
+                <p class="warn">Среди них — работа людей: @PeopleWork.</p>
+            }
+            <p class="muted">
+                Папка <span class="path">@_project.Folder</span> и отчёты в ней не удаляются. Перед удалением сохраняется копия базы.
+            </p>
+            <label class="dialog-field">
+                Для подтверждения введите название проекта
+                <input @bind="_deleteName" @bind:event="oninput" placeholder="@_project.Name" autocomplete="off" />
+            </label>
+            @if (_deleteError != null) { <p class="error">@_deleteError</p> }
+            <div class="actions dialog-buttons">
+                <button class="btn" disabled="@_deleting" @onclick="CancelDelete">Отмена</button>
+                <button class="btn danger" disabled="@(!DeleteNameMatches || _deleting)" @onclick="DeleteProject">@(_deleting ? "Удаляем…" : "Удалить")</button>
+            </div>
+        </div>
+    </div>
+}
 
 @code {
     [Parameter] public long Id { get; set; }
@@ -1175,12 +1215,60 @@
     {
         _editError = true;
         if (string.IsNullOrWhiteSpace(_editName)) { _editMessage = "Укажите название."; return; }
-        var folder = (_editFolder ?? "").Trim().Trim('"');
+        var folder = ProjectFolders.Clean(_editFolder);
         if (!Directory.Exists(folder)) { _editMessage = "Папка не найдена или недоступна: " + folder; return; }
+        var conflict = ProjectFolders.Conflict(folder, Store.Projects().Where(p => p.Id != Id).Select(p => (p.Name, p.Folder)));
+        if (conflict != null) { _editMessage = conflict; return; }
         Store.UpdateProject(Id, _editName, folder);
         _editError = false;
         _editMessage = "Сохранено.";
         LoadAll();
+    }
+
+    // ───── удаление проекта ─────
+
+    /// <summary>Что удалится — показывается в вопросе; null — вопроса нет.</summary>
+    private ProjectContents _deleteAsk;
+    private string _deleteName, _deleteError;
+    private bool _deleting;
+
+    private bool DeleteNameMatches =>
+        string.Equals((_deleteName ?? "").Trim(), _project?.Name.Trim(), StringComparison.CurrentCultureIgnoreCase);
+
+    private void AskDelete()
+    {
+        _deleteAsk = Store.ProjectContents(Id);
+        _deleteName = _deleteError = null;
+    }
+
+    private void CancelDelete() => _deleteAsk = null;
+
+    /// <summary>«комментарии (2), статусы, поставленные вручную (5)» — только то, что есть.</summary>
+    private string PeopleWork => string.Join(", ", new[]
+    {
+        _deleteAsk.Comments > 0 ? $"комментарии ({_deleteAsk.Comments})" : null,
+        _deleteAsk.ManualStates > 0 ? $"статусы, поставленные вручную ({_deleteAsk.ManualStates})" : null,
+    }.Where(x => x != null));
+
+    private async Task DeleteProject()
+    {
+        if (!DeleteNameMatches) return;
+        _deleting = true;
+        _deleteError = null;
+        try
+        {
+            var name = _project.Name;
+            await Removal.DeleteAsync(Id);
+            Nav.NavigateTo("/?deleted=" + Uri.EscapeDataString(name));
+        }
+        catch (Exception ex)
+        {
+            _deleteError = "Не удалено: " + ex.Message;
+        }
+        finally
+        {
+            _deleting = false;
+        }
     }
 
     private static string DateSourceTitle(string source) => source switch

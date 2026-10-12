@@ -39,6 +39,16 @@ public sealed class ProjectRow
     public DateTime? LastReport { get; set; }
 }
 
+/// <summary>Что удалится вместе с проектом — для вопроса перед удалением.</summary>
+public sealed class ProjectContents
+{
+    public int Reports { get; set; }
+    public int Clashes { get; set; }
+    public int Comments { get; set; }
+    /// <summary>Статусы, поставленные людьми (а не прогоном).</summary>
+    public int ManualStates { get; set; }
+}
+
 public sealed class TestRow
 {
     public long Id { get; set; }

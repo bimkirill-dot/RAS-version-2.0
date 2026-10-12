@@ -23,6 +23,7 @@ builder.Logging.AddProvider(new FileLoggerProvider(options.LogsFolder));
 builder.Services.AddSingleton<Database>();
 builder.Services.AddSingleton<ClashStore>();
 builder.Services.AddSingleton<ReportImporter>();
+builder.Services.AddSingleton<ProjectRemoval>();
 builder.Services.AddSingleton<BackupService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<BackupService>());
 builder.Services.AddHostedService<ImportScheduler>();

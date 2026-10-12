@@ -24,6 +24,7 @@ namespace RASv2.Tests
             Run("RAS-Clash Analysis: папки с отчётами", ClashPathTests.All);
             Run("RAS-Clash Analysis: отборы списка", ClashFacetTests.All);
             Run("RAS-Clash Analysis: группировка по элементу", ClashGroupingTests.All);
+            Run("RAS-Clash Analysis: папка нового проекта", ClashProjectFolderTests.All);
 #if REVIT2026
             Run("RAS-Model History: фильтр", ModelHistoryTests.Filter);
             Run("RAS-Model History: пары «правка + отмена»", ModelHistoryTests.Undo);

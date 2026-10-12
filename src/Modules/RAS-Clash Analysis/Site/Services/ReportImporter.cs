@@ -72,6 +72,20 @@ public sealed class ReportImporter
         }
     }
 
+    /// <summary>Сделать работу, пока не идёт проверка папок (и не начнётся новая), — удаление проекта.</summary>
+    public async Task<T> ExclusiveAsync<T>(Func<T> work)
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            return await Task.Run(work);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
     private List<ImportResult> Scan(long? projectId)
     {
         var results = new List<ImportResult>();

@@ -63,6 +63,14 @@ else
     </span>
 </div>
 
+@if (!string.IsNullOrEmpty(Deleted))
+{
+    <p class="notice">
+        Проект «@Deleted» удалён с сайта. Папка с его отчётами не тронута;
+        копия базы перед удалением — рядом с базой (файл «clashes.db.до-удаления-…»).
+    </p>
+}
+
 <ImportResults Results="Importer.LastResults" />
 
 @if (_projects.Count == 0 || _showNew)
@@ -105,6 +113,9 @@ else
 </footer>
 
 @code {
+    /// <summary>Название только что удалённого проекта — для сообщения.</summary>
+    [SupplyParameterFromQuery(Name = "deleted")] public string Deleted { get; set; }
+
     private List<ProjectRow> _projects = new();
     private string _name;
     private string _folder;
@@ -153,14 +164,15 @@ else
     private async Task Create()
     {
         _error = null;
-        var folder = (_folder ?? "").Trim().Trim('"').TrimEnd('\\', '/');
+        var folder = ProjectFolders.Clean(_folder);
         if (folder.Length == 0) { _error = "Укажите папку проекта."; return; }
         if (!Directory.Exists(folder)) { _error = "Папка не найдена или недоступна: " + folder; return; }
         if (string.IsNullOrWhiteSpace(_name)) { _error = "Укажите название проекта."; return; }
         if (_projects.Any(p => string.Equals(p.Name, _name.Trim(), StringComparison.CurrentCultureIgnoreCase)))
         { _error = "Проект с таким названием уже есть."; return; }
-        if (_projects.Any(p => string.Equals(p.Folder.TrimEnd('\\', '/'), folder, StringComparison.OrdinalIgnoreCase)))
-        { _error = "Эта папка уже добавлена как проект."; return; }
+        // та же папка, папка внутри другого проекта или с проектом внутри — отчёты считались бы дважды
+        var conflict = ProjectFolders.Conflict(folder, _projects.Select(p => (p.Name, p.Folder)));
+        if (conflict != null) { _error = conflict; return; }
         var id = Store.AddProject(_name, folder);
         _name = _folder = _autoName = null;
         _showNew = false;

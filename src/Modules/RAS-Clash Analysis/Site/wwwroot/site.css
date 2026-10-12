@@ -366,6 +366,26 @@ ul.history .ev-comment .text { font-style: italic; }
 
 .root-folder { margin: 0 0 12px; }
 
+/* удаление проекта: отдельный блок и окно вопроса */
+.btn.danger { color: var(--error); border-color: var(--error); }
+.btn.danger:hover:not(:disabled) { background: var(--error); color: #fff; border-color: var(--error); }
+.danger-zone { max-width: 760px; margin-top: 32px; padding-top: 4px; border-top: 1px solid var(--line); }
+.danger-zone h2 { color: var(--error); }
+.danger-zone p { margin: 0 0 10px; }
+.dialog-back {
+    position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center;
+    padding: 16px; background: rgba(0, 0, 0, .4);
+}
+.dialog {
+    width: 100%; max-width: 560px; max-height: 100%; overflow: auto;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px 22px 18px; box-shadow: var(--shadow);
+}
+.dialog h2 { font-size: 17px; }
+.dialog p { margin: 0 0 10px; }
+.dialog-field { display: flex; flex-direction: column; gap: 4px; margin: 14px 0 6px; color: var(--muted); font-size: 13px; }
+.dialog-field input { color: var(--text); }
+.dialog-buttons { justify-content: flex-end; margin-top: 14px; }
+
 details.import { margin: 8px 0; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; }
 details.import ul { margin: 6px 0; padding-left: 18px; }
 
