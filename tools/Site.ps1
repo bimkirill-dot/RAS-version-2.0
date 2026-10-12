@@ -62,7 +62,7 @@ function Stop-Site {
     $p | Stop-Process -Force
     $p | Wait-Process -Timeout 20 -ErrorAction SilentlyContinue
     for ($i = 0; $i -lt 20 -and (Get-SiteProcess); $i++) { Start-Sleep -Milliseconds 500 }
-    if (Get-SiteProcess) { throw 'Сайт не остановился — закройте его окно и повторите.' }
+    if (Get-SiteProcess) { throw 'Сайт не остановился — повторите; не поможет — завершите RASv2.ClashAnalysis.Site в диспетчере задач.' }
 }
 
 function Start-Site {
@@ -70,11 +70,12 @@ function Start-Site {
     elseif (-not (Test-Path $Exe)) { throw "Сайт ещё не установлен ($Exe). Запустите site.cmd без параметров." }
     else {
         Write-Host 'Запускаем сайт...'
-        # своё окно, свёрнутое: в нём журнал сайта; закрыть окно — остановить сайт.
+        # без окна: свёрнутое окно сайта принимали за забытую командную строку и закрывали — сайт останавливался
+        # (12.10.2026, ExitWatch: «окно закрыто»). Журнал — в файле; остановить — site.cmd stop.
         # Запуск — через WMI, а не Start-Process: так сайт не дочерний процесс того, кто запустил команду, и не
-        # закрывается вместе с ним (Claude Code держит свои команды в «задании» Windows — 09.10 и 12.10.2026 сайт
-        # закрывался вместе с ним без записи в журнале)
-        $startup = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ ShowWindow = [uint16]7 }
+        # закрывается вместе с ним (Claude Code держит свои команды в «задании» Windows: запущенный оттуда сайт
+        # закрылся бы при перезапуске Claude Code)
+        $startup = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ ShowWindow = [uint16]0 }
         $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
             CommandLine = '"' + $Exe + '"'; CurrentDirectory = $App; ProcessStartupInformation = $startup }
         if ($r.ReturnValue -ne 0) { throw "Сайт не запустился: Win32_Process.Create вернул $($r.ReturnValue)." }
@@ -144,7 +145,9 @@ switch ($Action) {
         $link = Join-Path $startup 'RAS — сайт коллизий.lnk'
         $shell = New-Object -ComObject WScript.Shell
         $s = $shell.CreateShortcut($link)
-        $s.TargetPath = $Exe
+        # тоже без окна (см. Start-Site): PowerShell на миг, он запускает сайт скрытым
+        $s.TargetPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+        $s.Arguments = "-NoProfile -WindowStyle Hidden -Command ""Start-Process -FilePath '$Exe' -WorkingDirectory '$App' -WindowStyle Hidden"""
         $s.WorkingDirectory = $App
         $s.WindowStyle = 7
         $s.Description = 'Сайт RAS-Clash Analysis'
