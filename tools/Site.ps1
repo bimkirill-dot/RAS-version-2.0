@@ -59,8 +59,14 @@ function Start-Site {
     elseif (-not (Test-Path $Exe)) { throw "Сайт ещё не установлен ($Exe). Запустите site.cmd без параметров." }
     else {
         Write-Host 'Запускаем сайт...'
-        # своё окно, свёрнутое: в нём журнал сайта; закрыть окно — остановить сайт
-        Start-Process -FilePath $Exe -WorkingDirectory $App -WindowStyle Minimized | Out-Null
+        # своё окно, свёрнутое: в нём журнал сайта; закрыть окно — остановить сайт.
+        # Запуск — через WMI, а не Start-Process: так сайт не дочерний процесс того, кто запустил команду, и не
+        # закрывается вместе с ним (Claude Code держит свои команды в «задании» Windows — 09.10 и 12.10.2026 сайт
+        # закрывался вместе с ним без записи в журнале)
+        $startup = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ ShowWindow = [uint16]7 }
+        $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
+            CommandLine = '"' + $Exe + '"'; CurrentDirectory = $App; ProcessStartupInformation = $startup }
+        if ($r.ReturnValue -ne 0) { throw "Сайт не запустился: Win32_Process.Create вернул $($r.ReturnValue)." }
         Start-Sleep -Seconds 3
         if (-not (Get-SiteProcess)) { throw "Сайт не запустился — см. журнал: $(Join-Path $SiteHome 'Журнал')" }
     }
