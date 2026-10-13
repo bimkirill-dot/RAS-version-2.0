@@ -10,6 +10,8 @@
     --accent: #7b5cf0;
     --accent-strong: #6544e6;
     --accent-bg: #efebfe;
+    /* знак RAS — тёмно-синий, как логотип прежнего плагина */
+    --brand: #12305a;
     --active: #e5484d;
     --active-bg: #fdecec;
     --fixed: #2e9e5b;
@@ -40,6 +42,7 @@ html[data-theme="dark"] {
     --accent: #9d87f7;
     --accent-strong: #b3a2fa;
     --accent-bg: #2a2546;
+    --brand: #2b5591;
     --active: #ff6b6f;
     --active-bg: #3d2224;
     --fixed: #4cc38a;
@@ -78,12 +81,19 @@ header.top {
     display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 20px;
     background: var(--panel); border-bottom: 1px solid var(--line); box-shadow: var(--shadow);
 }
-.brand { display: inline-flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; }
+.brand { display: inline-flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; }
 .brand:hover { text-decoration: none; }
-.brand-mark { width: 28px; height: 28px; flex: none; }
-.brand-name { font-weight: 700; font-size: 16px; letter-spacing: .2px; }
-.brand-name span { color: var(--accent); }
-.brand-sub { color: var(--muted); font-size: 12px; border-left: 1px solid var(--line); padding-left: 10px; }
+/* знак: узкие высокие буквы — Bahnschrift (есть в каждой Windows), без него — Arial Narrow */
+.ras-plate {
+    font-family: Bahnschrift, "Arial Narrow", sans-serif; font-stretch: condensed; font-weight: 700; font-size: 21px; line-height: 1;
+    letter-spacing: .5px; color: #fff; background: var(--brand); padding: 5px 9px 4px; border-radius: 6px;
+}
+.brand-name { font-weight: 600; font-size: 17px; letter-spacing: .1px; }
+/* под названием проекта: последний прогон, отчёты, папка — со значками */
+.ph-meta { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); font-size: 13px; }
+.ph-meta span { display: inline-flex; align-items: center; gap: 6px; }
+.ph-meta svg { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; stroke-linecap: round; }
+.crumbs .sep { color: var(--muted); margin: 0 2px; }
 .theme-toggle {
     margin-left: auto; font: inherit; font-size: 16px; width: 34px; height: 34px; border-radius: 8px; cursor: pointer;
     border: 1px solid var(--line); background: var(--panel); color: var(--muted);

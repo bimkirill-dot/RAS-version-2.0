@@ -1,14 +1,10 @@
 @inherits LayoutComponentBase
 
 <header class="top">
-    <a class="brand" href="/">
-        <svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true">
-            <rect x="2" y="7" width="15" height="15" rx="3" fill="var(--accent)" opacity=".9" />
-            <rect x="11" y="3" width="15" height="15" rx="3" fill="var(--active)" opacity=".8" />
-            <rect x="11" y="7" width="6" height="11" fill="var(--panel)" opacity=".85" />
-        </svg>
-        <span class="brand-name">RAS <span>Clash Analysis</span></span>
-        <span class="brand-sub">единая база коллизий</span>
+    @* знак RAS — тёмно-синяя плашка с узкими высокими буквами, как логотип прежнего плагина (вариант А, 13.10.2026; без подписи) *@
+    <a class="brand" href="/" title="Проекты">
+        <span class="ras-plate">RAS</span>
+        <span class="brand-name">Clash Analysis</span>
     </a>
     @* тема — без связи с сайтом (обычный обработчик): работает и пока страница подключается *@
     <button class="theme-toggle" onclick="ras.toggleTheme()" title="Светлая / тёмная тема">◐</button>
