@@ -974,7 +974,8 @@
             "imported" => r => r.Imported,
             _ => r => r.ReportDate,
         };
-        return (_view.ReportSortDesc ? reports.OrderByDescending(key) : reports.OrderBy(key)).ThenByDescending(r => r.ReportDate).ToList();
+        return (_view.ReportSortDesc ? reports.OrderByDescending(key) : reports.OrderBy(key)).ThenByDescending(r => r.ReportDate)
+            .ThenBy(r => System.IO.Path.GetFileName(r.FilePath), StringComparer.CurrentCultureIgnoreCase).ToList();
     }
 
     /// <summary>Группы отчётов по выбранному параметру; внутри — по выбранной сортировке.</summary>
