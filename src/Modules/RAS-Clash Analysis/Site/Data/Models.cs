@@ -96,6 +96,8 @@ public sealed class ReportRow
     public int Results { get; set; }
     /// <summary>Что принёс этот отчёт.</summary>
     public RunDelta Delta { get; } = new RunDelta();
+    /// <summary>Первый прогон его проверки: раньше отчётов по ней не было — «первая проверка», а не «новые».</summary>
+    public bool FirstRun { get; set; }
 }
 
 public sealed class ElementView

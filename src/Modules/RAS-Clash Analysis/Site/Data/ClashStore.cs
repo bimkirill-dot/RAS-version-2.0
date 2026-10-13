@@ -172,6 +172,16 @@ public sealed class ClashStore
                     x.Delta.Fixed = d.GetInt32(2);
                     x.Delta.Returned = d.GetInt32(3);
                 }
+        // первый прогон проверки: в отчёте есть коллизии, и ни у одной её проверки нет коллизий раньше дня отчёта
+        using (var f = Query(c, """
+            SELECT rp.Id FROM Reports rp
+            WHERE rp.ProjectId = $p AND EXISTS(SELECT 1 FROM Occurrences o WHERE o.ReportId = rp.Id)
+              AND NOT EXISTS(SELECT 1 FROM Occurrences o JOIN Clashes cl ON cl.Id = o.ClashId
+                             WHERE o.ReportId = rp.Id
+                               AND (SELECT substr(MIN(c0.FirstSeen), 1, 10) FROM Clashes c0 WHERE c0.TestId = cl.TestId) < substr(rp.ReportDate, 1, 10))
+            """, ("$p", projectId)))
+            while (f.Read())
+                if (byId.TryGetValue(f.GetInt64(0), out var x)) x.FirstRun = true;
         return list;
     }
 

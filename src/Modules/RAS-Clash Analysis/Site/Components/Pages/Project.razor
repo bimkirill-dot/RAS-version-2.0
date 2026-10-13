@@ -632,9 +632,13 @@
     /// <summary>Что принесли отчёты группы (дата внутри блока — это прогон).</summary>
     private RenderFragment SumDelta(IEnumerable<ReportRow> reports) => __builder =>
     {
+        var list = reports.ToList();
         var sum = new RunDelta();
-        foreach (var r in reports) sum.Add(r.Delta);
-        <Delta Value="sum" />
+        foreach (var r in list) sum.Add(r.Delta);
+        // «первая проверка» — если все отчёты прогона с коллизиями — первые для своих проверок
+        var withClashes = list.Where(r => r.Results > 0).ToList();
+        var first = withClashes.Count > 0 && withClashes.All(r => r.FirstRun);
+        <Delta Value="sum" FirstRun="first" Unchanged="!first && withClashes.Count > 0" />
     };
 
     private void UndoFixes(ReportRow r)
@@ -1026,7 +1030,7 @@
             <td class="file" title="@r.FilePath">
                 <div class="cut">@System.IO.Path.GetFileName(r.FilePath)</div>
                 <div class="el-sub cut">@ReportFolder(r)</div>
-                <Delta Value="r.Delta" />
+                <Delta Value="r.Delta" FirstRun="r.FirstRun" Unchanged="!r.FirstRun && r.Results > 0" />
                 @if (r.Warning != null) { <div class="warn small report-warning" title="@r.Warning">⚠ @r.Warning</div> }
                 @if (r.Suspicious)
                 {

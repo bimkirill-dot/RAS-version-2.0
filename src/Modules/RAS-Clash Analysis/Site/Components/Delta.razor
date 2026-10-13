@@ -8,7 +8,19 @@
         @if (Value.Returned > 0) { <span class="d-returned">↺ @Fmt.Plural(Value.Returned, "вернулась", "вернулись", "вернулось")</span> }
     </span>
 }
+else if (Value != null && FirstRun)
+{
+    <span class="delta"><span class="d-first" title="Раньше отчётов по этой проверке не было — все её коллизии исходные, не «новые»">первая проверка</span></span>
+}
+else if (Value != null && Unchanged)
+{
+    <span class="delta"><span class="d-same" title="Прогон ничего не изменил: новых, исправленных и вернувшихся нет">без изменений</span></span>
+}
 
 @code {
     [Parameter] public RunDelta Value { get; set; }
+    /// <summary>Первый прогон проверки — «первая проверка» вместо пустого места.</summary>
+    [Parameter] public bool FirstRun { get; set; }
+    /// <summary>Не первый прогон и ничего не изменилось — «без изменений».</summary>
+    [Parameter] public bool Unchanged { get; set; }
 }
