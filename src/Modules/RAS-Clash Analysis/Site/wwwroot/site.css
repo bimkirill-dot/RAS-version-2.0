@@ -460,6 +460,8 @@ input:focus, select:focus, textarea:focus, .list:focus-visible { outline: 2px so
 .side-sub b { align-self: flex-start; padding-top: 1px; }
 /* выбранное справа у раздела («S2», название типа) — в одну строку */
 .side-btn.side-group span { white-space: nowrap; }
+/* выбранный тип проверки — полностью, строкой под названием раздела (длинный справа не помещался) */
+.side-btn .side-chosen { display: block; margin-top: 2px; white-space: normal; overflow-wrap: anywhere; font-size: 12px; line-height: 1.3; font-weight: 600; color: var(--accent-strong); }
 .side-btn .side-value { min-width: 0; max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .side-sub b { font-weight: 500; font-size: 12px; color: var(--muted); }
 .side-sub:hover { background: var(--row-hover); }

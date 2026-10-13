@@ -116,7 +116,17 @@
                 @* «Тип проверки» — как «Блок»: нажать — типы подразделами (просьба разработчика 13.10.2026; был списком на ленте) *@
                 <button class="side-btn side-group @(_view.TypesOpen ? "open" : "")" @onclick="() => _view.TypesOpen = !_view.TypesOpen"
                         title="Тип проверки — показать коллизии одной проверки" aria-expanded="@(_view.TypesOpen ? "true" : "false")">
-                    <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="11" y="11" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M9 6h5v5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg><span>Тип проверки</span><b class="side-value" title="@_filter.TestType">@(_filter.TestType ?? "все")</b><i class="chev" aria-hidden="true"></i>
+                    <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="11" y="11" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M9 6h5v5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg><span>
+                        Тип проверки
+                        @if (_filter.TestType != null)
+                        {
+                            <small class="side-chosen">@_filter.TestType</small>
+                        }
+                    </span>
+                    @if (_filter.TestType == null)
+                    {
+                        <b class="side-value">все</b>
+                    }<i class="chev" aria-hidden="true"></i>
                 </button>
                 @if (_view.TypesOpen)
                 {
