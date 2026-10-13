@@ -109,13 +109,13 @@
                     @if (_view.BlocksOpen)
                     {
                         <div class="side-subs">
-                            <button class="side-sub @(_filter.Block == null ? "on" : "")" @onclick="() => SetBlock(null)">
+                            <button class="side-sub @(_filter.Block == null ? "on" : "")" @onclick="() => PickBlock(null)">
                                 <span>Все</span><b>@ActiveIn(_filter.Criticality, null, null)</b>
                             </button>
                             @foreach (var b in BlocksOf(_filter.Criticality))
                             {
                                 var block = b;
-                                <button class="side-sub @(_filter.Block == block ? "on" : "")" @onclick="() => SetBlock(block)">
+                                <button class="side-sub @(_filter.Block == block ? "on" : "")" @onclick="() => PickBlock(block)">
                                     <span>@ReportPath.BlockTitle(block)</span><b>@ActiveIn(_filter.Criticality, block, null)</b>
                                 </button>
                             }
@@ -140,13 +140,13 @@
                 @if (_view.TypesOpen)
                 {
                     <div class="side-subs">
-                        <button class="side-sub @(_filter.TestType == null ? "on" : "")" @onclick="() => SetTestType(null)">
+                        <button class="side-sub @(_filter.TestType == null ? "on" : "")" @onclick="() => PickTestType(null)">
                             <span>Все</span><b>@ActiveIn(_filter.Criticality, _filter.Block, null)</b>
                         </button>
                         @foreach (var (name, active) in TestTypes)
                         {
                             var type = name;
-                            <button class="side-sub @(_filter.TestType == type ? "on" : "")" @onclick="() => SetTestType(type)" title="@type">
+                            <button class="side-sub @(_filter.TestType == type ? "on" : "")" @onclick="() => PickTestType(type)" title="@type">
                                 <span>@type</span><b>@active</b>
                             </button>
                         }
@@ -992,6 +992,19 @@
     {
         var v = e.Value?.ToString();
         SetScope(v == "*" ? null : v == "-" ? "" : v, null, null);
+    }
+
+    /// <summary>Выбор на боковой панели: список сразу сворачивается, выбранное видно под названием раздела (просьба разработчика 13.10.2026).</summary>
+    private void PickBlock(string block)
+    {
+        SetBlock(block);
+        _view.BlocksOpen = false;
+    }
+
+    private void PickTestType(string type)
+    {
+        SetTestType(type);
+        _view.TypesOpen = false;
     }
 
     /// <summary>Тип проверки (null — все) — в выбранных критичности и блоке.</summary>
