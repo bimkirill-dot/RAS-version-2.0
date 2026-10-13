@@ -33,11 +33,13 @@ else
                     <div class="pc-run small" title="Что принёс последний прогон каждой проверки">Последний прогон: <Delta Value="p.LastRun" /></div>
                 }
                 <div class="pc-nums">
-                    @if (_crits.Count == 0)
+                    @* столбцы — критичности этого проекта (без критичности — один «активные»): у карточек нет пустых «0» *@
+                    @{ var crits = CritsOf(p); }
+                    @if (crits.Count == 0)
                     {
                         <div class="pc-num k-active"><b>@p.Counts.Active</b><span>активные</span></div>
                     }
-                    @foreach (var cr in _crits)
+                    @foreach (var cr in crits)
                     {
                         <div class="pc-num k-active @(cr == "Высокая" ? "" : "soft")">
                             <b>@(p.ActiveByCriticality.TryGetValue(cr, out var n) ? n : 0)</b>
@@ -99,8 +101,7 @@ else
     </div>
 }
 
-<footer class="status">
-    База: <span class="path">@Options.DatabaseFile</span>.
+<footer class="status" title="База: @Options.DatabaseFile">
     @if (Backup.LastError != null)
     {
         <span class="error">@Backup.LastError</span>
@@ -126,8 +127,6 @@ else
     private string _autoName;
     private string _error;
     private bool _showNew;
-    /// <summary>Критичности, которые есть в проектах (столбцы активных); пусто — один столбец «Активные».</summary>
-    private List<string> _crits = new();
 
     protected override void OnInitialized() => Load();
 
@@ -138,11 +137,16 @@ else
         return all == 0 ? 0 : (int)Math.Round(100.0 * p.Counts.Fixed / all);
     }
 
+    /// <summary>Критичности проекта по порядку; только «без критичности» — пусто (один столбец «активные»).</summary>
+    private static List<string> CritsOf(ProjectRow p)
+    {
+        var all = p.ActiveByCriticality.Keys.ToList();
+        return all.Count == 0 || (all.Count == 1 && all[0] == "") ? new List<string>() : all.OrderBy(ReportPath.CriticalityOrder).ToList();
+    }
+
     private void Load()
     {
         _projects = Store.Projects();
-        var all = _projects.SelectMany(p => p.ActiveByCriticality.Keys).Distinct().ToList();
-        _crits = all.Count == 1 && all[0] == "" ? new List<string>() : all.OrderBy(ReportPath.CriticalityOrder).ToList();
     }
 
     /// <summary>Папку ввели — название проекта берётся из её имени (если название ещё не меняли руками).</summary>

@@ -36,12 +36,28 @@ window.ras = {
         document.documentElement.dataset.theme = next;
         try { localStorage.setItem('ras-theme', next); } catch (e) { }
     },
+    // карточка коллизии — в начало (открыта другая коллизия)
+    top: function (el) {
+        if (el) el.scrollTop = 0;
+    },
     // выбранная строка списка — в видимую часть (стрелки ↑/↓)
     reveal: function (id) {
         const el = document.getElementById(id);
         if (el) el.scrollIntoView({ block: 'nearest' });
     }
 };
+
+// 1 · 2 · 3 — статус открытой коллизии: «Активная», «Исправлена», «Допущена» (кроме набора текста в полях)
+document.addEventListener('keydown', function (e) {
+    if (e.ctrlKey || e.altKey || e.metaKey || (e.key !== '1' && e.key !== '2' && e.key !== '3')) return;
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    const b = document.querySelector('.clash-card .state-buttons button[data-key="' + e.key + '"]');
+    if (b && !b.disabled) {
+        e.preventDefault();
+        b.click();
+    }
+});
 
 // ↑ ↓ в списке коллизий выбирают соседнюю коллизию (это делает страница) — список при этом не прокручивается сам
 document.addEventListener('keydown', function (e) {

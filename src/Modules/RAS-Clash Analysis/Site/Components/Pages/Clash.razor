@@ -11,7 +11,14 @@
 }
 
 <nav class="crumbs"><a href="/">Проекты</a> › <a href="project/@_projectId">@_projectName</a> ›</nav>
-<p><a href="project/@_projectId">← К списку коллизий</a></p>
+@* соседние коллизии проекта — в том же порядке, что список (блок, проверка, номер): по ссылке от коллеги тоже можно идти дальше *@
+<div class="clash-nav">
+    <a href="project/@_projectId">← К списку коллизий</a>
+    <span class="spacer"></span>
+    @if (_prev != null) { <a class="btn small" href="clash/@_prev" title="Предыдущая коллизия проекта">‹</a> } else { <button class="btn small" disabled>‹</button> }
+    <span class="muted small">@(_index + 1) из @_count</span>
+    @if (_next != null) { <a class="btn small" href="clash/@_next" title="Следующая коллизия проекта">›</a> } else { <button class="btn small" disabled>›</button> }
+</div>
 
 <ClashPanel ClashId="Id" />
 
@@ -21,6 +28,8 @@
     private long? _projectId;
     private string _projectName;
     private string _title;
+    private long? _prev, _next;
+    private int _index, _count;
 
     protected override void OnParametersSet()
     {
@@ -28,5 +37,11 @@
         _projectId = card?.ProjectId;
         _projectName = card?.ProjectName;
         _title = card?.Last?.Name;
+        if (card == null) return;
+        var ids = Store.Clashes(card.ProjectId, new ClashFilter()).Select(c => c.Id).ToList();
+        _index = ids.IndexOf(Id);
+        _count = ids.Count;
+        _prev = _index > 0 ? ids[_index - 1] : null;
+        _next = _index >= 0 && _index < ids.Count - 1 ? ids[_index + 1] : null;
     }
 }

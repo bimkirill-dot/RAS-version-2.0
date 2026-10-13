@@ -27,7 +27,7 @@
         {
             @* итоги всего проекта — крупными цифрами (для показа руководству); от отборов не зависят *@
             var k = Kpi;
-            <div class="kpis" title="Весь проект: все критичности, блоки и проверки">
+            <div class="kpis" title="Весь проект: все критичности, блоки и проверки" data-caption="по всему проекту">
                 <div class="kpi k-active"><div class="v">@k.Active</div><div class="l">Активные</div></div>
                 <div class="kpi k-fixed"><div class="v">@k.Fixed</div><div class="l">Исправлены</div></div>
                 <div class="kpi k-accepted"><div class="v">@k.Accepted</div><div class="l">Допущены</div></div>
@@ -51,7 +51,7 @@
         <div class="ribbon sub-ribbon">
             @if (ShowAllCriticalities)
             {
-                <label class="dd crit-dd @CriticalityClass(_filter.Criticality)">
+                <label class="dd crit-dd @CriticalityClass(_filter.Criticality) @(_view.Tab == 3 ? "off" : "")">
                     <span>Критичность</span>
                     <select value="@(_filter.Criticality == null ? "*" : _filter.Criticality == "" ? "-" : _filter.Criticality)" @onchange="OnCriticalityChanged">
                         @foreach (var cr in _criticalities)
@@ -62,6 +62,8 @@
                     </select>
                 </label>
             }
+            @* на «Отчётах» и «Проекте» отборы списка не действуют — приглушены (строка остаётся, чтобы страница не прыгала) *@
+            <div class="ribbon-list @(_view.Tab == 0 ? "" : "off")">
             <label class="dd" title="За какой прогон: последний (что сейчас), любой прошлый или все">
                 <span>Дата</span>
                 <select value="@_view.RunDate" @onchange="OnRunDateChanged">
@@ -80,8 +82,13 @@
             {
                 <button class="btn link small" @onclick="ResetFilter">Сбросить</button>
             }
+            </div>
+            @if (_view.Tab != 0)
+            {
+                <span class="off-note" title="Остальные отборы — для списка коллизий">@(_view.Tab == 2 ? "Здесь — только критичность" : "Отборы — для списка коллизий")</span>
+            }
             @* поиск — справа (просьба разработчика 13.10.2026) *@
-            <input class="search" type="search" placeholder="Поиск: номер элемента, тип, имя…" value="@_filter.Search" @oninput="OnSearch" />
+            <input class="search @(_view.Tab == 0 ? "" : "off")" type="search" placeholder="Поиск: номер элемента, тип, имя…" value="@_filter.Search" @oninput="OnSearch" />
         </div>
     }
 
@@ -173,7 +180,7 @@
                         <label class="dd">
                             <span>Группировка</span>
                             <select value="@_view.GroupBy" @onchange="OnGroupChanged">
-                                <option value="">Нет</option>
+                                <option value="">Без группировки</option>
                                 <option value="test">По типу проверки</option>
                                 <option value="element">По элементу</option>
                             </select>
@@ -220,29 +227,23 @@
                         }
                         else
                         {
+                            @* столбцы «Расстояние» и «Оси» — только если они есть в отчётах; при открытой карточке на широком экране
+                               необязательные (opt) прячутся, на узком карточка выезжает поверх списка и столбцы остаются *@
                             <table class="grid clashes">
-                                <colgroup>
-                                    <col class="c-sel" /><col class="c-date" /><col class="c-test" />
-                                    @if (Wide) { <col class="c-disc" /> }
-                                    <col class="c-name" /><col class="c-dist" />
-                                    @if (Wide) { <col class="c-grid" /> }
-                                    <col class="c-level" /><col class="c-state" />
-                                    @if (Wide) { <col class="c-rep" /> }
-                                </colgroup>
                                 <thead>
                                     <tr>
-                                        <th class="sel" @onclick:stopPropagation="true">
+                                        <th class="sel c-sel" @onclick:stopPropagation="true">
                                             <input type="checkbox" checked="@AllSelected" @onchange="ToggleAll" title="Отметить все найденные (@_clashes.Count)" />
                                         </th>
-                                        @SortHeader("date", "Дата", "Последний прогон, где была коллизия")
-                                        @SortHeader("test", "Проверка")
-                                        @if (Wide) { @SortHeader("disc", "Раздел") }
-                                        @SortHeader("name", "Имя")
-                                        @SortHeader("dist", "Расстояние", "Глубина пересечения, мм — если включена в отчёт Navisworks")
-                                        @if (Wide) { @SortHeader("grid", "Оси", "Расположение по осям — если включено в отчёт Navisworks") }
-                                        @SortHeader("level", "Уровень")
-                                        @SortHeader("state", "Статус")
-                                        @if (Wide) { @SortHeader("repeats", "Повторы", "В скольких прогонах встречалась") }
+                                        @SortHeader("date", "Дата", "Последний прогон, где была коллизия", "c-date opt")
+                                        @SortHeader("test", "Проверка", null, "c-test")
+                                        @SortHeader("disc", "Раздел", null, "c-disc opt")
+                                        @SortHeader("what", "Что с чем", "Элементы коллизии: тип А × тип Б; имя Navisworks — в подсказке", "c-what")
+                                        @if (HasDistance) { @SortHeader("dist", "Расстояние", "Глубина пересечения, мм", "c-dist opt") }
+                                        @if (HasGrid) { @SortHeader("grid", "Оси", "Расположение по осям", "c-grid opt") }
+                                        @SortHeader("level", "Уровень", null, "c-level")
+                                        @SortHeader("state", "Статус", null, "c-state")
+                                        @SortHeader("repeats", "Прогонов", "В скольких прогонах встречалась", "c-rep opt")
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -257,10 +258,10 @@
                                                     <input type="checkbox" checked="@g.Rows.All(r => _selected.Contains(r.Id))" @onchange="e => ToggleRows(g.Rows, e)"
                                                            title="Отметить всю группу (@g.Rows.Count)" />
                                                 </td>
-                                                <td colspan="@(Wide ? 9 : 6)">
+                                                <td colspan="@(ColumnCount - 1)">
                                                     <span class="caret">@(collapsed ? "▸" : "▾")</span>
                                                     <span class="group-title">@g.Title</span>
-                                                    @if (g.Sub != null) { <span class="mono small muted"> · @g.Sub</span> }
+                                                    @if (g.Sub != null) { <span class="small muted" title="@g.SubTitle"> · @g.Sub</span> }
                                                     <span class="group-count">@Fmt.Plural(g.Rows.Count, "коллизия", "коллизии", "коллизий")</span>
                                                 </td>
                                             </tr>
@@ -403,10 +404,6 @@
                             </tbody>
                         }
                     </table>
-                    @if (ScopeReports.Any(r => r.DateSource != ReportPath.DateFromXml))
-                    {
-                        <p class="muted">* — в отчёте нет даты обнаружения коллизий: дата — из названия папки прогона, а если её нет — время файла. Дату можно включить в настройках отчёта Navisworks.</p>
-                    }
                 </section>
             }
             else
@@ -477,6 +474,7 @@
     {
         public string Key;
         public string Title;
+        public string SubTitle;
         public string Sub;
         public List<ClashRow> Rows;
     }
@@ -516,6 +514,15 @@
     private bool SelectedVisible => _view.SelectedId.HasValue;
     /// <summary>Список во всю ширину (карточка закрыта) — со всеми столбцами.</summary>
     private bool Wide => !SelectedVisible;
+    /// <summary>Расстояние и оси есть хоть у одной коллизии — иначе их столбцов нет (в отчётах их не включили).</summary>
+    private bool HasDistance => _base.Any(c => c.Distance.HasValue);
+    private bool HasGrid => _base.Any(c => !string.IsNullOrEmpty(c.GridLocation));
+    /// <summary>Столбцов в таблице (для строки группы).</summary>
+    private int ColumnCount => 8 + (HasDistance ? 1 : 0) + (HasGrid ? 1 : 0);
+
+    /// <summary>Подсказка «что с чем»: полностью, с номерами элементов и именем Navisworks.</summary>
+    private static string WhatTitle(ClashRow x) =>
+        $"{Fmt.Element(x.A)} (ID {x.A?.ElementId}) × {Fmt.Element(x.B)} (ID {x.B?.ElementId}) · {x.Name}";
     private IEnumerable<TestRow> ScopeTests => _tests.Where(InScope);
     private IEnumerable<ReportRow> ScopeReports => _reports.Where(r => (_filter.Criticality == null || r.Criticality == _filter.Criticality)
                                                                       && (_filter.Block == null || r.Block == _filter.Block));
@@ -592,10 +599,10 @@
         if (list.Count == 0) return;
         <details class="missing-box">
             <summary>
-                ⚠ В последнем прогоне нет отчёта по @Fmt.Plural(list.Count, "проверке", "проверкам", "проверкам") —
-                их @Fmt.Plural(list.Sum(m => m.Test.Counts.Active), "активная коллизия", "активные коллизии", "активных коллизий") по более ранним отчётам.
-                <span class="muted">Выгружайте все проверки, даже пустые: иначе не понять — исправлено всё или отчёт забыли.</span>
+                ⚠ Нет отчёта в последнем прогоне: @Fmt.Plural(list.Count, "проверка", "проверки", "проверок") ·
+                @Fmt.Plural(list.Sum(m => m.Test.Counts.Active), "активная", "активные", "активных") по более ранним отчётам
             </summary>
+            <p class="muted">Выгружайте все проверки, даже пустые: иначе не понять — исправлено всё или отчёт забыли. Статусы этих коллизий сайт не меняет.</p>
             <ul>
                 @foreach (var (t, run) in list.OrderBy(m => ReportPath.CriticalityOrder(m.Test.Criticality)).ThenBy(m => ReportPath.BlockOrder(m.Test.Block)).ThenBy(m => m.Test.Name))
                 {
@@ -677,8 +684,9 @@
             groups = ClashGrouping.ByElement(_clashes).Select(g => new ListGroup
             {
                 Key = "e:" + (g.Key ?? "—"),
-                Title = g.Key == null ? "Остальные — по одной коллизии на элемент" : Fmt.Element(g.Element),
-                Sub = g.Key == null ? null : g.Element.ElementId + " · " + Fmt.Model(g.Element.ModelFile),
+                Title = g.Key == null ? "Остальные — по одной коллизии на элемент" : Fmt.Short(g.Element),
+                Sub = g.Key == null ? null : "ID " + g.Element.ElementId + " · " + (ClashRules.Discipline(g.Element.ModelFile) ?? Fmt.Model(g.Element.ModelFile)),
+                SubTitle = g.Key == null ? null : Fmt.Element(g.Element) + " · " + g.Element.ModelFile,
                 Rows = g.Rows,
             }).ToList();
         _items = new List<ListItem>();
@@ -841,23 +849,26 @@
             <td class="sel" @onclick:stopPropagation="true">
                 <input type="checkbox" checked="@_selected.Contains(x.Id)" @onchange="e => Toggle(x.Id, e)" />
             </td>
-            <td>@Fmt.Day(x.LastSeen)</td>
+            <td class="opt">@Fmt.Day(x.LastSeen)</td>
             <td class="cut" title="@(x.Type != x.TestName ? x.Type + " (в Navisworks: " + x.TestName + ")" : x.TestName)">
                 @if (ShowBlock) { <span class="tag">@x.Block</span> }@x.Type
             </td>
-            @if (Wide) { <td><Disc Pair="@disc" /></td> }
-            <td class="name">
-                @(x.Name ?? "—")
-                @if (RunIs(x, "new")) { <span class="tag run-new" title="Появилась в этом прогоне">новая</span> }
-                @if (RunIs(x, "returned")) { <span class="tag run-returned" title="Вернулась после исправления в этом прогоне">↺ вернулась</span> }
-                else if (RunIs(x, "fixed")) { <span class="tag run-fixed" title="Исправлена этим прогоном">исправлена</span> }
-                else if (x.ReturnCount > 0) { <span class="tag returned" title="Возвращалась после исправления: @x.ReturnCount">↺@(x.ReturnCount > 1 ? x.ReturnCount.ToString() : "")</span> }
+            <td class="opt"><Disc Pair="@disc" /></td>
+            @* что с чем пересекается — вместо «Конфликт4»: имя Navisworks — в подсказке и в карточке *@
+            <td class="what" title="@WhatTitle(x)">
+                <div class="what-line">
+                    <span class="w">@Fmt.Short(x.A)</span><span class="x">×</span><span class="w">@Fmt.Short(x.B)</span>
+                    @if (RunIs(x, "new")) { <span class="tag run-new" title="Появилась в этом прогоне">новая</span> }
+                    @if (RunIs(x, "returned")) { <span class="tag run-returned" title="Вернулась после исправления в этом прогоне">↺ вернулась</span> }
+                    else if (RunIs(x, "fixed")) { <span class="tag run-fixed" title="Исправлена этим прогоном">исправлена</span> }
+                    else if (x.ReturnCount > 0) { <span class="tag returned" title="Возвращалась после исправления: @x.ReturnCount">↺@(x.ReturnCount > 1 ? x.ReturnCount.ToString() : "")</span> }
+                </div>
             </td>
-            <td>@if (x.Distance.HasValue) { <span class="dist">@Fmt.MmAbs(x.Distance, x.Units)</span> } else { <span class="muted">—</span> }</td>
-            @if (Wide) { <td class="cut" title="@x.GridLocation">@(x.GridLocation ?? "—")</td> }
+            @if (HasDistance) { <td class="opt">@if (x.Distance.HasValue) { <span class="dist">@Fmt.MmAbs(x.Distance, x.Units)</span> } else { <span class="muted">—</span> }</td> }
+            @if (HasGrid) { <td class="cut opt" title="@x.GridLocation">@(x.GridLocation ?? "—")</td> }
             <td class="cut" title="@Level(x)">@Level(x)</td>
             <td><span class="badge @Fmt.StateClass(x.State)">@Fmt.State(x.State)</span></td>
-            @if (Wide) { <td class="num">@x.Repeats</td> }
+            <td class="num opt">@x.Repeats</td>
         </tr>
     };
 
@@ -1171,10 +1182,10 @@
     // ───── сортировка ─────
 
     /// <summary>Заголовок столбца с сортировкой: щелчок — по нему, повторный — обратный порядок; ⇅ — можно сортировать.</summary>
-    private RenderFragment SortHeader(string key, string title, string tip = null) => __builder =>
+    private RenderFragment SortHeader(string key, string title, string tip = null, string css = null) => __builder =>
     {
         var on = _view.SortKey == key;
-        <th class="sortable @(on ? "sorted" : "")" @onclick="() => SortBy(key)" title="@(tip ?? "Сортировать")">
+        <th class="sortable @(on ? "sorted" : "") @css" @onclick="() => SortBy(key)" title="@(tip ?? "Сортировать")">
             @title <span class="sort-mark">@(on ? (_view.SortDesc ? "▼" : "▲") : "⇅")</span>
         </th>
     };
@@ -1200,6 +1211,7 @@
             "test" => c => c.Type,
             "disc" => c => ClashFacets.DisciplinePair(c) ?? "",
             "name" => c => NameNumber(c.Name),
+            "what" => c => Fmt.Short(c.A) + " × " + Fmt.Short(c.B),
             "dist" => c => c.Distance.HasValue ? Math.Abs(c.Distance.Value) : -1,
             "grid" => c => c.GridLocation ?? "",
             "level" => c => LevelOrder(c),

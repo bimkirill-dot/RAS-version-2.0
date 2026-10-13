@@ -213,6 +213,11 @@ table.reports { table-layout: fixed; }
 .missing-box li { margin: 3px 0; }
 table.grid tbody tr.missing-row td { padding: 6px 10px 6px 34px; color: var(--pending); font-size: 13px; background: color-mix(in srgb, var(--pending) 7%, var(--panel)); }
 .report-warning { white-space: normal; }
+/* строка отборов на «Отчётах» и «Проекте»: не действующее — приглушено */
+.ribbon-list { display: contents; }
+.sub-ribbon .off, .ribbon-list.off > * { opacity: .38; pointer-events: none; }
+.off-note { font-size: 12px; color: var(--muted); }
+.missing-box p { margin: 8px 0 0; }
 .group-missing { margin-left: 10px; color: var(--pending); font-size: 12px; font-weight: 600; }
 table.reports td.file { max-width: 0; }
 table.reports th:nth-child(1) { width: 140px; }
@@ -330,16 +335,38 @@ table.clashes tbody tr.selected { background: var(--row-selected); }
 table.clashes tbody tr.selected td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 table.clashes tr.gone td { color: var(--muted); }
 table.clashes td.name { white-space: nowrap; }
-col.c-sel { width: 32px; }
-col.c-date { width: 92px; }
-col.c-test { width: auto; }
-col.c-disc { width: 84px; }
-col.c-name { width: 120px; }
-col.c-dist { width: 96px; }
-col.c-grid { width: 90px; }
-col.c-level { width: 150px; }
-col.c-state { width: 124px; }
-col.c-rep { width: 80px; }
+th.c-sel { width: 32px; }
+th.c-date { width: 92px; }
+th.c-test { width: 20%; }
+th.c-disc { width: 84px; }
+th.c-what { width: auto; }
+th.c-dist { width: 96px; }
+th.c-grid { width: 90px; }
+th.c-level { width: 150px; }
+th.c-state { width: 124px; }
+th.c-rep { width: 86px; }
+/* «что с чем»: тип А × тип Б, каждая сторона — многоточием */
+td.what { overflow: hidden; }
+.what-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.what-line .w { min-width: 0; flex: 1 1 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.what-line .x { flex: none; color: var(--muted); }
+.what-line .tag { flex: none; }
+/* открыта карточка на широком экране — необязательные столбцы прячутся; подпись «Группировка» — тоже */
+@media (min-width: 1400px) {
+    .body.with-panel table.clashes .opt { display: none; }
+    .body.with-panel table.clashes th.c-test { width: 24%; }
+    .body.with-panel table.clashes th.c-level { width: 104px; }
+    .body.with-panel table.clashes th.c-state { width: 112px; }
+    .body.with-panel .list-title .dd > span { display: none; }
+}
+/* узкий экран (ноутбук): карточка выезжает поверх списка справа, список — во всю ширину */
+@media (min-width: 1101px) and (max-width: 1399px) {
+    .body.with-panel { grid-template-columns: 230px minmax(0, 1fr); }
+    .body.with-panel > aside.panel {
+        position: fixed; top: 64px; right: 12px; bottom: 12px; width: min(500px, calc(100vw - 24px)); z-index: 40;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, .28);
+    }
+}
 
 /* заголовок списка: «Коллизии (N)», прогон, группировка, Excel */
 .list-title { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; flex: none; padding: 0 0 8px; }
@@ -360,11 +387,31 @@ th.sorted .sort-mark { opacity: 1; color: var(--accent); }
 .clash-card { display: flex; flex-direction: column; gap: 10px; }
 .clash-card.wide { max-width: 900px; }
 .cc-head h2 { margin: 6px 0 2px; }
+/* верх карточки закреплён (что, статус, кнопки, комментарий), ниже — прокручивается (сведения, снимок, объекты, история) */
+.cc-top { display: flex; flex-direction: column; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.cc-top textarea { min-height: 32px; resize: vertical; }
+.cc-body { display: flex; flex-direction: column; gap: 10px; }
+.cc-notes { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; margin-top: 2px; }
+.cc-notes .run-note { margin-top: 0; }
+.cc-what { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 6px; font-size: 13px; }
+.cc-what .w { font-weight: 600; }
+.cc-what .x { color: var(--muted); }
+.state-buttons kbd { margin-left: 6px; padding: 0 4px; border: 1px solid currentColor; border-radius: 3px; font: 10px/14px Consolas, monospace; opacity: .55; }
+/* справа от списка: карточка во всю высоту, прокручивается только низ */
+aside.panel { display: flex; flex-direction: column; overflow: hidden; }
+aside.panel .panel-nav { flex: none; }
+.clash-card.compact { flex: 1; min-height: 0; gap: 0; }
+.clash-card.compact .cc-top { flex: none; padding-top: 2px; }
+.clash-card.compact .cc-body { flex: 1; min-height: 0; overflow: auto; padding: 10px 2px 0 0; scrollbar-gutter: stable; }
+/* отдельной страницей: верх прилипает при прокрутке страницы */
+.clash-card.wide .cc-top { position: sticky; top: 0; z-index: 5; background: var(--bg); padding-top: 6px; }
+.clash-nav { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; max-width: 900px; }
 table.facts2 { width: 100%; border-collapse: collapse; font-size: 13px; border: 1px solid var(--line); border-radius: 6px; }
 table.facts2 th, table.facts2 td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
 table.facts2 th { color: var(--muted); font-weight: normal; background: var(--bg); width: 22%; white-space: nowrap; }
 table.facts2 td { width: 28%; word-break: break-word; }
-.cc-shot img { width: 100%; max-height: 300px; object-fit: contain; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); display: block; }
+.cc-shot { text-align: center; }
+.cc-shot img { width: auto; max-width: 100%; max-height: 340px; object-fit: contain; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); display: inline-block; vertical-align: top; }
 .no-shot { height: 120px; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--line); border-radius: 6px; color: var(--muted); }
 .obj { border-top: 1px solid var(--line); padding-top: 8px; }
 .obj-title { font-weight: 600; margin-bottom: 2px; }
@@ -444,7 +491,8 @@ input:focus, select:focus, textarea:focus, .list:focus-visible { outline: 2px so
 /* шапка проекта: название — слева, итоги — справа */
 .project-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
 .project-head h1 { margin-bottom: 2px; }
-.kpis { display: flex; gap: 10px; flex-wrap: wrap; }
+.kpis { display: flex; gap: 10px; flex-wrap: wrap; position: relative; }
+.kpis::before { content: attr(data-caption); position: absolute; right: 2px; top: -15px; font-size: 11px; color: var(--muted); }
 .kpi {
     min-width: 116px; padding: 10px 14px; border-radius: var(--radius); background: var(--panel);
     border: 1px solid var(--line); box-shadow: var(--shadow);

@@ -53,6 +53,15 @@ public static class Fmt
         return parts.Count == 0 ? e.Name ?? "—" : string.Join(" · ", parts);
     }
 
+    /// <summary>Коротко, что за элемент, — для строки списка: тип (самое различимое), без него — семейство, категория, имя.</summary>
+    public static string Short(Data.ElementView e)
+    {
+        if (e == null) return "—";
+        foreach (var v in new[] { e.Type, e.Family, e.Category, e.Name })
+            if (!string.IsNullOrWhiteSpace(v)) return v.Trim();
+        return "—";
+    }
+
     /// <summary>«у 1 коллизии», «у 21 коллизии», «у 5 коллизий» — после «у».</summary>
     public static string Clashes(int n) => n + (n % 10 == 1 && n % 100 != 11 ? " коллизии" : " коллизий");
 

@@ -10,43 +10,73 @@
 }
 
 <div class="clash-card @(Compact ? "compact" : "wide")">
-    <div class="cc-head">
-        <h2>@(_card.Last?.Name ?? "Коллизия") <span class="badge big @Fmt.StateClass(_card.State)">@Fmt.State(_card.State)</span></h2>
-        @if (_card.RunKind != null && _card.RunDay.HasValue)
+    @* верх закреплён: что это, статус, кнопки статуса (клавиши 1 · 2 · 3) и комментарий к ним — без прокрутки
+       (разбор удобства 13.10.2026: кнопки были внизу карточки, на каждой коллизии — прокрутка вниз и вверх) *@
+    <div class="cc-top">
+        <div class="cc-head">
+            <h2>@(_card.Last?.Name ?? "Коллизия") <span class="badge big @Fmt.StateClass(_card.State)">@Fmt.State(_card.State)</span></h2>
+            @if ((_card.RunKind != null && _card.RunDay.HasValue) || _card.ReturnCount > 0)
+            {
+                <div class="cc-notes">
+                    @if (_card.RunKind != null && _card.RunDay.HasValue)
+                    {
+                        @* что сделал с ней последний прогон её проверки *@
+                        <span class="run-note @_card.RunKind">
+                            @(_card.RunKind switch { "new" => "+ Новая", "fixed" => "Исправлена", _ => "↺ Вернулась" }) — прогон @Fmt.Day(_card.RunDay.Value)
+                        </span>
+                    }
+                    @if (_card.ReturnCount > 0)
+                    {
+                        <span class="returned-note">↺ возвращалась после исправления — @Fmt.Plural(_card.ReturnCount, "раз", "раза", "раз")</span>
+                    }
+                </div>
+            }
+            @if (_card.Last != null && _card.Last.Elements.Count > 0)
+            {
+                <div class="cc-what" title="@string.Join(" × ", _card.Last.Elements.Select(Fmt.Element))">
+                    @for (var i = 0; i < _card.Last.Elements.Count; i++)
+                    {
+                        var e = _card.Last.Elements[i];
+                        if (i > 0) { <span class="x">×</span> }
+                        <span class="w">@Fmt.Short(e)</span>
+                        <Disc Pair="@ClashRules.Discipline(e.ModelFile)" />
+                    }
+                    <span class="muted"> · @Level</span>
+                </div>
+            }
+        </div>
+        <div class="state-buttons">
+            @* три статуса, как у автора статьи; «Исправлена», а следующий прогон её нашёл — снова «Активная» с ↺ *@
+            @foreach (var (s, title, key) in Buttons)
+            {
+                var current = s == _card.State;
+                <button class="btn state @Fmt.StateClass(s) @(current ? "current" : "")" disabled="@current" data-key="@key"
+                        title="@(current ? "Текущий статус" : (s == ClashState.Fixed ? "Если следующий прогон её найдёт — снова «Активная»" : "Сделать «" + title + "»") + " · клавиша " + key)"
+                        @onclick="() => SetState(s)">@(current ? "✓ " : "")@title <kbd>@key</kbd></button>
+            }
+        </div>
+        <textarea rows="1" placeholder="Комментарий к статусу (Ctrl+Enter — без статуса)"
+                  @bind="_comment" @bind:event="oninput" @onkeydown="CommentKey"></textarea>
+        @if (!string.IsNullOrWhiteSpace(_comment))
         {
-            @* что сделал с ней последний прогон её проверки *@
-            <div class="run-note @_card.RunKind">
-                @(_card.RunKind switch { "new" => "+ Новая", "fixed" => "Исправлена", _ => "↺ Вернулась" }) — прогон @Fmt.Day(_card.RunDay.Value)
-            </div>
-        }
-        @if (_card.ReturnCount > 0)
-        {
-            <div class="returned-note">↺ Возвращалась после исправления — @Fmt.Plural(_card.ReturnCount, "раз", "раза", "раз")</div>
+            <button class="btn small" @onclick="AddComment">Добавить комментарий</button>
         }
     </div>
 
-    @* сведения — таблицей в два столбца *@
+    <div class="cc-body" @ref="_body">
+    @* сведения — таблицей в два столбца; пустое (нет в отчётах Navisworks) не показывается *@
     <table class="facts2">
-        <tr>
-            <th>Расстояние</th><td>@if (_card.Last?.Distance != null) { <span class="dist">@Fmt.MmAbs(_card.Last.Distance, _card.Units)</span> } else { <span class="muted">—</span> }</td>
-            <th>Оси</th><td>@(_card.Last?.GridLocation ?? "—")</td>
-        </tr>
-        <tr>
-            <th>Уровень</th><td>@Level</td>
-            <th>Статус</th><td><span class="badge @Fmt.StateClass(_card.State)">@Fmt.State(_card.State)</span></td>
-        </tr>
-        <tr>
-            <th>Блок</th><td>@(_card.Block == "" ? "—" : _card.Block)</td>
-            <th>Дата</th><td title="Впервые @Fmt.Day(_card.FirstSeen)">@Fmt.Day(_card.LastSeen)</td>
-        </tr>
-        <tr>
-            <th>Встречалась</th><td>@Fmt.Plural(Repeats, "раз", "раза", "раз")@if ((_card.Last?.Points ?? 1) > 1) { <span class="muted" title="Navisworks нашёл несколько точек касания этих же элементов — это одна коллизия"> · @Fmt.Plural(_card.Last.Points, "точка", "точки", "точек")</span> }</td>
-            <th>Проверка</th><td title="@(_card.Type != _card.TestName ? "В Navisworks: " + _card.TestName : "")">@_card.Type</td>
-        </tr>
-        <tr>
-            <th>Статус Navisworks</th><td>@(_card.Last != null ? Fmt.Navis(_card.Last.NavisStatus) : "—")</td>
-            <th>Критичность</th><td>@(_card.Criticality == "" ? "—" : _card.Criticality)</td>
-        </tr>
+        @foreach (var row in FactRows)
+        {
+            <tr>
+                @foreach (var f in row)
+                {
+                    <th>@f.Label</th>
+                    <td title="@f.Title">@if (f.Dist) { <span class="dist">@f.Value</span> } else { @f.Value }</td>
+                }
+                @if (row.Count == 1) { <th></th><td></td> }
+            </tr>
+        }
     </table>
 
     <div class="cc-shot">
@@ -91,23 +121,6 @@
         }
     }
 
-    <div class="state-buttons">
-        @* три статуса, как у автора статьи; «Исправлена», а следующий прогон её нашёл — снова «Активная» с ↺ *@
-        @foreach (var (s, title) in Buttons)
-        {
-            var current = s == _card.State;
-            <button class="btn state @Fmt.StateClass(s) @(current ? "current" : "")" disabled="@current"
-                    title="@(current ? "Текущий статус" : s == ClashState.Fixed ? "Если следующий прогон её найдёт — снова «Активная»" : "Сделать «" + title + "»")"
-                    @onclick="() => SetState(s)">@(current ? "✓ " : "")@title</button>
-        }
-    </div>
-    <textarea rows="2" placeholder="Комментарий. Нажмёте статус — комментарий добавится к нему; Ctrl+Enter — просто добавить комментарий"
-              @bind="_comment" @bind:event="oninput" @onkeydown="CommentKey"></textarea>
-    @if (!string.IsNullOrWhiteSpace(_comment))
-    {
-        <button class="btn" @onclick="AddComment">Добавить комментарий</button>
-    }
-
     <details class="cc-more" open="@(!Compact)">
         <summary>История (@_card.Events.Count)</summary>
         <ul class="history">
@@ -149,6 +162,7 @@
             </dl>
         }
     </details>
+    </div>
 </div>
 
 @code {
@@ -158,10 +172,41 @@
     /// <summary>Статус изменён (новый статус) или добавлен комментарий (null).</summary>
     [Parameter] public EventCallback<ClashState?> Changed { get; set; }
 
-    private static readonly (ClashState State, string Title)[] Buttons =
+    private static readonly (ClashState State, string Title, string Key)[] Buttons =
     {
-        (ClashState.Active, "Активная"), (ClashState.Fixed, "Исправлена"), (ClashState.Accepted, "Допущена"),
+        (ClashState.Active, "Активная", "1"), (ClashState.Fixed, "Исправлена", "2"), (ClashState.Accepted, "Допущена", "3"),
     };
+
+    /// <summary>Сведение карточки: подпись, значение, подсказка; Dist — значение как «расстояние» (красной плашкой).</summary>
+    private sealed record Fact(string Label, string Value, string Title = null, bool Dist = false);
+
+    /// <summary>Сведения по два в строке; расстояние, оси, статус Navisworks — только если они есть в отчёте.</summary>
+    private List<List<Fact>> FactRows
+    {
+        get
+        {
+            var l = _card.Last;
+            var facts = new List<Fact>
+            {
+                new("Проверка", _card.Type, _card.Type != _card.TestName ? "В Navisworks: " + _card.TestName : null),
+                new("Блок", _card.Block == "" ? "—" : _card.Block),
+                new("Критичность", _card.Criticality == "" ? "—" : _card.Criticality),
+                new("Дата", Fmt.Day(_card.LastSeen), "Впервые — " + Fmt.Day(_card.FirstSeen)),
+                new("Встречалась", Fmt.Plural(Repeats, "раз", "раза", "раз") + ((l?.Points ?? 1) > 1 ? " · " + Fmt.Plural(l.Points, "точка", "точки", "точек") : ""),
+                    (l?.Points ?? 1) > 1 ? "Navisworks нашёл несколько точек касания этих же элементов — это одна коллизия" : null),
+            };
+            if (l?.Distance != null) facts.Add(new("Расстояние", Fmt.MmAbs(l.Distance, _card.Units), null, true));
+            if (!string.IsNullOrEmpty(l?.GridLocation)) facts.Add(new("Оси", l.GridLocation));
+            if (l != null && l.NavisStatus != NavisworksStatus.New) facts.Add(new("Статус Navisworks", Fmt.Navis(l.NavisStatus)));
+            var rows = new List<List<Fact>>();
+            for (var i = 0; i < facts.Count; i += 2) rows.Add(facts.Skip(i).Take(2).ToList());
+            return rows;
+        }
+    }
+
+    private ElementReference _body;
+    /// <summary>Открыта другая коллизия — карточку в начало (иначе новая открывалась прокрученной вниз).</summary>
+    private bool _toTop;
 
     private ClashCard _card;
     private long _loadedId = -1;
@@ -185,10 +230,18 @@
     protected override void OnParametersSet()
     {
         if (ClashId == _loadedId) return;
+        _toTop = _loadedId != -1;
         _loadedId = ClashId;
         _comment = null;
         _copied = -1;
         _card = Store.Card(ClashId);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_toTop) return;
+        _toTop = false;
+        await JS.InvokeVoidAsync("ras.top", _body);
     }
 
     /// <summary>Перечитать (после смены статуса из списка).</summary>
