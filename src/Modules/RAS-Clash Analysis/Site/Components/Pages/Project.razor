@@ -77,11 +77,12 @@
             <FacetMenu Title="Раздел" Values="_facetValues[ClashFacets.Discipline]" Selected="FacetSet(ClashFacets.Discipline)" Changed="Recompute" />
             <FacetMenu Title="Уровень" Values="_facetValues[ClashFacets.Level]" Selected="FacetSet(ClashFacets.Level)" Changed="Recompute" />
             <FacetMenu Title="Статус" Values="_facetValues[ClashFacets.State]" Selected="FacetSet(ClashFacets.State)" Changed="Recompute" />
-            <input class="search" type="search" placeholder="Поиск: номер элемента, тип, имя…" value="@_filter.Search" @oninput="OnSearch" />
             @if (FilterIsSet)
             {
                 <button class="btn link small" @onclick="ResetFilter">Сбросить</button>
             }
+            @* поиск — справа (просьба разработчика 13.10.2026) *@
+            <input class="search" type="search" placeholder="Поиск: номер элемента, тип, имя…" value="@_filter.Search" @oninput="OnSearch" />
         </div>
     }
 
@@ -389,6 +390,7 @@
             else
             {
                 <section class="content scroll">
+                    <div class="list-title"><h2>Проект</h2></div>
                     <div class="form">
                         <label>Название <input @bind="_editName" /></label>
                         <label>Папка с отчётами проекта <input class="wide" @bind="_editFolder" /></label>

@@ -177,7 +177,7 @@ textarea { width: 100%; resize: vertical; }
 .sub-ribbon { padding: 8px 10px; margin-bottom: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; gap: 10px 14px; }
 .dd { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
 .dd select { min-width: 120px; max-width: 260px; font-size: 14px; }
-.sub-ribbon .search { flex: 1; min-width: 200px; max-width: 320px; }
+.sub-ribbon .search { flex: 1; min-width: 200px; max-width: 320px; margin-left: auto; }
 /* критичность — первым списком; высокая — красным, как на главной */
 .crit-dd select { font-weight: 600; }
 .crit-dd.crit-high select { color: var(--active); border-color: var(--active); }
@@ -363,8 +363,9 @@ ul.history .ev-comment .text { font-style: italic; }
 
 /* формы */
 .form { display: flex; flex-direction: column; gap: 8px; max-width: 760px; }
-.form label { display: flex; flex-direction: column; gap: 3px; color: var(--muted); font-size: 13px; }
-.form input { color: var(--text); }
+.form label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 14px; }
+.form input { color: var(--text); font-size: 14px; }
+.form > .btn { align-self: flex-start; }
 
 .root-folder { margin: 0 0 12px; }
 
@@ -372,7 +373,7 @@ ul.history .ev-comment .text { font-style: italic; }
 .btn.danger { color: var(--error); border-color: var(--error); }
 .btn.danger:hover:not(:disabled) { background: var(--error); color: #fff; border-color: var(--error); }
 .danger-zone { max-width: 760px; margin-top: 32px; padding-top: 4px; border-top: 1px solid var(--line); }
-.danger-zone h2 { color: var(--error); }
+.danger-zone h2 { color: var(--error); font-size: 18px; }
 .danger-zone p { margin: 0 0 10px; }
 .dialog-back {
     position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center;
