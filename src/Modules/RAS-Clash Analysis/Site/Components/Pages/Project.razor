@@ -25,14 +25,14 @@
         </div>
         @if (_tests.Count > 0)
         {
-            @* итоги выбранного на лентах — крупными цифрами (для показа руководству) *@
+            @* итоги всего проекта — крупными цифрами (для показа руководству); от отборов не зависят *@
             var k = Kpi;
-            <div class="kpis">
+            <div class="kpis" title="Весь проект: все критичности, блоки и проверки">
                 <div class="kpi k-active"><div class="v">@k.Active</div><div class="l">Активные</div></div>
                 <div class="kpi k-pending"><div class="v">@k.Pending</div><div class="l">Ждут проверки</div></div>
                 <div class="kpi k-fixed"><div class="v">@k.Fixed</div><div class="l">Исправлены</div></div>
                 <div class="kpi k-accepted"><div class="v">@k.Accepted</div><div class="l">Допущены</div></div>
-                <div class="kpi k-progress" title="Исправлено из всех, кроме допущенных">
+                <div class="kpi k-progress" title="Исправлено по всему проекту — из всех коллизий, кроме допущенных">
                     <div class="v">@FixedPercent(k) %</div><div class="l">исправлено</div>
                     <div class="kpi-bar"><i style="width:@FixedPercent(k)%"></i></div>
                 </div>
@@ -789,13 +789,16 @@
     private static string FacetTitle(string facet, string key) =>
         facet == ClashFacets.State && int.TryParse(key, out var n) ? ClashRules.Title((ClashState)n) : key;
 
-    /// <summary>Итоги выбранного на лентах (критичность, блок, тип проверки).</summary>
+    /// <summary>
+    /// Итоги всего проекта — все критичности, блоки, проверки; от отборов не зависят (просьба разработчика 13.10.2026:
+    /// итоги по выбранному — это уже дашборды, для них будет свой раздел).
+    /// </summary>
     private StateCounts Kpi
     {
         get
         {
             var k = new StateCounts();
-            foreach (var t in ScopeTests)
+            foreach (var t in _tests)
             {
                 k.Active += t.Counts.Active;
                 k.Pending += t.Counts.Pending;
