@@ -99,19 +99,28 @@
             @* боковая панель — разделы этого проекта *@
             <aside class="side" aria-label="Разделы проекта">
                 <div class="side-title">Проект</div>
-                @* блок — первым, над разделами (просьба разработчика 13.10.2026) *@
+                @* «Блок» — первым, как остальные разделы; нажать — блоки раскрываются подразделами (просьба разработчика 13.10.2026) *@
                 @if (ShowBlocks)
                 {
-                    <label class="side-block">
-                        <span>Блок</span>
-                        <select value="@BlockValue" @onchange="OnBlockChanged">
-                            <option value="*">Все (@ActiveIn(_filter.Criticality, null, null))</option>
+                    <button class="side-btn side-group @(_view.BlocksOpen ? "open" : "")" @onclick="() => _view.BlocksOpen = !_view.BlocksOpen"
+                            title="Блок — показать коллизии одного блока" aria-expanded="@(_view.BlocksOpen ? "true" : "false")">
+                        <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="6.5" y="2.5" width="7" height="6" rx="1.3" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="2.5" y="11.5" width="7" height="6" rx="1.3" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="10.5" y="11.5" width="7" height="6" rx="1.3" stroke="currentColor" stroke-width="1.5" fill="none"/></svg><span>Блок</span><b>@(_filter.Block == null ? "все" : ReportPath.BlockTitle(_filter.Block))</b><i class="chev" aria-hidden="true"></i>
+                    </button>
+                    @if (_view.BlocksOpen)
+                    {
+                        <div class="side-subs">
+                            <button class="side-sub @(_filter.Block == null ? "on" : "")" @onclick="() => SetBlock(null)">
+                                <span>Все</span><b>@ActiveIn(_filter.Criticality, null, null)</b>
+                            </button>
                             @foreach (var b in BlocksOf(_filter.Criticality))
                             {
-                                <option value="@(b == "" ? "-" : b)">@ReportPath.BlockTitle(b) (@ActiveIn(_filter.Criticality, b, null))</option>
+                                var block = b;
+                                <button class="side-sub @(_filter.Block == block ? "on" : "")" @onclick="() => SetBlock(block)">
+                                    <span>@ReportPath.BlockTitle(block)</span><b>@ActiveIn(_filter.Criticality, block, null)</b>
+                                </button>
                             }
-                        </select>
-                    </label>
+                        </div>
+                    }
                 }
                 <button class="side-btn @(_view.Tab == 0 ? "on" : "")" @onclick="() => _view.Tab = 0" title="Коллизии — список и карточка">
                     <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg><span>Коллизии</span><b>@ActiveIn(_filter.Criticality, _filter.Block, _filter.TestType)</b>
@@ -904,8 +913,6 @@
     /// <summary>«Все» на основной ленте — когда в папках есть критичность (иначе кнопка повторяла бы единственную).</summary>
     private bool ShowAllCriticalities => _criticalities.Count > 1 || (_criticalities.Count == 1 && _criticalities[0] != "");
 
-    private string BlockValue => _filter.Block == null ? "*" : _filter.Block == "" ? "-" : _filter.Block;
-
     /// <summary>Другая критичность — тип проверки и блок «все».</summary>
     private void OnCriticalityChanged(ChangeEventArgs e)
     {
@@ -919,11 +926,9 @@
         SetScope(_filter.Criticality, _filter.Block, string.IsNullOrEmpty(name) ? null : name);
     }
 
-    /// <summary>Другой блок: выбранный тип проверки остаётся, если он есть в этом блоке.</summary>
-    private void OnBlockChanged(ChangeEventArgs e)
+    /// <summary>Другой блок (null — все): выбранный тип проверки остаётся, если он есть в этом блоке.</summary>
+    private void SetBlock(string block)
     {
-        var v = e.Value?.ToString();
-        var block = v == "*" ? null : v == "-" ? "" : v;
         var keep = _filter.TestType != null && _tests.Any(t => t.Type == _filter.TestType
                                                               && (_filter.Criticality == null || t.Criticality == _filter.Criticality)
                                                               && (block == null || t.Block == block));

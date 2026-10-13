@@ -34,6 +34,8 @@ public sealed class ProjectView
     public bool Initialized { get; set; }
     /// <summary>Показан отбор «Категория» (спрятан под «Ещё»).</summary>
     public bool MoreFilters { get; set; }
+    /// <summary>«Блок» на боковой панели раскрыт — блоки видны подразделами.</summary>
+    public bool BlocksOpen { get; set; }
 }
 
 /// <summary>
