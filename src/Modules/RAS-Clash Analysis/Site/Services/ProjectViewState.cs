@@ -21,7 +21,9 @@ public sealed class ProjectView
     public bool ReportSortDesc { get; set; } = true;
     /// <summary>Отчёты — сразу по блоку (S1, S2… по порядку), внутри — по дате (новые сверху): просьба разработчика 13.10.2026.</summary>
     public string ReportGroup { get; set; } = "block-date";
-    /// <summary>Раскрытые группы «Отчётов»: при открытии все свёрнуты (просьба разработчика 13.10.2026).</summary>
+    /// <summary>Свёрнутые группы «Отчётов» (блоки и прочие группы первого уровня): при открытии раскрыты.</summary>
+    public HashSet<string> ReportCollapsed { get; } = new HashSet<string>();
+    /// <summary>Раскрытые даты внутри блока: при открытии свёрнуты — «свёрнуто до дат» (просьба разработчика 13.10.2026).</summary>
     public HashSet<string> ReportExpanded { get; } = new HashSet<string>();
 
     /// <summary>Отбор последнего прогона: null — нет, new / fixed / returned.</summary>

@@ -28,6 +28,10 @@ else
             <a class="proj-card" href="project/@p.Id">
                 <div class="pc-name">@p.Name</div>
                 <div class="pc-meta muted small">@(p.LastReport.HasValue ? "Последний отчёт — " + Fmt.Day(p.LastReport.Value) : "Отчётов ещё нет")</div>
+                @if (p.LastRun.Any)
+                {
+                    <div class="pc-run small" title="Что принёс последний прогон каждой проверки">Последний прогон: <Delta Value="p.LastRun" /></div>
+                }
                 <div class="pc-nums">
                     @if (_crits.Count == 0)
                     {

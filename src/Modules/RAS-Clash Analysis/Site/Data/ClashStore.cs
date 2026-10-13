@@ -32,6 +32,20 @@ public sealed class ClashStore
         using (var r = Query(c, "SELECT ProjectId, MAX(ReportDate) FROM Reports GROUP BY ProjectId"))
             while (r.Read())
                 if (byId.TryGetValue(r.GetInt64(0), out var p) && !r.IsDBNull(1)) p.LastReport = Database.Time(r.GetString(1));
+        using (var r = Query(c, """
+            SELECT c.ProjectId,
+                   COALESCE(SUM(c.FirstSeen = t.LastReportDate AND substr(t.LastReportDate, 1, 10) > (SELECT substr(MIN(c0.FirstSeen), 1, 10) FROM Clashes c0 WHERE c0.TestId = t.Id)), 0),
+                   COALESCE(SUM(EXISTS(SELECT 1 FROM Events e WHERE e.ClashId = c.Id AND e.ReportId = t.LastReportId AND e.Kind IN ('gone', 'confirmed') AND NOT EXISTS(SELECT 1 FROM Events u WHERE u.ClashId = e.ClashId AND u.ReportId = e.ReportId AND u.Kind = 'status' AND u.NewState = 0))), 0),
+                   COALESCE(SUM(EXISTS(SELECT 1 FROM Events e WHERE e.ClashId = c.Id AND e.ReportId = t.LastReportId AND e.Kind = 'reappeared')), 0)
+            FROM Clashes c JOIN Tests t ON t.Id = c.TestId GROUP BY c.ProjectId
+            """))
+            while (r.Read())
+                if (byId.TryGetValue(r.GetInt64(0), out var p))
+                {
+                    p.LastRun.New = r.GetInt32(1);
+                    p.LastRun.Fixed = r.GetInt32(2);
+                    p.LastRun.Returned = r.GetInt32(3);
+                }
         return list;
     }
 
@@ -142,6 +156,22 @@ public sealed class ClashStore
                 Imported = Database.Time(r.GetString(4)), Results = r.GetInt32(5), Criticality = r.GetString(6), Block = r.GetString(7),
                 DateSource = r.GetString(8), Warning = Str(r, 9), Suspicious = r.GetInt32(10) != 0,
             });
+        r.Close();
+        var byId = list.ToDictionary(x => x.Id);
+        using (var d = Query(c, """
+            SELECT e.ReportId,
+                   COUNT(DISTINCT CASE WHEN e.Kind = 'found' AND substr(cl.FirstSeen, 1, 10) = substr(rp.ReportDate, 1, 10) AND substr(rp.ReportDate, 1, 10) > (SELECT substr(MIN(c0.FirstSeen), 1, 10) FROM Clashes c0 WHERE c0.TestId = cl.TestId) THEN e.ClashId END),
+                   COUNT(DISTINCT CASE WHEN e.Kind IN ('gone', 'confirmed') AND NOT EXISTS(SELECT 1 FROM Events u WHERE u.ClashId = e.ClashId AND u.ReportId = e.ReportId AND u.Kind = 'status' AND u.NewState = 0) THEN e.ClashId END),
+                   COUNT(DISTINCT CASE WHEN e.Kind = 'reappeared' THEN e.ClashId END)
+            FROM Events e JOIN Reports rp ON rp.Id = e.ReportId JOIN Clashes cl ON cl.Id = e.ClashId WHERE rp.ProjectId = $p GROUP BY e.ReportId
+            """, ("$p", projectId)))
+            while (d.Read())
+                if (byId.TryGetValue(d.GetInt64(0), out var x))
+                {
+                    x.Delta.New = d.GetInt32(1);
+                    x.Delta.Fixed = d.GetInt32(2);
+                    x.Delta.Returned = d.GetInt32(3);
+                }
         return list;
     }
 
@@ -192,13 +222,15 @@ public sealed class ClashStore
                a.ModelFile, a.Level, a.LevelKey, a.Category, a.Family, a.Type, a.Name, a.ElementId,
                b.ModelFile, b.Level, b.LevelKey, b.Category, b.Family, b.Type, b.Name, b.ElementId,
                t.Criticality, t.Block, COALESCE(tn.TypeName, t.Name), c.ReturnCount,
-               CASE WHEN c.FirstSeen = t.LastReportDate THEN 1 ELSE 0 END,
-               EXISTS(SELECT 1 FROM Events e WHERE e.ClashId = c.Id AND e.ReportId = t.LastReportId AND e.Kind IN ('gone', 'confirmed')),
+               CASE WHEN c.FirstSeen = t.LastReportDate AND substr(t.LastReportDate, 1, 10) > (SELECT substr(MIN(c0.FirstSeen), 1, 10) FROM Clashes c0 WHERE c0.TestId = t.Id) THEN 1 ELSE 0 END,
+               EXISTS(SELECT 1 FROM Events e WHERE e.ClashId = c.Id AND e.ReportId = t.LastReportId AND e.Kind IN ('gone', 'confirmed') AND NOT EXISTS(SELECT 1 FROM Events u WHERE u.ClashId = e.ClashId AND u.ReportId = e.ReportId AND u.Kind = 'status' AND u.NewState = 0)),
                EXISTS(SELECT 1 FROM Events e WHERE e.ClashId = c.Id AND e.ReportId = t.LastReportId AND e.Kind = 'reappeared'),
                o.Distance, o.GridLocation, rl.Units,
                (SELECT group_concat(substr(rp.ReportDate, 1, 10)) FROM Occurrences o2 JOIN Reports rp ON rp.Id = o2.ReportId WHERE o2.ClashId = c.Id),
                (SELECT group_concat(substr(rp.ReportDate, 1, 10)) FROM Events e JOIN Reports rp ON rp.Id = e.ReportId
-                WHERE e.ClashId = c.Id AND e.Kind IN ('gone', 'confirmed'))
+                WHERE e.ClashId = c.Id AND e.Kind IN ('gone', 'confirmed') AND NOT EXISTS(SELECT 1 FROM Events u WHERE u.ClashId = e.ClashId AND u.ReportId = e.ReportId AND u.Kind = 'status' AND u.NewState = 0)),
+               (SELECT group_concat(substr(rp.ReportDate, 1, 10)) FROM Events e JOIN Reports rp ON rp.Id = e.ReportId
+                WHERE e.ClashId = c.Id AND e.Kind = 'reappeared')
         FROM Clashes c
         JOIN Tests t ON t.Id = c.TestId
         LEFT JOIN TypeNames tn ON tn.ProjectId = c.ProjectId AND tn.Name = t.Name
@@ -225,6 +257,12 @@ public sealed class ClashStore
         using (var r = Query(c, sql, args.ToArray()))
             while (r.Read()) list.Add(ReadRow(r));
 
+        // первый прогон проверки: его коллизии — исходная точка, не «новые»
+        foreach (var g in list.GroupBy(x => x.TestId))
+        {
+            var first = g.Min(x => x.FirstSeen).ToString("yyyy-MM-dd");
+            foreach (var x in g) x.TestFirstRun = first;
+        }
         return list.OrderBy(x => Logic.ReportPath.BlockOrder(x.Block)).ThenBy(x => x.TestName, StringComparer.CurrentCultureIgnoreCase)
             .ThenBy(x => NameNumber(x.Name)).ThenBy(x => x.Name).ToList();
     }
@@ -237,7 +275,10 @@ public sealed class ClashStore
         ClashCard card;
         using (var r = Query(c, """
             SELECT c.Id, c.ProjectId, p.Name, t.Name, t.LeftSet, t.RightSet, c.State, c.InLastReport, c.FirstSeen, c.LastSeen,
-                   t.Criticality, t.Block, COALESCE(tn.TypeName, t.Name), c.ReturnCount
+                   t.Criticality, t.Block, COALESCE(tn.TypeName, t.Name), c.ReturnCount, t.LastReportDate,
+                   CASE WHEN EXISTS(SELECT 1 FROM Events e WHERE e.ClashId = c.Id AND e.ReportId = t.LastReportId AND e.Kind = 'reappeared') THEN 'returned'
+                        WHEN EXISTS(SELECT 1 FROM Events e WHERE e.ClashId = c.Id AND e.ReportId = t.LastReportId AND e.Kind IN ('gone', 'confirmed') AND NOT EXISTS(SELECT 1 FROM Events u WHERE u.ClashId = e.ClashId AND u.ReportId = e.ReportId AND u.Kind = 'status' AND u.NewState = 0)) THEN 'fixed'
+                        WHEN c.FirstSeen = t.LastReportDate AND substr(t.LastReportDate, 1, 10) > (SELECT substr(MIN(c0.FirstSeen), 1, 10) FROM Clashes c0 WHERE c0.TestId = t.Id) THEN 'new' END
             FROM Clashes c JOIN Projects p ON p.Id = c.ProjectId JOIN Tests t ON t.Id = c.TestId
             LEFT JOIN TypeNames tn ON tn.ProjectId = c.ProjectId AND tn.Name = t.Name
             WHERE c.Id = $id
@@ -250,6 +291,7 @@ public sealed class ClashStore
                 LeftSet = Str(r, 4), RightSet = Str(r, 5), State = (ClashState)r.GetInt32(6), InLastReport = r.GetInt32(7) != 0,
                 FirstSeen = Database.Time(r.GetString(8)), LastSeen = Database.Time(r.GetString(9)),
                 Criticality = r.GetString(10), Block = r.GetString(11), Type = r.GetString(12), ReturnCount = r.GetInt32(13),
+                RunDay = r.IsDBNull(14) ? null : Database.Time(r.GetString(14)).Date, RunKind = Str(r, 15),
             };
         }
         var byId = new Dictionary<long, OccurrenceView>();
@@ -380,7 +422,7 @@ public sealed class ClashStore
         Criticality = r.GetString(24), Block = r.GetString(25), Type = r.GetString(26), ReturnCount = r.GetInt32(27),
         NewInLastRun = r.GetInt32(28) != 0, FixedInLastRun = r.GetInt32(29) != 0, ReturnedInLastRun = r.GetInt32(30) != 0,
         Distance = Num(r, 31), GridLocation = Str(r, 32), Units = Str(r, 33) ?? "m",
-    }.WithRuns(Str(r, 34), Str(r, 35));
+    }.WithRuns(Str(r, 34), Str(r, 35), Str(r, 36));
 
     private static ElementView ReadElement(SqliteDataReader r, int i) => new ElementView
     {
@@ -399,12 +441,14 @@ public sealed class ClashStore
     private static string Str(SqliteDataReader r, int i) => r.IsDBNull(i) ? null : r.GetString(i);
 
     /// <summary>Прогоны коллизии: дни отчётов, где она была, и где её исправили (пропала).</summary>
-    internal static ClashRow FillRuns(ClashRow row, string present, string fixedIn)
+    internal static ClashRow FillRuns(ClashRow row, string present, string fixedIn, string returnedIn)
     {
         var seen = (present ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Distinct().ToList();
         row.Repeats = seen.Count;
         row.Runs.UnionWith(seen);
-        row.Runs.UnionWith((fixedIn ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries));
+        row.FixedOn.UnionWith((fixedIn ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries));
+        row.ReturnedOn.UnionWith((returnedIn ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries));
+        row.Runs.UnionWith(row.FixedOn);
         return row;
     }
 
@@ -415,5 +459,6 @@ public sealed class ClashStore
 
 internal static class ClashRowRuns
 {
-    public static ClashRow WithRuns(this ClashRow row, string present, string fixedIn) => ClashStore.FillRuns(row, present, fixedIn);
+    public static ClashRow WithRuns(this ClashRow row, string present, string fixedIn, string returnedIn) =>
+        ClashStore.FillRuns(row, present, fixedIn, returnedIn);
 }

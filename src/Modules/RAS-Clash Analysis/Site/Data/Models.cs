@@ -34,6 +34,24 @@ public sealed class ProjectRow
     /// <summary>Активные по критичности («Высокая» → 12); "" — без критичности.</summary>
     public Dictionary<string, int> ActiveByCriticality { get; } = new Dictionary<string, int>();
     public DateTime? LastReport { get; set; }
+    /// <summary>Что принёс последний прогон каждой проверки проекта (DECISIONS.md, «Что принёс прогон — везде»).</summary>
+    public RunDelta LastRun { get; } = new RunDelta();
+}
+
+/// <summary>Что принёс прогон: новые, исправленные им, вернувшиеся после исправления.</summary>
+public sealed class RunDelta
+{
+    public int New { get; set; }
+    public int Fixed { get; set; }
+    public int Returned { get; set; }
+    public bool Any => New + Fixed + Returned > 0;
+
+    public void Add(RunDelta d)
+    {
+        New += d.New;
+        Fixed += d.Fixed;
+        Returned += d.Returned;
+    }
 }
 
 /// <summary>Что удалится вместе с проектом — для вопроса перед удалением.</summary>
@@ -76,6 +94,8 @@ public sealed class ReportRow
     public bool Suspicious { get; set; }
     public DateTime Imported { get; set; }
     public int Results { get; set; }
+    /// <summary>Что принёс этот отчёт.</summary>
+    public RunDelta Delta { get; } = new RunDelta();
 }
 
 public sealed class ElementView
@@ -108,6 +128,11 @@ public sealed class ClashRow
     public bool NewInLastRun { get; set; }
     public bool FixedInLastRun { get; set; }
     public bool ReturnedInLastRun { get; set; }
+    /// <summary>Дни прогонов («yyyy-MM-dd»), которыми исправлена и в которые вернулась (для «Даты» — любого прогона).</summary>
+    public HashSet<string> FixedOn { get; } = new HashSet<string>();
+    public HashSet<string> ReturnedOn { get; } = new HashSet<string>();
+    /// <summary>Первый прогон её проверки («yyyy-MM-dd»): коллизии в нём — исходная точка, а не «новые».</summary>
+    public string TestFirstRun { get; set; }
     /// <summary>Расстояние (глубина пересечения) и оси — из последнего появления; null — не включены в отчёт Navisworks.</summary>
     public double? Distance { get; set; }
     public string Units { get; set; } = "m";
@@ -188,6 +213,9 @@ public sealed class ClashCard
     public string Criticality { get; set; } = "";
     public string Block { get; set; } = "";
     public int ReturnCount { get; set; }
+    /// <summary>Последний прогон её проверки (день) и что он с ней сделал: «new» / «fixed» / «returned»; null — ничего.</summary>
+    public DateTime? RunDay { get; set; }
+    public string RunKind { get; set; }
     public string LeftSet { get; set; }
     public string RightSet { get; set; }
     public ClashState State { get; set; }

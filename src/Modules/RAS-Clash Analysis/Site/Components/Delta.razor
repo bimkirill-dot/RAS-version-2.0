@@ -1,0 +1,14 @@
+@* Что принёс прогон: «+3 новых · 2 исправлено · ↺ 1 вернулось» — нули не показываются (DECISIONS.md, «Что принёс прогон — везде»).
+   Цвета — как у строки прогона над списком коллизий. *@
+@if (Value != null && Value.Any)
+{
+    <span class="delta">
+        @if (Value.New > 0) { <span class="d-new">+@Value.New @Fmt.Plural(Value.New, "новая", "новые", "новых").Split(' ')[1]</span> }
+        @if (Value.Fixed > 0) { <span class="d-fixed">@Fmt.Plural(Value.Fixed, "исправлена", "исправлены", "исправлено")</span> }
+        @if (Value.Returned > 0) { <span class="d-returned">↺ @Fmt.Plural(Value.Returned, "вернулась", "вернулись", "вернулось")</span> }
+    </span>
+}
+
+@code {
+    [Parameter] public RunDelta Value { get; set; }
+}

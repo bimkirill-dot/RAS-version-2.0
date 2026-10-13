@@ -12,6 +12,13 @@
 <div class="clash-card @(Compact ? "compact" : "wide")">
     <div class="cc-head">
         <h2>@(_card.Last?.Name ?? "Коллизия") <span class="badge big @Fmt.StateClass(_card.State)">@Fmt.State(_card.State)</span></h2>
+        @if (_card.RunKind != null && _card.RunDay.HasValue)
+        {
+            @* что сделал с ней последний прогон её проверки *@
+            <div class="run-note @_card.RunKind">
+                @(_card.RunKind switch { "new" => "+ Новая", "fixed" => "Исправлена", _ => "↺ Вернулась" }) — прогон @Fmt.Day(_card.RunDay.Value)
+            </div>
+        }
         @if (_card.ReturnCount > 0)
         {
             <div class="returned-note">↺ Возвращалась после исправления — @Fmt.Plural(_card.ReturnCount, "раз", "раза", "раз")</div>

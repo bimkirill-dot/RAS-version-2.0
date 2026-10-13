@@ -168,9 +168,9 @@
                 <section class="content">
                     <div class="list-title">
                         <h2>Коллизии <span class="muted">(@_clashes.Count)</span></h2>
-                        @if (_view.RunDate == "last" && _lastRun.HasValue)
+                        @if (_view.RunDate != "all" && _lastRun.HasValue)
                         {
-                            @* что принёс последний прогон — щелчок показывает именно их *@
+                            @* что принёс прогон (последний или выбранный в «Дате») — щелчок показывает именно их *@
                             <div class="run-strip">
                                 @RunChip("new", "новых", "+")
                                 @RunChip("fixed", "исправлено", "")
@@ -358,7 +358,7 @@
                         </thead>
                         @foreach (var g in ReportGroups())
                         {
-                            var collapsed = g.Key != null && !_view.ReportExpanded.Contains(g.Key);
+                            var collapsed = g.Key != null && _view.ReportCollapsed.Contains(g.Key);
                             <tbody class="group">
                                 @if (g.Key != null)
                                 {
@@ -377,11 +377,12 @@
                                     foreach (var sg in g.Subgroups)
                                     {
                                         var subCollapsed = !_view.ReportExpanded.Contains(sg.Key);
-                                        <tr class="group-row sub" @onclick="() => ToggleReportGroup(sg.Key)">
+                                        <tr class="group-row sub" @onclick="() => ToggleReportDay(sg.Key)">
                                             <td colspan="5">
                                                 <span class="caret">@(subCollapsed ? "▸" : "▾")</span>
                                                 <span class="group-title">@sg.Title</span>
                                                 <span class="group-count">@Fmt.Plural(sg.Reports.Count, "отчёт", "отчёта", "отчётов") · @Fmt.Plural(sg.Reports.Sum(r => r.Results), "коллизия", "коллизии", "коллизий") в отчётах</span>
+                                                @SumDelta(sg.Reports)
                                                 @MissingMark(g.Block, sg.Day)
                                             </td>
                                         </tr>
@@ -628,6 +629,14 @@
         <span class="group-missing" title="Проверки без отчёта в последнем прогоне блока — выгружайте все, даже пустые">⚠ нет отчёта: @n</span>
     };
 
+    /// <summary>Что принесли отчёты группы (дата внутри блока — это прогон).</summary>
+    private RenderFragment SumDelta(IEnumerable<ReportRow> reports) => __builder =>
+    {
+        var sum = new RunDelta();
+        foreach (var r in reports) sum.Add(r.Delta);
+        <Delta Value="sum" />
+    };
+
     private void UndoFixes(ReportRow r)
     {
         var n = Store.UndoReportFixes(r.Id);
@@ -644,6 +653,7 @@
         var dated = _base.Where(InDate).ToList();
         var searched = dated.Where(c => ClashFacets.MatchesSearch(c, _filter.Search)).ToList();
         _faceted = searched.Where(c => ClashFacets.Matches(c, _filter.Facets)).ToList();
+        _runBase = searched.Where(c => ClashFacets.Matches(c, _filter.Facets, except: ClashFacets.State)).ToList();
         _clashes = Sort(_faceted.Where(InRun).ToList());
         foreach (var f in ClashFacets.All)
         {
@@ -716,8 +726,8 @@
     private void SetRunDate(string date)
     {
         _view.RunDate = date;
-        // «что принёс прогон» — только про последний
-        if (date != "last") _view.RunFilter = null;
+        // «что принёс прогон» — про выбранный прогон; «все даты» — его нет
+        if (date == "all") _view.RunFilter = null;
         _view.SelectedId = null;
         _page = 0;
         Recompute();
@@ -725,21 +735,30 @@
 
     // ───── последний прогон ─────
 
-    /// <summary>Коллизия проходит отбор прогона: new — появилась в последнем отчёте своей проверки, fixed — исправлена им, returned — вернулась.</summary>
-    private bool InRun(ClashRow c) => _view.RunFilter switch
-    {
-        "new" => c.NewInLastRun,
-        "fixed" => c.FixedInLastRun,
-        "returned" => c.ReturnedInLastRun,
-        _ => true,
-    };
+    /// <summary>Коллизия проходит отбор прогона: new — появилась в нём, fixed — исправлена им, returned — вернулась.</summary>
+    private bool InRun(ClashRow c) => _view.RunFilter == null || RunIs(c, _view.RunFilter);
 
-    private int RunCount(string kind) => kind switch
+    /// <summary>
+    /// Что выбранный прогон сделал с коллизией: «последний» — последний отчёт её проверки; день — отчёты того дня.
+    /// </summary>
+    private bool RunIs(ClashRow c, string kind)
     {
-        "new" => _faceted.Count(c => c.NewInLastRun),
-        "fixed" => _faceted.Count(c => c.FixedInLastRun),
-        _ => _faceted.Count(c => c.ReturnedInLastRun),
-    };
+        var day = _view.RunDate;
+        if (day == "all") return false;
+        if (day == "last")
+            return kind switch { "new" => c.NewInLastRun, "fixed" => c.FixedInLastRun, _ => c.ReturnedInLastRun };
+        return kind switch
+        {
+            "new" => c.FirstSeen.ToString("yyyy-MM-dd") == day && day != c.TestFirstRun,
+            "fixed" => c.FixedOn.Contains(day),
+            _ => c.ReturnedOn.Contains(day),
+        };
+    }
+
+    /// <summary>Сколько — среди отобранных всеми отборами, кроме статуса: иначе «Статус: Активная» прятал бы исправленные прогоном.</summary>
+    private int RunCount(string kind) => _runBase.Count(c => RunIs(c, kind));
+
+    private List<ClashRow> _runBase = new();
 
     private RenderFragment RunChip(string kind, string title, string prefix) => __builder =>
     {
@@ -836,7 +855,10 @@
             @if (Wide) { <td><Disc Pair="@disc" /></td> }
             <td class="name">
                 @(x.Name ?? "—")
-                @if (x.ReturnCount > 0) { <span class="tag returned" title="Возвращалась после исправления: @x.ReturnCount">↺@(x.ReturnCount > 1 ? x.ReturnCount.ToString() : "")</span> }
+                @if (RunIs(x, "new")) { <span class="tag run-new" title="Появилась в этом прогоне">новая</span> }
+                @if (RunIs(x, "returned")) { <span class="tag run-returned" title="Вернулась после исправления в этом прогоне">↺ вернулась</span> }
+                else if (RunIs(x, "fixed")) { <span class="tag run-fixed" title="Исправлена этим прогоном">исправлена</span> }
+                else if (x.ReturnCount > 0) { <span class="tag returned" title="Возвращалась после исправления: @x.ReturnCount">↺@(x.ReturnCount > 1 ? x.ReturnCount.ToString() : "")</span> }
             </td>
             <td>@if (x.Distance.HasValue) { <span class="dist">@Fmt.MmAbs(x.Distance, x.Units)</span> } else { <span class="muted">—</span> }</td>
             @if (Wide) { <td class="cut" title="@x.GridLocation">@(x.GridLocation ?? "—")</td> }
@@ -1004,6 +1026,7 @@
             <td class="file" title="@r.FilePath">
                 <div class="cut">@System.IO.Path.GetFileName(r.FilePath)</div>
                 <div class="el-sub cut">@ReportFolder(r)</div>
+                <Delta Value="r.Delta" />
                 @if (r.Warning != null) { <div class="warn small report-warning" title="@r.Warning">⚠ @r.Warning</div> }
                 @if (r.Suspicious)
                 {
@@ -1088,10 +1111,17 @@
     private void OnReportGroupChanged(ChangeEventArgs e)
     {
         _view.ReportGroup = e.Value?.ToString() ?? "";
+        _view.ReportCollapsed.Clear();
         _view.ReportExpanded.Clear();
     }
 
     private void ToggleReportGroup(string key)
+    {
+        if (!_view.ReportCollapsed.Remove(key)) _view.ReportCollapsed.Add(key);
+    }
+
+    /// <summary>Дата внутри блока: при открытии свёрнута.</summary>
+    private void ToggleReportDay(string key)
     {
         if (!_view.ReportExpanded.Remove(key)) _view.ReportExpanded.Add(key);
     }

@@ -245,6 +245,21 @@ table.reports th:nth-child(5) { width: 150px; }
 .run-chip.new b { color: var(--active); }
 .run-chip.fixed b { color: var(--fixed); }
 .run-chip.returned b { color: var(--pending); }
+/* что принёс прогон — одинаково везде (Delta.razor, метки в строке, карточка) */
+.delta { display: inline-flex; flex-wrap: wrap; gap: 2px 10px; font-size: 12px; font-weight: 600; }
+.group-row .delta { margin-left: 10px; }
+.d-new { color: var(--active); }
+.d-fixed { color: var(--fixed); }
+.d-returned { color: var(--pending); }
+.pc-run { display: flex; gap: 8px; align-items: baseline; color: var(--muted); margin-top: 2px; }
+.tag.run-new { background: var(--active-bg); color: var(--active); }
+.tag.run-new, .tag.run-fixed, .tag.run-returned { display: inline-block; text-decoration: none; margin-left: 6px; }
+.tag.run-fixed { background: var(--fixed-bg); color: var(--fixed); }
+.tag.run-returned { background: color-mix(in srgb, var(--pending) 14%, var(--panel)); color: var(--pending); }
+.run-note { display: inline-block; margin-top: 4px; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+.run-note.new { background: var(--active-bg); color: var(--active); }
+.run-note.fixed { background: var(--fixed-bg); color: var(--fixed); }
+.run-note.returned { background: color-mix(in srgb, var(--pending) 14%, var(--panel)); color: var(--pending); }
 .run-chip.on { background: var(--accent-bg); border-color: var(--accent); color: var(--text); }
 .tag.returned { background: var(--pending-bg); color: var(--pending); font-weight: 600; }
 .returned-note { color: var(--pending); font-size: 13px; margin-top: 4px; }
