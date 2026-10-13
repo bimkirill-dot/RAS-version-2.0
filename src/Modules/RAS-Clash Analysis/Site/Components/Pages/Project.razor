@@ -95,7 +95,17 @@
                 {
                     <button class="side-btn side-group @(_view.BlocksOpen ? "open" : "")" @onclick="() => _view.BlocksOpen = !_view.BlocksOpen"
                             title="Блок — показать коллизии одного блока" aria-expanded="@(_view.BlocksOpen ? "true" : "false")">
-                        <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="6.5" y="2.5" width="7" height="6" rx="1.3" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="2.5" y="11.5" width="7" height="6" rx="1.3" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="10.5" y="11.5" width="7" height="6" rx="1.3" stroke="currentColor" stroke-width="1.5" fill="none"/></svg><span>Блок</span><b class="side-value">@(_filter.Block == null ? "все" : ReportPath.BlockTitle(_filter.Block))</b><i class="chev" aria-hidden="true"></i>
+                        <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="6.5" y="2.5" width="7" height="6" rx="1.3" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="2.5" y="11.5" width="7" height="6" rx="1.3" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="10.5" y="11.5" width="7" height="6" rx="1.3" stroke="currentColor" stroke-width="1.5" fill="none"/></svg><span>
+                            Блок
+                            @if (_filter.Block != null)
+                            {
+                                <small class="side-chosen">@ReportPath.BlockTitle(_filter.Block)</small>
+                            }
+                        </span>
+                        @if (_filter.Block == null)
+                        {
+                            <b class="side-value">все</b>
+                        }<i class="chev" aria-hidden="true"></i>
                     </button>
                     @if (_view.BlocksOpen)
                     {
