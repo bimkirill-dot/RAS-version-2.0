@@ -312,6 +312,9 @@ table.reports th:nth-child(5) { width: 150px; }
 td .tag:first-child { margin: 0 6px 0 0; }
 
 .list { flex: 1; min-height: 0; overflow: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+/* место под полосу прокрутки — всегда: появляется она или нет (много строк / мало), ширина не меняется и столбцы не прыгают вбок
+   (просьба разработчика 13.10.2026: при смене типа проверки страница прыгала в сторону) */
+html, .list, .side, .content.scroll { scrollbar-gutter: stable; }
 .panel { overflow: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 0 14px 14px; }
 .panel-nav {
     position: sticky; top: 0; z-index: 2; background: var(--panel);
