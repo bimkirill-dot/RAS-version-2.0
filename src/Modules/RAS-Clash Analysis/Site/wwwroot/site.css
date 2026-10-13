@@ -195,17 +195,18 @@ textarea { width: 100%; resize: vertical; }
 .side-btn:hover { background: var(--row-hover); }
 .side-btn.on { background: var(--row-selected); border-color: var(--accent); }
 
-/* группы в таблицах (отчёты) */
-tbody.group tr.group-row { cursor: pointer; background: var(--bg); }
-tbody.group tr.group-row:hover { background: var(--row-hover); }
-tbody.group tr.group-row td { padding: 7px 10px; }
-.group-row .caret { display: inline-block; width: 14px; color: var(--muted); }
-.group-title { font-weight: 600; }
+/* группы в таблицах (отчёты, коллизии): заголовок группы — заливка акцента и полоса слева, чтобы не сливался со строками;
+   группа внутри группы (блок → дата) — светлее, с отступом и тонкой полосой (просьба разработчика 13.10.2026) */
+table.grid tbody.group tr.group-row { cursor: pointer; background: var(--accent-bg); }
+table.grid tbody.group tr.group-row:hover { background: color-mix(in srgb, var(--accent-bg) 70%, var(--accent) 30%); }
+tbody.group tr.group-row td { padding: 9px 10px; box-shadow: inset 4px 0 0 var(--accent); border-bottom-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+.group-row .caret { display: inline-block; width: 16px; color: var(--accent-strong); }
+.group-title { font-weight: 700; font-size: 15px; color: var(--accent-strong); }
 .group-count { margin-left: 10px; color: var(--muted); font-size: 12px; }
-/* группа внутри группы (блок → дата): с отступом, светлее */
-tbody.group tr.group-row.sub { background: var(--panel); }
-tbody.group tr.group-row.sub td { padding: 5px 10px 5px 30px; }
-tbody.group tr.group-row.sub .group-title { font-size: 13px; }
+table.grid tbody.group tr.group-row.sub { background: color-mix(in srgb, var(--accent-bg) 45%, var(--panel)); }
+table.grid tbody.group tr.group-row.sub:hover { background: var(--accent-bg); }
+tbody.group tr.group-row.sub td { padding: 6px 10px 6px 34px; box-shadow: inset 4px 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
+tbody.group tr.group-row.sub .group-title { font-size: 14px; font-weight: 600; color: var(--text); }
 table.reports { table-layout: fixed; }
 table.reports td.file { max-width: 0; }
 table.reports th:nth-child(1) { width: 140px; }
