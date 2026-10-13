@@ -202,6 +202,10 @@ tbody.group tr.group-row td { padding: 7px 10px; }
 .group-row .caret { display: inline-block; width: 14px; color: var(--muted); }
 .group-title { font-weight: 600; }
 .group-count { margin-left: 10px; color: var(--muted); font-size: 12px; }
+/* группа внутри группы (блок → дата): с отступом, светлее */
+tbody.group tr.group-row.sub { background: var(--panel); }
+tbody.group tr.group-row.sub td { padding: 5px 10px 5px 30px; }
+tbody.group tr.group-row.sub .group-title { font-size: 13px; }
 table.reports { table-layout: fixed; }
 table.reports td.file { max-width: 0; }
 table.reports th:nth-child(1) { width: 140px; }

@@ -348,6 +348,7 @@
                             <span>Группировка</span>
                             <select value="@_view.ReportGroup" @onchange="OnReportGroupChanged">
                                 <option value="">Без группировки</option>
+                                <option value="block-date">По блоку и дате</option>
                                 <option value="block">По блоку</option>
                                 <option value="date">По дате отчёта</option>
                                 <option value="file">По файлу</option>
@@ -382,21 +383,33 @@
                                         </td>
                                     </tr>
                                 }
-                                @if (!collapsed)
+                                @if (!collapsed && g.Subgroups != null)
+                                {
+                                    @* внутри блока — по дате: свой заголовок, сворачивается отдельно *@
+                                    foreach (var sg in g.Subgroups)
+                                    {
+                                        var subCollapsed = _view.ReportCollapsed.Contains(sg.Key);
+                                        <tr class="group-row sub" @onclick="() => ToggleReportGroup(sg.Key)">
+                                            <td colspan="5">
+                                                <span class="caret">@(subCollapsed ? "▸" : "▾")</span>
+                                                <span class="group-title">@sg.Title</span>
+                                                <span class="group-count">@Fmt.Plural(sg.Reports.Count, "отчёт", "отчёта", "отчётов") · @Fmt.Plural(sg.Reports.Sum(r => r.Results), "коллизия", "коллизии", "коллизий") в отчётах</span>
+                                            </td>
+                                        </tr>
+                                        @if (!subCollapsed)
+                                        {
+                                            foreach (var r in sg.Reports)
+                                            {
+                                                @ReportLine(r)
+                                            }
+                                        }
+                                    }
+                                }
+                                else if (!collapsed)
                                 {
                                     foreach (var r in g.Reports)
                                     {
-                                        <tr>
-                                            <td title="@DateSourceTitle(r.DateSource)">@(r.DateSource == ReportPath.DateFromFolder ? Fmt.Day(r.ReportDate) : Fmt.Date(r.ReportDate))@(r.DateSource == ReportPath.DateFromXml ? "" : "*")</td>
-                                            <td>@ReportPath.BlockTitle(r.Block)</td>
-                                            <td class="file" title="@r.FilePath">
-                                                <div class="cut">@System.IO.Path.GetFileName(r.FilePath)</div>
-                                                <div class="el-sub cut">@ReportFolder(r)</div>
-                                                @if (r.Warning != null) { <div class="warn small" title="@r.Warning">⚠ Неполный отчёт: пропавшие коллизии не считаются исправленными</div> }
-                                            </td>
-                                            <td class="num">@r.Results</td>
-                                            <td>@Fmt.Date(r.Imported)</td>
-                                        </tr>
+                                        @ReportLine(r)
                                     }
                                 }
                             </tbody>
@@ -943,7 +956,25 @@
         public string Key;
         public string Title;
         public List<ReportRow> Reports;
+        /// <summary>Группы внутри группы («По блоку и дате»: блок → даты); null — нет.</summary>
+        public List<ReportGroup> Subgroups;
     }
+
+    /// <summary>Строка отчёта в таблице «Отчёты».</summary>
+    private RenderFragment ReportLine(ReportRow r) => __builder =>
+    {
+        <tr>
+            <td title="@DateSourceTitle(r.DateSource)">@(r.DateSource == ReportPath.DateFromFolder ? Fmt.Day(r.ReportDate) : Fmt.Date(r.ReportDate))@(r.DateSource == ReportPath.DateFromXml ? "" : "*")</td>
+            <td>@ReportPath.BlockTitle(r.Block)</td>
+            <td class="file" title="@r.FilePath">
+                <div class="cut">@System.IO.Path.GetFileName(r.FilePath)</div>
+                <div class="el-sub cut">@ReportFolder(r)</div>
+                @if (r.Warning != null) { <div class="warn small" title="@r.Warning">⚠ Неполный отчёт: пропавшие коллизии не считаются исправленными</div> }
+            </td>
+            <td class="num">@r.Results</td>
+            <td>@Fmt.Date(r.Imported)</td>
+        </tr>
+    };
 
     private RenderFragment ReportSortHeader(string key, string title, string css = null) => __builder =>
     {
@@ -984,6 +1015,15 @@
         var reports = ScopeReports.ToList();
         switch (_view.ReportGroup)
         {
+            case "block-date":
+                return reports.GroupBy(r => r.Block).OrderBy(g => ReportPath.BlockOrder(g.Key))
+                    .Select(g => new ReportGroup
+                    {
+                        Key = "b:" + g.Key, Title = ReportPath.BlockTitle(g.Key), Reports = g.ToList(),
+                        Subgroups = g.GroupBy(r => r.ReportDate.Date).OrderByDescending(d => d.Key)
+                            .Select(d => new ReportGroup { Key = "b:" + g.Key + "|d:" + d.Key.ToString("yyyyMMdd"), Title = Fmt.Day(d.Key), Reports = SortedReports(d) })
+                            .ToList(),
+                    }).ToList();
             case "block":
                 return reports.GroupBy(r => r.Block).OrderBy(g => ReportPath.BlockOrder(g.Key))
                     .Select(g => new ReportGroup { Key = "b:" + g.Key, Title = ReportPath.BlockTitle(g.Key), Reports = SortedReports(g) }).ToList();
