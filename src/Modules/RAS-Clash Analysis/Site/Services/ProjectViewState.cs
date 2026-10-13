@@ -17,10 +17,10 @@ public sealed class ProjectView
     public bool AutoNext { get; set; } = true;
 
     /// <summary>Отчёты: сортировка (date / block / file / count / imported), группировка ("" — нет, block / date / file / imported), свёрнутые группы.</summary>
-    /// <summary>Отчёты — сразу по блоку (S1, S2… по порядку; внутри — новые сверху): просьба разработчика 13.10.2026.</summary>
-    public string ReportSortKey { get; set; } = "block";
-    public bool ReportSortDesc { get; set; }
-    public string ReportGroup { get; set; } = "";
+    public string ReportSortKey { get; set; } = "date";
+    public bool ReportSortDesc { get; set; } = true;
+    /// <summary>Отчёты — сразу сгруппированы по блоку (S1, S2… по порядку; внутри — новые сверху): просьба разработчика 13.10.2026.</summary>
+    public string ReportGroup { get; set; } = "block";
     public HashSet<string> ReportCollapsed { get; } = new HashSet<string>();
 
     /// <summary>Отбор последнего прогона: null — нет, new / fixed / returned.</summary>
