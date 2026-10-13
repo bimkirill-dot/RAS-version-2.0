@@ -16,10 +16,6 @@
         {
             <div class="returned-note">↺ Возвращалась после исправления — @Fmt.Plural(_card.ReturnCount, "раз", "раза", "раз")</div>
         }
-        @if (_card.State == ClashState.Pending)
-        {
-            <div class="muted small">Отмечена исправленной — станет «Исправлена», когда следующий прогон Navisworks её не найдёт.</div>
-        }
     </div>
 
     @* сведения — таблицей в два столбца *@
@@ -37,7 +33,7 @@
             <th>Дата</th><td title="Впервые @Fmt.Day(_card.FirstSeen)">@Fmt.Day(_card.LastSeen)</td>
         </tr>
         <tr>
-            <th>Встречалась</th><td>@Fmt.Plural(Repeats, "раз", "раза", "раз")</td>
+            <th>Встречалась</th><td>@Fmt.Plural(Repeats, "раз", "раза", "раз")@if ((_card.Last?.Points ?? 1) > 1) { <span class="muted" title="Navisworks нашёл несколько точек касания этих же элементов — это одна коллизия"> · @Fmt.Plural(_card.Last.Points, "точка", "точки", "точек")</span> }</td>
             <th>Проверка</th><td title="@(_card.Type != _card.TestName ? "В Navisworks: " + _card.TestName : "")">@_card.Type</td>
         </tr>
         <tr>
@@ -89,12 +85,12 @@
     }
 
     <div class="state-buttons">
-        @* «Исправлена» ставит «Ждёт проверки»: подтверждает прогон (DECISIONS.md, «Исправлена → ждёт проверки») *@
+        @* три статуса, как у автора статьи; «Исправлена», а следующий прогон её нашёл — снова «Активная» с ↺ *@
         @foreach (var (s, title) in Buttons)
         {
-            var current = s == _card.State || (s == ClashState.Pending && _card.State == ClashState.Fixed);
+            var current = s == _card.State;
             <button class="btn state @Fmt.StateClass(s) @(current ? "current" : "")" disabled="@current"
-                    title="@(current ? "Текущий статус" : s == ClashState.Pending ? "Станет «Исправлена», когда следующий прогон её не найдёт" : "Сделать «" + title + "»")"
+                    title="@(current ? "Текущий статус" : s == ClashState.Fixed ? "Если следующий прогон её найдёт — снова «Активная»" : "Сделать «" + title + "»")"
                     @onclick="() => SetState(s)">@(current ? "✓ " : "")@title</button>
         }
     </div>
@@ -157,7 +153,7 @@
 
     private static readonly (ClashState State, string Title)[] Buttons =
     {
-        (ClashState.Active, "Активная"), (ClashState.Pending, "Исправлена"), (ClashState.Accepted, "Допущена"),
+        (ClashState.Active, "Активная"), (ClashState.Fixed, "Исправлена"), (ClashState.Accepted, "Допущена"),
     };
 
     private ClashCard _card;

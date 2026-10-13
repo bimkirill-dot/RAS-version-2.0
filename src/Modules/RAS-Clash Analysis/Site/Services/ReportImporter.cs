@@ -19,12 +19,10 @@ public sealed class ImportResult
     /// <summary>Вернулись после исправления.</summary>
     public int Reappeared { get; set; }
     public int Fixed { get; set; }
-    /// <summary>Из них — «Ждёт проверки», исправление подтверждено прогоном.</summary>
-    public int Confirmed { get; set; }
-    /// <summary>Предупреждение (неполный отчёт); null — нет.</summary>
+    /// <summary>Предупреждение (неполный отчёт, пропало подозрительно много); null — нет.</summary>
     public string Warning { get; set; }
-    /// <summary>Узнаны по паре элементов: номер Navisworks сменился.</summary>
-    public int Rekeyed { get; set; }
+    /// <summary>Пропало подозрительно много (ReportMerge.TooManyGone) — у отчёта «Вернуть активными».</summary>
+    public bool Suspicious { get; set; }
 }
 
 /// <summary>
@@ -151,8 +149,8 @@ public sealed class ReportImporter
                     var result = Import(p.Id, x.Path, x.Hash, x.FileTime, x.Report, x.Place, x.Date, x.DateSource);
                     result.ProjectName = p.Name;
                     results.Add(result);
-                    _log.LogInformation("Загружен отчёт {File}: новых {New}, снова {Again}, появились снова {Reappeared}, исправлены {Fixed}, узнаны по паре элементов {Rekeyed}",
-                        x.Path, result.New, result.Again, result.Reappeared, result.Fixed, result.Rekeyed);
+                    _log.LogInformation("Загружен отчёт {File}: новых {New}, снова {Again}, появились снова {Reappeared}, исправлены {Fixed}",
+                        x.Path, result.New, result.Again, result.Reappeared, result.Fixed);
                 }
                 catch (Exception ex)
                 {
@@ -203,7 +201,7 @@ public sealed class ReportImporter
             var (testId, lastDate, lastReportId) = EnsureTest(c, tx, projectId, test, place);
             // отчёт старше уже загруженного по этой проверке: только дополняет историю, статусы не трогает
             var latest = lastDate == null || string.CompareOrdinal(reportDate, lastDate) >= 0;
-            var known = KnownClashes(c, tx, testId, test.Name);
+            var known = KnownClashes(c, tx, testId);
             var dateText = date.ToString(dateSource == ReportPath.DateFromFolder ? "dd.MM.yyyy" : "dd.MM.yyyy HH:mm");
             // неполный отчёт (выгружены не все статусы): пропавшие не считаем исправленными — DECISIONS.md, «Неполный отчёт»
             var complete = ReportMerge.IsComplete(test);
@@ -215,7 +213,19 @@ public sealed class ReportImporter
                 _log.LogWarning("{File}: {Warning}", path, warning);
             }
 
-            foreach (var step in ReportMerge.Plan(test.Name, known, test.Results, complete))
+            var steps = ReportMerge.Plan(test.Name, known, test.Results, complete);
+            // предохранитель: пропало подозрительно много — предупреждение и «Вернуть активными» в «Отчётах» (DECISIONS.md, «Предохранитель»)
+            var activeBefore = known.Count(k => k.State == ClashState.Active);
+            var vanished = steps.Count(s => s.Action == MergeAction.Gone && s.StateChanged);
+            if (latest && ReportMerge.TooManyGone(activeBefore, vanished))
+            {
+                var warning = $"«{test.Name}»: исправлены сразу {vanished} из {activeBefore} активных. Если в Navisworks не подгрузилась модель — "
+                              + "«Вернуть активными» у этого отчёта.";
+                result.Warning = result.Warning == null ? warning : result.Warning + " " + warning;
+                result.Suspicious = true;
+                _log.LogWarning("{File}: {Warning}", path, warning);
+            }
+            foreach (var step in steps)
             {
                 if (!latest)
                 {
@@ -227,16 +237,8 @@ public sealed class ReportImporter
                         ClashStore.AddEvent(c, tx, cid, now, EventKinds.Gone,
                             "Исправлена: нет в более позднем отчёте от " + Database.Time(lastDate).ToString("dd.MM.yyyy"),
                             (int)ClashState.Active, (int)ClashState.Fixed, null, lastReportId);
-                    AddOccurrence(c, tx, cid, reportId, report, step.Result, makeLast: step.Known == null, reportDate);
+                    AddOccurrence(c, tx, cid, reportId, report, step.Result, step.Points, makeLast: step.Known == null, reportDate);
                     continue;
-                }
-                if (step.Rekeyed)
-                {
-                    // номер Navisworks сменился (проверку пересоздали / новый файл Navisworks) — та же коллизия, новый ключ
-                    Exec(c, tx, "UPDATE Clashes SET IdentityKey = $k WHERE Id = $id", ("$k", step.IdentityKey), ("$id", step.Known.Id));
-                    ClashStore.AddEvent(c, tx, step.Known.Id, now, EventKinds.Rekey,
-                        "Номер Navisworks сменился — узнана по паре элементов (отчёт от " + dateText + ")", null, null, null, reportId);
-                    result.Rekeyed++;
                 }
                 switch (step.Action)
                 {
@@ -244,13 +246,13 @@ public sealed class ReportImporter
                     {
                         var cid = NewClash(c, tx, projectId, testId, step.IdentityKey, step.NewState, step.Present, reportDate, reportId,
                             "Найдена в отчёте от " + dateText);
-                        AddOccurrence(c, tx, cid, reportId, report, step.Result, makeLast: true, reportDate);
+                        AddOccurrence(c, tx, cid, reportId, report, step.Result, step.Points, makeLast: true, reportDate);
                         result.New++;
                         break;
                     }
                     case MergeAction.Again:
                     case MergeAction.Reappeared:
-                        AddOccurrence(c, tx, step.Known.Id, reportId, report, step.Result, makeLast: true, reportDate);
+                        AddOccurrence(c, tx, step.Known.Id, reportId, report, step.Result, step.Points, makeLast: true, reportDate);
                         Exec(c, tx, "UPDATE Clashes SET State = $s, InLastReport = 1 WHERE Id = $id", ("$s", (int)step.NewState), ("$id", step.Known.Id));
                         if (step.Returned)
                             Exec(c, tx, "UPDATE Clashes SET ReturnCount = ReturnCount + 1 WHERE Id = $id", ("$id", step.Known.Id));
@@ -262,16 +264,14 @@ public sealed class ReportImporter
                         break;
                     case MergeAction.Gone:
                         if (step.Result != null)
-                            AddOccurrence(c, tx, step.Known.Id, reportId, report, step.Result, makeLast: true, reportDate);
+                            AddOccurrence(c, tx, step.Known.Id, reportId, report, step.Result, step.Points, makeLast: true, reportDate);
                         Exec(c, tx, "UPDATE Clashes SET State = $s, InLastReport = 0 WHERE Id = $id", ("$s", (int)step.NewState), ("$id", step.Known.Id));
                         if (step.StateChanged)
                         {
                             var why = step.Result != null ? "Navisworks пишет «Исправлено» (отчёт от " + dateText + ")" : "нет в отчёте от " + dateText;
-                            ClashStore.AddEvent(c, tx, step.Known.Id, now, step.Confirmed ? EventKinds.Confirmed : EventKinds.Gone,
-                                (step.Confirmed ? "Исправление подтверждено: " : "Исправлена: ") + why,
+                            ClashStore.AddEvent(c, tx, step.Known.Id, now, EventKinds.Gone, "Исправлена: " + why,
                                 (int)step.Known.State, (int)step.NewState, null, reportId);
                             result.Fixed++;
-                            if (step.Confirmed) result.Confirmed++;
                         }
                         break;
                 }
@@ -280,7 +280,8 @@ public sealed class ReportImporter
                 Exec(c, tx, "UPDATE Tests SET LastReportId = $r, LastReportDate = $d WHERE Id = $id", ("$r", reportId), ("$d", reportDate), ("$id", testId));
         }
         if (result.Warning != null)
-            Exec(c, tx, "UPDATE Reports SET Warning = $w WHERE Id = $id", ("$w", result.Warning), ("$id", reportId));
+            Exec(c, tx, "UPDATE Reports SET Warning = $w, Suspicious = $s WHERE Id = $id",
+                ("$w", result.Warning), ("$s", result.Suspicious ? 1 : 0), ("$id", reportId));
         tx.Commit();
         return result;
     }
@@ -308,34 +309,15 @@ public sealed class ReportImporter
         return (newId, null, null);
     }
 
-    /// <summary>Известные коллизии проверки — с парой элементов последнего появления (узнавание при смене номера Navisworks).</summary>
-    private static List<KnownClash> KnownClashes(SqliteConnection c, SqliteTransaction tx, long testId, string testName)
+    /// <summary>Известные коллизии проверки.</summary>
+    private static List<KnownClash> KnownClashes(SqliteConnection c, SqliteTransaction tx, long testId)
     {
-        var byId = new Dictionary<long, KnownClash>();
-        using (var cmd = ClashStore.Command(c, "SELECT Id, IdentityKey, State FROM Clashes WHERE TestId = $t", ("$t", testId)))
-        {
-            cmd.Transaction = tx;
-            using var r = cmd.ExecuteReader();
-            while (r.Read()) byId[r.GetInt64(0)] = new KnownClash { Id = r.GetInt64(0), IdentityKey = r.GetString(1), State = (ClashState)r.GetInt32(2) };
-        }
-        var elements = new Dictionary<long, List<ClashElement>>();
-        using (var cmd = ClashStore.Command(c, """
-            SELECT c.Id, e.ModelFile, e.ElementId FROM Clashes c JOIN Elements e ON e.OccurrenceId = c.LastOccurrenceId
-            WHERE c.TestId = $t ORDER BY c.Id, e.Idx
-            """, ("$t", testId)))
-        {
-            cmd.Transaction = tx;
-            using var r = cmd.ExecuteReader();
-            while (r.Read())
-            {
-                if (!elements.TryGetValue(r.GetInt64(0), out var list)) elements[r.GetInt64(0)] = list = new List<ClashElement>();
-                list.Add(new ClashElement { ModelFile = r.IsDBNull(1) ? null : r.GetString(1), ElementId = r.IsDBNull(2) ? null : r.GetInt64(2) });
-            }
-        }
-        foreach (var (id, list) in elements)
-            if (byId.TryGetValue(id, out var k) && ClashRules.HasFullPair(list))
-                k.PairKey = ClashRules.PairKey(testName, list);
-        return byId.Values.ToList();
+        var list = new List<KnownClash>();
+        using var cmd = ClashStore.Command(c, "SELECT Id, IdentityKey, State FROM Clashes WHERE TestId = $t", ("$t", testId));
+        cmd.Transaction = tx;
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) list.Add(new KnownClash { Id = r.GetInt64(0), IdentityKey = r.GetString(1), State = (ClashState)r.GetInt32(2) });
+        return list;
     }
 
     private static long NewClash(SqliteConnection c, SqliteTransaction tx, long projectId, long testId, string key, ClashState state,
@@ -349,14 +331,15 @@ public sealed class ReportImporter
         return id;
     }
 
-    private void AddOccurrence(SqliteConnection c, SqliteTransaction tx, long clashId, long reportId, ClashReport report, ClashResult r,
+    /// <summary>Появление в отчёте: первый результат пары; points — сколько всего результатов Navisworks на эту пару.</summary>
+    private void AddOccurrence(SqliteConnection c, SqliteTransaction tx, long clashId, long reportId, ClashReport report, ClashResult r, int points,
         bool makeLast, string reportDate)
     {
         var image = CopyImage(reportId, report, r);
         var occId = Insert(c, tx, """
-            INSERT INTO Occurrences(ClashId, ReportId, Name, NavisStatus, Image, X, Y, Z, Distance, Created, GridLocation, GroupName, Description)
-            VALUES($c, $r, $n, $s, $img, $x, $y, $z, $dist, $cr, $g, $gr, $desc)
-            """, ("$c", clashId), ("$r", reportId), ("$n", r.Name), ("$s", (int)r.Status), ("$img", image),
+            INSERT INTO Occurrences(ClashId, ReportId, Name, NavisStatus, Image, X, Y, Z, Distance, Created, GridLocation, GroupName, Description, Points)
+            VALUES($c, $r, $n, $s, $img, $x, $y, $z, $dist, $cr, $g, $gr, $desc, $pts)
+            """, ("$c", clashId), ("$r", reportId), ("$n", r.Name), ("$s", (int)r.Status), ("$img", image), ("$pts", Math.Max(points, 1)),
             ("$x", r.Point?.X), ("$y", r.Point?.Y), ("$z", r.Point?.Z), ("$dist", r.Distance),
             ("$cr", r.Created.HasValue ? Database.Time(r.Created.Value) : null), ("$g", r.GridLocation), ("$gr", r.GroupName), ("$desc", r.Description));
         for (var i = 0; i < r.Elements.Count; i++)

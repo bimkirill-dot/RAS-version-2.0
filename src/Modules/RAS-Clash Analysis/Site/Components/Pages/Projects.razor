@@ -40,7 +40,6 @@ else
                             <span>@(cr == "" ? "активные" : cr.ToLowerInvariant() + " крит.")</span>
                         </div>
                     }
-                    <div class="pc-num k-pending"><b>@p.Counts.Pending</b><span>ждут проверки</span></div>
                     <div class="pc-num k-fixed"><b>@p.Counts.Fixed</b><span>исправлены</span></div>
                 </div>
                 <div class="pc-progress" title="Исправлено из всех, кроме допущенных">
@@ -131,7 +130,7 @@ else
     /// <summary>Сколько исправлено из всех, кроме допущенных, — %.</summary>
     private static int FixedPercent(ProjectRow p)
     {
-        var all = p.Counts.Active + p.Counts.Pending + p.Counts.Fixed;
+        var all = p.Counts.Active + p.Counts.Fixed;
         return all == 0 ? 0 : (int)Math.Round(100.0 * p.Counts.Fixed / all);
     }
 

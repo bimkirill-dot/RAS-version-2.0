@@ -6,7 +6,7 @@ using RASv2.ClashAnalysis.Site.Logic;
 
 namespace RASv2.Tests
 {
-    /// <summary>RAS-Clash Analysis: новый отчёт против известного (ReportMerge).</summary>
+    /// <summary>RAS-Clash Analysis: новый отчёт против известного (ReportMerge) и проверки без отчёта в прогоне (RunCheck).</summary>
     internal static class ClashMergeTests
     {
         private static KeyValuePair<string, Action> Case(string name, Action body) => new KeyValuePair<string, Action>(name, body);
@@ -15,25 +15,22 @@ namespace RASv2.Tests
 
         private const string Test = "АР Стены/МЕР Трубы";
 
-        private static ClashResult Result(string guid, NavisworksStatus status = NavisworksStatus.New, long a = 1, long b = 2)
+        /// <summary>Результат Navisworks: пара элементов AR #a и VK #b (номер Navisworks — guid, на узнавание не влияет).</summary>
+        private static ClashResult Result(long a, long b, NavisworksStatus status = NavisworksStatus.New, string guid = null, bool swap = false)
         {
-            var r = new ClashResult { Name = "Конфликт", Guid = guid, Status = status };
-            r.Elements.Add(new ClashElement { ModelFile = "AR.nwc", ElementId = a });
-            r.Elements.Add(new ClashElement { ModelFile = "VK.nwc", ElementId = b });
+            var r = new ClashResult { Name = "Конфликт" + a, Guid = guid ?? Guid.NewGuid().ToString(), Status = status };
+            var ea = new ClashElement { ModelFile = "AR.nwc", ElementId = a };
+            var eb = new ClashElement { ModelFile = "VK.nwc", ElementId = b };
+            r.Elements.Add(swap ? eb : ea);
+            r.Elements.Add(swap ? ea : eb);
             return r;
         }
 
-        private static KnownClash Known(string guid, ClashState state) => new KnownClash { Id = guid.GetHashCode(), IdentityKey = "guid:" + guid, State = state };
+        private static string Key(long a, long b) => ClashRules.IdentityKey(Test, Result(a, b));
 
-        private static MergeStep Step(List<MergeStep> steps, string guid) => steps.Single(s => s.IdentityKey == "guid:" + guid);
+        private static KnownClash Known(long a, long b, ClashState state) => new KnownClash { Id = a * 1000 + b, IdentityKey = Key(a, b), State = state };
 
-        /// <summary>Известная коллизия с парой элементов последнего появления (как её даёт база).</summary>
-        private static KnownClash KnownWithPair(string guid, ClashState state, long a = 1, long b = 2)
-        {
-            var k = Known(guid, state);
-            k.PairKey = ClashRules.PairKey(Test, Result(guid, a: a, b: b).Elements);
-            return k;
-        }
+        private static MergeStep Step(List<MergeStep> steps, long a, long b) => steps.Single(s => s.IdentityKey == Key(a, b));
 
         public static IEnumerable<KeyValuePair<string, Action>> All()
         {
@@ -41,111 +38,97 @@ namespace RASv2.Tests
             {
                 var steps = ReportMerge.Plan(Test, new KnownClash[0], new[]
                 {
-                    Result("a"), Result("b", NavisworksStatus.Approved), Result("c", NavisworksStatus.Resolved), Result("d", NavisworksStatus.Reviewed),
+                    Result(1, 2), Result(3, 4, NavisworksStatus.Approved), Result(5, 6, NavisworksStatus.Resolved), Result(7, 8, NavisworksStatus.Reviewed),
                 });
                 Check(steps.All(s => s.Action == MergeAction.New), "все новые");
-                Check(Step(steps, "a").NewState == ClashState.Active && Step(steps, "a").Present, "новая — активная, в отчёте");
-                Check(Step(steps, "b").NewState == ClashState.Accepted, "подтверждённая — допущена");
-                Check(Step(steps, "c").NewState == ClashState.Fixed && !Step(steps, "c").Present, "исправленная — исправлена, не «в отчёте»");
-                Check(Step(steps, "d").NewState == ClashState.Active, "проверенная — активная");
+                Check(Step(steps, 1, 2).NewState == ClashState.Active && Step(steps, 1, 2).Present, "новая — активная, в отчёте");
+                Check(Step(steps, 3, 4).NewState == ClashState.Accepted, "подтверждённая — допущена");
+                Check(Step(steps, 5, 6).NewState == ClashState.Fixed && !Step(steps, 5, 6).Present, "исправленная — исправлена, не «в отчёте»");
+                Check(Step(steps, 7, 8).NewState == ClashState.Active, "проверенная — активная");
+            });
+            yield return Case("одна пара — несколько результатов Navisworks (точки касания) — одна коллизия", () =>
+            {
+                var steps = ReportMerge.Plan(Test, new KnownClash[0], new[] { Result(1, 2), Result(1, 2), Result(1, 2, swap: true), Result(3, 4) });
+                Check(steps.Count == 2, "коллизий: " + steps.Count);
+                Check(Step(steps, 1, 2).Points == 3 && Step(steps, 3, 4).Points == 1, "точек: " + Step(steps, 1, 2).Points);
+            });
+            yield return Case("элементы поменялись местами — та же коллизия; номер Navisworks сменился — тоже", () =>
+            {
+                var steps = ReportMerge.Plan(Test, new[] { Known(1, 2, ClashState.Accepted) }, new[] { Result(1, 2, swap: true, guid: "новый") });
+                var s = steps.Single();
+                Check(s.Action == MergeAction.Again && s.NewState == ClashState.Accepted && !s.StateChanged, "узнана, «Допущена» сохранилась: " + s.Action);
             });
             yield return Case("снова в отчёте — статус сайта главнее статуса Navisworks", () =>
             {
-                var steps = ReportMerge.Plan(Test, new[] { Known("a", ClashState.Active), Known("b", ClashState.Accepted) },
-                    new[] { Result("a", NavisworksStatus.Approved), Result("b", NavisworksStatus.New) });
-                Check(Step(steps, "a").Action == MergeAction.Again && Step(steps, "a").NewState == ClashState.Active, "активная осталась активной");
-                Check(Step(steps, "b").Action == MergeAction.Again && Step(steps, "b").NewState == ClashState.Accepted, "допущенная осталась допущенной");
+                var steps = ReportMerge.Plan(Test, new[] { Known(1, 2, ClashState.Active), Known(3, 4, ClashState.Accepted) },
+                    new[] { Result(1, 2, NavisworksStatus.Approved), Result(3, 4) });
+                Check(Step(steps, 1, 2).Action == MergeAction.Again && Step(steps, 1, 2).NewState == ClashState.Active, "активная осталась активной");
+                Check(Step(steps, 3, 4).Action == MergeAction.Again && Step(steps, 3, 4).NewState == ClashState.Accepted, "допущенная осталась допущенной");
                 Check(steps.All(s => !s.StateChanged), "статусы не менялись");
             });
-            yield return Case("пропала из отчёта: активная — исправлена, допущенная — без изменений", () =>
+            yield return Case("пропала из отчёта: активная — исправлена, допущенная и исправленная — без изменений", () =>
             {
-                var steps = ReportMerge.Plan(Test, new[] { Known("a", ClashState.Active), Known("b", ClashState.Accepted), Known("c", ClashState.Fixed) },
+                var steps = ReportMerge.Plan(Test, new[] { Known(1, 2, ClashState.Active), Known(3, 4, ClashState.Accepted), Known(5, 6, ClashState.Fixed) },
                     new ClashResult[0]);
                 Check(steps.All(s => s.Action == MergeAction.Gone && !s.Present), "все пропали");
-                Check(Step(steps, "a").NewState == ClashState.Fixed && Step(steps, "a").StateChanged, "активная → исправлена");
-                Check(Step(steps, "b").NewState == ClashState.Accepted && !Step(steps, "b").StateChanged, "допущенная");
-                Check(Step(steps, "c").NewState == ClashState.Fixed && !Step(steps, "c").StateChanged, "исправленная");
+                Check(Step(steps, 1, 2).NewState == ClashState.Fixed && Step(steps, 1, 2).StateChanged, "активная → исправлена");
+                Check(Step(steps, 3, 4).NewState == ClashState.Accepted && !Step(steps, 3, 4).StateChanged, "допущенная");
+                Check(Step(steps, 5, 6).NewState == ClashState.Fixed && !Step(steps, 5, 6).StateChanged, "исправленная");
             });
-            yield return Case("Navisworks пишет «Исправлено» — как пропала", () =>
+            yield return Case("Navisworks пишет «Исправлено» у всех точек — как пропала; хоть одна открыта — пара есть", () =>
             {
-                var steps = ReportMerge.Plan(Test, new[] { Known("a", ClashState.Active) }, new[] { Result("a", NavisworksStatus.Resolved) });
-                var a = Step(steps, "a");
+                var steps = ReportMerge.Plan(Test, new[] { Known(1, 2, ClashState.Active), Known(3, 4, ClashState.Active) },
+                    new[] { Result(1, 2, NavisworksStatus.Resolved), Result(3, 4, NavisworksStatus.Resolved), Result(3, 4) });
+                var a = Step(steps, 1, 2);
                 Check(a.Action == MergeAction.Gone && a.NewState == ClashState.Fixed && a.StateChanged && a.Result != null, "исправлена, снимок остаётся");
+                Check(Step(steps, 3, 4).Action == MergeAction.Again, "одна точка ещё открыта — активная");
             });
-            yield return Case("исправленная снова в отчёте — опять активная", () =>
+            yield return Case("исправленная снова в отчёте — опять активная, «вернулась»; активная — не «вернулась»", () =>
             {
-                var steps = ReportMerge.Plan(Test, new[] { Known("a", ClashState.Fixed) }, new[] { Result("a") });
-                var a = Step(steps, "a");
-                Check(a.Action == MergeAction.Reappeared && a.NewState == ClashState.Active && a.StateChanged && a.Present, "появилась снова");
+                var steps = ReportMerge.Plan(Test, new[] { Known(1, 2, ClashState.Fixed), Known(3, 4, ClashState.Active) }, new[] { Result(1, 2), Result(3, 4) });
+                var f = Step(steps, 1, 2);
+                Check(f.Action == MergeAction.Reappeared && f.NewState == ClashState.Active && f.StateChanged && f.Present && f.Returned, "вернулась");
+                Check(!Step(steps, 3, 4).Returned, "активная — нет");
             });
-            yield return Case("без guid — по паре элементов; дубль в отчёте — одна коллизия", () =>
+            yield return Case("неполная пара (нет номера элемента) — по номеру Navisworks", () =>
             {
-                var steps = ReportMerge.Plan(Test, new KnownClash[0], new[] { Result(null, a: 5, b: 6), Result(null, a: 5, b: 6) });
-                Check(steps.Count(s => s.Action == MergeAction.New) == 1, "одна новая, шагов: " + steps.Count);
-                Check(steps[0].IdentityKey.StartsWith("pair:", StringComparison.Ordinal), "ключ по паре");
-            });
-            yield return Case("номер Navisworks сменился — та же коллизия по паре элементов, ключ обновляется", () =>
-            {
-                var steps = ReportMerge.Plan(Test, new[] { KnownWithPair("old", ClashState.Accepted) }, new[] { Result("new") });
-                var s = steps.Single();
-                Check(s.Action == MergeAction.Again && s.Known?.IdentityKey == "guid:old", "узнана: " + s.Action);
-                Check(s.Rekeyed && s.IdentityKey == "guid:new", "новый ключ: " + s.IdentityKey);
-                Check(s.NewState == ClashState.Accepted && !s.StateChanged, "«Допущена» сохранилась");
-            });
-            yield return Case("сменился номер у исправленной — снова активная; у «Исправлено» в Navisworks — исправлена", () =>
-            {
-                var steps = ReportMerge.Plan(Test, new[] { KnownWithPair("f", ClashState.Fixed, 1, 2), KnownWithPair("a", ClashState.Active, 3, 4) },
-                    new[] { Result("f2", a: 1, b: 2), Result("a2", NavisworksStatus.Resolved, 3, 4) });
-                var f = Step(steps, "f2");
-                Check(f.Action == MergeAction.Reappeared && f.Rekeyed && f.NewState == ClashState.Active, "исправленная вернулась");
-                var g = Step(steps, "a2");
-                Check(g.Action == MergeAction.Gone && g.Rekeyed && g.NewState == ClashState.Fixed && g.Result != null, "исправлена в Navisworks");
-                Check(steps.Count == 2, "лишних шагов нет: " + steps.Count);
-            });
-            yield return Case("пара не перехватывает коллизию, которая есть в отчёте со своим номером", () =>
-            {
-                // две известные с одной парой (одни и те же элементы пересекаются дважды): «a» — со своим номером, «x» — новый номер
-                var steps = ReportMerge.Plan(Test, new[] { KnownWithPair("a", ClashState.Active), KnownWithPair("b", ClashState.Accepted) },
-                    new[] { Result("x"), Result("a") });
-                Check(Step(steps, "a").Action == MergeAction.Again && !Step(steps, "a").Rekeyed, "«a» — по своему номеру");
-                Check(Step(steps, "x").Known?.IdentityKey == "guid:b" && Step(steps, "x").Rekeyed, "«x» — это «b»");
-                Check(steps.Count == 2, "шагов: " + steps.Count);
-            });
-            yield return Case("неполная пара (нет номера элемента) — по паре не узнаём", () =>
-            {
-                var k = Known("old", ClashState.Active);
-                k.PairKey = null;
-                var r = Result("new");
+                var r = Result(1, 2, guid: "g1");
                 r.Elements[1].ElementId = null;
-                var steps = ReportMerge.Plan(Test, new[] { k }, new[] { r });
-                Check(steps.Any(s => s.Action == MergeAction.New) && steps.Any(s => s.Action == MergeAction.Gone), "новая + пропавшая");
-                Check(!ClashRules.HasFullPair(r.Elements), "пара неполная");
-            });
-            yield return Case("«Ждёт проверки»: нет в прогоне — исправление подтверждено, есть — вернулась", () =>
-            {
-                var steps = ReportMerge.Plan(Test, new[] { Known("p", ClashState.Pending), Known("q", ClashState.Pending) }, new[] { Result("q") });
-                var p = Step(steps, "p");
-                Check(p.Action == MergeAction.Gone && p.NewState == ClashState.Fixed && p.StateChanged && p.Confirmed, "подтверждено");
-                var q = Step(steps, "q");
-                Check(q.Action == MergeAction.Reappeared && q.NewState == ClashState.Active && q.Returned && !q.Confirmed, "вернулась");
-            });
-            yield return Case("исправленная прогоном снова в отчёте — тоже «вернулась»; активная — нет", () =>
-            {
-                var steps = ReportMerge.Plan(Test, new[] { Known("f", ClashState.Fixed), Known("a", ClashState.Active) }, new[] { Result("f"), Result("a") });
-                Check(Step(steps, "f").Returned && !Step(steps, "a").Returned, "вернулась только исправленная");
-                Check(!Step(steps, "a").Confirmed, "подтверждения нет");
+                Check(!ClashRules.HasFullPair(r.Elements) && ClashRules.IdentityKey(Test, r) == "guid:g1", "ключ — номер Navisworks");
+                var steps = ReportMerge.Plan(Test, new[] { new KnownClash { Id = 7, IdentityKey = "guid:g1", State = ClashState.Active } }, new[] { r });
+                Check(steps.Single().Action == MergeAction.Again, "узнана по номеру");
             });
             yield return Case("неполный отчёт: пропавшие не трогаем, найденные — как обычно", () =>
             {
-                var steps = ReportMerge.Plan(Test, new[] { Known("a", ClashState.Active), Known("p", ClashState.Pending), Known("f", ClashState.Fixed) },
-                    new[] { Result("f") }, complete: false);
-                Check(steps.Count == 1 && Step(steps, "f").Returned, "только найденная: " + steps.Count);
+                var steps = ReportMerge.Plan(Test, new[] { Known(1, 2, ClashState.Active), Known(5, 6, ClashState.Fixed) },
+                    new[] { Result(5, 6) }, complete: false);
+                Check(steps.Count == 1 && Step(steps, 5, 6).Returned, "только найденная: " + steps.Count);
                 var test = new ClashTest { Summary = new ClashSummary { Total = 5 } };
-                test.Results.Add(Result("x"));
+                test.Results.Add(Result(9, 9));
                 test.ResultsInFile = 3;
                 Check(!ReportMerge.IsComplete(test), "в проверке 5, в файле 3 — неполный");
                 test.ResultsInFile = 5;
                 Check(ReportMerge.IsComplete(test), "в файле все 5 (одна без элементов пропущена) — полный");
+            });
+            yield return Case("предохранитель: пропало больше 10 и больше половины активных", () =>
+            {
+                Check(ReportMerge.TooManyGone(86, 86) && ReportMerge.TooManyGone(30, 16), "86 из 86, 16 из 30 — подозрительно");
+                Check(!ReportMerge.TooManyGone(30, 15) && !ReportMerge.TooManyGone(12, 10), "15 из 30, 10 из 12 — обычный прогон");
+            });
+            yield return Case("проверки без отчёта в последнем прогоне своего блока и критичности", () =>
+            {
+                var d24 = new DateTime(2026, 9, 24); var d08 = new DateTime(2026, 10, 8, 15, 0, 0);
+                var tests = new[]
+                {
+                    (Name: "КЖ Гор/МЕР Возд", Crit: "Высокая", Block: "S5", Last: (DateTime?)d24),
+                    (Name: "АР Стены/МЕР Трубы", Crit: "Высокая", Block: "S5", Last: (DateTime?)d08),
+                    (Name: "АР Стены/МЕР Трубы", Crit: "Высокая", Block: "S6", Last: (DateTime?)d24),
+                    (Name: "АР Полы", Crit: "Средняя", Block: "S5", Last: (DateTime?)d24),
+                };
+                var reports = new[] { ("Высокая", "S5", d24), ("Высокая", "S5", d08), ("Высокая", "S6", d24), ("Средняя", "S5", d24) };
+                var missing = RunCheck.Missing(tests, t => t.Crit, t => t.Block, t => t.Last, reports);
+                Check(missing.Count == 1 && missing[0].Test.Name == "КЖ Гор/МЕР Возд" && missing[0].Run == d08.Date,
+                    "только S5 высокой — прогон 08.10: " + string.Join(", ", missing.Select(m => m.Test.Name)));
             });
         }
     }

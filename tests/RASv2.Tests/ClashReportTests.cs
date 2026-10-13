@@ -185,10 +185,14 @@ namespace RASv2.Tests
                 Check(Error("<exchange units=\"m\"></exchange>")?.Contains("не отчёт Navisworks") == true, "без проверок");
                 Check(Error("<exchange><clashtest")?.Contains("не читается как XML") == true, "обрыв файла");
             });
-            yield return Case("«личность»: guid; без guid — проверка + пара «файл + номер», порядок не важен", () =>
+            yield return Case("«личность»: проверка + пара «файл + номер», порядок не важен; номер Navisworks — только без пары", () =>
             {
                 var t = Parse(Extended).Tests[0];
-                Check(ClashRules.IdentityKey(t.Name, t.Results[0]) == "guid:11111111-2222-3333-4444-555555555555", "по guid");
+                var withGuid = ClashRules.IdentityKey(t.Name, t.Results[0]);
+                Check(withGuid.StartsWith("pair:", StringComparison.Ordinal), "с guid и полной парой — по паре: " + withGuid);
+                var partial = new ClashResult { Guid = "g" };
+                partial.Elements.Add(new ClashElement { ModelFile = "AR.nwc" });
+                Check(ClashRules.IdentityKey(t.Name, partial) == "guid:g", "пара неполная — по guid");
                 var noGuid = ClashRules.IdentityKey(t.Name, t.Results[1]);
                 Check(noGuid == "pair:ар стены/мер трубы|ar#101|vk#202", "без guid: " + noGuid);
                 var swapped = new ClashResult();

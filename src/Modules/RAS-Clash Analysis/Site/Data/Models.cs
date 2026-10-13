@@ -10,11 +10,9 @@ namespace RASv2.ClashAnalysis.Site.Data;
 public sealed class StateCounts
 {
     public int Active { get; set; }
-    /// <summary>Отмечены «Исправлена» — ждут следующего прогона.</summary>
-    public int Pending { get; set; }
     public int Fixed { get; set; }
     public int Accepted { get; set; }
-    public int Total => Active + Pending + Fixed + Accepted;
+    public int Total => Active + Fixed + Accepted;
 
     public void Add(ClashState state, int count)
     {
@@ -22,7 +20,6 @@ public sealed class StateCounts
         {
             case ClashState.Fixed: Fixed += count; break;
             case ClashState.Accepted: Accepted += count; break;
-            case ClashState.Pending: Pending += count; break;
             default: Active += count; break;
         }
     }
@@ -73,8 +70,10 @@ public sealed class ReportRow
     public bool DateFromReport { get; set; }
     /// <summary>Откуда дата отчёта: Logic.ReportPath.DateFromXml / DateFromFolder / DateFromFile.</summary>
     public string DateSource { get; set; }
-    /// <summary>Предупреждение загрузки (неполный отчёт); null — нет.</summary>
+    /// <summary>Предупреждение загрузки (неполный отчёт, пропало подозрительно много); null — нет.</summary>
     public string Warning { get; set; }
+    /// <summary>Пропало подозрительно много (ReportMerge.TooManyGone): у отчёта — «Вернуть активными».</summary>
+    public bool Suspicious { get; set; }
     public DateTime Imported { get; set; }
     public int Results { get; set; }
 }
@@ -163,6 +162,8 @@ public sealed class OccurrenceView
     public string GridLocation { get; set; }
     public string GroupName { get; set; }
     public string Description { get; set; }
+    /// <summary>Сколько результатов Navisworks на эту пару элементов в отчёте (точек касания).</summary>
+    public int Points { get; set; } = 1;
     public List<ElementView> Elements { get; } = new List<ElementView>();
 }
 

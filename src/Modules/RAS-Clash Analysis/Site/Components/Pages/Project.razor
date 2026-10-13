@@ -29,7 +29,6 @@
             var k = Kpi;
             <div class="kpis" title="Весь проект: все критичности, блоки и проверки">
                 <div class="kpi k-active"><div class="v">@k.Active</div><div class="l">Активные</div></div>
-                <div class="kpi k-pending"><div class="v">@k.Pending</div><div class="l">Ждут проверки</div></div>
                 <div class="kpi k-fixed"><div class="v">@k.Fixed</div><div class="l">Исправлены</div></div>
                 <div class="kpi k-accepted"><div class="v">@k.Accepted</div><div class="l">Допущены</div></div>
                 <div class="kpi k-progress" title="Исправлено по всему проекту — из всех коллизий, кроме допущенных">
@@ -193,6 +192,7 @@
                         </label>
                         <button class="btn" title="Скачать список (как сейчас отобран) — откроется в Excel" @onclick="ExportCsv">⤓ Excel</button>
                     </div>
+                    @MissingBox()
 
                     @if (_selected.Count > 0)
                     {
@@ -209,7 +209,7 @@
                             {
                                 <span>Отмечено: <b>@_selected.Count</b></span>
                                 <input class="comment" placeholder="Комментарий ко всем (необязательно)" @bind="_bulkComment" />
-                                <button class="btn state-pending" title="Станет «Исправлена», когда следующий прогон её не найдёт" @onclick="() => AskBulk(ClashState.Pending)">Исправлена</button>
+                                <button class="btn state-fixed" title="Если следующий прогон их найдёт — снова «Активная»" @onclick="() => AskBulk(ClashState.Fixed)">Исправлена</button>
                                 <button class="btn state-accepted" @onclick="() => AskBulk(ClashState.Accepted)">Допущена</button>
                                 <button class="btn state-active" @onclick="() => AskBulk(ClashState.Active)">Активная</button>
                                 <button class="btn link" @onclick="() => _selected.Clear()">Снять отметки</button>
@@ -345,6 +345,7 @@
                         <span class="path" title="Папка проекта">@_project.Folder</span>
                     </div>
                     <ImportResults Results="Importer.LastResults" />
+                    @MissingBox()
                     <table class="grid reports">
                         <thead>
                             <tr>
@@ -387,6 +388,16 @@
                                             foreach (var r in sg.Reports)
                                             {
                                                 @ReportLine(r)
+                                            }
+                                            @* договорились выгружать все проверки, даже пустые: нет отчёта — ошибка выгрузки *@
+                                            foreach (var (t, _) in _missing.Where(m => m.Test.Block == g.Block && m.Run == sg.Day && InCriticality(m.Test)))
+                                            {
+                                                <tr class="missing-row">
+                                                    <td colspan="5">
+                                                        ⚠ Нет отчёта: <b>@t.Name</b>@(_filter.Criticality == null && t.Criticality != "" ? " (" + t.Criticality.ToLowerInvariant() + ")" : "")
+                                                        <span class="muted">— последний @(t.LastReport.HasValue ? Fmt.Day(t.LastReport.Value) : "—"), активных по нему @t.Counts.Active</span>
+                                                    </td>
+                                                </tr>
                                             }
                                         }
                                     }
@@ -537,8 +548,8 @@
         _filter = _view.Filter;
         if (!_view.Initialized)
         {
-            // по умолчанию — то, с чем работать: активные и ждущие проверки
-            FacetSet(ClashFacets.State).UnionWith(new[] { ((int)ClashState.Active).ToString(), ((int)ClashState.Pending).ToString() });
+            // по умолчанию — то, с чем работать: активные
+            FacetSet(ClashFacets.State).Add(((int)ClashState.Active).ToString());
             _filter.State = null;
             _view.Initialized = true;
         }
@@ -567,8 +578,50 @@
         if (_filter.Block != null && !BlocksOf(_filter.Criticality).Contains(_filter.Block)) _filter.Block = null;
         if (_filter.TestType != null && !_tests.Any(t => t.Type == _filter.TestType && InScope(t))) _filter.TestType = null;
         _lastRun = ScopeTests.Where(t => t.LastReport.HasValue).Select(t => t.LastReport).DefaultIfEmpty(null).Max();
+        _missing = RunCheck.Missing(_tests, t => t.Criticality, t => t.Block, t => t.LastReport, _reports.Select(r => (r.Criticality, r.Block, r.ReportDate)));
         _base = _criticalities.Count == 0 ? new List<ClashRow>() : Store.Clashes(Id, _filter);
         Recompute();
+    }
+
+    // ───── нет отчёта в прогоне; «Вернуть активными» ─────
+
+    /// <summary>Проверки без отчёта в последнем прогоне своего блока и критичности (RunCheck) — с днём этого прогона.</summary>
+    private List<(TestRow Test, DateTime Run)> _missing = new();
+
+    private bool InCriticality(TestRow t) => _filter.Criticality == null || t.Criticality == _filter.Criticality;
+
+    /// <summary>
+    /// Предупреждение: в последнем прогоне блока нет отчёта по проверке — договорились выгружать все, даже пустые
+    /// (DECISIONS.md, «Нет отчёта в прогоне»); статусы её коллизий не меняются.
+    /// </summary>
+    private RenderFragment MissingBox() => __builder =>
+    {
+        var list = _missing.Where(m => InScope(m.Test)).ToList();
+        if (list.Count == 0) return;
+        <details class="missing-box">
+            <summary>
+                ⚠ В последнем прогоне нет отчёта по @Fmt.Plural(list.Count, "проверке", "проверкам", "проверкам") —
+                их @Fmt.Plural(list.Sum(m => m.Test.Counts.Active), "активная коллизия", "активные коллизии", "активных коллизий") по более ранним отчётам.
+                <span class="muted">Выгружайте все проверки, даже пустые: иначе не понять — исправлено всё или отчёт забыли.</span>
+            </summary>
+            <ul>
+                @foreach (var (t, run) in list.OrderBy(m => ReportPath.CriticalityOrder(m.Test.Criticality)).ThenBy(m => ReportPath.BlockOrder(m.Test.Block)).ThenBy(m => m.Test.Name))
+                {
+                    <li>
+                        @if (t.Block != "") { <span class="tag">@t.Block</span> }
+                        <b>@t.Name</b>@(t.Criticality != "" ? " · " + t.Criticality.ToLowerInvariant() : "")
+                        <span class="muted">— нет в прогоне @Fmt.Day(run); последний отчёт @(t.LastReport.HasValue ? Fmt.Day(t.LastReport.Value) : "—"), активных @t.Counts.Active</span>
+                    </li>
+                }
+            </ul>
+        </details>
+    };
+
+    private void UndoFixes(ReportRow r)
+    {
+        var n = Store.UndoReportFixes(r.Id);
+        _notice = $"Возвращены «Активная»: {n}.";
+        LoadAll();
     }
 
     /// <summary>
@@ -803,7 +856,7 @@
     }
 
     /// <summary>Кнопка статуса: «Исправлена» ставит «Ждёт проверки».</summary>
-    private static string StateButtonTitle(ClashState s) => s == ClashState.Pending ? "Исправлена" : Fmt.State(s);
+    private static string StateButtonTitle(ClashState s) => Fmt.State(s);
 
     /// <summary>Подпись значения, которого нет ни у одной коллизии (статус — по названию, остальное — как есть).</summary>
     private static string FacetTitle(string facet, string key) =>
@@ -821,7 +874,6 @@
             foreach (var t in _tests)
             {
                 k.Active += t.Counts.Active;
-                k.Pending += t.Counts.Pending;
                 k.Fixed += t.Counts.Fixed;
                 k.Accepted += t.Counts.Accepted;
             }
@@ -832,7 +884,7 @@
     /// <summary>Сколько исправлено из всех, кроме допущенных, — %.</summary>
     private static int FixedPercent(StateCounts k)
     {
-        var all = k.Active + k.Pending + k.Fixed;
+        var all = k.Active + k.Fixed;
         return all == 0 ? 0 : (int)Math.Round(100.0 * k.Fixed / all);
     }
 
@@ -927,6 +979,9 @@
         public List<ReportRow> Reports;
         /// <summary>Группы внутри группы («По блоку и дате»: блок → даты); null — нет.</summary>
         public List<ReportGroup> Subgroups;
+        /// <summary>Блок группы «По блоку и дате»; день подгруппы — прогон.</summary>
+        public string Block;
+        public DateTime? Day;
     }
 
     /// <summary>Строка отчёта в таблице «Отчёты».</summary>
@@ -938,7 +993,11 @@
             <td class="file" title="@r.FilePath">
                 <div class="cut">@System.IO.Path.GetFileName(r.FilePath)</div>
                 <div class="el-sub cut">@ReportFolder(r)</div>
-                @if (r.Warning != null) { <div class="warn small" title="@r.Warning">⚠ Неполный отчёт: пропавшие коллизии не считаются исправленными</div> }
+                @if (r.Warning != null) { <div class="warn small report-warning" title="@r.Warning">⚠ @r.Warning</div> }
+                @if (r.Suspicious)
+                {
+                    <button class="btn small" title="Коллизии, которые этот отчёт отметил «Исправлена», — снова «Активная»" @onclick="() => UndoFixes(r)">Вернуть активными</button>
+                }
             </td>
             <td class="num">@r.Results</td>
             <td>@Fmt.Date(r.Imported)</td>
@@ -988,9 +1047,9 @@
                 return reports.GroupBy(r => r.Block).OrderBy(g => ReportPath.BlockOrder(g.Key))
                     .Select(g => new ReportGroup
                     {
-                        Key = "b:" + g.Key, Title = ReportPath.BlockTitle(g.Key), Reports = g.ToList(),
+                        Key = "b:" + g.Key, Title = ReportPath.BlockTitle(g.Key), Reports = g.ToList(), Block = g.Key,
                         Subgroups = g.GroupBy(r => r.ReportDate.Date).OrderByDescending(d => d.Key)
-                            .Select(d => new ReportGroup { Key = "b:" + g.Key + "|d:" + d.Key.ToString("yyyyMMdd"), Title = Fmt.Day(d.Key), Reports = SortedReports(d) })
+                            .Select(d => new ReportGroup { Key = "b:" + g.Key + "|d:" + d.Key.ToString("yyyyMMdd"), Title = Fmt.Day(d.Key), Reports = SortedReports(d), Day = d.Key })
                             .ToList(),
                     }).ToList();
             case "block":
@@ -1056,7 +1115,7 @@
     {
         _filter.Search = null;
         foreach (var set in _filter.Facets.Values) set.Clear();
-        FacetSet(ClashFacets.State).UnionWith(new[] { ((int)ClashState.Active).ToString(), ((int)ClashState.Pending).ToString() });
+        FacetSet(ClashFacets.State).Add(((int)ClashState.Active).ToString());
         _view.RunFilter = null;
         _page = 0;
         Recompute();
@@ -1109,9 +1168,8 @@
     private static int StateOrder(ClashState s) => s switch
     {
         ClashState.Active => 0,
-        ClashState.Pending => 1,
-        ClashState.Fixed => 2,
-        _ => 3,
+        ClashState.Fixed => 1,
+        _ => 2,
     };
 
     private static long NameNumber(string name)

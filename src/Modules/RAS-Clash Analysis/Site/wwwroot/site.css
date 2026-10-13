@@ -124,7 +124,6 @@ th.sortable:hover, th.sorted { color: var(--text); }
 .badge.state-active { background: var(--active-bg); color: var(--active); }
 .badge.state-fixed { background: var(--fixed-bg); color: var(--fixed); }
 .badge.state-accepted { background: var(--accepted-bg); color: var(--accepted); }
-.badge.state-pending { background: var(--pending-bg); color: var(--pending); }
 
 /* вкладки */
 .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
@@ -151,13 +150,11 @@ textarea { width: 100%; resize: vertical; }
 .btn.state-active { color: var(--active); }
 .btn.state-fixed { color: var(--fixed); }
 .btn.state-accepted { color: var(--accepted); }
-.btn.state-pending { color: var(--fixed); }
 /* текущий статус в карточке — залитая кнопка */
 .btn.state.current { opacity: 1; font-weight: 600; cursor: default; }
 .btn.state-active.current { background: var(--active-bg); border-color: var(--active); }
 .btn.state-fixed.current { background: var(--fixed-bg); border-color: var(--fixed); }
 .btn.state-accepted.current { background: var(--accepted-bg); border-color: var(--accepted); }
-.btn.state-pending.current { background: var(--fixed-bg); border-color: var(--fixed); }
 
 .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
 .check { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); cursor: pointer; }
@@ -208,6 +205,14 @@ table.grid tbody.group tr.group-row.sub:hover { background: var(--accent-bg); }
 tbody.group tr.group-row.sub td { padding: 6px 10px 6px 34px; box-shadow: inset 4px 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
 tbody.group tr.group-row.sub .group-title { font-size: 14px; font-weight: 600; color: var(--text); }
 table.reports { table-layout: fixed; }
+/* нет отчёта в прогоне (RunCheck): над списком и строкой в группе «блок → дата» */
+.missing-box { margin: 0 0 10px; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--pending) 45%, var(--line)); border-radius: 8px;
+    background: color-mix(in srgb, var(--pending) 9%, var(--panel)); font-size: 13px; }
+.missing-box summary { cursor: pointer; color: var(--text); }
+.missing-box ul { margin: 8px 0 2px; padding-left: 18px; }
+.missing-box li { margin: 3px 0; }
+table.grid tbody tr.missing-row td { padding: 6px 10px 6px 34px; color: var(--pending); font-size: 13px; background: color-mix(in srgb, var(--pending) 7%, var(--panel)); }
+.report-warning { white-space: normal; }
 table.reports td.file { max-width: 0; }
 table.reports th:nth-child(1) { width: 140px; }
 table.reports th:nth-child(2) { width: 90px; }
@@ -226,7 +231,6 @@ table.reports th:nth-child(5) { width: 150px; }
 .stab.on.state-active { border-bottom-color: var(--active); }
 .stab.on.state-fixed { border-bottom-color: var(--fixed); }
 .stab.on.state-accepted { border-bottom-color: var(--accepted); }
-.stab.on.state-pending { border-bottom-color: var(--pending); }
 
 /* последний прогон: новые / исправлено / вернулось — щелчок показывает их */
 .run-strip { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 2px 0 8px; flex: none; }
@@ -427,7 +431,6 @@ input:focus, select:focus, textarea:focus, .list:focus-visible { outline: 2px so
 .kpi .v { font-size: 24px; font-weight: 700; line-height: 1.15; }
 .kpi .l { font-size: 12px; color: var(--muted); }
 .kpi.k-active .v, .pc-num.k-active b { color: var(--active); }
-.kpi.k-pending .v, .pc-num.k-pending b { color: var(--pending); }
 .kpi.k-fixed .v, .pc-num.k-fixed b { color: var(--fixed); }
 .kpi.k-accepted .v { color: var(--accepted); }
 .kpi.k-progress { min-width: 150px; }

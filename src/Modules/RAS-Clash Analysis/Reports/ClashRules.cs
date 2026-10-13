@@ -9,10 +9,10 @@ using System.Text.RegularExpressions;
 namespace RASv2.ClashAnalysis.Reports
 {
     /// <summary>
-    /// Наш статус коллизии (DECISIONS.md, «Статусы»; числа — в базе, не менять). Pending — человек отметил «Исправлена»,
-    /// ждёт следующего прогона: нет в нём — Fixed (подтверждено), есть — снова Active («вернулась»).
+    /// Наш статус коллизии — три, как у автора статьи (DECISIONS.md, «Коллизии: пара элементов, три статуса»; числа — в базе,
+    /// не менять). Было ещё «Ждёт проверки» (3) — убрано 13.10.2026, в базе стало «Исправлена».
     /// </summary>
-    public enum ClashState { Active = 0, Fixed = 1, Accepted = 2, Pending = 3 }
+    public enum ClashState { Active = 0, Fixed = 1, Accepted = 2 }
 
     /// <summary>
     /// Правила над отчётом: что считать той же коллизией в следующем прогоне, тем же уровнем, каким статусом.
@@ -21,13 +21,13 @@ namespace RASv2.ClashAnalysis.Reports
     public static class ClashRules
     {
         /// <summary>
-        /// «Личность» коллизии — одна через все прогоны: постоянный номер Navisworks (guid), а без него —
-        /// проверка + пара элементов «файл модели + номер» (порядок элементов не важен).
-        /// Номер Navisworks меняется, если проверку пересоздали или собрали новый файл Navisworks, — тогда коллизию
-        /// узнают по паре (<see cref="PairKey"/>, ReportMerge сайта).
+        /// «Личность» коллизии — одна через все прогоны: проверка + пара элементов «файл модели + номер» (порядок элементов
+        /// не важен), как у автора статьи. Несколько результатов Navisworks на одну пару — одна коллизия; номер Navisworks
+        /// не важен: он меняется, если проверку пересоздали или собрали новый файл Navisworks.
+        /// Пара неполная (нет номера или файла у элемента) — номер Navisworks (guid), а без него — пара как есть.
         /// </summary>
         public static string IdentityKey(string testName, ClashResult result) =>
-            !string.IsNullOrEmpty(result.Guid) ? "guid:" + result.Guid : PairKey(testName, result.Elements);
+            HasFullPair(result.Elements) || string.IsNullOrEmpty(result.Guid) ? PairKey(testName, result.Elements) : "guid:" + result.Guid;
 
         /// <summary>Проверка + пара элементов «файл модели + номер», порядок элементов не важен.</summary>
         public static string PairKey(string testName, IEnumerable<ClashElement> elements)
@@ -112,7 +112,6 @@ namespace RASv2.ClashAnalysis.Reports
             {
                 case ClashState.Fixed: return "Исправлена";
                 case ClashState.Accepted: return "Допущена";
-                case ClashState.Pending: return "Ждёт проверки";
                 default: return "Активная";
             }
         }

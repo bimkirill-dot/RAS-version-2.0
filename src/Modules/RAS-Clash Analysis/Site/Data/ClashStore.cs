@@ -132,7 +132,7 @@ public sealed class ClashStore
         using var c = _db.Open();
         var list = new List<ReportRow>();
         using var r = Query(c, """
-            SELECT Id, FilePath, ReportDate, DateFromReport, Imported, Results, Criticality, Block, DateSource, Warning
+            SELECT Id, FilePath, ReportDate, DateFromReport, Imported, Results, Criticality, Block, DateSource, Warning, Suspicious
             FROM Reports WHERE ProjectId = $p ORDER BY ReportDate DESC, Id DESC
             """, ("$p", projectId));
         while (r.Read())
@@ -140,9 +140,49 @@ public sealed class ClashStore
             {
                 Id = r.GetInt64(0), FilePath = r.GetString(1), ReportDate = Database.Time(r.GetString(2)), DateFromReport = r.GetInt32(3) != 0,
                 Imported = Database.Time(r.GetString(4)), Results = r.GetInt32(5), Criticality = r.GetString(6), Block = r.GetString(7),
-                DateSource = r.GetString(8), Warning = Str(r, 9),
+                DateSource = r.GetString(8), Warning = Str(r, 9), Suspicious = r.GetInt32(10) != 0,
             });
         return list;
+    }
+
+    /// <summary>
+    /// «Вернуть активными» у отчёта, из которого пропало подозрительно много (DECISIONS.md, «Предохранитель»): коллизии,
+    /// которые этот отчёт сделал «Исправлена» и которые так и остались, — снова «Активная», с записью в истории.
+    /// </summary>
+    public int UndoReportFixes(long reportId)
+    {
+        using var c = _db.Open();
+        using var tx = c.BeginTransaction();
+        var ids = new List<long>();
+        using (var cmd = Command(c, """
+            SELECT DISTINCT e.ClashId FROM Events e JOIN Clashes c ON c.Id = e.ClashId
+            WHERE e.ReportId = $r AND e.Kind = 'gone' AND e.NewState = 1 AND c.State = 1
+              AND NOT EXISTS(SELECT 1 FROM Events l WHERE l.ClashId = e.ClashId AND l.NewState IS NOT NULL AND l.Id > e.Id)
+            """, ("$r", reportId)))
+        {
+            cmd.Transaction = tx;
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) ids.Add(r.GetInt64(0));
+        }
+        var now = Database.Time(DateTime.Now);
+        foreach (var id in ids)
+        {
+            using (var upd = Command(c, "UPDATE Clashes SET State = 0, InLastReport = 1 WHERE Id = $id", ("$id", id)))
+            {
+                upd.Transaction = tx;
+                upd.ExecuteNonQuery();
+            }
+            AddEvent(c, tx, id, now, EventKinds.Status, "Возвращена: отчёт, из которого она пропала, выгружен неправильно («Вернуть активными»)",
+                (int)ClashState.Fixed, (int)ClashState.Active, null, reportId);
+        }
+        using (var mark = Command(c, "UPDATE Reports SET Suspicious = 0, Warning = COALESCE(Warning, '') || $w WHERE Id = $r",
+                   ("$w", $" Возвращены активными: {ids.Count}."), ("$r", reportId)))
+        {
+            mark.Transaction = tx;
+            mark.ExecuteNonQuery();
+        }
+        tx.Commit();
+        return ids.Count;
     }
 
     // ───────────── список коллизий ─────────────
@@ -215,7 +255,7 @@ public sealed class ClashStore
         var byId = new Dictionary<long, OccurrenceView>();
         using (var r = Query(c, """
             SELECT o.Id, o.ReportId, rp.ReportDate, rp.FilePath, o.Name, o.NavisStatus, o.Image, o.X, o.Y, o.Z, o.Distance, o.Created,
-                   o.GridLocation, o.GroupName, o.Description, rp.Units
+                   o.GridLocation, o.GroupName, o.Description, rp.Units, o.Points
             FROM Occurrences o JOIN Reports rp ON rp.Id = o.ReportId WHERE o.ClashId = $id ORDER BY rp.ReportDate DESC, o.Id DESC
             """, ("$id", id)))
             while (r.Read())
@@ -226,7 +266,7 @@ public sealed class ClashStore
                     Name = Str(r, 4), NavisStatus = (NavisworksStatus)r.GetInt32(5), HasImage = !r.IsDBNull(6),
                     X = Num(r, 7), Y = Num(r, 8), Z = Num(r, 9), Distance = Num(r, 10),
                     Created = r.IsDBNull(11) ? null : Database.Time(r.GetString(11)),
-                    GridLocation = Str(r, 12), GroupName = Str(r, 13), Description = Str(r, 14),
+                    GridLocation = Str(r, 12), GroupName = Str(r, 13), Description = Str(r, 14), Points = r.GetInt32(16),
                 };
                 if (card.Occurrences.Count == 0) card.Units = r.GetString(15);
                 card.Occurrences.Add(o);

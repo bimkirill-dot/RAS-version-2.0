@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.Data.Sqlite;
+using RASv2.ClashAnalysis.Reports;
 
 namespace RASv2.ClashAnalysis.Site.Data;
 
@@ -201,7 +202,125 @@ public sealed class Database
         WHERE c.State = 1 AND t.LastReportDate IS NOT NULL
           AND NOT EXISTS(SELECT 1 FROM Events e WHERE e.ClashId = c.Id AND e.Kind IN ('gone', 'confirmed'));
         """,
+
+        // 5 — 13.10.2026 (DECISIONS.md, «Коллизии: пара элементов, три статуса»): статусов три — «Ждёт проверки» стала
+        // «Исправлена»; у появления — сколько результатов Navisworks на пару (точек); у отчёта — «пропало подозрительно много».
+        // Объединение коллизий одной пары — MergePairs (C#)
+        """
+        ALTER TABLE Occurrences ADD COLUMN Points INTEGER NOT NULL DEFAULT 1;
+        ALTER TABLE Reports ADD COLUMN Suspicious INTEGER NOT NULL DEFAULT 0;
+        INSERT INTO Events(ClashId, Time, Kind, Text, OldState, NewState, Author, ReportId)
+        SELECT Id, strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime'), 'status',
+               'Статуса «Ждёт проверки» больше нет — стала «Исправлена»', NULL, 1, NULL, NULL
+        FROM Clashes WHERE State = 3;
+        UPDATE Clashes SET State = 1 WHERE State = 3;
+        UPDATE Events SET OldState = 1 WHERE OldState = 3;
+        UPDATE Events SET NewState = 1 WHERE NewState = 3;
+        """,
     };
+
+    /// <summary>
+    /// Шаг 5: коллизия — пара элементов в проверке (ClashRules.IdentityKey). Коллизии одной пары в одной проверке (раньше —
+    /// отдельные результаты Navisworks: две-три точки касания одних и тех же элементов) объединяются в одну: появления и
+    /// история — к самой ранней, появления в одном отчёте — одно, с числом точек; статус — «Активная», если активна хоть
+    /// одна, иначе «Допущена», если допущена хоть одна, иначе «Исправлена». Ключ — пара (номер Navisworks не важен).
+    /// </summary>
+    private static void MergePairs(SqliteConnection c, SqliteTransaction tx)
+    {
+        var now = Time(DateTime.Now);
+        var tests = new List<(long Id, string Name)>();
+        using (var cmd = Cmd(c, tx, "SELECT Id, Name FROM Tests"))
+        using (var r = cmd.ExecuteReader())
+            while (r.Read()) tests.Add((r.GetInt64(0), r.GetString(1)));
+
+        foreach (var (testId, testName) in tests)
+        {
+            var clashes = new List<(long Id, string Key, int State, string First, string Last, int InLast, int Returns)>();
+            using (var cmd = Cmd(c, tx, "SELECT Id, IdentityKey, State, FirstSeen, LastSeen, InLastReport, ReturnCount FROM Clashes WHERE TestId = $t ORDER BY FirstSeen, Id", ("$t", testId)))
+            using (var r = cmd.ExecuteReader())
+                while (r.Read()) clashes.Add((r.GetInt64(0), r.GetString(1), r.GetInt32(2), r.GetString(3), r.GetString(4), r.GetInt32(5), r.GetInt32(6)));
+            var elements = new Dictionary<long, List<ClashElement>>();
+            using (var cmd = Cmd(c, tx, """
+                SELECT c.Id, e.ModelFile, e.ElementId FROM Clashes c JOIN Elements e ON e.OccurrenceId = c.LastOccurrenceId
+                WHERE c.TestId = $t ORDER BY c.Id, e.Idx
+                """, ("$t", testId)))
+            using (var r = cmd.ExecuteReader())
+                while (r.Read())
+                {
+                    if (!elements.TryGetValue(r.GetInt64(0), out var list)) elements[r.GetInt64(0)] = list = new List<ClashElement>();
+                    list.Add(new ClashElement { ModelFile = r.IsDBNull(1) ? null : r.GetString(1), ElementId = r.IsDBNull(2) ? null : r.GetInt64(2) });
+                }
+            string NewKey((long Id, string Key, int State, string First, string Last, int InLast, int Returns) x) =>
+                elements.TryGetValue(x.Id, out var els) && ClashRules.HasFullPair(els) ? ClashRules.PairKey(testName, els) : x.Key;
+
+            var groups = clashes.GroupBy(NewKey, StringComparer.Ordinal).ToList();
+            foreach (var g in groups)
+            {
+                var all = g.ToList();
+                var keep = all[0];
+                if (all.Count == 1) continue;
+                foreach (var other in all.Skip(1))
+                {
+                    var occs = new List<(long Id, long Report)>();
+                    using (var cmd = Cmd(c, tx, "SELECT Id, ReportId FROM Occurrences WHERE ClashId = $c", ("$c", other.Id)))
+                    using (var r = cmd.ExecuteReader())
+                        while (r.Read()) occs.Add((r.GetInt64(0), r.GetInt64(1)));
+                    foreach (var (occ, report) in occs)
+                    {
+                        object mine;
+                        using (var cmd = Cmd(c, tx, "SELECT Id FROM Occurrences WHERE ClashId = $c AND ReportId = $r LIMIT 1", ("$c", keep.Id), ("$r", report)))
+                            mine = cmd.ExecuteScalar();
+                        if (mine == null)
+                            Run(c, tx, "UPDATE Occurrences SET ClashId = $c WHERE Id = $o", ("$c", keep.Id), ("$o", occ));
+                        else
+                        {
+                            // в этом отчёте у пары уже есть появление — одна точка больше
+                            Run(c, tx, "UPDATE Occurrences SET Points = Points + (SELECT Points FROM Occurrences WHERE Id = $o) WHERE Id = $m", ("$o", occ), ("$m", mine));
+                            Run(c, tx, "DELETE FROM Elements WHERE OccurrenceId = $o", ("$o", occ));
+                            Run(c, tx, "DELETE FROM Occurrences WHERE Id = $o", ("$o", occ));
+                        }
+                    }
+                    Run(c, tx, "UPDATE Events SET ClashId = $k WHERE ClashId = $c", ("$k", keep.Id), ("$c", other.Id));
+                    Run(c, tx, "DELETE FROM Clashes WHERE Id = $c", ("$c", other.Id));
+                }
+                var state = all.Any(x => x.State == (int)ClashState.Active) ? ClashState.Active
+                    : all.Any(x => x.State == (int)ClashState.Accepted) ? ClashState.Accepted : ClashState.Fixed;
+                Run(c, tx, """
+                    UPDATE Clashes SET State = $s, FirstSeen = $f, LastSeen = $l, InLastReport = $in, ReturnCount = $rc,
+                        LastOccurrenceId = (SELECT o.Id FROM Occurrences o JOIN Reports r ON r.Id = o.ReportId WHERE o.ClashId = $id ORDER BY r.ReportDate DESC, o.Id DESC LIMIT 1)
+                    WHERE Id = $id
+                    """, ("$s", (int)state), ("$f", all.Min(x => x.First)), ("$l", all.Max(x => x.Last)), ("$in", all.Max(x => x.InLast)),
+                    ("$rc", all.Max(x => x.Returns)), ("$id", keep.Id));
+                Run(c, tx, """
+                    INSERT INTO Events(ClashId, Time, Kind, Text, OldState, NewState, Author, ReportId)
+                    VALUES($c, $t, 'status', $text, $old, $new, NULL, NULL)
+                    """, ("$c", keep.Id), ("$t", now),
+                    ("$text", $"Одна пара элементов — одна коллизия: объединены {all.Count} результата Navisworks (точки касания тех же элементов)"),
+                    ("$old", keep.State == (int)state ? null : (object)keep.State), ("$new", keep.State == (int)state ? null : (object)(int)state));
+            }
+            // ключи — после удаления объединённых: UNIQUE(TestId, IdentityKey)
+            foreach (var g in groups)
+            {
+                var keep = g.First();
+                if (keep.Key != g.Key) Run(c, tx, "UPDATE Clashes SET IdentityKey = $k WHERE Id = $id", ("$k", g.Key), ("$id", keep.Id));
+            }
+        }
+    }
+
+    private static SqliteCommand Cmd(SqliteConnection c, SqliteTransaction tx, string sql, params (string Name, object Value)[] args)
+    {
+        var cmd = c.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = sql;
+        foreach (var (name, value) in args) cmd.Parameters.AddWithValue(name, value ?? DBNull.Value);
+        return cmd;
+    }
+
+    private static void Run(SqliteConnection c, SqliteTransaction tx, string sql, params (string Name, object Value)[] args)
+    {
+        using var cmd = Cmd(c, tx, sql, args);
+        cmd.ExecuteNonQuery();
+    }
 
     /// <summary>Шаг 2: критичность и блок у уже загруженных отчётов и проверок — по пути отчёта внутри папки проекта.</summary>
     private static void FillPlaces(SqliteConnection c, SqliteTransaction tx)
@@ -237,6 +356,7 @@ public sealed class Database
     private static readonly Dictionary<int, Action<SqliteConnection, SqliteTransaction>> MigrationCode = new()
     {
         [2] = FillPlaces,
+        [5] = MergePairs,
     };
 
     /// <summary>Создать базу или довести её до текущей версии. Перед переносом — копия рядом с базой.</summary>
