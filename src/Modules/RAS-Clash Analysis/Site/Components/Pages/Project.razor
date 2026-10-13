@@ -358,7 +358,7 @@
                         </thead>
                         @foreach (var g in ReportGroups())
                         {
-                            var collapsed = g.Key != null && _view.ReportCollapsed.Contains(g.Key);
+                            var collapsed = g.Key != null && !_view.ReportExpanded.Contains(g.Key);
                             <tbody class="group">
                                 @if (g.Key != null)
                                 {
@@ -367,6 +367,7 @@
                                             <span class="caret">@(collapsed ? "▸" : "▾")</span>
                                             <span class="group-title">@g.Title</span>
                                             <span class="group-count">@Fmt.Plural(g.Reports.Count, "отчёт", "отчёта", "отчётов") · @Fmt.Plural(g.Reports.Sum(r => r.Results), "коллизия", "коллизии", "коллизий") в отчётах</span>
+                                            @MissingMark(g.Block, null)
                                         </td>
                                     </tr>
                                 }
@@ -375,12 +376,13 @@
                                     @* внутри блока — по дате: свой заголовок, сворачивается отдельно *@
                                     foreach (var sg in g.Subgroups)
                                     {
-                                        var subCollapsed = _view.ReportCollapsed.Contains(sg.Key);
+                                        var subCollapsed = !_view.ReportExpanded.Contains(sg.Key);
                                         <tr class="group-row sub" @onclick="() => ToggleReportGroup(sg.Key)">
                                             <td colspan="5">
                                                 <span class="caret">@(subCollapsed ? "▸" : "▾")</span>
                                                 <span class="group-title">@sg.Title</span>
                                                 <span class="group-count">@Fmt.Plural(sg.Reports.Count, "отчёт", "отчёта", "отчётов") · @Fmt.Plural(sg.Reports.Sum(r => r.Results), "коллизия", "коллизии", "коллизий") в отчётах</span>
+                                                @MissingMark(g.Block, sg.Day)
                                             </td>
                                         </tr>
                                         @if (!subCollapsed)
@@ -615,6 +617,15 @@
                 }
             </ul>
         </details>
+    };
+
+    /// <summary>В заголовке группы «блок → дата» (видно и в свёрнутой): сколько проверок без отчёта в прогоне; block null — не по блокам.</summary>
+    private RenderFragment MissingMark(string block, DateTime? day) => __builder =>
+    {
+        if (block == null) return;
+        var n = _missing.Count(m => m.Test.Block == block && (day == null || m.Run == day) && InCriticality(m.Test));
+        if (n == 0) return;
+        <span class="group-missing" title="Проверки без отчёта в последнем прогоне блока — выгружайте все, даже пустые">⚠ нет отчёта: @n</span>
     };
 
     private void UndoFixes(ReportRow r)
@@ -1077,12 +1088,12 @@
     private void OnReportGroupChanged(ChangeEventArgs e)
     {
         _view.ReportGroup = e.Value?.ToString() ?? "";
-        _view.ReportCollapsed.Clear();
+        _view.ReportExpanded.Clear();
     }
 
     private void ToggleReportGroup(string key)
     {
-        if (!_view.ReportCollapsed.Remove(key)) _view.ReportCollapsed.Add(key);
+        if (!_view.ReportExpanded.Remove(key)) _view.ReportExpanded.Add(key);
     }
 
     /// <summary>Папка отчёта — от папки проекта («08.10.2026\Высокая критичность\XML\S6»): полный путь — в подсказке.</summary>

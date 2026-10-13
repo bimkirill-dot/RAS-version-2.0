@@ -213,6 +213,7 @@ table.reports { table-layout: fixed; }
 .missing-box li { margin: 3px 0; }
 table.grid tbody tr.missing-row td { padding: 6px 10px 6px 34px; color: var(--pending); font-size: 13px; background: color-mix(in srgb, var(--pending) 7%, var(--panel)); }
 .report-warning { white-space: normal; }
+.group-missing { margin-left: 10px; color: var(--pending); font-size: 12px; font-weight: 600; }
 table.reports td.file { max-width: 0; }
 table.reports th:nth-child(1) { width: 140px; }
 table.reports th:nth-child(2) { width: 90px; }
