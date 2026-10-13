@@ -96,15 +96,9 @@
                             title="Блок — показать коллизии одного блока" aria-expanded="@(_view.BlocksOpen ? "true" : "false")">
                         <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="6.5" y="2.5" width="7" height="6" rx="1.3" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="2.5" y="11.5" width="7" height="6" rx="1.3" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="10.5" y="11.5" width="7" height="6" rx="1.3" stroke="currentColor" stroke-width="1.5" fill="none"/></svg><span>
                             Блок
-                            @if (_filter.Block != null)
-                            {
-                                <small class="side-chosen">@ReportPath.BlockTitle(_filter.Block)</small>
-                            }
-                        </span>
-                        @if (_filter.Block == null)
-                        {
-                            <b class="side-value">все</b>
-                        }<i class="chev" aria-hidden="true"></i>
+                            @* выбранное — всегда второй строкой (и «все»): высота кнопки не меняется, панель не прыгает *@
+                            <small class="side-chosen @(_filter.Block == null ? "all" : "")">@(_filter.Block == null ? "все" : ReportPath.BlockTitle(_filter.Block))</small>
+                        </span><i class="chev" aria-hidden="true"></i>
                     </button>
                     @if (_view.BlocksOpen)
                     {
@@ -127,15 +121,9 @@
                         title="Тип проверки — показать коллизии одной проверки" aria-expanded="@(_view.TypesOpen ? "true" : "false")">
                     <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="11" y="11" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M9 6h5v5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg><span>
                         Тип проверки
-                        @if (_filter.TestType != null)
-                        {
-                            <small class="side-chosen">@_filter.TestType</small>
-                        }
-                    </span>
-                    @if (_filter.TestType == null)
-                    {
-                        <b class="side-value">все</b>
-                    }<i class="chev" aria-hidden="true"></i>
+                        @* две строки всегда (длинное — многоточием, полностью — в подсказке): высота не меняется *@
+                        <small class="side-chosen two @(_filter.TestType == null ? "all" : "")" title="@_filter.TestType">@(_filter.TestType ?? "все")</small>
+                    </span><i class="chev" aria-hidden="true"></i>
                 </button>
                 @if (_view.TypesOpen)
                 {
@@ -599,7 +587,8 @@
     /// </summary>
     private RenderFragment MissingBox() => __builder =>
     {
-        var list = _missing.Where(m => InScope(m.Test)).ToList();
+        // по критичности и блоку, без типа проверки: это про полноту прогона, и плашка не появляется-пропадает при смене типа
+        var list = _missing.Where(m => InCriticality(m.Test) && (_filter.Block == null || m.Test.Block == _filter.Block)).ToList();
         if (list.Count == 0) return;
         <details class="missing-box">
             <summary>
