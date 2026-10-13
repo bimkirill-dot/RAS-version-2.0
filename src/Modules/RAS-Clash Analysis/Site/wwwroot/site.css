@@ -444,6 +444,8 @@ input:focus, select:focus, textarea:focus, .list:focus-visible { outline: 2px so
 .side-btn span { flex: 1; }
 .side-btn.on { background: var(--accent-bg); border-color: transparent; color: var(--accent-strong); font-weight: 600; }
 .side-btn.on svg, .side-btn.on b { color: var(--accent-strong); }
+.side-block { display: flex; flex-direction: column; gap: 4px; margin: 0 6px 12px; color: var(--muted); font-size: 12px; }
+.side-block select { width: 100%; font-size: 14px; color: var(--text); }
 
 /* таблица коллизий */
 .list-title h2 { font-size: 20px; font-weight: 700; }

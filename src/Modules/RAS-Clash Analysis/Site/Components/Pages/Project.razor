@@ -40,54 +40,69 @@
         }
     </div>
 
-    @if (_view.Tab != 3)
+    @if (_criticalities.Count == 0)
     {
-        @if (_criticalities.Count == 0)
-        {
-            <p class="muted">Отчётов ещё нет — «Отчёты» на боковой панели, «Проверить папку сейчас».</p>
-        }
+        <p class="muted">Отчётов ещё нет — «Отчёты» на боковой панели, «Проверить папку сейчас».</p>
+    }
 
-        @* строка отборов: критичность, дата, тип проверки, блок, раздел, уровень, статус, поиск — всё выпадающими списками *@
-        @if (_criticalities.Count > 0)
-        {
-            <div class="ribbon sub-ribbon">
-                @if (ShowAllCriticalities)
-                {
-                    <label class="dd crit-dd @CriticalityClass(_filter.Criticality)">
-                        <span>Критичность</span>
-                        <select value="@(_filter.Criticality == null ? "*" : _filter.Criticality == "" ? "-" : _filter.Criticality)" @onchange="OnCriticalityChanged">
-                            @foreach (var cr in _criticalities)
-                            {
-                                <option value="@(cr == "" ? "-" : cr)">@(cr == "" ? "Без критичности" : cr) (@ActiveIn(cr, null, null))</option>
-                            }
-                            <option value="*">Все (@ActiveIn(null, null, null))</option>
-                        </select>
-                    </label>
-                }
-                <label class="dd" title="За какой прогон: последний (что сейчас), любой прошлый или все">
-                    <span>Дата</span>
-                    <select value="@_view.RunDate" @onchange="OnRunDateChanged">
-                        <option value="last">Последняя@(_lastRun.HasValue ? " — " + Fmt.Day(_lastRun.Value) : "")</option>
-                        @foreach (var d in RunDates)
+    @* строка отборов: критичность, дата, тип проверки, раздел, уровень, статус, поиск (блок — на боковой панели).
+       Видна во всех разделах, и в «Проекте»: пропадала — страница будто уезжала вверх *@
+    @if (_criticalities.Count > 0)
+    {
+        <div class="ribbon sub-ribbon">
+            @if (ShowAllCriticalities)
+            {
+                <label class="dd crit-dd @CriticalityClass(_filter.Criticality)">
+                    <span>Критичность</span>
+                    <select value="@(_filter.Criticality == null ? "*" : _filter.Criticality == "" ? "-" : _filter.Criticality)" @onchange="OnCriticalityChanged">
+                        @foreach (var cr in _criticalities)
                         {
-                            <option value="@d.ToString("yyyy-MM-dd")">@Fmt.Day(d)</option>
+                            <option value="@(cr == "" ? "-" : cr)">@(cr == "" ? "Без критичности" : cr) (@ActiveIn(cr, null, null))</option>
                         }
-                        <option value="all">Все даты</option>
+                        <option value="*">Все (@ActiveIn(null, null, null))</option>
                     </select>
                 </label>
-                <label class="dd">
-                    <span>Тип проверки</span>
-                    <select value="@(_filter.TestType ?? "")" @onchange="OnTestChanged">
-                        <option value="">Все (@ActiveIn(_filter.Criticality, _filter.Block, null))</option>
-                        @foreach (var (name, active) in TestTypes)
-                        {
-                            <option value="@name">@name (@active)</option>
-                        }
-                    </select>
-                </label>
+            }
+            <label class="dd" title="За какой прогон: последний (что сейчас), любой прошлый или все">
+                <span>Дата</span>
+                <select value="@_view.RunDate" @onchange="OnRunDateChanged">
+                    <option value="last">Последняя@(_lastRun.HasValue ? " — " + Fmt.Day(_lastRun.Value) : "")</option>
+                    @foreach (var d in RunDates)
+                    {
+                        <option value="@d.ToString("yyyy-MM-dd")">@Fmt.Day(d)</option>
+                    }
+                    <option value="all">Все даты</option>
+                </select>
+            </label>
+            <label class="dd">
+                <span>Тип проверки</span>
+                <select value="@(_filter.TestType ?? "")" @onchange="OnTestChanged">
+                    <option value="">Все (@ActiveIn(_filter.Criticality, _filter.Block, null))</option>
+                    @foreach (var (name, active) in TestTypes)
+                    {
+                        <option value="@name">@name (@active)</option>
+                    }
+                </select>
+            </label>
+            <FacetMenu Title="Раздел" Values="_facetValues[ClashFacets.Discipline]" Selected="FacetSet(ClashFacets.Discipline)" Changed="Recompute" />
+            <FacetMenu Title="Уровень" Values="_facetValues[ClashFacets.Level]" Selected="FacetSet(ClashFacets.Level)" Changed="Recompute" />
+            <FacetMenu Title="Статус" Values="_facetValues[ClashFacets.State]" Selected="FacetSet(ClashFacets.State)" Changed="Recompute" />
+            <input class="search" type="search" placeholder="Поиск: номер элемента, тип, имя…" value="@_filter.Search" @oninput="OnSearch" />
+            @if (FilterIsSet)
+            {
+                <button class="btn link small" @onclick="ResetFilter">Сбросить</button>
+            }
+        </div>
+    }
+
+    <div class="body @(_view.Tab == 0 && SelectedVisible ? "with-panel" : "")">
+            @* боковая панель — разделы этого проекта *@
+            <aside class="side" aria-label="Разделы проекта">
+                <div class="side-title">Проект</div>
+                @* блок — первым, над разделами (просьба разработчика 13.10.2026) *@
                 @if (ShowBlocks)
                 {
-                    <label class="dd">
+                    <label class="side-block">
                         <span>Блок</span>
                         <select value="@BlockValue" @onchange="OnBlockChanged">
                             <option value="*">Все (@ActiveIn(_filter.Criticality, null, null))</option>
@@ -98,22 +113,6 @@
                         </select>
                     </label>
                 }
-                <FacetMenu Title="Раздел" Values="_facetValues[ClashFacets.Discipline]" Selected="FacetSet(ClashFacets.Discipline)" Changed="Recompute" />
-                <FacetMenu Title="Уровень" Values="_facetValues[ClashFacets.Level]" Selected="FacetSet(ClashFacets.Level)" Changed="Recompute" />
-                <FacetMenu Title="Статус" Values="_facetValues[ClashFacets.State]" Selected="FacetSet(ClashFacets.State)" Changed="Recompute" />
-                <input class="search" type="search" placeholder="Поиск: номер элемента, тип, имя…" value="@_filter.Search" @oninput="OnSearch" />
-                @if (FilterIsSet)
-                {
-                    <button class="btn link small" @onclick="ResetFilter">Сбросить</button>
-                }
-            </div>
-        }
-    }
-
-    <div class="body @(_view.Tab == 0 && SelectedVisible ? "with-panel" : "")">
-            @* боковая панель — разделы этого проекта *@
-            <aside class="side" aria-label="Разделы проекта">
-                <div class="side-title">Проект</div>
                 <button class="side-btn @(_view.Tab == 0 ? "on" : "")" @onclick="() => _view.Tab = 0" title="Коллизии — список и карточка">
                     <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg><span>Коллизии</span><b>@ActiveIn(_filter.Criticality, _filter.Block, _filter.TestType)</b>
                 </button>
