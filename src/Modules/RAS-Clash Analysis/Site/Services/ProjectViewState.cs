@@ -37,6 +37,8 @@ public sealed class ProjectView
     public bool MoreFilters { get; set; }
     /// <summary>«Блок» на боковой панели раскрыт — блоки видны подразделами.</summary>
     public bool BlocksOpen { get; set; }
+    /// <summary>«Тип проверки» на боковой панели раскрыт — типы видны подразделами.</summary>
+    public bool TypesOpen { get; set; }
 }
 
 /// <summary>

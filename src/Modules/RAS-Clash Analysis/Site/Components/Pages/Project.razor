@@ -45,7 +45,7 @@
         <p class="muted">Отчётов ещё нет — «Отчёты» на боковой панели, «Проверить папку сейчас».</p>
     }
 
-    @* строка отборов: критичность, дата, тип проверки, раздел, уровень, статус, поиск (блок — на боковой панели).
+    @* строка отборов: критичность, дата, раздел, уровень, статус, поиск (блок и тип проверки — на боковой панели).
        Видна во всех разделах, и в «Проекте»: пропадала — страница будто уезжала вверх *@
     @if (_criticalities.Count > 0)
     {
@@ -74,16 +74,6 @@
                     <option value="all">Все даты</option>
                 </select>
             </label>
-            <label class="dd">
-                <span>Тип проверки</span>
-                <select value="@(_filter.TestType ?? "")" @onchange="OnTestChanged">
-                    <option value="">Все (@ActiveIn(_filter.Criticality, _filter.Block, null))</option>
-                    @foreach (var (name, active) in TestTypes)
-                    {
-                        <option value="@name">@name (@active)</option>
-                    }
-                </select>
-            </label>
             <FacetMenu Title="Раздел" Values="_facetValues[ClashFacets.Discipline]" Selected="FacetSet(ClashFacets.Discipline)" Changed="Recompute" />
             <FacetMenu Title="Уровень" Values="_facetValues[ClashFacets.Level]" Selected="FacetSet(ClashFacets.Level)" Changed="Recompute" />
             <FacetMenu Title="Статус" Values="_facetValues[ClashFacets.State]" Selected="FacetSet(ClashFacets.State)" Changed="Recompute" />
@@ -104,7 +94,7 @@
                 {
                     <button class="side-btn side-group @(_view.BlocksOpen ? "open" : "")" @onclick="() => _view.BlocksOpen = !_view.BlocksOpen"
                             title="Блок — показать коллизии одного блока" aria-expanded="@(_view.BlocksOpen ? "true" : "false")">
-                        <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="6.5" y="2.5" width="7" height="6" rx="1.3" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="2.5" y="11.5" width="7" height="6" rx="1.3" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="10.5" y="11.5" width="7" height="6" rx="1.3" stroke="currentColor" stroke-width="1.5" fill="none"/></svg><span>Блок</span><b>@(_filter.Block == null ? "все" : ReportPath.BlockTitle(_filter.Block))</b><i class="chev" aria-hidden="true"></i>
+                        <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="6.5" y="2.5" width="7" height="6" rx="1.3" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="2.5" y="11.5" width="7" height="6" rx="1.3" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="10.5" y="11.5" width="7" height="6" rx="1.3" stroke="currentColor" stroke-width="1.5" fill="none"/></svg><span>Блок</span><b class="side-value">@(_filter.Block == null ? "все" : ReportPath.BlockTitle(_filter.Block))</b><i class="chev" aria-hidden="true"></i>
                     </button>
                     @if (_view.BlocksOpen)
                     {
@@ -122,11 +112,28 @@
                         </div>
                     }
                 }
+                @* «Тип проверки» — как «Блок»: нажать — типы подразделами (просьба разработчика 13.10.2026; был списком на ленте) *@
+                <button class="side-btn side-group @(_view.TypesOpen ? "open" : "")" @onclick="() => _view.TypesOpen = !_view.TypesOpen"
+                        title="Тип проверки — показать коллизии одной проверки" aria-expanded="@(_view.TypesOpen ? "true" : "false")">
+                    <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="11" y="11" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M9 6h5v5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg><span>Тип проверки</span><b class="side-value" title="@_filter.TestType">@(_filter.TestType ?? "все")</b><i class="chev" aria-hidden="true"></i>
+                </button>
+                @if (_view.TypesOpen)
+                {
+                    <div class="side-subs">
+                        <button class="side-sub @(_filter.TestType == null ? "on" : "")" @onclick="() => SetTestType(null)">
+                            <span>Все</span><b>@ActiveIn(_filter.Criticality, _filter.Block, null)</b>
+                        </button>
+                        @foreach (var (name, active) in TestTypes)
+                        {
+                            var type = name;
+                            <button class="side-sub @(_filter.TestType == type ? "on" : "")" @onclick="() => SetTestType(type)" title="@type">
+                                <span>@type</span><b>@active</b>
+                            </button>
+                        }
+                    </div>
+                }
                 <button class="side-btn @(_view.Tab == 0 ? "on" : "")" @onclick="() => _view.Tab = 0" title="Коллизии — список и карточка">
                     <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg><span>Коллизии</span><b>@ActiveIn(_filter.Criticality, _filter.Block, _filter.TestType)</b>
-                </button>
-                <button class="side-btn @(_view.Tab == 1 ? "on" : "")" @onclick="() => _view.Tab = 1" title="Проверки Navisworks — сколько коллизий в каждой">
-                    <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="11" y="11" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M9 6h5v5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg><span>Проверки</span><b>@ScopeTests.Count()</b>
                 </button>
                 <button class="side-btn @(_view.Tab == 2 ? "on" : "")" @onclick="() => _view.Tab = 2" title="Загруженные отчёты Navisworks этого проекта">
                     <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 2.5h7l3.5 3.5v11.5h-10.5z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"/><path d="M8 10h5M8 13.5h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Отчёты</span><b>@ScopeReports.Count()</b>
@@ -296,48 +303,6 @@
                         <ClashPanel ClashId="_view.SelectedId.Value" Compact="true" Changed="OnPanelChanged" />
                     </aside>
                 }
-            }
-            else if (_view.Tab == 1)
-            {
-                <section class="content scroll">
-                    <p class="muted small">
-                        «Тип» — как проверка называется на сайте; по нему работает «Тип проверки» на ленте. Одинаковые проверки с разным написанием
-                        («Ж Горизонтальные…» и «КЖ Горизонтальные…», «MEP» и «МЕР») объединяются, если дать им одно название типа.
-                        Название меняется для всех блоков и будущих отчётов; в Navisworks ничего не меняется.
-                    </p>
-                    <datalist id="test-types">
-                        @foreach (var type in _tests.Select(t => t.Type).Distinct().OrderBy(x => x, StringComparer.CurrentCultureIgnoreCase)) { <option value="@type"></option> }
-                    </datalist>
-                    <table class="grid">
-                        <thead><tr><th>Проверка</th><th>Тип</th><th class="num">Активные</th><th class="num">Ждут проверки</th><th class="num">Исправлены</th><th class="num">Допущены</th><th>Последний отчёт</th></tr></thead>
-                        <tbody>
-                            @foreach (var t in ScopeTests)
-                            {
-                                <tr class="clickable" @onclick="() => ShowTest(t)" title="Показать коллизии этой проверки">
-                                    <td>@if (_filter.Block == null && t.Block != "") { <span class="tag">@t.Block</span> }@t.Name</td>
-                                    <td class="type-cell" @onclick:stopPropagation="true">
-                                        @if (_editingType == t.Name)
-                                        {
-                                            <input list="test-types" @bind="_typeInput" @bind:event="oninput" placeholder="Название типа" />
-                                            <button class="btn small primary" @onclick="() => SaveType(t)">Сохранить</button>
-                                            <button class="btn link small" @onclick="() => _editingType = null">Отмена</button>
-                                        }
-                                        else
-                                        {
-                                            <span class="@(t.Type != t.Name ? "renamed" : "")" title="@(t.Type != t.Name ? "Своё название; в Navisworks: " + t.Name : "")">@t.Type</span>
-                                            <button class="btn link small" title="Переименовать или объединить с другим типом" @onclick="() => StartEditType(t)">✎</button>
-                                        }
-                                    </td>
-                                    <td class="num"><Bar Value="t.Counts.Active" Max="_maxActive" /></td>
-                                    <td class="num">@t.Counts.Pending</td>
-                                    <td class="num">@t.Counts.Fixed</td>
-                                    <td class="num">@t.Counts.Accepted</td>
-                                    <td>@Fmt.Date(t.LastReport)</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </section>
             }
             else if (_view.Tab == 2)
             {
@@ -512,13 +477,11 @@
     private int _page;
     /// <summary>Последний прогон выбранного (самый поздний отчёт проверок).</summary>
     private DateTime? _lastRun;
-    private string _editingType, _typeInput;
     private readonly Dictionary<string, List<FacetValue>> _facetValues = ClashFacets.All.ToDictionary(f => f, _ => new List<FacetValue>());
     private readonly HashSet<long> _selected = new();
     private string _bulkComment;
     private ClashState? _pendingState;
     private string _notice;
-    private int _maxActive;
     private string _editName, _editFolder, _editMessage;
     private bool _editError;
     private CancellationTokenSource _searchDelay;
@@ -581,7 +544,6 @@
         }
         if (_filter.Block != null && !BlocksOf(_filter.Criticality).Contains(_filter.Block)) _filter.Block = null;
         if (_filter.TestType != null && !_tests.Any(t => t.Type == _filter.TestType && InScope(t))) _filter.TestType = null;
-        _maxActive = ScopeTests.Select(t => t.Counts.Active).DefaultIfEmpty(0).Max();
         _lastRun = ScopeTests.Where(t => t.LastReport.HasValue).Select(t => t.LastReport).DefaultIfEmpty(null).Max();
         _base = _criticalities.Count == 0 ? new List<ClashRow>() : Store.Clashes(Id, _filter);
         Recompute();
@@ -821,21 +783,6 @@
     /// <summary>Кнопка статуса: «Исправлена» ставит «Ждёт проверки».</summary>
     private static string StateButtonTitle(ClashState s) => s == ClashState.Pending ? "Исправлена" : Fmt.State(s);
 
-    // ───── типы проверок ─────
-
-    private void StartEditType(TestRow t)
-    {
-        _editingType = t.Name;
-        _typeInput = t.Type;
-    }
-
-    private void SaveType(TestRow t)
-    {
-        Store.SetTestType(Id, t.Name, _typeInput);
-        _editingType = null;
-        LoadAll();
-    }
-
     /// <summary>Подпись значения, которого нет ни у одной коллизии (статус — по названию, остальное — как есть).</summary>
     private static string FacetTitle(string facet, string key) =>
         facet == ClashFacets.State && int.TryParse(key, out var n) ? ClashRules.Title((ClashState)n) : key;
@@ -933,11 +880,8 @@
         SetScope(v == "*" ? null : v == "-" ? "" : v, null, null);
     }
 
-    private void OnTestChanged(ChangeEventArgs e)
-    {
-        var name = e.Value?.ToString();
-        SetScope(_filter.Criticality, _filter.Block, string.IsNullOrEmpty(name) ? null : name);
-    }
+    /// <summary>Тип проверки (null — все) — в выбранных критичности и блоке.</summary>
+    private void SetTestType(string type) => SetScope(_filter.Criticality, _filter.Block, type);
 
     /// <summary>Другой блок (null — все): выбранный тип проверки остаётся, если он есть в этом блоке.</summary>
     private void SetBlock(string block)
@@ -1063,13 +1007,6 @@
         var dir = System.IO.Path.GetDirectoryName(r.FilePath) ?? "";
         var root = (_project?.Folder ?? "").TrimEnd('\\', '/');
         return root.Length > 0 && dir.StartsWith(root, StringComparison.OrdinalIgnoreCase) ? dir.Substring(root.Length).TrimStart('\\', '/') : dir;
-    }
-
-    private void ShowTest(TestRow t)
-    {
-        _view.Tab = 0;
-        var flat = BlocksOf(t.Criticality).Count == 1 && t.Block == "";
-        SetScope(t.Criticality, flat ? null : t.Block, t.Type);
     }
 
     private static string CriticalityTitle(string c) => string.IsNullOrEmpty(c) ? "Все проверки" : ReportPath.CriticalityTitle(c);
