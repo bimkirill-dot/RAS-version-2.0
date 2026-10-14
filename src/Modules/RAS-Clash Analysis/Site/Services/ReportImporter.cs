@@ -199,6 +199,7 @@ public sealed class ReportImporter
         {
             // проверка — в своей критичности и своём блоке: «АР Стены/МЕР Трубы» в S1 и в S2 — разные проверки
             var (testId, lastDate, lastReportId) = EnsureTest(c, tx, projectId, test, place);
+            Exec(c, tx, "INSERT OR IGNORE INTO ReportTests(ReportId, TestId) VALUES($r, $t)", ("$r", reportId), ("$t", testId));
             // отчёт старше уже загруженного по этой проверке: только дополняет историю, статусы не трогает
             var latest = lastDate == null || string.CompareOrdinal(reportDate, lastDate) >= 0;
             var known = KnownClashes(c, tx, testId);
@@ -276,6 +277,8 @@ public sealed class ReportImporter
                         break;
                 }
             }
+            // отчёт старше уже загруженных: коллизии, которых нет в следующих прогонах, исправлены к следующему после него
+            if (!latest) ClashStore.RetimeFixes(c, tx, testId);
             if (latest)
                 Exec(c, tx, "UPDATE Tests SET LastReportId = $r, LastReportDate = $d WHERE Id = $id", ("$r", reportId), ("$d", reportDate), ("$id", testId));
         }

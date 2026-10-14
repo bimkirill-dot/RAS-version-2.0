@@ -100,6 +100,7 @@ public sealed class ClashStore
             $"DELETE FROM Elements WHERE OccurrenceId IN (SELECT Id FROM Occurrences WHERE ClashId IN ({clashes}) OR ReportId IN ({reportIds}))",
             $"DELETE FROM Occurrences WHERE ClashId IN ({clashes}) OR ReportId IN ({reportIds})",
             $"DELETE FROM Events WHERE ClashId IN ({clashes}) OR ReportId IN ({reportIds})",
+            $"DELETE FROM ReportTests WHERE ReportId IN ({reportIds})",
             "DELETE FROM Clashes WHERE ProjectId = $p",
             "DELETE FROM Tests WHERE ProjectId = $p",
             "DELETE FROM TypeNames WHERE ProjectId = $p",
@@ -406,6 +407,38 @@ public sealed class ClashStore
             """, ("$c", clashId), ("$t", time), ("$k", kind), ("$x", text), ("$o", oldState), ("$n", newState), ("$a", author), ("$r", reportId));
         cmd.Transaction = tx;
         cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// «Исправлена: нет в отчёте» — на первый отчёт проверки после последнего появления коллизии (DECISIONS.md, «Более
+    /// ранний отчёт, добавленный позже»): отчёт, загруженный не по порядку, меняет прогон, к которому её не стало. Только
+    /// у коллизий, которые сейчас «Исправлена» по отсутствию в отчёте (последняя смена статуса — она). Возвращает: сколько перенесено.
+    /// </summary>
+    internal static int RetimeFixes(SqliteConnection c, SqliteTransaction tx, long testId)
+    {
+        var moves = new List<(long Event, long Report, string Date)>();
+        using (var cmd = Command(c, """
+            SELECT g.Id, n.Id, n.ReportDate
+            FROM Clashes cl
+            JOIN Events g ON g.Id = (SELECT e.Id FROM Events e WHERE e.ClashId = cl.Id AND e.NewState IS NOT NULL ORDER BY e.Id DESC LIMIT 1)
+            JOIN Reports n ON n.Id = (SELECT rp.Id FROM ReportTests rt JOIN Reports rp ON rp.Id = rt.ReportId
+                                      WHERE rt.TestId = cl.TestId AND rp.ReportDate > cl.LastSeen ORDER BY rp.ReportDate, rp.Id LIMIT 1)
+            WHERE cl.TestId = $t AND cl.State = 1 AND g.Kind = 'gone' AND g.ReportId IS NOT n.Id
+              AND NOT EXISTS(SELECT 1 FROM Occurrences o WHERE o.ClashId = cl.Id AND o.ReportId = g.ReportId)
+            """, ("$t", testId)))
+        {
+            cmd.Transaction = tx;
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) moves.Add((r.GetInt64(0), r.GetInt64(1), r.GetString(2)));
+        }
+        foreach (var (ev, report, date) in moves)
+        {
+            using var cmd = Command(c, "UPDATE Events SET ReportId = $r, Text = $x WHERE Id = $id",
+                ("$r", report), ("$x", "Исправлена: нет в отчёте от " + Database.Time(date).ToString("dd.MM.yyyy")), ("$id", ev));
+            cmd.Transaction = tx;
+            cmd.ExecuteNonQuery();
+        }
+        return moves.Count;
     }
 
     // ───────────── служебное ─────────────

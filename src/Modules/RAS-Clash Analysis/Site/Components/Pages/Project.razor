@@ -565,7 +565,8 @@
         if (_filter.Block != null && !BlocksOf(_filter.Criticality).Contains(_filter.Block)) _filter.Block = null;
         if (_filter.TestType != null && !_tests.Any(t => t.Type == _filter.TestType && InScope(t))) _filter.TestType = null;
         _lastRun = ScopeTests.Where(t => t.LastReport.HasValue).Select(t => t.LastReport).DefaultIfEmpty(null).Max();
-        _missing = RunCheck.Missing(_tests, t => t.Criticality, t => t.Block, t => t.LastReport, _reports.Select(r => (r.Criticality, r.Block, r.ReportDate)));
+        // проверка, в которой не было ни одной коллизии, не тревожит: беспокоиться о ней нечего (14.10.2026)
+        _missing = RunCheck.Missing(_tests.Where(t => t.Counts.Total > 0), t => t.Criticality, t => t.Block, t => t.LastReport, _reports.Select(r => (r.Criticality, r.Block, r.ReportDate)));
         _base = _criticalities.Count == 0 ? new List<ClashRow>() : Store.Clashes(Id, _filter);
         Recompute();
     }

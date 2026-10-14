@@ -217,6 +217,21 @@ public sealed class Database
         UPDATE Events SET OldState = 1 WHERE OldState = 3;
         UPDATE Events SET NewState = 1 WHERE NewState = 3;
         """,
+
+        // 6 — 14.10.2026 (DECISIONS.md, «Более ранний отчёт, добавленный позже»): какие проверки были в отчёте — чтобы знать
+        // следующий прогон проверки. У уже загруженных — по появлениям коллизий и последнему отчёту проверки (отчёт, где
+        // в проверке не было ни одной коллизии, так не узнать). «Исправлена: нет в отчёте» — на следующий прогон (RetimeFixes)
+        """
+        CREATE TABLE ReportTests(
+            ReportId INTEGER NOT NULL REFERENCES Reports(Id),
+            TestId INTEGER NOT NULL REFERENCES Tests(Id),
+            PRIMARY KEY(ReportId, TestId));
+        CREATE INDEX ReportTestsTest ON ReportTests(TestId);
+        INSERT OR IGNORE INTO ReportTests(ReportId, TestId)
+        SELECT DISTINCT o.ReportId, cl.TestId FROM Occurrences o JOIN Clashes cl ON cl.Id = o.ClashId;
+        INSERT OR IGNORE INTO ReportTests(ReportId, TestId)
+        SELECT LastReportId, Id FROM Tests WHERE LastReportId IS NOT NULL;
+        """,
     };
 
     /// <summary>
@@ -357,7 +372,18 @@ public sealed class Database
     {
         [2] = FillPlaces,
         [5] = MergePairs,
+        [6] = RetimeAllFixes,
     };
+
+    /// <summary>Шаг 6: «Исправлена: нет в отчёте» у всех проверок — на следующий прогон после последнего появления.</summary>
+    private static void RetimeAllFixes(SqliteConnection c, SqliteTransaction tx)
+    {
+        var tests = new List<long>();
+        using (var cmd = Cmd(c, tx, "SELECT Id FROM Tests"))
+        using (var r = cmd.ExecuteReader())
+            while (r.Read()) tests.Add(r.GetInt64(0));
+        foreach (var t in tests) ClashStore.RetimeFixes(c, tx, t);
+    }
 
     /// <summary>Создать базу или довести её до текущей версии. Перед переносом — копия рядом с базой.</summary>
     public void Migrate(ILogger log)
