@@ -6,6 +6,14 @@
         @if (Value.New > 0) { <span class="d-new">+@Value.New @Fmt.Plural(Value.New, "новая", "новые", "новых").Split(' ')[1]</span> }
         @if (Value.Fixed > 0) { <span class="d-fixed">@Fmt.Plural(Value.Fixed, "исправлена", "исправлены", "исправлено")</span> }
         @if (Value.Returned > 0) { <span class="d-returned">↺ @Fmt.Plural(Value.Returned, "вернулась", "вернулись", "вернулось")</span> }
+        @if (Value.NewTests.Count > 0)
+        {
+            <span class="d-tests" title="Впервые в прогоне: @string.Join("; ", Value.NewTests). Их коллизии — активные, но не «новые»: их просто впервые проверили.">+@Fmt.Plural(Value.NewTests.Count, "проверка", "проверки", "проверок") (@Fmt.Plural(Value.NewTestClashes, "коллизия", "коллизии", "коллизий"))</span>
+        }
+        @if (Value.DroppedTests.Count > 0)
+        {
+            <span class="d-dropped" title="Были в прошлом прогоне, в этом нет: @string.Join("; ", Value.DroppedTests). Их коллизии не меняются.">−@Fmt.Plural(Value.DroppedTests.Count, "проверка", "проверки", "проверок")</span>
+        }
     </span>
 }
 else if (Value != null && FirstRun)

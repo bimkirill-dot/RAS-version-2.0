@@ -162,6 +162,7 @@
                                 @RunChip("new", "новых", "+")
                                 @RunChip("fixed", "исправлено", "")
                                 @RunChip("returned", "вернулось", "↺ ")
+                                @RunChip("tests", "в новых проверках", "+")
                                 @if (_view.RunFilter != null)
                                 {
                                     <button class="btn link small" @onclick="() => SetRunFilter(null)">✕</button>
@@ -362,7 +363,7 @@
                                                 <span class="caret">@(subCollapsed ? "▸" : "▾")</span>
                                                 <span class="group-title">@sg.Title</span>
                                                 <span class="group-count">@Fmt.Plural(sg.Reports.Count, "отчёт", "отчёта", "отчётов") · @Fmt.Plural(sg.Reports.Sum(r => r.Results), "коллизия", "коллизии", "коллизий") в отчётах</span>
-                                                @SumDelta(sg.Reports)
+                                                @SumDelta(sg.Reports, g.Subgroups.Where(x => x.Day < sg.Day).OrderByDescending(x => x.Day).FirstOrDefault()?.Reports)
                                                 @MissingMark(g.Block, sg.Day)
                                             </td>
                                         </tr>
@@ -566,6 +567,7 @@
         if (_filter.TestType != null && !_tests.Any(t => t.Type == _filter.TestType && InScope(t))) _filter.TestType = null;
         _lastRun = ScopeTests.Where(t => t.LastReport.HasValue).Select(t => t.LastReport).DefaultIfEmpty(null).Max();
         // проверка, в которой не было ни одной коллизии, не тревожит: беспокоиться о ней нечего (14.10.2026)
+        _blockFirstRun = _reports.GroupBy(r => r.Block ?? "").ToDictionary(g => g.Key, g => g.Min(r => r.ReportDate).ToString("yyyy-MM-dd"));
         _missing = RunCheck.Missing(_tests.Where(t => t.Counts.Total > 0), t => t.Criticality, t => t.Block, t => t.LastReport, _reports.Select(r => (r.Criticality, r.Block, r.ReportDate)));
         _base = _criticalities.Count == 0 ? new List<ClashRow>() : Store.Clashes(Id, _filter);
         Recompute();
@@ -600,11 +602,29 @@
                         @if (t.Block != "") { <span class="tag">@t.Block</span> }
                         <b>@t.Name</b>
                         <span class="muted">— нет в прогоне @Fmt.Day(run); последний отчёт @(t.LastReport.HasValue ? Fmt.Day(t.LastReport.Value) : "—"), активных @t.Counts.Active</span>
+                        @{ var appeared = NewTestsIn(t.Block, run, t.LastReport); }
+                        @if (appeared.Count > 0)
+                        {
+                            <div class="small">В этом прогоне блока появились: @string.Join("; ", appeared.Select(n => "«" + n + "»")). Если одна из них — эта же проверка, переименованная, её коллизии посчитаны дважды: верните прежнее название в Navisworks.</div>
+                        }
                     </li>
                 }
             </ul>
         </details>
     };
+
+    /// <summary>
+    /// Проверки, впервые попавшие в прогон блока (день), — если пропавшая проверка была в прошлом прогоне блока (lastReport):
+    /// может быть, одна из них — она же, переименованная. Пропала раньше — к этому прогону не относится.
+    /// </summary>
+    private List<string> NewTestsIn(string block, DateTime run, DateTime? lastReport)
+    {
+        if (!_blockFirstRun.TryGetValue(block ?? "", out var first) || run.ToString("yyyy-MM-dd") == first) return new List<string>();
+        var previous = _reports.Where(r => r.Block == block && r.ReportDate.Date < run.Date).Select(r => r.ReportDate.Date).DefaultIfEmpty().Max();
+        if (lastReport?.Date != previous) return new List<string>();
+        var ids = _reports.Where(r => r.Block == block && r.ReportDate.Date == run.Date).SelectMany(r => r.NewTestIds).ToHashSet();
+        return _tests.Where(t => ids.Contains(t.Id)).Select(t => t.Name).ToList();
+    }
 
     /// <summary>В заголовке группы «блок → дата» (видно и в свёрнутой): сколько проверок без отчёта в прогоне; block null — не по блокам.</summary>
     private RenderFragment MissingMark(string block, DateTime? day) => __builder =>
@@ -615,15 +635,27 @@
         <span class="group-missing" title="Проверки без отчёта в последнем прогоне блока — выгружайте все, даже пустые">⚠ нет отчёта: @n</span>
     };
 
-    /// <summary>Что принесли отчёты группы (дата внутри блока — это прогон).</summary>
-    private RenderFragment SumDelta(IEnumerable<ReportRow> reports) => __builder =>
+    /// <summary>
+    /// Что принесли отчёты группы (дата внутри блока — это прогон); previous — отчёты прошлого прогона блока (null — это
+    /// первый прогон): проверки, которых в нём не было, и пропавшие из него.
+    /// </summary>
+    private RenderFragment SumDelta(IEnumerable<ReportRow> reports, IEnumerable<ReportRow> previous) => __builder =>
     {
         var list = reports.ToList();
         var sum = new RunDelta();
         foreach (var r in list) sum.Add(r.Delta);
-        // «первая проверка» — если все отчёты прогона с коллизиями — первые для своих проверок
+        // «первая проверка» — первый прогон блока, если все отчёты с коллизиями — первые для своих проверок
         var withClashes = list.Where(r => r.Results > 0).ToList();
-        var first = withClashes.Count > 0 && withClashes.All(r => r.FirstRun);
+        var first = previous == null && withClashes.Count > 0 && withClashes.All(r => r.FirstRun);
+        if (previous != null)
+        {
+            var names = _tests.ToDictionary(t => t.Id, t => t.Name);
+            string Name(long id) => names.TryGetValue(id, out var n) ? n : "?";
+            sum.NewTests.AddRange(list.SelectMany(r => r.NewTestIds).Distinct().Select(Name));
+            sum.NewTestClashes = list.Sum(r => r.NewTestClashes);
+            var now = list.SelectMany(r => r.TestIds).ToHashSet();
+            sum.DroppedTests.AddRange(previous.SelectMany(r => r.TestIds).Distinct().Where(id => !now.Contains(id)).Select(Name));
+        }
         <Delta Value="sum" FirstRun="first" Unchanged="!first && withClashes.Count > 0" />
     };
 
@@ -736,6 +768,15 @@
     {
         var day = _view.RunDate;
         if (day == "all") return false;
+        if (kind == "tests")
+        {
+            // коллизии проверок, впервые попавших в прогон (не в первый прогон блока): активные, но не «новые»
+            if (c.TestFirstRun == null || c.FirstSeen.ToString("yyyy-MM-dd") != c.TestFirstRun) return false;
+            if (!_blockFirstRun.TryGetValue(c.Block ?? "", out var blockFirst) || string.CompareOrdinal(c.TestFirstRun, blockFirst) <= 0) return false;
+            if (day != "last") return c.TestFirstRun == day;
+            var test = _tests.FirstOrDefault(t => t.Id == c.TestId);
+            return test?.LastReport != null && test.LastReport.Value.ToString("yyyy-MM-dd") == c.TestFirstRun;
+        }
         if (day == "last")
             return kind switch { "new" => c.NewInLastRun, "fixed" => c.FixedInLastRun, _ => c.ReturnedInLastRun };
         return kind switch
@@ -750,6 +791,9 @@
     private int RunCount(string kind) => _runBase.Count(c => RunIs(c, kind));
 
     private List<ClashRow> _runBase = new();
+
+    /// <summary>Первый прогон (день «yyyy-MM-dd») каждого блока — по отчётам.</summary>
+    private Dictionary<string, string> _blockFirstRun = new();
 
     private RenderFragment RunChip(string kind, string title, string prefix) => __builder =>
     {

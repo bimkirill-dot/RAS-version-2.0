@@ -44,6 +44,24 @@ public sealed class ClashStore
                     p.LastRun.Fixed = r.GetInt32(2);
                     p.LastRun.Returned = r.GetInt32(3);
                 }
+        // проверки, впервые попавшие в последний прогон своего блока (у блока были прогоны и раньше): их коллизии — не «новые»
+        using (var r = Query(c, """
+            WITH firsts AS (
+                SELECT t.Id, t.ProjectId, t.Block, t.Name, MIN(substr(rp.ReportDate, 1, 10)) AS First
+                FROM Tests t JOIN ReportTests rt ON rt.TestId = t.Id JOIN Reports rp ON rp.Id = rt.ReportId GROUP BY t.Id),
+            blocks AS (
+                SELECT ProjectId, Block, MIN(substr(ReportDate, 1, 10)) AS First, MAX(substr(ReportDate, 1, 10)) AS Last
+                FROM Reports GROUP BY ProjectId, Block)
+            SELECT f.ProjectId, f.Block, f.Name, (SELECT COUNT(*) FROM Clashes cl WHERE cl.TestId = f.Id AND substr(cl.FirstSeen, 1, 10) = f.First)
+            FROM firsts f JOIN blocks b ON b.ProjectId = f.ProjectId AND b.Block = f.Block
+            WHERE f.First = b.Last AND b.First < b.Last
+            """))
+            while (r.Read())
+                if (byId.TryGetValue(r.GetInt64(0), out var p))
+                {
+                    p.LastRun.NewTests.Add((r.GetString(1) == "" ? "" : r.GetString(1) + " · ") + r.GetString(2));
+                    p.LastRun.NewTestClashes += r.GetInt32(3);
+                }
         return list;
     }
 
@@ -181,6 +199,25 @@ public sealed class ClashStore
             """, ("$p", projectId)))
             while (f.Read())
                 if (byId.TryGetValue(f.GetInt64(0), out var x)) x.FirstRun = true;
+        // проверки отчёта; первый ли это отчёт проверки (по дню) и сколько в нём её коллизий
+        using (var t = Query(c, """
+            SELECT rt.ReportId, rt.TestId,
+                   NOT EXISTS(SELECT 1 FROM ReportTests r2 JOIN Reports p2 ON p2.Id = r2.ReportId
+                              WHERE r2.TestId = rt.TestId AND substr(p2.ReportDate, 1, 10) < substr(rp.ReportDate, 1, 10)),
+                   (SELECT COUNT(DISTINCT o.ClashId) FROM Occurrences o JOIN Clashes cl ON cl.Id = o.ClashId
+                    WHERE o.ReportId = rt.ReportId AND cl.TestId = rt.TestId)
+            FROM ReportTests rt JOIN Reports rp ON rp.Id = rt.ReportId WHERE rp.ProjectId = $p
+            """, ("$p", projectId)))
+            while (t.Read())
+                if (byId.TryGetValue(t.GetInt64(0), out var x))
+                {
+                    x.TestIds.Add(t.GetInt64(1));
+                    if (t.GetInt64(2) != 0)
+                    {
+                        x.NewTestIds.Add(t.GetInt64(1));
+                        x.NewTestClashes += t.GetInt32(3);
+                    }
+                }
         return list;
     }
 

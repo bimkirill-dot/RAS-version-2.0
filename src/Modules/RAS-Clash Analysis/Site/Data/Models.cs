@@ -44,13 +44,25 @@ public sealed class RunDelta
     public int New { get; set; }
     public int Fixed { get; set; }
     public int Returned { get; set; }
-    public bool Any => New + Fixed + Returned > 0;
+    /// <summary>
+    /// Проверки, впервые попавшие в прогон (не в первый прогон блока): их коллизии — активные, но не «новые» — их просто
+    /// впервые проверили (14.10.2026). Без них счёт «активных было − исправлено + новые» не сходился.
+    /// </summary>
+    public List<string> NewTests { get; } = new List<string>();
+    /// <summary>Сколько коллизий в этих проверках.</summary>
+    public int NewTestClashes { get; set; }
+    /// <summary>Проверки прошлого прогона блока, которых в этом прогоне нет.</summary>
+    public List<string> DroppedTests { get; } = new List<string>();
+    public bool Any => New + Fixed + Returned > 0 || NewTests.Count > 0 || DroppedTests.Count > 0;
 
     public void Add(RunDelta d)
     {
         New += d.New;
         Fixed += d.Fixed;
         Returned += d.Returned;
+        NewTests.AddRange(d.NewTests);
+        NewTestClashes += d.NewTestClashes;
+        DroppedTests.AddRange(d.DroppedTests);
     }
 }
 
@@ -98,6 +110,11 @@ public sealed class ReportRow
     public RunDelta Delta { get; } = new RunDelta();
     /// <summary>Первый прогон его проверки: раньше отчётов по ней не было — «первая проверка», а не «новые».</summary>
     public bool FirstRun { get; set; }
+    /// <summary>Проверки в отчёте (ReportTests).</summary>
+    public List<long> TestIds { get; } = new List<long>();
+    /// <summary>Проверки, для которых это первый отчёт, и сколько в нём их коллизий.</summary>
+    public List<long> NewTestIds { get; } = new List<long>();
+    public int NewTestClashes { get; set; }
 }
 
 public sealed class ElementView
