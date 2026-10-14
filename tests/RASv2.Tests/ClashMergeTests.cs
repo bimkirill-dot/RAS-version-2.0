@@ -16,11 +16,12 @@ namespace RASv2.Tests
         private const string Test = "АР Стены/МЕР Трубы";
 
         /// <summary>Результат Navisworks: пара элементов AR #a и VK #b (номер Navisworks — guid, на узнавание не влияет).</summary>
-        private static ClashResult Result(long a, long b, NavisworksStatus status = NavisworksStatus.New, string guid = null, bool swap = false)
+        private static ClashResult Result(long a, long b, NavisworksStatus status = NavisworksStatus.New, string guid = null, bool swap = false,
+            string modelA = "AR.nwc", string modelB = "VK.nwc")
         {
             var r = new ClashResult { Name = "Конфликт" + a, Guid = guid ?? Guid.NewGuid().ToString(), Status = status };
-            var ea = new ClashElement { ModelFile = "AR.nwc", ElementId = a };
-            var eb = new ClashElement { ModelFile = "VK.nwc", ElementId = b };
+            var ea = new ClashElement { ModelFile = modelA, ElementId = a };
+            var eb = new ClashElement { ModelFile = modelB, ElementId = b };
             r.Elements.Add(swap ? eb : ea);
             r.Elements.Add(swap ? ea : eb);
             return r;
@@ -51,6 +52,23 @@ namespace RASv2.Tests
                 var steps = ReportMerge.Plan(Test, new KnownClash[0], new[] { Result(1, 2), Result(1, 2), Result(1, 2, swap: true), Result(3, 4) });
                 Check(steps.Count == 2, "коллизий: " + steps.Count);
                 Check(Step(steps, 1, 2).Points == 3 && Step(steps, 3, 4).Points == 1, "точек: " + Step(steps, 1, 2).Points);
+            });
+            yield return Case("файл модели переименован — та же коллизия, не «исправлена + новая» (14.10.2026)", () =>
+            {
+                var steps = ReportMerge.Plan(Test, new[] { Known(1, 2, ClashState.Active), Known(3, 4, ClashState.Accepted) },
+                    new[] { Result(1, 2, modelB: "VK_BIM_Alma.nwc"), Result(3, 4, modelA: "AR с отверстиями.nwc") });
+                Check(steps.Count == 2 && steps.All(s => s.Action == MergeAction.Again), "узнаны: " + string.Join(", ", steps.Select(s => s.Action)));
+                Check(Step(steps, 3, 4).NewState == ClashState.Accepted, "«Допущена» сохранилась");
+            });
+            yield return Case("одинаковые номера у разных моделей в одном отчёте — разные коллизии", () =>
+            {
+                var results = new[] { Result(1, 2), Result(1, 2, modelA: "KR.nwc"), Result(1, 2, swap: true), Result(5, 6) };
+                var keys = ClashRules.IdentityKeys(Test, results);
+                Check(keys[0] != keys[1], "AR и KR с одинаковыми номерами — разные");
+                Check(keys[0] == keys[2], "та же пара в другом порядке — одна");
+                Check(keys[0].StartsWith("pair:", StringComparison.Ordinal) && keys[3].StartsWith("ids:", StringComparison.Ordinal), "ключи: " + string.Join(" ", keys));
+                var steps = ReportMerge.Plan(Test, new KnownClash[0], results);
+                Check(steps.Count == 3, "коллизий: " + steps.Count);
             });
             yield return Case("элементы поменялись местами — та же коллизия; номер Navisworks сменился — тоже", () =>
             {

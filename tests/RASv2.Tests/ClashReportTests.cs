@@ -185,16 +185,16 @@ namespace RASv2.Tests
                 Check(Error("<exchange units=\"m\"></exchange>")?.Contains("не отчёт Navisworks") == true, "без проверок");
                 Check(Error("<exchange><clashtest")?.Contains("не читается как XML") == true, "обрыв файла");
             });
-            yield return Case("«личность»: проверка + пара «файл + номер», порядок не важен; номер Navisworks — только без пары", () =>
+            yield return Case("«личность»: проверка + номера двух элементов, порядок не важен; номер Navisworks — только без пары", () =>
             {
                 var t = Parse(Extended).Tests[0];
                 var withGuid = ClashRules.IdentityKey(t.Name, t.Results[0]);
-                Check(withGuid.StartsWith("pair:", StringComparison.Ordinal), "с guid и полной парой — по паре: " + withGuid);
+                Check(withGuid.StartsWith("ids:", StringComparison.Ordinal), "с guid и полной парой — по номерам: " + withGuid);
                 var partial = new ClashResult { Guid = "g" };
                 partial.Elements.Add(new ClashElement { ModelFile = "AR.nwc" });
                 Check(ClashRules.IdentityKey(t.Name, partial) == "guid:g", "пара неполная — по guid");
                 var noGuid = ClashRules.IdentityKey(t.Name, t.Results[1]);
-                Check(noGuid == "pair:ар стены/мер трубы|ar#101|vk#202", "без guid: " + noGuid);
+                Check(noGuid == "ids:ар стены/мер трубы|101|202", "без guid: " + noGuid);
                 var swapped = new ClashResult();
                 swapped.Elements.Add(t.Results[1].Elements[1]);
                 swapped.Elements.Add(t.Results[1].Elements[0]);

@@ -21,13 +21,41 @@ namespace RASv2.ClashAnalysis.Reports
     public static class ClashRules
     {
         /// <summary>
-        /// «Личность» коллизии — одна через все прогоны: проверка + пара элементов «файл модели + номер» (порядок элементов
-        /// не важен), как у автора статьи. Несколько результатов Navisworks на одну пару — одна коллизия; номер Navisworks
-        /// не важен: он меняется, если проверку пересоздали или собрали новый файл Navisworks.
+        /// «Личность» коллизии — одна через все прогоны: проверка + номера двух элементов (порядок элементов не важен), как у
+        /// автора статьи. Несколько результатов Navisworks на одну пару — одна коллизия; номер Navisworks не важен: он
+        /// меняется, если проверку пересоздали или собрали новый файл Navisworks. Имя файла модели в «личность» не входит
+        /// (14.10.2026): модель переименовали («…_Р3_BIM_Alma.nwc» → «…_Р3.nwc») — коллизии те же, а не «исправлены и найдены
+        /// новые». Две разные модели с одинаковыми номерами в одном отчёте — <see cref="IdentityKeys"/>.
         /// Пара неполная (нет номера или файла у элемента) — номер Navisworks (guid), а без него — пара как есть.
         /// </summary>
         public static string IdentityKey(string testName, ClashResult result) =>
-            HasFullPair(result.Elements) || string.IsNullOrEmpty(result.Guid) ? PairKey(testName, result.Elements) : "guid:" + result.Guid;
+            HasFullPair(result.Elements) ? IdsKey(testName, result.Elements)
+            : string.IsNullOrEmpty(result.Guid) ? PairKey(testName, result.Elements) : "guid:" + result.Guid;
+
+        /// <summary>
+        /// «Личности» результатов одной проверки одного отчёта. Одинаковые номера элементов у разных пар моделей в одном
+        /// отчёте — разные коллизии (номер уникален только внутри своего файла): у них ключ с именами моделей (<see cref="PairKey"/>).
+        /// </summary>
+        public static List<string> IdentityKeys(string testName, IReadOnlyList<ClashResult> results)
+        {
+            var keys = results.Select(r => IdentityKey(testName, r)).ToList();
+            var byIds = Enumerable.Range(0, results.Count).Where(i => keys[i].StartsWith("ids:", StringComparison.Ordinal)).GroupBy(i => keys[i], StringComparer.Ordinal);
+            foreach (var g in byIds)
+            {
+                var pairs = g.Select(i => PairKey(testName, results[i].Elements)).ToList();
+                if (pairs.Distinct(StringComparer.Ordinal).Count() < 2) continue;
+                var n = 0;
+                foreach (var i in g) keys[i] = pairs[n++];
+            }
+            return keys;
+        }
+
+        /// <summary>Проверка + номера элементов, порядок элементов не важен.</summary>
+        public static string IdsKey(string testName, IEnumerable<ClashElement> elements)
+        {
+            var ids = elements.Select(e => e.ElementId?.ToString(CultureInfo.InvariantCulture) ?? "?").OrderBy(k => k, StringComparer.Ordinal);
+            return "ids:" + Simplify(testName) + "|" + string.Join("|", ids);
+        }
 
         /// <summary>Проверка + пара элементов «файл модели + номер», порядок элементов не важен.</summary>
         public static string PairKey(string testName, IEnumerable<ClashElement> elements)
@@ -43,7 +71,7 @@ namespace RASv2.ClashAnalysis.Reports
         public static bool HasFullPair(IReadOnlyCollection<ClashElement> elements) =>
             elements.Count > 0 && elements.All(e => e.ElementId.HasValue && !string.IsNullOrEmpty(e.ModelFile));
 
-        /// <summary>Элемент — «файл модели + номер»: номер уникален только внутри своего файла.</summary>
+        /// <summary>Элемент — «файл модели + номер»: номер уникален только внутри своего файла (запасной ключ — <see cref="IdentityKeys"/>).</summary>
         public static string ElementKey(ClashElement e) =>
             ModelName(e.ModelFile).ToLowerInvariant() + "#" + (e.ElementId?.ToString(CultureInfo.InvariantCulture) ?? "?");
 

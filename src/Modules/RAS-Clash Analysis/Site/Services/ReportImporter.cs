@@ -195,6 +195,7 @@ public sealed class ReportImporter
             ("$dr", report.DateFromReport ? 1 : 0), ("$u", report.Units ?? "m"), ("$i", now), ("$n", report.Tests.Sum(t => t.Results.Count)),
             ("$cr", place.Criticality), ("$bl", place.Block), ("$ds", dateSource));
 
+        var renamed = new SortedSet<(string Before, string After)>();
         foreach (var test in report.Tests)
         {
             // проверка — в своей критичности и своём блоке: «АР Стены/МЕР Трубы» в S1 и в S2 — разные проверки
@@ -279,8 +280,18 @@ public sealed class ReportImporter
             }
             // отчёт старше уже загруженных: коллизии, которых нет в следующих прогонах, исправлены к следующему после него
             if (!latest) ClashStore.RetimeFixes(c, tx, testId);
+            renamed.UnionWith(RenamedModels(c, tx, reportId, testId));
             if (latest)
                 Exec(c, tx, "UPDATE Tests SET LastReportId = $r, LastReportDate = $d WHERE Id = $id", ("$r", reportId), ("$d", reportDate), ("$id", testId));
+        }
+        if (renamed.Count > 0)
+        {
+            // коллизии узнаны по номерам элементов (ClashRules.IdentityKey), но имя файла модели должно быть постоянным —
+            // DECISIONS.md, «Имя файла модели — не часть коллизии»
+            var warning = "Модели названы иначе, чем в соседнем прогоне: " + string.Join(", ", renamed.Select(x => "здесь «" + x.After + "», в соседнем — «" + x.Before + "»"))
+                          + ". Коллизии узнаны по номерам элементов. Держите имена файлов моделей постоянными (регламент выгрузки).";
+            result.Warning = result.Warning == null ? warning : result.Warning + " " + warning;
+            _log.LogWarning("{File}: {Warning}", path, warning);
         }
         if (result.Warning != null)
             Exec(c, tx, "UPDATE Reports SET Warning = $w, Suspicious = $s WHERE Id = $id",
@@ -310,6 +321,34 @@ public sealed class ReportImporter
         var newId = Insert(c, tx, "INSERT INTO Tests(ProjectId, Criticality, Block, Name, LeftSet, RightSet) VALUES($p, $cr, $bl, $n, $l, $rs)",
             ("$p", projectId), ("$cr", place.Criticality), ("$bl", place.Block), ("$n", test.Name ?? ""), ("$l", test.LeftSet), ("$rs", test.RightSet));
         return (newId, null, null);
+    }
+
+    /// <summary>
+    /// Модели, названные в этом отчёте иначе, чем в соседнем прогоне той же проверки (предыдущем; у самого раннего — в
+    /// следующем): у той же коллизии тот же номер элемента, а файл модели другой.
+    /// </summary>
+    private static List<(string Before, string After)> RenamedModels(SqliteConnection c, SqliteTransaction tx, long reportId, long testId)
+    {
+        var list = new List<(string, string)>();
+        using var cmd = ClashStore.Command(c, """
+            SELECT DISTINCT pe.ModelFile, ne.ModelFile
+            FROM Occurrences n
+            JOIN Clashes cl ON cl.Id = n.ClashId AND cl.TestId = $t
+            JOIN Elements ne ON ne.OccurrenceId = n.Id
+            JOIN Reports rn ON rn.Id = n.ReportId
+            -- соседнее появление той же коллизии: предыдущий прогон, а у самого раннего отчёта — следующий
+            JOIN Occurrences p ON p.Id = COALESCE(
+                (SELECT o2.Id FROM Occurrences o2 JOIN Reports r2 ON r2.Id = o2.ReportId
+                 WHERE o2.ClashId = n.ClashId AND r2.ReportDate < rn.ReportDate ORDER BY r2.ReportDate DESC, o2.Id DESC LIMIT 1),
+                (SELECT o2.Id FROM Occurrences o2 JOIN Reports r2 ON r2.Id = o2.ReportId
+                 WHERE o2.ClashId = n.ClashId AND r2.ReportDate > rn.ReportDate ORDER BY r2.ReportDate, o2.Id LIMIT 1))
+            JOIN Elements pe ON pe.OccurrenceId = p.Id AND pe.ElementId = ne.ElementId
+            WHERE n.ReportId = $r AND pe.ModelFile IS NOT NULL AND ne.ModelFile IS NOT NULL AND pe.ModelFile <> ne.ModelFile COLLATE NOCASE
+            """, ("$t", testId), ("$r", reportId));
+        cmd.Transaction = tx;
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) list.Add((r.GetString(0), r.GetString(1)));
+        return list;
     }
 
     /// <summary>Известные коллизии проверки.</summary>

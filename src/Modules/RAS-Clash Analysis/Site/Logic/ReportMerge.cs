@@ -69,9 +69,11 @@ namespace RASv2.ClashAnalysis.Site.Logic
             var steps = new List<MergeStep>();
 
             // результаты одной пары — одна коллизия; порядок — как в отчёте
-            foreach (var group in results.GroupBy(r => ClashRules.IdentityKey(testName, r), StringComparer.Ordinal))
+            var list = results.ToList();
+            var keys = ClashRules.IdentityKeys(testName, list);
+            foreach (var group in Enumerable.Range(0, list.Count).GroupBy(i => keys[i], StringComparer.Ordinal))
             {
-                var all = group.ToList();
+                var all = group.Select(i => list[i]).ToList();
                 // «Исправлено» в Navisworks — этой точки в модели уже нет, хоть она и в отчёте; пара есть, пока есть хоть одна точка
                 var open = all.Where(r => r.Status != NavisworksStatus.Resolved).ToList();
                 var present = open.Count > 0;

@@ -232,6 +232,10 @@ public sealed class Database
         INSERT OR IGNORE INTO ReportTests(ReportId, TestId)
         SELECT LastReportId, Id FROM Tests WHERE LastReportId IS NOT NULL;
         """,
+
+        // 7 — 14.10.2026 (DECISIONS.md, «Имя файла модели — не часть коллизии»): «личность» — номера элементов без имени
+        // модели. Коллизии, разошедшиеся из-за переименованной модели, — склеить (MergeRenamed, C#)
+        "SELECT 1;",
     };
 
     /// <summary>
@@ -373,7 +377,108 @@ public sealed class Database
         [2] = FillPlaces,
         [5] = MergePairs,
         [6] = RetimeAllFixes,
+        [7] = MergeRenamed,
     };
+
+    /// <summary>
+    /// Шаг 7: имя файла модели больше не входит в «личность» коллизии (ClashRules.IdentityKey). Коллизии одной проверки с
+    /// одинаковыми номерами элементов, которые ни разу не встретились в одном отчёте, — одна коллизия под разными именами
+    /// модели («…_Р3_BIM_Alma.nwc» → «…_Р3.nwc»): склеиваются в самую раннюю. Ложные записи убираются: «Найдена» у более
+    /// поздней (её не нашли — её переименовали) и «Исправлена: нет в отчёте» там, где она была под другим именем. Статус —
+    /// последний по времени, но «Допущена» вручную не теряется. Встретились в одном отчёте — разные модели с одинаковыми
+    /// номерами: остаются разными, с ключом по именам моделей.
+    /// </summary>
+    private static void MergeRenamed(SqliteConnection c, SqliteTransaction tx)
+    {
+        var now = Time(DateTime.Now);
+        var tests = new List<(long Id, string Name)>();
+        using (var cmd = Cmd(c, tx, "SELECT Id, Name FROM Tests"))
+        using (var r = cmd.ExecuteReader())
+            while (r.Read()) tests.Add((r.GetInt64(0), r.GetString(1)));
+
+        foreach (var (testId, testName) in tests)
+        {
+            var clashes = new List<(long Id, string Key, int State, string First, string Last, int InLast, int Returns)>();
+            using (var cmd = Cmd(c, tx, "SELECT Id, IdentityKey, State, FirstSeen, LastSeen, InLastReport, ReturnCount FROM Clashes WHERE TestId = $t ORDER BY FirstSeen, Id", ("$t", testId)))
+            using (var r = cmd.ExecuteReader())
+                while (r.Read()) clashes.Add((r.GetInt64(0), r.GetString(1), r.GetInt32(2), r.GetString(3), r.GetString(4), r.GetInt32(5), r.GetInt32(6)));
+            var elements = new Dictionary<long, List<ClashElement>>();
+            using (var cmd = Cmd(c, tx, """
+                SELECT c.Id, e.ModelFile, e.ElementId FROM Clashes c JOIN Elements e ON e.OccurrenceId = c.LastOccurrenceId
+                WHERE c.TestId = $t ORDER BY c.Id, e.Idx
+                """, ("$t", testId)))
+            using (var r = cmd.ExecuteReader())
+                while (r.Read())
+                {
+                    if (!elements.TryGetValue(r.GetInt64(0), out var list)) elements[r.GetInt64(0)] = list = new List<ClashElement>();
+                    list.Add(new ClashElement { ModelFile = r.IsDBNull(1) ? null : r.GetString(1), ElementId = r.IsDBNull(2) ? null : r.GetInt64(2) });
+                }
+            var reports = new Dictionary<long, HashSet<long>>();
+            using (var cmd = Cmd(c, tx, "SELECT o.ClashId, o.ReportId FROM Occurrences o JOIN Clashes c ON c.Id = o.ClashId WHERE c.TestId = $t", ("$t", testId)))
+            using (var r = cmd.ExecuteReader())
+                while (r.Read())
+                {
+                    if (!reports.TryGetValue(r.GetInt64(0), out var set)) reports[r.GetInt64(0)] = set = new HashSet<long>();
+                    set.Add(r.GetInt64(1));
+                }
+
+            var groups = clashes.GroupBy(x => elements.TryGetValue(x.Id, out var els) && ClashRules.HasFullPair(els) ? ClashRules.IdsKey(testName, els) : x.Key,
+                StringComparer.Ordinal).ToList();
+            var rekey = new List<(long Id, string Key)>();
+            foreach (var g in groups)
+            {
+                if (!g.Key.StartsWith("ids:", StringComparison.Ordinal)) continue;
+                var all = g.ToList();
+                // встретились в одном отчёте — разные модели с одинаковыми номерами: остаются разными, ключ — с именами моделей
+                var sets = all.Select(x => reports.TryGetValue(x.Id, out var set) ? set : new HashSet<long>()).ToList();
+                var together = false;
+                for (var i = 0; i < sets.Count && !together; i++)
+                    for (var j = i + 1; j < sets.Count && !together; j++)
+                        together = sets[i].Overlaps(sets[j]);
+                if (together) continue;
+                var keep = all[0];
+                rekey.Add((keep.Id, g.Key));
+                if (all.Count == 1) continue;
+
+                var newest = all.OrderByDescending(x => x.Last, StringComparer.Ordinal).ThenByDescending(x => x.Id).First();
+                var state = (ClashState)newest.State;
+                if (state == ClashState.Active && all.Any(x => x.State == (int)ClashState.Accepted)) state = ClashState.Accepted;
+                var before = elements[keep.Id].Select(e => e.ModelFile).ToList();
+                var after = elements[newest.Id].Select(e => e.ModelFile).ToList();
+                var renamed = string.Join(", ", before.Except(after, StringComparer.OrdinalIgnoreCase)
+                    .Zip(after.Except(before, StringComparer.OrdinalIgnoreCase), (a, b) => "«" + a + "» → «" + b + "»"));
+                foreach (var other in all.Skip(1))
+                {
+                    Run(c, tx, "UPDATE Occurrences SET ClashId = $k WHERE ClashId = $c", ("$k", keep.Id), ("$c", other.Id));
+                    // её не нашли — её переименовали
+                    Run(c, tx, "DELETE FROM Events WHERE ClashId = $c AND Kind = 'found'", ("$c", other.Id));
+                    Run(c, tx, "UPDATE Events SET ClashId = $k WHERE ClashId = $c", ("$k", keep.Id), ("$c", other.Id));
+                    Run(c, tx, "DELETE FROM Clashes WHERE Id = $c", ("$c", other.Id));
+                }
+                // «нет в отчёте», а она в нём есть — под другим именем модели: не исправлялась
+                Run(c, tx, """
+                    DELETE FROM Events WHERE ClashId = $k AND Kind = 'gone' AND Text LIKE 'Исправлена: нет в%'
+                      AND ReportId IN (SELECT ReportId FROM Occurrences WHERE ClashId = $k)
+                    """, ("$k", keep.Id));
+                Run(c, tx, """
+                    UPDATE Clashes SET State = $s, FirstSeen = $f, LastSeen = $l, InLastReport = $in, ReturnCount = $rc,
+                        LastOccurrenceId = (SELECT o.Id FROM Occurrences o JOIN Reports r ON r.Id = o.ReportId WHERE o.ClashId = $id ORDER BY r.ReportDate DESC, o.Id DESC LIMIT 1)
+                    WHERE Id = $id
+                    """, ("$s", (int)state), ("$f", all.Min(x => x.First)), ("$l", all.Max(x => x.Last)), ("$in", all.Max(x => x.InLast)),
+                    ("$rc", all.Max(x => x.Returns)), ("$id", keep.Id));
+                Run(c, tx, """
+                    INSERT INTO Events(ClashId, Time, Kind, Text, OldState, NewState, Author, ReportId)
+                    VALUES($c, $t, 'status', $text, $old, $new, NULL, NULL)
+                    """, ("$c", keep.Id), ("$t", now),
+                    ("$text", "Та же коллизия под другим именем файла модели" + (renamed.Length > 0 ? " (" + renamed + ")" : "")
+                              + ": объединены, ложные «Найдена» и «Исправлена» убраны"),
+                    ("$old", keep.State == (int)state ? null : (object)keep.State), ("$new", keep.State == (int)state ? null : (object)(int)state));
+            }
+            // ключи — после удаления объединённых: UNIQUE(TestId, IdentityKey)
+            foreach (var (id, key) in rekey) Run(c, tx, "UPDATE Clashes SET IdentityKey = $k WHERE Id = $id", ("$k", key), ("$id", id));
+            ClashStore.RetimeFixes(c, tx, testId);
+        }
+    }
 
     /// <summary>Шаг 6: «Исправлена: нет в отчёте» у всех проверок — на следующий прогон после последнего появления.</summary>
     private static void RetimeAllFixes(SqliteConnection c, SqliteTransaction tx)
