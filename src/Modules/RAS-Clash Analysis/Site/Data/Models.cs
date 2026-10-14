@@ -32,6 +32,8 @@ public sealed class ProjectRow
     public string Folder { get; set; }
     public StateCounts Counts { get; } = new StateCounts();
     public DateTime? LastReport { get; set; }
+    /// <summary>Сколько было прогонов (дней отчётов): один — «первая проверка».</summary>
+    public int Runs { get; set; }
     /// <summary>Что принёс последний прогон каждой проверки проекта (DECISIONS.md, «Что принёс прогон — везде»).</summary>
     public RunDelta LastRun { get; } = new RunDelta();
 }

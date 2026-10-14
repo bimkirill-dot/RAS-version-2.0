@@ -23,9 +23,13 @@ public sealed class ClashStore
         using (var r = Query(c, "SELECT ProjectId, State, COUNT(*) FROM Clashes GROUP BY ProjectId, State"))
             while (r.Read())
                 if (byId.TryGetValue(r.GetInt64(0), out var p)) p.Counts.Add((ClashState)r.GetInt32(1), r.GetInt32(2));
-        using (var r = Query(c, "SELECT ProjectId, MAX(ReportDate) FROM Reports GROUP BY ProjectId"))
+        using (var r = Query(c, "SELECT ProjectId, MAX(ReportDate), COUNT(DISTINCT substr(ReportDate, 1, 10)) FROM Reports GROUP BY ProjectId"))
             while (r.Read())
-                if (byId.TryGetValue(r.GetInt64(0), out var p) && !r.IsDBNull(1)) p.LastReport = Database.Time(r.GetString(1));
+                if (byId.TryGetValue(r.GetInt64(0), out var p))
+                {
+                    if (!r.IsDBNull(1)) p.LastReport = Database.Time(r.GetString(1));
+                    p.Runs = r.GetInt32(2);
+                }
         using (var r = Query(c, """
             SELECT c.ProjectId,
                    COALESCE(SUM(c.FirstSeen = t.LastReportDate AND substr(t.LastReportDate, 1, 10) > (SELECT substr(MIN(c0.FirstSeen), 1, 10) FROM Clashes c0 WHERE c0.TestId = t.Id)), 0),

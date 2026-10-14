@@ -596,7 +596,9 @@ table.clashes tbody tr.selected { background: var(--row-selected); }
 .pc-num b { font-size: 22px; line-height: 1.1; }
 .pc-num.soft b { opacity: .75; }
 .pc-num span { font-size: 12px; color: var(--muted); }
-.pc-progress { display: flex; align-items: center; gap: 10px; }
+/* карточки проекта одной высоты: строки — на одних местах, полоса «исправлено» — всегда внизу */
+.proj-card { display: flex; flex-direction: column; }
+.pc-progress { display: flex; align-items: center; gap: 10px; margin-top: auto; }
 .pc-progress .kpi-bar { flex: 1; margin: 0; }
 
 /* карточка коллизии */
