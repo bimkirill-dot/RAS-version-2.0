@@ -1,13 +1,15 @@
 @inherits LayoutComponentBase
 
 <header class="top">
-    @* знак RAS — тёмно-синяя плашка с узкими высокими буквами, как логотип прежнего плагина (вариант А, 13.10.2026; без подписи) *@
+    @* без знака компании — продукт для любой компании (14.10.2026): «Clash Analysis · Менеджер коллизий» *@
     <a class="brand" href="/" title="Проекты">
-        <span class="ras-plate">RAS</span>
         <span class="brand-name">Clash Analysis</span>
+        <span class="brand-dot" aria-hidden="true">·</span>
+        <span class="brand-sub">Менеджер коллизий</span>
     </a>
     @* тема — без связи с сайтом (обычный обработчик): работает и пока страница подключается *@
-    <button class="theme-toggle" onclick="ras.toggleTheme()" title="Светлая / тёмная тема">◐</button>
+    <a class="theme-toggle head-btn" href="settings" title="Настройки сайта">⚙</a>
+    <button class="theme-toggle head-btn" onclick="ras.toggleTheme()" title="Светлая / тёмная тема">◐</button>
 </header>
 
 <main>

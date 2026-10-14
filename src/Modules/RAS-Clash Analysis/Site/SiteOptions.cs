@@ -24,8 +24,15 @@ public sealed class SiteOptions
     /// <summary>Папка сайта на этом компьютере: программа («Программа»), данные, settings.json.</summary>
     public static string DefaultFolder => Path.Combine(RasPaths.Local, ModuleFolder, "Site");
 
-    /// <summary>Свои настройки сайта (тот же вид, что appsettings.json); обновление сайта их не трогает.</summary>
-    public static string LocalSettingsFile => Path.Combine(DefaultFolder, "settings.json");
+    /// <summary>
+    /// Свои настройки сайта (тот же вид, что appsettings.json; страница «Настройки») — рядом с данными этого сайта:
+    /// обычно %LocalAppData%\RAS_v_2.0\RAS-Clash Analysis\Site\settings.json; обновление сайта их не трогает.
+    /// Папку данных сам settings.json не задаёт (её задают appsettings.json или переменная Site__DataFolder).
+    /// </summary>
+    public static string SettingsFileFor(string dataFolder) =>
+        Path.Combine(string.IsNullOrWhiteSpace(dataFolder) ? DefaultFolder : Environment.ExpandEnvironmentVariables(dataFolder), "settings.json");
+
+    public string SettingsFile => SettingsFileFor(DataFolder);
 
     public string Data => string.IsNullOrWhiteSpace(DataFolder)
         ? DefaultFolder

@@ -1,0 +1,127 @@
+@page "/settings"
+@inject SiteSettings Cfg
+@inject SiteOptions Options
+@inject BackupService Backup
+
+<PageTitle>Настройки · Clash Analysis</PageTitle>
+
+@* Настройки окружения — то, что у компании своё: куда копировать базу, как часто проверять папки, адрес сайта
+   (DECISIONS.md модуля, «Настройки сайта»). Хранятся в своём settings.json сайта; обновление сайта их не трогает. *@
+<div class="settings-page">
+    <nav class="crumbs"><a href="/">Проекты</a> <span class="sep">/</span></nav>
+    <h1>Настройки</h1>
+
+    <section class="set-block">
+        <h2>Копии базы</h2>
+        <label class="set-row">
+            <span class="set-label">Папка на сервере</span>
+            <span class="set-field">
+                <input class="wide" @bind="_v.BackupFolder" @bind:event="oninput" placeholder="@Cfg.DefaultBackupFolder" />
+                <small class="muted">Пусто — по умолчанию: <span class="path">@Cfg.DefaultBackupFolder</span></small>
+            </span>
+        </label>
+        <div class="set-row">
+            <span class="set-label"></span>
+            <span class="set-field set-inline">
+                <button class="btn small" @onclick="Check">Проверить запись</button>
+                @if (_check != null) { <span class="@(_checkOk ? "notice" : "error")">@_check</span> }
+                else if (Backup.LastError != null) { <span class="error">@Backup.LastError</span> }
+                else if (Backup.LastServerCopy.HasValue) { <span class="muted">Последняя копия на сервере — @Fmt.Date(Backup.LastServerCopy)</span> }
+                else { <span class="muted">Копия — через 2 минуты после запуска сайта, потом каждый час</span> }
+            </span>
+        </div>
+        <label class="set-row">
+            <span class="set-label">Хранить</span>
+            <span class="set-field set-inline">
+                <input class="num" type="number" min="1" max="1000" @bind="_v.HourlyBackups" /> часовых
+                <input class="num" type="number" min="1" max="1000" @bind="_v.NightlyBackups" /> ночных
+            </span>
+        </label>
+    </section>
+
+    <section class="set-block">
+        <h2>Папки проектов</h2>
+        <label class="set-row">
+            <span class="set-label">Проверять новые отчёты</span>
+            <span class="set-field set-inline">
+                каждые <input class="num" type="number" min="0" max="1440" @bind="_v.ScanMinutes" /> мин
+                <small class="muted">0 — только кнопкой «Проверить папки сейчас»</small>
+            </span>
+        </label>
+    </section>
+
+    <section class="set-block">
+        <h2>Адрес сайта</h2>
+        <label class="set-row">
+            <span class="set-label">Порт</span>
+            <span class="set-field set-inline"><input class="num" type="number" min="1024" max="65535" @bind="_v.Port" /></span>
+        </label>
+        <label class="set-row">
+            <span class="set-label"></span>
+            <span class="set-field set-inline">
+                <input type="checkbox" @bind="_v.Network" /> Доступен коллегам по сети
+                <small class="muted">— по адресу <span class="path">http://@Environment.MachineName.ToLowerInvariant():@_v.Port</span>; может понадобиться разрешение в брандмауэре Windows</small>
+            </span>
+        </label>
+        @if (_v.Port != Cfg.RunningPort || _v.Network != Cfg.RunningNetwork)
+        {
+            <p class="warn small">Порт и доступ по сети вступят в силу после перезапуска сайта (site.cmd stop, затем site.cmd start).</p>
+        }
+    </section>
+
+    <section class="set-block">
+        <h2>О сайте</h2>
+        <dl class="facts">
+            <dt>База</dt><dd class="path">@Options.DatabaseFile</dd>
+            <dt>Журнал</dt><dd class="path">@Options.LogsFolder</dd>
+            <dt>Настройки</dt><dd class="path">@Options.SettingsFile</dd>
+            <dt>Версия программы</dt><dd>@AppVersion.Tag</dd>
+        </dl>
+    </section>
+
+    <div class="actions set-actions">
+        @if (_error != null) { <span class="error">@_error</span> }
+        @if (_saved != null) { <span class="notice">@_saved</span> }
+        <span class="spacer"></span>
+        <button class="btn" @onclick="Reset">Отменить изменения</button>
+        <button class="btn primary" @onclick="Save">Сохранить</button>
+    </div>
+</div>
+
+@code {
+    private SiteSettingsValues _v = new();
+    private string _error, _saved, _check;
+    private bool _checkOk;
+
+    protected override void OnInitialized() => Reset();
+
+    private void Reset()
+    {
+        _v = Cfg.Current();
+        _error = _saved = _check = null;
+    }
+
+    private void Save()
+    {
+        _saved = _check = null;
+        _error = SiteSettings.Validate(_v);
+        if (_error != null) return;
+        try
+        {
+            var restart = Cfg.Save(_v);
+            _saved = restart ? "Сохранено. Порт и доступ по сети — после перезапуска сайта." : "Сохранено.";
+        }
+        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+        {
+            _error = "Не сохранено: " + ex.Message;
+        }
+    }
+
+    private void Check()
+    {
+        var folder = string.IsNullOrWhiteSpace(_v.BackupFolder) ? Cfg.DefaultBackupFolder : Environment.ExpandEnvironmentVariables(_v.BackupFolder.Trim().Trim('"'));
+        var problem = SiteSettings.CheckFolder(folder);
+        _checkOk = problem == null;
+        _check = problem == null ? "✓ В папку можно писать" : "✗ Нельзя писать: " + problem;
+    }
+}

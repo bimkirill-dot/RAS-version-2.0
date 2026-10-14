@@ -83,12 +83,26 @@ header.top {
 }
 .brand { display: inline-flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; }
 .brand:hover { text-decoration: none; }
-/* знак: узкие высокие буквы — Bahnschrift (есть в каждой Windows), без него — Arial Narrow */
-.ras-plate {
-    font-family: Bahnschrift, "Arial Narrow", sans-serif; font-stretch: condensed; font-weight: 700; font-size: 21px; line-height: 1;
-    letter-spacing: .5px; color: #fff; background: var(--brand); padding: 5px 9px 4px; border-radius: 6px;
-}
-.brand-name { font-weight: 600; font-size: 17px; letter-spacing: .1px; }
+/* шапка: «Clash Analysis · Менеджер коллизий» — без знака компании */
+.brand { gap: 8px; }
+.brand-name { font-weight: 700; font-size: 17px; letter-spacing: .1px; }
+.brand-dot { color: var(--muted); font-weight: 700; }
+.brand-sub { color: var(--muted); font-size: 15px; }
+/* кнопки шапки справа: ⚙ и ◐ */
+.head-btn { display: inline-grid; place-items: center; text-decoration: none; }
+.head-btn:hover { text-decoration: none; border-color: var(--accent); color: var(--text); }
+a.head-btn + .head-btn { margin-left: 8px; }
+/* страница «Настройки» */
+.settings-page { max-width: 860px; }
+.set-block { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px 18px 14px; margin: 0 0 14px; }
+.set-block h2 { font-size: 16px; }
+.set-row { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 12px; align-items: center; margin: 8px 0; color: var(--text); font-size: 14px; }
+.set-label { color: var(--muted); }
+.set-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.set-field.set-inline { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; }
+.set-field input.wide { width: 100%; }
+.set-field input.num { width: 90px; }
+.set-actions { position: sticky; bottom: 0; padding: 10px 0; background: var(--bg); }
 /* под названием проекта: последний прогон, отчёты, папка — со значками */
 .ph-meta { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); font-size: 13px; }
 .ph-meta span { display: inline-flex; align-items: center; gap: 6px; }

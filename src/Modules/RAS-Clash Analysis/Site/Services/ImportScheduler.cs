@@ -16,12 +16,17 @@ public sealed class ImportScheduler : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stop)
     {
-        if (_options.ScanMinutes <= 0) return;
         try
         {
             await Task.Delay(TimeSpan.FromSeconds(10), stop);
             while (!stop.IsCancellationRequested)
             {
+                // 0 — только по кнопке; значение меняется на странице «Настройки» — проверяем раз в минуту, не включили ли
+                if (_options.ScanMinutes <= 0)
+                {
+                    await Task.Delay(TimeSpan.FromMinutes(1), stop);
+                    continue;
+                }
                 try
                 {
                     await _importer.ScanAsync();
@@ -30,7 +35,7 @@ public sealed class ImportScheduler : BackgroundService
                 {
                     _log.LogError(ex, "Проверка папок проектов не удалась");
                 }
-                await Task.Delay(TimeSpan.FromMinutes(_options.ScanMinutes), stop);
+                await Task.Delay(TimeSpan.FromMinutes(Math.Max(_options.ScanMinutes, 1)), stop);
             }
         }
         catch (OperationCanceledException)

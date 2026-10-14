@@ -14,7 +14,7 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 });
 
 // свои настройки — в папке данных (settings.json): appsettings.json рядом с программой заменяется при каждом обновлении
-builder.Configuration.AddJsonFile(SiteOptions.LocalSettingsFile, optional: true, reloadOnChange: false);
+builder.Configuration.AddJsonFile(SiteOptions.SettingsFileFor(builder.Configuration["Site:DataFolder"]), optional: true, reloadOnChange: false);
 builder.Configuration.AddEnvironmentVariables();
 var options = builder.Configuration.GetSection("Site").Get<SiteOptions>() ?? new SiteOptions();
 builder.Services.AddSingleton(options);
@@ -24,6 +24,7 @@ builder.Services.AddSingleton<Database>();
 builder.Services.AddSingleton<ClashStore>();
 builder.Services.AddSingleton<ReportImporter>();
 builder.Services.AddSingleton<ProjectRemoval>();
+builder.Services.AddSingleton<SiteSettings>();
 builder.Services.AddSingleton<BackupService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<BackupService>());
 builder.Services.AddHostedService<ImportScheduler>();
