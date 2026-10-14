@@ -23,7 +23,6 @@ namespace RASv2.ClashAnalysis.Site.Logic
     {
         public const string Level = "level";
         public const string Category = "category";
-        public const string Discipline = "discipline";
         public const string Report = "report";
         public const string State = "state";
 
@@ -31,13 +30,12 @@ namespace RASv2.ClashAnalysis.Site.Logic
         public const string NotInLastReport = "out";
 
         /// <summary>Поля на странице; «Отчёт» убран (решение разработчика 09.10.2026) — проверки его остались.</summary>
-        public static readonly string[] All = { Level, Discipline, State };
+        public static readonly string[] All = { Level, State };
 
         public static string Title(string facet) => facet switch
         {
             Level => "Уровень",
             Category => "Категория",
-            Discipline => "Раздел",
             Report => "Отчёт",
             State => "Статус",
             _ => facet,
@@ -55,13 +53,6 @@ namespace RASv2.ClashAnalysis.Site.Logic
                 case Category:
                     foreach (var e in Elements(c))
                         if (!string.IsNullOrEmpty(e.Category)) yield return (e.Category, e.Category);
-                    break;
-                case Discipline:
-                    foreach (var e in Elements(c))
-                    {
-                        var d = ClashRules.Discipline(e.ModelFile);
-                        if (d != null) yield return (d, d);
-                    }
                     break;
                 case Report:
                     yield return c.InLastReport ? (InLastReport, "Есть в последнем отчёте") : (NotInLastReport, "Нет в последнем отчёте");
@@ -138,15 +129,8 @@ namespace RASv2.ClashAnalysis.Site.Logic
             if (c.B != null) yield return c.B;
         }
 
-        /// <summary>Статусы по ходу работы: активная, ждёт проверки, исправлена, допущена.</summary>
-        private static int StateOrder(string key) => key == "0" ? 0 : key == "3" ? 1 : key == "1" ? 2 : 3;
-
-        /// <summary>Раздел коллизии парой — «АР-ОВ» (у двух элементов; один раздел — «КЖ»); не определён — null.</summary>
-        public static string DisciplinePair(ClashRow c)
-        {
-            var list = Elements(c).Select(e => ClashRules.Discipline(e.ModelFile)).Where(d => d != null).Distinct().ToList();
-            return list.Count == 0 ? null : string.Join("-", list);
-        }
+        /// <summary>Статусы по ходу работы: активная, исправлена, допущена.</summary>
+        private static int StateOrder(string key) => key == "0" ? 0 : key == "1" ? 1 : 2;
 
         private static double LevelOrder(string key)
         {

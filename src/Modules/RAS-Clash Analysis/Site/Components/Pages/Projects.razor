@@ -20,7 +20,7 @@
 }
 else
 {
-    @* карточки проектов: активные по критичности, ждут проверки, исправлено % — для показа руководству *@
+    @* карточки проектов: активные, исправлены, исправлено % — для показа руководству *@
     <div class="proj-grid">
         @foreach (var p in _projects)
         {
@@ -33,19 +33,7 @@ else
                     <div class="pc-run small" title="Что принёс последний прогон каждой проверки">Последний прогон: <Delta Value="p.LastRun" /></div>
                 }
                 <div class="pc-nums">
-                    @* столбцы — критичности этого проекта (без критичности — один «активные»): у карточек нет пустых «0» *@
-                    @{ var crits = CritsOf(p); }
-                    @if (crits.Count == 0)
-                    {
-                        <div class="pc-num k-active"><b>@p.Counts.Active</b><span>активные</span></div>
-                    }
-                    @foreach (var cr in crits)
-                    {
-                        <div class="pc-num k-active @(cr == "Высокая" ? "" : "soft")">
-                            <b>@(p.ActiveByCriticality.TryGetValue(cr, out var n) ? n : 0)</b>
-                            <span>@(cr == "" ? "активные" : cr.ToLowerInvariant() + " крит.")</span>
-                        </div>
-                    }
+                    <div class="pc-num k-active"><b>@p.Counts.Active</b><span>активные</span></div>
                     <div class="pc-num k-fixed"><b>@p.Counts.Fixed</b><span>исправлены</span></div>
                 </div>
                 <div class="pc-progress" title="Исправлено из всех, кроме допущенных">
@@ -91,7 +79,7 @@ else
             <input @bind="_name" placeholder="Арман Кала" />
         </label>
         <p class="muted small">
-            Внутри папки проекта сайт сам разберёт даты прогонов, критичность («Высокая…», «Средняя…»), блоки (S1, S2…) и найдёт все отчёты XML.
+            Внутри папки проекта сайт сам найдёт все отчёты XML, разберёт даты прогонов и блоки (S1, S2…).
         </p>
         <div class="actions">
             <button class="btn primary" @onclick="Create">Добавить и загрузить отчёты</button>
@@ -135,13 +123,6 @@ else
     {
         var all = p.Counts.Active + p.Counts.Fixed;
         return all == 0 ? 0 : (int)Math.Round(100.0 * p.Counts.Fixed / all);
-    }
-
-    /// <summary>Критичности проекта по порядку; только «без критичности» — пусто (один столбец «активные»).</summary>
-    private static List<string> CritsOf(ProjectRow p)
-    {
-        var all = p.ActiveByCriticality.Keys.ToList();
-        return all.Count == 0 || (all.Count == 1 && all[0] == "") ? new List<string>() : all.OrderBy(ReportPath.CriticalityOrder).ToList();
     }
 
     private void Load()

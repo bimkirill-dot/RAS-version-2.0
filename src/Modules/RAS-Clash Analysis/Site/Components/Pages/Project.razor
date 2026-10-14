@@ -32,7 +32,7 @@
         {
             @* итоги всего проекта — крупными цифрами (для показа руководству); от отборов не зависят *@
             var k = Kpi;
-            <div class="kpis" title="Весь проект: все критичности, блоки и проверки" data-caption="по всему проекту">
+            <div class="kpis" title="Весь проект: все блоки и проверки" data-caption="по всему проекту">
                 <div class="kpi k-active"><div class="v">@k.Active</div><div class="l">Активные</div></div>
                 <div class="kpi k-fixed"><div class="v">@k.Fixed</div><div class="l">Исправлены</div></div>
                 <div class="kpi k-accepted"><div class="v">@k.Accepted</div><div class="l">Допущены</div></div>
@@ -49,24 +49,12 @@
         <p class="muted">Отчётов ещё нет — «Отчёты» на боковой панели, «Проверить папку сейчас».</p>
     }
 
-    @* строка отборов: критичность, дата, раздел, уровень, статус, поиск (блок и тип проверки — на боковой панели).
+    @* строка отборов: дата, уровень, статус, поиск (блок и тип проверки — на боковой панели; критичность и раздел убраны 14.10.2026 —
+       продукт для любой компании: не зависит от того, как компания называет папки и модели).
        Видна во всех разделах, и в «Проекте»: пропадала — страница будто уезжала вверх *@
     @if (_criticalities.Count > 0)
     {
         <div class="ribbon sub-ribbon">
-            @if (ShowAllCriticalities)
-            {
-                <label class="dd crit-dd @CriticalityClass(_filter.Criticality) @(_view.Tab == 3 ? "off" : "")">
-                    <span>Критичность</span>
-                    <select value="@(_filter.Criticality == null ? "*" : _filter.Criticality == "" ? "-" : _filter.Criticality)" @onchange="OnCriticalityChanged">
-                        @foreach (var cr in _criticalities)
-                        {
-                            <option value="@(cr == "" ? "-" : cr)">@(cr == "" ? "Без критичности" : cr) (@ActiveIn(cr, null, null))</option>
-                        }
-                        <option value="*">Все (@ActiveIn(null, null, null))</option>
-                    </select>
-                </label>
-            }
             @* на «Отчётах» и «Проекте» отборы списка не действуют — приглушены (строка остаётся, чтобы страница не прыгала) *@
             <div class="ribbon-list @(_view.Tab == 0 ? "" : "off")">
             <label class="dd" title="За какой прогон: последний (что сейчас), любой прошлый или все">
@@ -80,7 +68,6 @@
                     <option value="all">Все даты</option>
                 </select>
             </label>
-            <FacetMenu Title="Раздел" Values="_facetValues[ClashFacets.Discipline]" Selected="FacetSet(ClashFacets.Discipline)" Changed="Recompute" />
             <FacetMenu Title="Уровень" Values="_facetValues[ClashFacets.Level]" Selected="FacetSet(ClashFacets.Level)" Changed="Recompute" />
             <FacetMenu Title="Статус" Values="_facetValues[ClashFacets.State]" Selected="FacetSet(ClashFacets.State)" Changed="Recompute" />
             @if (FilterIsSet)
@@ -90,7 +77,7 @@
             </div>
             @if (_view.Tab != 0)
             {
-                <span class="off-note" title="Остальные отборы — для списка коллизий">@(_view.Tab == 2 ? "Здесь — только критичность" : "Отборы — для списка коллизий")</span>
+                <span class="off-note" title="Остальные отборы — для списка коллизий">Отборы — для списка коллизий</span>
             }
             @* поиск — справа (просьба разработчика 13.10.2026) *@
             <input class="search @(_view.Tab == 0 ? "" : "off")" type="search" placeholder="Поиск: номер элемента, тип, имя…" value="@_filter.Search" @oninput="OnSearch" />
@@ -242,7 +229,6 @@
                                         </th>
                                         @SortHeader("date", "Дата", "Последний прогон, где была коллизия", "c-date opt")
                                         @SortHeader("test", "Проверка", null, "c-test")
-                                        @SortHeader("disc", "Раздел", null, "c-disc opt")
                                         @SortHeader("what", "Что с чем", "Элементы коллизии: тип А × тип Б; имя Navisworks — в подсказке", "c-what")
                                         @if (HasDistance) { @SortHeader("dist", "Расстояние", "Глубина пересечения, мм", "c-dist opt") }
                                         @if (HasGrid) { @SortHeader("grid", "Оси", "Расположение по осям", "c-grid opt") }
@@ -391,7 +377,7 @@
                                             {
                                                 <tr class="missing-row">
                                                     <td colspan="5">
-                                                        ⚠ Нет отчёта: <b>@t.Name</b>@(_filter.Criticality == null && t.Criticality != "" ? " (" + t.Criticality.ToLowerInvariant() + ")" : "")
+                                                        ⚠ Нет отчёта: <b>@t.Name</b>
                                                         <span class="muted">— последний @(t.LastReport.HasValue ? Fmt.Day(t.LastReport.Value) : "—"), активных по нему @t.Counts.Active</span>
                                                     </td>
                                                 </tr>
@@ -532,7 +518,7 @@
     private bool HasDistance => _base.Any(c => c.Distance.HasValue);
     private bool HasGrid => _base.Any(c => !string.IsNullOrEmpty(c.GridLocation));
     /// <summary>Столбцов в таблице (для строки группы).</summary>
-    private int ColumnCount => 8 + (HasDistance ? 1 : 0) + (HasGrid ? 1 : 0);
+    private int ColumnCount => 7 + (HasDistance ? 1 : 0) + (HasGrid ? 1 : 0);
 
     /// <summary>Подсказка «что с чем»: полностью, с номерами элементов и именем Navisworks.</summary>
     private static string WhatTitle(ClashRow x) =>
@@ -542,17 +528,6 @@
                                                                       && (_filter.Block == null || r.Block == _filter.Block));
     /// <summary>Блок у строки — когда выбрана вся критичность, а блоков несколько.</summary>
     private bool ShowBlock => _filter.Block == null && BlocksOf(_filter.Criticality).Count > 1;
-
-    private string ScopeTitle
-    {
-        get
-        {
-            var parts = new List<string> { _filter.Criticality == null ? "Все критичности" : CriticalityTitle(_filter.Criticality) };
-            if (!string.IsNullOrEmpty(_filter.Block)) parts.Add(_filter.Block);
-            if (_filter.TestType != null) parts.Add(_filter.TestType);
-            return string.Join(" › ", parts);
-        }
-    }
 
     protected override void OnParametersSet()
     {
@@ -581,8 +556,8 @@
         _criticalities = _tests.Select(t => t.Criticality).Distinct().OrderBy(ReportPath.CriticalityOrder).ToList();
         if (!_view.ScopeChosen || (_filter.Criticality != null && !_criticalities.Contains(_filter.Criticality)))
         {
-            // при открытии — первая критичность (высокая), все блоки
-            _filter.Criticality = _criticalities.FirstOrDefault();
+            // при открытии — все блоки и проверки (критичность в отборах больше не участвует — 14.10.2026)
+            _filter.Criticality = null;
             _filter.Block = null;
             _filter.TestType = null;
             _view.ScopeChosen = _criticalities.Count > 0;
@@ -622,7 +597,7 @@
                 {
                     <li>
                         @if (t.Block != "") { <span class="tag">@t.Block</span> }
-                        <b>@t.Name</b>@(t.Criticality != "" ? " · " + t.Criticality.ToLowerInvariant() : "")
+                        <b>@t.Name</b>
                         <span class="muted">— нет в прогоне @Fmt.Day(run); последний отчёт @(t.LastReport.HasValue ? Fmt.Day(t.LastReport.Value) : "—"), активных @t.Counts.Active</span>
                     </li>
                 }
@@ -699,7 +674,7 @@
             {
                 Key = "e:" + (g.Key ?? "—"),
                 Title = g.Key == null ? "Остальные — по одной коллизии на элемент" : Fmt.Short(g.Element),
-                Sub = g.Key == null ? null : "ID " + g.Element.ElementId + " · " + (ClashRules.Discipline(g.Element.ModelFile) ?? Fmt.Model(g.Element.ModelFile)),
+                Sub = g.Key == null ? null : "ID " + g.Element.ElementId,
                 SubTitle = g.Key == null ? null : Fmt.Element(g.Element) + " · " + g.Element.ModelFile,
                 Rows = g.Rows,
             }).ToList();
@@ -858,7 +833,6 @@
     /// <summary>Строка списка.</summary>
     private RenderFragment Row(ClashRow x) => __builder =>
     {
-        var disc = ClashFacets.DisciplinePair(x);
         <tr id="row-@x.Id" class="@(x.Id == _view.SelectedId ? "selected" : "") @(x.InLastReport ? "" : "gone")" @onclick="() => Select(x.Id)">
             <td class="sel" @onclick:stopPropagation="true">
                 <input type="checkbox" checked="@_selected.Contains(x.Id)" @onchange="e => Toggle(x.Id, e)" />
@@ -867,7 +841,6 @@
             <td class="cut" title="@(x.Type != x.TestName ? x.Type + " (в Navisworks: " + x.TestName + ")" : x.TestName)">
                 @if (ShowBlock) { <span class="tag">@x.Block</span> }@x.Type
             </td>
-            <td class="opt"><Disc Pair="@disc" /></td>
             @* что с чем пересекается — вместо «Конфликт4»: имя Navisworks — в подсказке и в карточке *@
             <td class="what" title="@WhatTitle(x)">
                 <div class="what-line">
@@ -891,12 +864,12 @@
     {
         static string Q(string v) => "\"" + (v ?? "").Replace("\"", "\"\"") + "\"";
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine(string.Join(";", new[] { "Дата", "Критичность", "Блок", "Тип проверки", "Проверка в Navisworks", "Раздел", "Имя", "Расстояние, мм", "Оси", "Уровень",
-            "Статус", "Повторы", "Возвращалась", "Элемент 1", "Номер 1", "Модель 1", "Элемент 2", "Номер 2", "Модель 2" }.Select(Q)));
+        sb.AppendLine(string.Join(";", new[] { "Дата", "Блок", "Тип проверки", "Проверка в Navisworks", "Имя", "Расстояние, мм", "Оси", "Уровень",
+            "Статус", "Прогонов", "Возвращалась", "Элемент 1", "Номер 1", "Модель 1", "Элемент 2", "Номер 2", "Модель 2" }.Select(Q)));
         foreach (var x in _clashes)
             sb.AppendLine(string.Join(";", new[]
             {
-                Fmt.Day(x.LastSeen), x.Criticality, x.Block, x.Type, x.TestName, ClashFacets.DisciplinePair(x), x.Name,
+                Fmt.Day(x.LastSeen), x.Block, x.Type, x.TestName, x.Name,
                 x.Distance.HasValue ? Fmt.MmAbs(x.Distance, x.Units).Replace(" мм", "") : "", x.GridLocation, Level(x),
                 Fmt.State(x.State), x.Repeats.ToString(), x.ReturnCount.ToString(),
                 Fmt.Element(x.A), x.A?.ElementId?.ToString(), Fmt.Model(x.A?.ModelFile),
@@ -998,15 +971,6 @@
         }
     }
 
-    /// <summary>«Все» на основной ленте — когда в папках есть критичность (иначе кнопка повторяла бы единственную).</summary>
-    private bool ShowAllCriticalities => _criticalities.Count > 1 || (_criticalities.Count == 1 && _criticalities[0] != "");
-
-    /// <summary>Другая критичность — тип проверки и блок «все».</summary>
-    private void OnCriticalityChanged(ChangeEventArgs e)
-    {
-        var v = e.Value?.ToString();
-        SetScope(v == "*" ? null : v == "-" ? "" : v, null, null);
-    }
 
     /// <summary>Выбор на боковой панели: список сразу сворачивается, выбранное видно под названием раздела (просьба разработчика 13.10.2026).</summary>
     private void PickBlock(string block)
@@ -1165,9 +1129,6 @@
         return root.Length > 0 && dir.StartsWith(root, StringComparison.OrdinalIgnoreCase) ? dir.Substring(root.Length).TrimStart('\\', '/') : dir;
     }
 
-    private static string CriticalityTitle(string c) => string.IsNullOrEmpty(c) ? "Все проверки" : ReportPath.CriticalityTitle(c);
-
-    private static string CriticalityClass(string c) => c == "Высокая" ? "crit-high" : c == "Средняя" ? "crit-mid" : "";
 
     // ───── поиск, сброс ─────
 
@@ -1223,7 +1184,6 @@
         {
             "date" => c => c.LastSeen,
             "test" => c => c.Type,
-            "disc" => c => ClashFacets.DisciplinePair(c) ?? "",
             "name" => c => NameNumber(c.Name),
             "what" => c => Fmt.Short(c.A) + " × " + Fmt.Short(c.B),
             "dist" => c => c.Distance.HasValue ? Math.Abs(c.Distance.Value) : -1,

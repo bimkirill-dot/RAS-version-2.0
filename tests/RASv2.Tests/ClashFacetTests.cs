@@ -27,14 +27,6 @@ namespace RASv2.Tests
 
         public static IEnumerable<KeyValuePair<string, Action>> All()
         {
-            yield return Case("раздел по имени модели: АР, ОВ, ВК, КЖ; блок и «М3» — не разделы", () =>
-            {
-                Check(ClashRules.Discipline("3457_01_01_S8_AR01_01_M3.nwc") == "АР", "АР");
-                Check(ClashRules.Discipline("3457_01_01_S8_OV01_01_М3.nwc") == "ОВ", "ОВ (русская М в «М3»)");
-                Check(ClashRules.Discipline("3457_01_01_S8_VK01_01_М3_отсоединено.nwc") == "ВК", "ВК с припиской");
-                Check(ClashRules.Discipline("0000_01_01_S08_KJ01_01_M3_с лестницей_BIM_Alma.nwc") == "КЖ", "КЖ с припиской");
-                Check(ClashRules.Discipline("Модель без кода.nwc") == null && ClashRules.Discipline(null) == null, "нет раздела");
-            });
             yield return Case("несколько значений одного поля — «или», разные поля — «и»", () =>
             {
                 var a = Row("1 Этаж", "1 Этаж", "Стены", "Трубы");
@@ -53,8 +45,6 @@ namespace RASv2.Tests
                 Check(levels.Count == 2, "значений: " + levels.Count);
                 Check(levels[0].Key == "5 этаж" && levels[0].Count == 3 && levels[0].Title == "5 Этаж", "5 этаж — 3 коллизии, самое частое написание");
                 Check(levels[1].Count == 1, "6 этаж — 1");
-                var disc = ClashFacets.Count(rows, ClashFacets.Discipline);
-                Check(disc.Count == 2 && disc.All(d => d.Count == 3), "разделы АР и ОВ — у всех трёх");
             });
             yield return Case("уровни — по номеру, остальное — по числу коллизий", () =>
             {

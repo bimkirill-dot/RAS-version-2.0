@@ -186,8 +186,6 @@ textarea { width: 100%; resize: vertical; }
 .dd select { min-width: 120px; max-width: 260px; font-size: 14px; }
 .sub-ribbon .search { flex: 1; min-width: 200px; max-width: 320px; margin-left: auto; }
 /* критичность — первым списком; высокая — красным, как на главной */
-.crit-dd select { font-weight: 600; }
-.crit-dd.crit-high select { color: var(--active); border-color: var(--active); }
 /* критичность — первым списком; высокая — красным, как на главной */
 
 /* боковая панель проекта */
@@ -384,7 +382,6 @@ td.what { overflow: hidden; }
 .list-title .run-strip { padding: 0; }
 .sort-mark { font-size: 10px; opacity: .55; margin-left: 2px; }
 th.sorted .sort-mark { opacity: 1; color: var(--accent); }
-.disc { display: inline-block; padding: 0 6px; border: 1px solid var(--line); border-radius: 4px; font-size: 11px; font-weight: 600; color: var(--muted); background: var(--bg); white-space: nowrap; }
 .dist { display: inline-block; padding: 0 6px; border: 1px solid var(--active); border-radius: 4px; font-size: 12px; color: var(--active); background: var(--active-bg); white-space: nowrap; }
 
 /* страницы */
@@ -565,12 +562,6 @@ table.clashes tbody tr.selected { background: var(--row-selected); }
 .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 
 /* разделы — цветные метки (цвета отделов палитры плагина) */
-.discs { display: inline-flex; gap: 3px; }
-.disc { border: none; color: #fff; font-weight: 600; padding: 1px 6px; border-radius: 4px; }
-.disc.d-ar { background: var(--d-ar); }
-.disc.d-kj { background: var(--d-kj); }
-.disc.d-ov { background: var(--d-ov); }
-.disc.d-other { background: var(--d-other); }
 
 /* страницы */
 .pager .btn { min-width: 30px; }

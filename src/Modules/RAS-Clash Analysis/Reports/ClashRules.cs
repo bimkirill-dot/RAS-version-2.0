@@ -47,31 +47,6 @@ namespace RASv2.ClashAnalysis.Reports
         public static string ElementKey(ClashElement e) =>
             ModelName(e.ModelFile).ToLowerInvariant() + "#" + (e.ElementId?.ToString(CultureInfo.InvariantCulture) ?? "?");
 
-        private static readonly Regex DisciplineCode = new Regex(@"(?:^|[_\-\s])([A-Za-z]{2,4})\d{1,3}(?=[_\-\s.]|$)", RegexOptions.CultureInvariant);
-
-        /// <summary>Коды разделов в именах моделей компании → как их называют люди.</summary>
-        private static readonly Dictionary<string, string> Disciplines = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["AR"] = "АР", ["KJ"] = "КЖ", ["KR"] = "КР", ["KM"] = "КМ", ["OV"] = "ОВ", ["VK"] = "ВК", ["EOM"] = "ЭОМ", ["EM"] = "ЭМ",
-            ["SS"] = "СС", ["TX"] = "ТХ", ["AUPT"] = "АУПТ", ["PT"] = "ПТ", ["GP"] = "ГП", ["TS"] = "ТС", ["HS"] = "ХС", ["AK"] = "АК",
-        };
-
-        /// <summary>
-        /// Раздел по имени модели: «3457_01_01_S8_AR01_01_M3.nwc» → «АР», «…_KJ01_01_M3_с лестницей…» → «КЖ»; блок («S8») — не раздел.
-        /// Берутся только известные коды (Disciplines): иначе «M3», «BIM» и прочее в имени выдавались бы за разделы. Не найден — null.
-        /// </summary>
-        public static string Discipline(string modelFile)
-        {
-            if (string.IsNullOrEmpty(modelFile)) return null;
-            foreach (Match m in DisciplineCode.Matches(ModelName(modelFile)))
-            {
-                var code = m.Groups[1].Value;
-                if (code.Equals("S", StringComparison.OrdinalIgnoreCase) || code.Length < 2) continue;
-                if (Disciplines.TryGetValue(code, out var ru)) return ru;
-            }
-            return null;
-        }
-
         /// <summary>Имя модели без расширения: «3457_01_01_S8_AR01_01_M3.nwc» → «3457_01_01_S8_AR01_01_M3».</summary>
         public static string ModelName(string modelFile)
         {

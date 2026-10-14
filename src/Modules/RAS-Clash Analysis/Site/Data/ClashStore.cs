@@ -23,12 +23,6 @@ public sealed class ClashStore
         using (var r = Query(c, "SELECT ProjectId, State, COUNT(*) FROM Clashes GROUP BY ProjectId, State"))
             while (r.Read())
                 if (byId.TryGetValue(r.GetInt64(0), out var p)) p.Counts.Add((ClashState)r.GetInt32(1), r.GetInt32(2));
-        using (var r = Query(c, """
-            SELECT c.ProjectId, t.Criticality, COUNT(*) FROM Clashes c JOIN Tests t ON t.Id = c.TestId
-            WHERE c.State = 0 GROUP BY c.ProjectId, t.Criticality
-            """))
-            while (r.Read())
-                if (byId.TryGetValue(r.GetInt64(0), out var p)) p.ActiveByCriticality[r.GetString(1)] = r.GetInt32(2);
         using (var r = Query(c, "SELECT ProjectId, MAX(ReportDate) FROM Reports GROUP BY ProjectId"))
             while (r.Read())
                 if (byId.TryGetValue(r.GetInt64(0), out var p) && !r.IsDBNull(1)) p.LastReport = Database.Time(r.GetString(1));

@@ -39,7 +39,6 @@
                         var e = _card.Last.Elements[i];
                         if (i > 0) { <span class="x">×</span> }
                         <span class="w">@Fmt.Short(e)</span>
-                        <Disc Pair="@ClashRules.Discipline(e.ModelFile)" />
                     }
                     <span class="muted"> · @Level</span>
                 </div>
@@ -96,7 +95,6 @@
         {
             var e = _card.Last.Elements[i];
             var key = i;
-            var disc = ClashRules.Discipline(e.ModelFile);
             <div class="obj">
                 <div class="obj-title">Объект @(i == 0 ? "А" : "Б")</div>
                 <div class="obj-id">
@@ -111,7 +109,6 @@
                     {
                         <span class="muted">без номера</span>
                     }
-                    <Disc Pair="@disc" />
                     @if (_copied == key) { <span class="small notice">скопировано</span> }
                 </div>
                 <div class="obj-path">@string.Join(" → ", new[] { e.Category, e.Family, e.Type }.Where(x => !string.IsNullOrEmpty(x)))</div>
@@ -190,7 +187,6 @@
             {
                 new("Проверка", _card.Type, _card.Type != _card.TestName ? "В Navisworks: " + _card.TestName : null),
                 new("Блок", _card.Block == "" ? "—" : _card.Block),
-                new("Критичность", _card.Criticality == "" ? "—" : _card.Criticality),
                 new("Дата", Fmt.Day(_card.LastSeen), "Впервые — " + Fmt.Day(_card.FirstSeen)),
                 new("Встречалась", Fmt.Plural(Repeats, "раз", "раза", "раз") + ((l?.Points ?? 1) > 1 ? " · " + Fmt.Plural(l.Points, "точка", "точки", "точек") : ""),
                     (l?.Points ?? 1) > 1 ? "Navisworks нашёл несколько точек касания этих же элементов — это одна коллизия" : null),

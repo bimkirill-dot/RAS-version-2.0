@@ -31,8 +31,6 @@ public sealed class ProjectRow
     public string Name { get; set; }
     public string Folder { get; set; }
     public StateCounts Counts { get; } = new StateCounts();
-    /// <summary>Активные по критичности («Высокая» → 12); "" — без критичности.</summary>
-    public Dictionary<string, int> ActiveByCriticality { get; } = new Dictionary<string, int>();
     public DateTime? LastReport { get; set; }
     /// <summary>Что принёс последний прогон каждой проверки проекта (DECISIONS.md, «Что принёс прогон — везде»).</summary>
     public RunDelta LastRun { get; } = new RunDelta();
@@ -166,7 +164,7 @@ public sealed class ClashFilter
     /// </summary>
     public string TestType { get; set; }
     public ClashState? State { get; set; }
-    /// <summary>Выбранные значения полей (Logic.ClashFacets.Level / Category / Discipline / Report → ключи значений).</summary>
+    /// <summary>Выбранные значения полей (Logic.ClashFacets.Level / Category / Report / State → ключи значений).</summary>
     public Dictionary<string, HashSet<string>> Facets { get; } = new Dictionary<string, HashSet<string>>();
     /// <summary>Номер элемента, имя, тип, семейство, файл модели, имя коллизии — без учёта регистра.</summary>
     public string Search { get; set; }
