@@ -103,6 +103,20 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .set-field input.wide { width: 100%; }
 .set-field input.num { width: 90px; }
 .set-actions { position: sticky; bottom: 0; padding: 10px 0; background: var(--bg); }
+.set-path { flex-wrap: nowrap; }
+.set-path input.wide { flex: 1; min-width: 0; }
+/* выбор папки на странице */
+.folder-dialog { max-width: 720px; display: flex; flex-direction: column; gap: 8px; }
+.fp-path { display: flex; gap: 8px; }
+.fp-path input { flex: 1; min-width: 0; }
+.fp-bar { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.fp-list { height: 300px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 4px; background: var(--bg); }
+.fp-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 8px; border: none; border-radius: 6px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.fp-item:hover { background: var(--row-hover); }
+.fp-item svg { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--muted); stroke-width: 1.4; }
+.fp-msg { padding: 10px; }
+.folder-dialog .dialog-buttons { flex-wrap: nowrap; }
+.fp-current { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* под названием проекта: последний прогон, отчёты, папка — со значками */
 .ph-meta { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); font-size: 13px; }
 .ph-meta span { display: inline-flex; align-items: center; gap: 6px; }

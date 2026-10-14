@@ -1,0 +1,115 @@
+@* Выбор папки прямо на странице: окно Windows «Выбор папки» сайт открыть не может — оно появилось бы на машине сайта,
+   а не у человека в браузере. Показывается то, что видит сайт (ему и писать в эту папку): диски, вложенные папки,
+   переход по вставленному пути (в том числе сетевому \\сервер\папка). Только папки, файлы не показываются. *@
+@if (Open)
+{
+    <div class="dialog-back">
+        <div class="dialog folder-dialog" role="dialog" aria-modal="true">
+            <h2>@Title</h2>
+            <div class="fp-path">
+                <input @bind="_typed" @bind:event="oninput" @onkeydown="PathKey" placeholder="Путь к папке, например \\сервер\папка" />
+                <button class="btn small" @onclick="() => Go(_typed)">Перейти</button>
+            </div>
+            <div class="fp-bar">
+                <button class="btn small" disabled="@(Parent == null)" @onclick="() => Go(Parent)" title="На уровень выше">↑ Наверх</button>
+                @foreach (var (title, path) in Shortcuts)
+                {
+                    <button class="btn link small" @onclick="() => Go(path)" title="@path">@title</button>
+                }
+            </div>
+            <div class="fp-list">
+                @if (_error != null)
+                {
+                    <div class="error fp-msg">@_error</div>
+                }
+                else if (_folders.Count == 0)
+                {
+                    <div class="muted fp-msg">Вложенных папок нет</div>
+                }
+                @foreach (var f in _folders)
+                {
+                    var path = f;
+                    <button class="fp-item" @onclick="() => Go(path)" title="@path">
+                        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 4.5a1 1 0 0 1 1-1h3.5l1.5 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z" /></svg>
+                        <span>@(string.IsNullOrEmpty(System.IO.Path.GetFileName(path)) ? path : System.IO.Path.GetFileName(path))</span>
+                    </button>
+                }
+            </div>
+            <div class="actions dialog-buttons">
+                <span class="path fp-current">@(_current ?? "—")</span>
+                <span class="spacer"></span>
+                <button class="btn" @onclick="Cancel">Отмена</button>
+                <button class="btn primary" disabled="@(_current == null || _error != null)" @onclick="Choose">Выбрать эту папку</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public string Title { get; set; } = "Выбор папки";
+    /// <summary>С какой папки начать; её нет — с ближайшей существующей выше.</summary>
+    [Parameter] public string Start { get; set; }
+    /// <summary>Быстрые переходы: подпись → путь (например, «Папка плагина на сервере»).</summary>
+    [Parameter] public IReadOnlyList<(string Title, string Path)> Extra { get; set; } = Array.Empty<(string, string)>();
+    [Parameter] public EventCallback<string> Chosen { get; set; }
+
+    private string _current, _typed, _error;
+    private List<string> _folders = new();
+    private bool _wasOpen;
+
+    private string Parent => _current == null ? null : System.IO.Path.GetDirectoryName(_current.TrimEnd('\\', '/'));
+
+    /// <summary>Диски этого компьютера и быстрые переходы.</summary>
+    private IEnumerable<(string Title, string Path)> Shortcuts =>
+        Extra.Concat(DriveInfo.GetDrives().Where(d => d.IsReady).Select(d => (d.Name.TrimEnd('\\'), d.Name)));
+
+    protected override void OnParametersSet()
+    {
+        if (Open && !_wasOpen) Go(NearestExisting(Start));
+        _wasOpen = Open;
+    }
+
+    private static string NearestExisting(string path)
+    {
+        var p = (path ?? "").Trim().Trim('"');
+        while (!string.IsNullOrEmpty(p))
+        {
+            try { if (Directory.Exists(p)) return p; } catch { /* недоступно — выше */ }
+            p = System.IO.Path.GetDirectoryName(p.TrimEnd('\\', '/'));
+        }
+        return DriveInfo.GetDrives().FirstOrDefault(d => d.IsReady)?.Name;
+    }
+
+    private void Go(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return;
+        path = Environment.ExpandEnvironmentVariables(path.Trim().Trim('"'));
+        _current = path;
+        _typed = path;
+        _error = null;
+        try
+        {
+            _folders = Directory.GetDirectories(path).OrderBy(f => f, StringComparer.CurrentCultureIgnoreCase).ToList();
+        }
+        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is ArgumentException || ex is NotSupportedException)
+        {
+            _folders = new List<string>();
+            _error = Directory.Exists(path) ? "Нет доступа к папке: " + ex.Message : "Папка не найдена или недоступна: " + path;
+        }
+    }
+
+    private void PathKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") Go(_typed);
+    }
+
+    private async Task Choose()
+    {
+        await Chosen.InvokeAsync(_current);
+        await OpenChanged.InvokeAsync(false);
+    }
+
+    private Task Cancel() => OpenChanged.InvokeAsync(false);
+}

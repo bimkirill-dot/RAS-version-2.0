@@ -13,13 +13,16 @@
 
     <section class="set-block">
         <h2>Копии базы</h2>
-        <label class="set-row">
+        @* в поле — фактическая папка; по умолчанию — папка плагина на сервере (там, где он установлен) *@
+        <div class="set-row">
             <span class="set-label">Папка на сервере</span>
-            <span class="set-field">
-                <input class="wide" @bind="_v.BackupFolder" @bind:event="oninput" placeholder="@Cfg.DefaultBackupFolder" />
-                <small class="muted">Пусто — по умолчанию: <span class="path">@Cfg.DefaultBackupFolder</span></small>
+            <span class="set-field set-inline set-path">
+                <input class="wide" @bind="_v.BackupFolder" @bind:event="oninput" />
+                <button class="btn" @onclick="() => _pick = true">Обзор…</button>
             </span>
-        </label>
+        </div>
+        <FolderPicker @bind-Open="_pick" Title="Папка копий базы" Start="@_v.BackupFolder"
+                      Extra="@(new[] { ("Папка плагина на сервере", Cfg.DefaultBackupFolder) })" Chosen="@(p => { _v.BackupFolder = p; _check = null; })" />
         <div class="set-row">
             <span class="set-label"></span>
             <span class="set-field set-inline">
@@ -91,7 +94,7 @@
 @code {
     private SiteSettingsValues _v = new();
     private string _error, _saved, _check;
-    private bool _checkOk;
+    private bool _checkOk, _pick;
 
     protected override void OnInitialized() => Reset();
 
@@ -119,7 +122,8 @@
 
     private void Check()
     {
-        var folder = string.IsNullOrWhiteSpace(_v.BackupFolder) ? Cfg.DefaultBackupFolder : Environment.ExpandEnvironmentVariables(_v.BackupFolder.Trim().Trim('"'));
+        var folder = Environment.ExpandEnvironmentVariables((_v.BackupFolder ?? "").Trim().Trim('"'));
+        if (folder.Length == 0) { _checkOk = false; _check = "✗ Укажите папку"; return; }
         var problem = SiteSettings.CheckFolder(folder);
         _checkOk = problem == null;
         _check = problem == null ? "✓ В папку можно писать" : "✗ Нельзя писать: " + problem;

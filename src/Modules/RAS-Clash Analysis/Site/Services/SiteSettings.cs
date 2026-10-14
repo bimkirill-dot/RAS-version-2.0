@@ -53,7 +53,8 @@ public sealed class SiteSettings
         var (port, network) = ParseUrls(ReadFile()?["Urls"]?.GetValue<string>() ?? _config["Urls"]);
         return new SiteSettingsValues
         {
-            BackupFolder = _options.BackupFolder ?? "",
+            // в поле — фактическая папка: своя или по умолчанию (папка плагина на сервере)
+            BackupFolder = string.IsNullOrWhiteSpace(_options.BackupFolder) ? DefaultBackupFolder : _options.BackupFolder,
             HourlyBackups = _options.HourlyBackups,
             NightlyBackups = _options.NightlyBackups,
             ScanMinutes = _options.ScanMinutes,
@@ -69,8 +70,8 @@ public sealed class SiteSettings
         if (v.HourlyBackups < 1 || v.HourlyBackups > 1000) return "Часовых копий: от 1 до 1000.";
         if (v.NightlyBackups < 1 || v.NightlyBackups > 1000) return "Ночных копий: от 1 до 1000.";
         if (v.Port < 1024 || v.Port > 65535) return "Порт: от 1024 до 65535.";
-        if (!string.IsNullOrWhiteSpace(v.BackupFolder) && v.BackupFolder.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
-            return "В пути папки копий недопустимые знаки.";
+        if (string.IsNullOrWhiteSpace(v.BackupFolder)) return "Укажите папку копий базы.";
+        if (v.BackupFolder.IndexOfAny(Path.GetInvalidPathChars()) >= 0) return "В пути папки копий недопустимые знаки.";
         return null;
     }
 
@@ -79,7 +80,9 @@ public sealed class SiteSettings
     {
         var root = ReadFile() ?? new JsonObject();
         if (root["Site"] is not JsonObject site) root["Site"] = site = new JsonObject();
-        site["BackupFolder"] = (v.BackupFolder ?? "").Trim().Trim('"');
+        // папка по умолчанию запоминается как «по умолчанию» (пусто): тогда она следует за папкой плагина на сервере
+        var folder = (v.BackupFolder ?? "").Trim().Trim('"').TrimEnd('\\', '/');
+        site["BackupFolder"] = string.Equals(folder, DefaultBackupFolder.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase) ? "" : folder;
         site["HourlyBackups"] = v.HourlyBackups;
         site["NightlyBackups"] = v.NightlyBackups;
         site["ScanMinutes"] = v.ScanMinutes;
