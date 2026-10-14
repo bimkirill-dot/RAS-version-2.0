@@ -78,7 +78,7 @@ a:hover { text-decoration: underline; }
 
 /* шапка: знак и название, справа — тема */
 header.top {
-    display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 20px;
+    display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 24px; /* как у main: знак и заголовки страниц — на одной линии */
     background: var(--panel); border-bottom: 1px solid var(--line); box-shadow: var(--shadow);
 }
 .brand { display: inline-flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; }
@@ -611,6 +611,7 @@ table.facts2 { border-radius: 8px; overflow: hidden; }
     .side { max-height: 20vh; }
     .list { max-height: 60vh; }
     main { padding: 10px; }
+    header.top { padding: 0 10px; }
 }
 
 /* ошибка на странице и обрыв связи с сайтом */
