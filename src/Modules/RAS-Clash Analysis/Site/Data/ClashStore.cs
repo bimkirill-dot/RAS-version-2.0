@@ -593,15 +593,15 @@ public sealed class ClashStore
     /// Место проверки по её названию: ключ (TestCategories.Key) → категория, подкатегория ("" — без подкатегории) и цвет
     /// (подкатегории, а без него — категории; null — без цвета).
     /// </summary>
-    public Dictionary<string, (string Category, string Subcategory, string Color)> CategoryMap()
+    public Dictionary<string, (string Category, string Subcategory, string Color, string SubColor)> CategoryMap()
     {
         using var c = _db.Open();
-        var map = new Dictionary<string, (string, string, string)>(StringComparer.Ordinal);
+        var map = new Dictionary<string, (string, string, string, string)>(StringComparer.Ordinal);
         using var r = Query(c, """
-            SELECT t.Key, k.Name, COALESCE(s.Name, ''), COALESCE(s.Color, k.Color) FROM CategoryTests t JOIN Categories k ON k.Id = t.CategoryId
+            SELECT t.Key, k.Name, COALESCE(s.Name, ''), k.Color, s.Color FROM CategoryTests t JOIN Categories k ON k.Id = t.CategoryId
             LEFT JOIN Subcategories s ON s.Id = t.SubcategoryId
             """);
-        while (r.Read()) map[r.GetString(0)] = (r.GetString(1), r.GetString(2), Str(r, 3));
+        while (r.Read()) map[r.GetString(0)] = (r.GetString(1), r.GetString(2), Str(r, 3), Str(r, 4));
         return map;
     }
 

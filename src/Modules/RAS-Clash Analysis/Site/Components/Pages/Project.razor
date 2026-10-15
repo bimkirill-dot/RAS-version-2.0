@@ -297,7 +297,7 @@
                                         @if (HasGrid) { @SortHeader("grid", "Оси", "Расположение по осям", "c-grid opt") }
                                         @SortHeader("state", "Статус", null, "c-state")
                                         @SortHeader("comment", "Комментарий", "Последний комментарий к коллизии (сколько всего — после точки); элементы — в подсказке", "c-what")
-                                        @SortHeader("repeats", "Встречалась, раз", "В скольких прогонах коллизия была в отчётах — чем больше, тем дольше она висит", "c-rep opt")
+                                        @SortHeader("repeats", "Повторы", "В скольких прогонах коллизия была в отчётах — чем больше, тем дольше она висит", "c-rep opt")
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -476,7 +476,8 @@
                     <div class="list-title"><h2>Сводка</h2><span class="muted small">@ScopeTitle</span></div>
                     <ProjectSummary ProjectId="Id" Rows="_base" Tests="ScopeTests.ToList()" Reports="ScopeReports.ToList()"
                                     Missing="_missing.Count(m => InCriticality(m.Test) && (_filter.Block == null || m.Test.Block == _filter.Block))"
-                                    Outside="_outside" CategoryOf="CategoryOf" Categories="_categoryOrder" Colors="_groupColors" Drill="DrillFromSummary" />
+                                    Outside="_outside" CategoryOf="CategoryOf" SubOf="SubOf" Categories="_categoryOrder" SubOrder="_subOrder"
+                                    Category="@_filter.Category" Subcategory="@_filter.Subcategory" Colors="_groupColors" Drill="DrillFromSummary" />
                 </section>
             }
             else if (_view.Tab == 4)
@@ -1118,10 +1119,11 @@
     /// <summary>Строка списка.</summary>
     private RenderFragment Row(ClashRow x) => __builder =>
     {
-        var color = ColorOf(x.TestName);
-        @* цвет категории / подкатегории — тонкой полосой слева (DECISIONS.md, «Категории проверок»); выбранная строка — акцентом *@
-        <tr id="row-@x.Id" class="@(x.Id == _view.SelectedId ? "selected" : "") @(x.InLastReport ? "" : "gone") @(color != null ? "has-cat" : "")"
-            style="@(color != null ? $"--row-cat: var(--cat-{color})" : null)" @onclick="() => Select(x.Id)">
+        var (color, subColor) = ColorsOf(x.TestName);
+        @* цвета категории и подкатегории — полосами слева: шире — категория, уже — подкатегория (DECISIONS.md, «Категории проверок»);
+           выбранная строка — акцентом *@
+        <tr id="row-@x.Id" class="@(x.Id == _view.SelectedId ? "selected" : "") @(x.InLastReport ? "" : "gone") @(color != null ? "has-cat" : "") @(subColor != null ? "has-sub" : "")"
+            style="@RowColors(color, subColor)" title="@CategoryTitle(x.TestName)" @onclick="() => Select(x.Id)">
             <td class="sel" @onclick:stopPropagation="true">
                 <input type="checkbox" checked="@_selected.Contains(x.Id)" @onchange="e => Toggle(x.Id, e)" />
             </td>
@@ -1157,7 +1159,7 @@
         static string Q(string v) => "\"" + (v ?? "").Replace("\"", "\"\"") + "\"";
         var sb = new System.Text.StringBuilder();
         sb.AppendLine(string.Join(";", new[] { "Дата", "Блок", "Тип проверки", "Проверка в Navisworks", "Имя", "Расстояние, мм", "Оси", "Уровень",
-            "Статус", "Встречалась, раз", "Возвращалась", "Элемент 1", "Номер 1", "Модель 1", "Элемент 2", "Номер 2", "Модель 2", "Последний комментарий", "Комментариев" }.Select(Q)));
+            "Статус", "Повторы", "Возвращалась", "Элемент 1", "Номер 1", "Модель 1", "Элемент 2", "Номер 2", "Модель 2", "Последний комментарий", "Комментариев" }.Select(Q)));
         foreach (var x in _clashes)
             sb.AppendLine(string.Join(";", new[]
             {
@@ -1234,11 +1236,29 @@
     // ───── категории проверок (DECISIONS.md, «Категории проверок») ─────
 
     /// <summary>Категория проверки по названию (ключ — TestCategories.Key) → название категории; нет — "".</summary>
-    private Dictionary<string, (string Category, string Subcategory, string Color)> _categoryMap = new();
+    private Dictionary<string, (string Category, string Subcategory, string Color, string SubColor)> _categoryMap = new();
     /// <summary>Цвета в «Типе проверки»: категория → цвет, «категория\u001fподкатегория» → цвет (свой или категории).</summary>
     private Dictionary<string, string> _groupColors = new();
 
-    private string ColorOf(string testName) => _categoryMap.TryGetValue(TestCategories.Key(testName), out var c) ? c.Color : null;
+    /// <summary>
+    /// Цвета полос строки: категория и подкатегория. Нет цвета у категории — одна полоса подкатегории; одинаковые — одна.
+    /// </summary>
+    private (string Category, string Sub) ColorsOf(string testName)
+    {
+        if (!_categoryMap.TryGetValue(TestCategories.Key(testName), out var c)) return (null, null);
+        if (c.Color == null) return (c.SubColor, null);
+        return (c.Color, c.SubColor == c.Color ? null : c.SubColor);
+    }
+
+    private static string RowColors(string color, string sub) =>
+        color == null ? null : $"--row-cat: var(--cat-{color})" + (sub != null ? $"; --row-sub: var(--cat-{sub})" : "");
+
+    /// <summary>Подсказка строки: «Категория › Подкатегория».</summary>
+    private string CategoryTitle(string testName)
+    {
+        if (!_categoryMap.TryGetValue(TestCategories.Key(testName), out var c)) return null;
+        return c.Subcategory == "" ? c.Category : c.Category + " › " + c.Subcategory;
+    }
 
     private string GroupColor(string key) => key != null && _groupColors.TryGetValue(key, out var c) ? c : null;
     private List<string> _categoryOrder = new();
@@ -1414,7 +1434,7 @@
         if (d.ToReports) { Go(2); return; }
         if (d.ClashId.HasValue) { Nav.NavigateTo("clash/" + d.ClashId.Value); return; }
         Freeze();
-        if (d.SetCategory) { _filter.Category = d.Category; _filter.Subcategory = null; }
+        if (d.SetCategory) { _filter.Category = d.Category; _filter.Subcategory = d.Category == null ? null : d.Subcategory; }
         var block = d.SetBlock ? d.Block : _filter.Block;
         var type = d.TestType ?? (d.SetCategory ? null : _filter.TestType);
         if (d.TestType != null) { _filter.Category = null; _filter.Subcategory = null; }

@@ -123,6 +123,8 @@ public sealed class SummaryDrill
     public string Block { get; set; }
     public bool SetCategory { get; set; }
     public string Category { get; set; }
+    /// <summary>Подкатегория (с SetCategory); null — вся категория.</summary>
+    public string Subcategory { get; set; }
     public string TestType { get; set; }
     public string LevelKey { get; set; }
     public long? ClashId { get; set; }

@@ -18,8 +18,11 @@ namespace RASv2.ClashAnalysis.Site.Logic
         /// </summary>
         public static readonly (string Key, string Title)[] Colors =
         {
-            ("red", "красный"), ("orange", "оранжевый"), ("yellow", "жёлтый"), ("green", "зелёный"),
-            ("teal", "бирюзовый"), ("blue", "синий"), ("violet", "фиолетовый"), ("gray", "серый"),
+            // по кругу оттенков; прежние восемь ключей — без изменений (уже сохранены в базе)
+            ("red", "красный"), ("crimson", "малиновый"), ("pink", "розовый"), ("orange", "оранжевый"), ("amber", "янтарный"),
+            ("yellow", "жёлтый"), ("lime", "лаймовый"), ("olive", "оливковый"), ("green", "зелёный"), ("teal", "бирюзовый"),
+            ("cyan", "голубой"), ("blue", "синий"), ("navy", "тёмно-синий"), ("indigo", "индиго"), ("violet", "фиолетовый"),
+            ("brown", "коричневый"), ("graphite", "графит"), ("gray", "серый"),
         };
 
         public static bool IsColor(string key) => key != null && Array.Exists(Colors, c => c.Key == key);

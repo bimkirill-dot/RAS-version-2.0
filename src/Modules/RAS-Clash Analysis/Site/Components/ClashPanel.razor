@@ -188,7 +188,7 @@
                 new("Проверка", _card.Type, _card.Type != _card.TestName ? "В Navisworks: " + _card.TestName : null),
                 new("Блок", _card.Block == "" ? "—" : _card.Block),
                 new("Дата", Fmt.Day(_card.LastSeen), "Впервые — " + Fmt.Day(_card.FirstSeen)),
-                new("Встречалась", Fmt.Plural(Repeats, "раз", "раза", "раз") + ((l?.Points ?? 1) > 1 ? " · " + Fmt.Plural(l.Points, "точка", "точки", "точек") : ""),
+                new("Повторы", Fmt.Plural(Repeats, "раз", "раза", "раз") + ((l?.Points ?? 1) > 1 ? " · " + Fmt.Plural(l.Points, "точка", "точки", "точек") : ""),
                     (l?.Points ?? 1) > 1 ? "Navisworks нашёл несколько точек касания этих же элементов — это одна коллизия" : null),
             };
             if (l?.Distance != null) facts.Add(new("Расстояние", Fmt.MmAbs(l.Distance, _card.Units), null, true));

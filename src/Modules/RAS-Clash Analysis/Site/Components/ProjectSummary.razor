@@ -1,8 +1,10 @@
 @inject ClashStore Store
 
 @* Сводка проекта (DECISIONS.md модуля, «Сводка проекта»): лучшее из образца автора статьи и нашего наброска — плитки с изменением
-   к прошлому прогону, тренд стопкой, блоки × категории, прогресс категорий, этажи, проверки, «висят дольше всего», качество
-   данных, сравнение прогонов. Действуют отборы боковой панели (блок, тип проверки / категория). Всё нажимается — к коллизиям. *@
+   к прошлому прогону, тренд стопкой, блоки × категории, прогресс категорий, этажи, проверки, повторяющиеся, качество
+   данных, сравнение прогонов. Действуют отборы боковой панели (блок, тип проверки / категория). Всё нажимается — к коллизиям.
+   Деление — уровнем ниже выбранного: весь проект — по категориям (в прогрессе ▸ раскрывает подкатегории), выбрана категория —
+   по её подкатегориям, выбрана подкатегория (или у категории их нет) — по типам проверок; категорий нет — по блокам. *@
 <div class="summary">
     @if (_days.Count == 0)
     {
@@ -38,13 +40,13 @@
         <div class="sum-grid">
             @* 3. блоки × категории *@
             <section class="sum-block">
-                <h3>Где больше всего активных <span class="muted small">— блоки × @(_categories.Count > 0 ? "категории" : "всего"); нажать — коллизии</span></h3>
+                <h3>Где больше всего активных <span class="muted small">— блоки × @(_by == By.Block ? "всего" : LevelName); нажать — коллизии</span></h3>
                 <div class="matrix-wrap">
                     <table class="matrix">
                         <thead>
                             <tr>
                                 <th></th>
-                                @foreach (var c in _matrixCols) { <th title="@ColTitle(c)">@CatDot(c)@ColTitle(c)</th> }
+                                @foreach (var c in _matrixCols) { <th class="col" title="@GroupTitle(c)">@ColHead(c)</th> }
                                 <th class="num">Всего</th>
                             </tr>
                         </thead>
@@ -94,21 +96,45 @@
 
         @* 4. прогресс по категориям (или по блокам, если категорий нет) *@
         <section class="sum-block">
-            <h3>Прогресс по @(_categories.Count > 0 ? "категориям" : "блокам") <span class="muted small">— сколько исправлено; линии — как менялся % по прогонам</span></h3>
+            <h3>Прогресс по @LevelDative <span class="muted small">— сколько исправлено@(_by == By.Category && _subs.Count > 0 ? "; ▸ — подкатегории" : ""); линии — как менялся % по прогонам</span></h3>
             <table class="grid sum-table">
-                <thead><tr><th>@(_categories.Count > 0 ? "Категория" : "Блок")</th><th class="num">Всего</th><th class="num">Активные</th><th class="num">Исправлены</th><th class="num">Допущены</th><th class="sum-progress-head">Исправлено</th></tr></thead>
+                <thead><tr><th>@LevelHead</th><th class="num">Всего</th><th class="num">Активные</th><th class="num">Исправлены</th><th class="num">Допущены</th><th class="sum-progress-head">Исправлено</th></tr></thead>
                 <tbody>
                     @foreach (var g in _groups)
                     {
                         var group = g;
+                        var subs = _subs.TryGetValue(group.Key, out var s) ? s : null;
+                        var open = subs != null && _expanded.Contains(group.Key);
                         <tr class="clickable" @onclick="() => DrillGroup(group.Key)">
-                            <td>@if (_categories.Count > 0) { @CatDot(group.Key) }@group.Title</td>
+                            <td>
+                                @if (subs != null)
+                                {
+                                    <button class="fold-btn" title="@(open ? "Свернуть подкатегории" : "Показать подкатегории")" @onclick="() => ToggleSubs(group.Key)" @onclick:stopPropagation="true">@(open ? "▾" : "▸")</button>
+                                }
+                                else if (_subs.Count > 0) { <span class="fold-gap"></span> }
+                                @Dot(GroupColor(group.Key))@group.Title
+                            </td>
                             <td class="num">@group.Total</td>
                             <td class="num k-active">@group.Active</td>
                             <td class="num k-fixed">@group.Fixed</td>
                             <td class="num">@group.Accepted</td>
                             <td class="sum-progress"><div class="kpi-bar"><i style="width:@group.Percent%"></i></div><span>@group.Percent %</span></td>
                         </tr>
+                        @if (open)
+                        {
+                            @foreach (var x in subs)
+                            {
+                                var sub = x;
+                                <tr class="clickable sub-row" @onclick="() => DrillSub(group.Key, sub.Key)">
+                                    <td>@Dot(SubColor(group.Key, sub.Key))@sub.Title</td>
+                                    <td class="num">@sub.Total</td>
+                                    <td class="num k-active">@sub.Active</td>
+                                    <td class="num k-fixed">@sub.Fixed</td>
+                                    <td class="num">@sub.Accepted</td>
+                                    <td class="sum-progress"><div class="kpi-bar"><i style="width:@sub.Percent%"></i></div><span>@sub.Percent %</span></td>
+                                </tr>
+                            }
+                        }
                     }
                 </tbody>
             </table>
@@ -134,7 +160,7 @@
                     {
                         var test = t;
                         <tr class="clickable" @onclick="() => DrillTest(test.Key)">
-                            <td>@CatDot(CategoryOfType(test.Key))@test.Title</td>
+                            <td>@Dot(TypeColor(test.Key))@test.Title</td>
                             <td class="num">@test.Total</td>
                             <td class="num k-active">@test.Active</td>
                             <td class="num k-fixed">@test.Fixed</td>
@@ -160,7 +186,7 @@
             {
                 <table class="grid sum-table recur-table">
                     <colgroup><col style="width:22%" /><col style="width:25%" /><col style="width:13%" /><col style="width:8.5%" /><col style="width:8.5%" /><col style="width:7.5%" /><col style="width:7.5%" /><col style="width:8%" /></colgroup>
-                    <thead><tr><th>Проверка</th><th>Элементы</th><th>Оси · уровень</th><th class="num" title="В скольких прогонах была в отчёте">Встречалась,<br />раз</th><th class="num" title="Сколько раз появлялась снова после исправления">↺ Вернулась,<br />раз</th><th>Первый</th><th>Последний</th><th>Статус</th></tr></thead>
+                    <thead><tr><th>Проверка</th><th>Элементы</th><th>Оси · уровень</th><th class="num" title="В скольких прогонах была в отчёте">Повторы</th><th class="num" title="Сколько раз появлялась снова после исправления">↺ Вернулась,<br />раз</th><th>Первый</th><th>Последний</th><th>Статус</th></tr></thead>
                     <tbody>
                         @foreach (var x in _recur.Take(_recurShown))
                         {
@@ -256,10 +282,23 @@
     [Parameter] public int Missing { get; set; }
     [Parameter] public IReadOnlyList<string> Outside { get; set; } = Array.Empty<string>();
     [Parameter] public Func<string, string> CategoryOf { get; set; } = _ => "";
+    [Parameter] public Func<string, string> SubOf { get; set; } = _ => "";
     /// <summary>Категории по порядку из «Настроек».</summary>
     [Parameter] public List<string> Categories { get; set; } = new();
-    /// <summary>Цвет категории: название → ключ палитры.</summary>
+    /// <summary>Подкатегории категорий по порядку из «Настроек».</summary>
+    [Parameter] public Dictionary<string, List<string>> SubOrder { get; set; } = new();
+    /// <summary>Выбранные на боковой панели категория и подкатегория (null — нет).</summary>
+    [Parameter] public string Category { get; set; }
+    [Parameter] public string Subcategory { get; set; }
+    /// <summary>Цвет: категория или «категория\u001fподкатегория» → ключ палитры (у подкатегории без своего — цвет категории).</summary>
     [Parameter] public Dictionary<string, string> Colors { get; set; } = new();
+
+    /// <summary>По чему делится сводка: на уровень ниже выбранного на боковой панели.</summary>
+    private enum By { Block, Category, Sub, Type }
+    private By _by;
+    /// <summary>Подкатегории категорий для раскрытия в «Прогрессе» (только при делении по категориям).</summary>
+    private Dictionary<string, List<Group>> _subs = new();
+    private readonly HashSet<string> _expanded = new();
     [Parameter] public EventCallback<SummaryDrill> Drill { get; set; }
 
     private const int RecurMin = 2;
@@ -291,7 +330,7 @@
 
     protected override void OnParametersSet()
     {
-        var key = HashCode.Combine(Tests?.Count, Categories?.Count, Reports?.Count, Missing, Outside?.Count, string.Join("|", Colors.Select(c => c.Key + c.Value)));
+        var key = HashCode.Combine(Tests?.Count, Categories?.Count, Reports?.Count, Missing, Outside?.Count, string.Join("|", Colors.Select(c => c.Key + c.Value)), Category, Subcategory);
         if (ReferenceEquals(Rows, _lastRows) && key == _lastKey) return;
         _lastRows = Rows;
         _lastKey = key;
@@ -302,6 +341,9 @@
         _days = _history.Days(_filter);
         if (_days.Count == 0) return;
         _categories = Categories.Where(c => (Tests ?? new()).Any(t => CategoryOf(t.Name) == c)).ToList();
+        _by = Category != null
+            ? (Subcategory == null && Category != "" && (Tests ?? new()).Any(t => SubOf(t.Name) != "") ? By.Sub : By.Type)
+            : _categories.Count > 0 ? By.Category : By.Block;
 
         // 1–2: по прогонам
         _trend = new();
@@ -327,10 +369,8 @@
         // 3: блоки × категории (нынешние активные)
         var active = _rows.Where(r => r.State == ClashState.Active).ToList();
         _matrixRows = _rows.Select(r => r.Block).Distinct().OrderBy(ReportPath.BlockOrder).ThenBy(b => b, StringComparer.CurrentCultureIgnoreCase).ToList();
-        _matrixCols = _categories.Count > 0
-            ? _categories.Concat(_rows.Any(r => CategoryOf(r.TestName) == "") ? new[] { "" } : Array.Empty<string>()).ToList()
-            : new List<string>();
-        _cells = active.GroupBy(r => (r.Block, Col: _categories.Count > 0 ? CategoryOf(r.TestName) : null))
+        _matrixCols = LevelOrder();
+        _cells = active.GroupBy(r => (r.Block, Col: _by == By.Block ? null : KeyOf(r.TestName, r.Type)))
             .ToDictionary(g => (g.Key.Block, g.Key.Col), g => g.Count());
         _cellMax = _cells.Values.DefaultIfEmpty(0).Max();
 
@@ -338,18 +378,23 @@
         _levels = ClashFacets.Count(active, ClashFacets.Level);
 
         // 4: прогресс по категориям или блокам + линии % по прогонам
-        Func<ClashRow, string> groupOf = _categories.Count > 0 ? r => CategoryOf(r.TestName) : r => r.Block;
-        var order = _categories.Count > 0 ? _matrixCols : _matrixRows;
-        _groups = _rows.GroupBy(groupOf).Select(g => new Group
-        {
-            Key = g.Key, Title = g.Key == "" ? (_categories.Count > 0 ? "Без категории" : "без блока") : (_categories.Count > 0 ? g.Key : ReportPath.BlockTitle(g.Key)),
-            Active = g.Count(r => r.State == ClashState.Active), Fixed = g.Count(r => r.State == ClashState.Fixed), Accepted = g.Count(r => r.State == ClashState.Accepted),
-        }).OrderBy(g => order.IndexOf(g.Key)).ToList();
-        var testGroup = (Tests ?? new()).ToDictionary(t => t.Id, t => _categories.Count > 0 ? CategoryOf(t.Name) : t.Block);
+        Func<ClashRow, string> groupOf = _by == By.Block ? r => r.Block : r => KeyOf(r.TestName, r.Type);
+        var order = _by == By.Block ? _matrixRows : _matrixCols;
+        _groups = _rows.GroupBy(groupOf).Select(g => GroupOf(g.Key, GroupTitle(g.Key), g)).OrderBy(g => order.IndexOf(g.Key)).ToList();
+        _subs = new();
+        if (_by == By.Category)
+            foreach (var g in _rows.GroupBy(r => CategoryOf(r.TestName)).Where(g => g.Key != "" && g.Any(r => SubOf(r.TestName) != "")))
+            {
+                var subOrder = SubOrder.TryGetValue(g.Key, out var so) ? so : new List<string>();
+                _subs[g.Key] = g.GroupBy(r => SubOf(r.TestName))
+                    .Select(x => GroupOf(x.Key, x.Key == "" ? "Без подкатегории" : x.Key, x))
+                    .OrderBy(x => x.Key == "" ? int.MaxValue : subOrder.IndexOf(x.Key)).ToList();
+            }
+        var testGroup = (Tests ?? new()).ToDictionary(t => t.Id, t => _by == By.Block ? t.Block : KeyOf(t.Name, t.Type));
         var palette = new[] { "--cat-violet", "--cat-teal", "--cat-orange", "--cat-blue", "--cat-green", "--cat-red", "--cat-yellow", "--cat-gray" };
         _progressLines = _groups.Select((g, i) =>
         {
-            var color = _categories.Count > 0 && Colors.TryGetValue(g.Key, out var c) ? "--cat-" + c : palette[i % palette.Length];
+            var color = GroupColor(g.Key) is string c ? "--cat-" + c : palette[i % palette.Length];
             var values = _days.Select(day =>
             {
                 var cnt = new Counts();
@@ -431,19 +476,107 @@
         </div>
     };
 
-    private RenderFragment CatDot(string category) => __builder =>
+    private RenderFragment Dot(string color) => __builder =>
     {
-        if (category != null && Colors.TryGetValue(category, out var c)) { <i class="cat-dot" style="background: var(--cat-@c)" aria-hidden="true"></i> }
+        if (color != null) { <i class="cat-dot" style="background: var(--cat-@color)" aria-hidden="true"></i> }
     };
 
-    private string ColTitle(string c) => c == "" ? "Без категории" : c;
+    /// <summary>Ключ группы у проверки — по уровню деления: категория, подкатегория или тип проверки.</summary>
+    private string KeyOf(string testName, string type) => _by switch
+    {
+        By.Category => CategoryOf(testName),
+        By.Sub => SubOf(testName),
+        By.Type => type,
+        _ => null,
+    };
 
-    private int Cell(string block, string col) => _cells.TryGetValue((block, _categories.Count > 0 ? col : null), out var n) ? n : 0;
+    /// <summary>Порядок групп уровня: как в «Настройках» (без категории / подкатегории — в конце), типы — по числу активных.</summary>
+    private List<string> LevelOrder()
+    {
+        switch (_by)
+        {
+            case By.Category:
+                return _categories.Concat(_rows.Any(r => CategoryOf(r.TestName) == "") ? new[] { "" } : Array.Empty<string>()).ToList();
+            case By.Sub:
+                var here = _rows.Select(r => SubOf(r.TestName)).ToHashSet();
+                var order = SubOrder.TryGetValue(Category, out var so) ? so : new List<string>();
+                return order.Where(here.Contains).Concat(here.Contains("") ? new[] { "" } : Array.Empty<string>()).ToList();
+            case By.Type:
+                return _rows.GroupBy(r => r.Type).OrderByDescending(g => g.Count(r => r.State == ClashState.Active))
+                    .ThenBy(g => g.Key, StringComparer.CurrentCultureIgnoreCase).Select(g => g.Key).ToList();
+            default:
+                return new List<string>();
+        }
+    }
+
+    private static Group GroupOf(string key, string title, IEnumerable<ClashRow> rows) => new Group
+    {
+        Key = key, Title = title,
+        Active = rows.Count(r => r.State == ClashState.Active), Fixed = rows.Count(r => r.State == ClashState.Fixed), Accepted = rows.Count(r => r.State == ClashState.Accepted),
+    };
+
+    private string GroupTitle(string key) => _by switch
+    {
+        By.Category => key == "" ? "Без категории" : key,
+        By.Sub => key == "" ? "Без подкатегории" : key,
+        By.Type => key,
+        _ => key == "" ? "без блока" : ReportPath.BlockTitle(key),
+    };
+
+    /// <summary>Цвет группы: категории, подкатегории выбранной категории; у типов и блоков — нет.</summary>
+    private string GroupColor(string key) => _by switch
+    {
+        By.Category => Colors.TryGetValue(key, out var c) ? c : null,
+        By.Sub => SubColor(Category, key),
+        By.Type => TypeColor(key),
+        _ => null,
+    };
+
+    private string SubColor(string category, string sub) =>
+        sub == "" ? (Colors.TryGetValue(category, out var c) ? c : null) : Colors.TryGetValue(category + "\u001f" + sub, out var s) ? s : null;
+
+    /// <summary>Цвет типа проверки — подкатегории или категории его проверки.</summary>
+    private string TypeColor(string type)
+    {
+        var name = (Tests ?? new()).FirstOrDefault(t => t.Type == type)?.Name ?? type;
+        var category = CategoryOf(name);
+        return category == "" ? null : SubColor(category, SubOf(name));
+    }
+
+    /// <summary>«категории», «подкатегории „Высокая критичность“», «типы проверок».</summary>
+    private string LevelName => _by switch
+    {
+        By.Category => "категории", By.Sub => $"подкатегории «{Category}»", By.Type => "типы проверок", _ => "блоки",
+    };
+    private string LevelDative => _by switch
+    {
+        By.Category => "категориям", By.Sub => $"подкатегориям «{Category}»", By.Type => "типам проверок", _ => "блокам",
+    };
+    private string LevelHead => _by switch { By.Category => "Категория", By.Sub => "Подкатегория", By.Type => "Тип проверки", _ => "Блок" };
+
+    private void ToggleSubs(string category)
+    {
+        if (!_expanded.Remove(category)) _expanded.Add(category);
+    }
+
+    /// <summary>Заголовок столбца: тип проверки — двумя строками, до «/» и после (различаются обычно концом названия).</summary>
+    private RenderFragment ColHead(string key) => __builder =>
+    {
+        var title = GroupTitle(key);
+        var cut = _by == By.Type ? title.IndexOf('/') : -1;
+        if (cut < 0) { <span class="line">@Dot(GroupColor(key))@title</span> }
+        else
+        {
+            <span class="line">@Dot(GroupColor(key))@title[..cut]</span>
+            <span class="line">/ @title[(cut + 1)..]</span>
+        }
+    };
+
+    private int Cell(string block, string col) => _cells.TryGetValue((block, _by == By.Block ? null : col), out var n) ? n : 0;
 
     /// <summary>Тепловая окраска клетки: чем больше активных — тем насыщеннее.</summary>
     private string Heat(int n) => n == 0 || _cellMax == 0 ? null : $"background: color-mix(in srgb, var(--active) {Math.Round(12 + 58.0 * n / _cellMax)}%, transparent)";
 
-    private string CategoryOfType(string type) => CategoryOf((Tests ?? new()).FirstOrDefault(t => t.Type == type)?.Name ?? type);
 
     /// <summary>Оси и уровень: «Ж-7 · 3 Этаж».</summary>
     private static string PlaceOf(ClashRow x) =>
@@ -483,10 +616,25 @@
         else { _sortKey = key; _sortDesc = key != "name"; }
     }
 
-    private Task DrillCell(string block, string col) => Drill.InvokeAsync(new SummaryDrill { SetBlock = true, Block = block, SetCategory = col != null, Category = col });
-    private Task DrillGroup(string key) => Drill.InvokeAsync(_categories.Count > 0
-        ? new SummaryDrill { SetCategory = true, Category = key }
-        : new SummaryDrill { SetBlock = true, Block = key });
+    /// <summary>Переход к коллизиям группы уровня (block — ещё и блок).</summary>
+    private SummaryDrill DrillTo(string key) => _by switch
+    {
+        By.Category => new SummaryDrill { SetCategory = true, Category = key },
+        By.Sub => new SummaryDrill { SetCategory = true, Category = Category, Subcategory = key },
+        By.Type => new SummaryDrill { TestType = key },
+        _ => new SummaryDrill { SetBlock = true, Block = key },
+    };
+
+    private Task DrillCell(string block, string col)
+    {
+        var d = col == null ? new SummaryDrill() : DrillTo(col);
+        d.SetBlock = true;
+        d.Block = block;
+        return Drill.InvokeAsync(d);
+    }
+
+    private Task DrillGroup(string key) => Drill.InvokeAsync(DrillTo(key));
+    private Task DrillSub(string category, string sub) => Drill.InvokeAsync(new SummaryDrill { SetCategory = true, Category = category, Subcategory = sub });
     private Task DrillTest(string type) => Drill.InvokeAsync(new SummaryDrill { TestType = type });
     private static string Pct(int value, int top) =>
         (top <= 0 ? 0 : Math.Max(100.0 * value / top, value > 0 ? 1 : 0)).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + "%";
