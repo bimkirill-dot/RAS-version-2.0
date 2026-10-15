@@ -250,6 +250,21 @@ public sealed class Database
             Deleted TEXT NOT NULL);
         CREATE INDEX DeletedReportsFile ON DeletedReports(ProjectId, FilePath);
         """,
+
+        // 9 — 15.10.2026 (DECISIONS.md, «История сайта»): что и когда сделано на сайте. Проект и коллизия — без ссылок
+        // на таблицы: запись остаётся после их удаления (название проекта запоминается); «кто» — пока пусто
+        """
+        CREATE TABLE SiteLog(
+            Id INTEGER PRIMARY KEY,
+            Time TEXT NOT NULL,
+            ProjectId INTEGER,
+            ProjectName TEXT,
+            Kind TEXT NOT NULL,
+            Text TEXT NOT NULL,
+            ClashId INTEGER,
+            Author TEXT);
+        CREATE INDEX SiteLogProject ON SiteLog(ProjectId, Id);
+        """,
     };
 
     /// <summary>
@@ -385,6 +400,9 @@ public sealed class Database
             """, tx);
     }
 
+    /// <summary>Текущая версия устройства базы — сколько шагов.</summary>
+    public static int Version => Migrations.Length;
+
     /// <summary>Дополнительная работа шага (по номеру шага, с 1), после его SQL — в той же транзакции.</summary>
     private static readonly Dictionary<int, Action<SqliteConnection, SqliteTransaction>> MigrationCode = new()
     {
@@ -504,8 +522,8 @@ public sealed class Database
         foreach (var t in tests) ClashStore.RetimeFixes(c, tx, t);
     }
 
-    /// <summary>Создать базу или довести её до текущей версии. Перед переносом — копия рядом с базой.</summary>
-    public void Migrate(ILogger log)
+    /// <summary>Создать базу или довести её до текущей версии. Перед переносом — копия рядом с базой. Возвращает: версия до переноса.</summary>
+    public int Migrate(ILogger log)
     {
         using var c = Open();
         Exec(c, "PRAGMA journal_mode = WAL; CREATE TABLE IF NOT EXISTS Meta(Key TEXT PRIMARY KEY, Value TEXT);");
@@ -513,7 +531,7 @@ public sealed class Database
         if (version > Migrations.Length)
             throw new InvalidOperationException(
                 $"База новее программы сайта (версия базы {version}, программа знает до {Migrations.Length}). Обновите сайт.");
-        if (version == Migrations.Length) return;
+        if (version == Migrations.Length) return version;
 
         if (version > 0)
         {
@@ -551,6 +569,7 @@ public sealed class Database
         {
             Exec(c, "PRAGMA foreign_keys = ON;");
         }
+        return version;
     }
 
     public static void Exec(SqliteConnection c, string sql, SqliteTransaction tx = null)

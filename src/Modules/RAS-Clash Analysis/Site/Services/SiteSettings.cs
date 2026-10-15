@@ -30,9 +30,11 @@ public sealed class SiteSettings
     private readonly SiteOptions _options;
     private readonly IConfiguration _config;
     private readonly ILogger<SiteSettings> _log;
+    private readonly Data.Database _db;
 
-    public SiteSettings(SiteOptions options, IConfiguration config, ILogger<SiteSettings> log)
+    public SiteSettings(SiteOptions options, IConfiguration config, ILogger<SiteSettings> log, Data.Database db)
     {
+        _db = db;
         _options = options;
         _config = config;
         _log = log;
@@ -78,6 +80,7 @@ public sealed class SiteSettings
     /// <summary>Сохранить в settings.json и применить, что можно, сразу. Возвращает: нужен ли перезапуск сайта.</summary>
     public bool Save(SiteSettingsValues v)
     {
+        var before = Current();
         var root = ReadFile() ?? new JsonObject();
         if (root["Site"] is not JsonObject site) root["Site"] = site = new JsonObject();
         // папка по умолчанию запоминается как «по умолчанию» (пусто): тогда она следует за папкой плагина на сервере
@@ -100,6 +103,20 @@ public sealed class SiteSettings
         _options.ScanMinutes = v.ScanMinutes;
         _log.LogInformation("Настройки сайта сохранены: копии — {Backups}, часовых {Hourly}, ночных {Nightly}, проверка папок — {Scan} мин, адрес — {Urls}",
             _options.Backups, v.HourlyBackups, v.NightlyBackups, v.ScanMinutes, (string)root["Urls"]);
+        // в историю сайта — только то, что поменялось
+        var changes = new List<string>();
+        var folderNow = (v.BackupFolder ?? "").Trim().Trim('"').TrimEnd('\\', '/');
+        if (!string.Equals(before.BackupFolder.TrimEnd('\\', '/'), folderNow, StringComparison.OrdinalIgnoreCase)) changes.Add($"папка копий базы: {before.BackupFolder} → {folderNow}");
+        if (before.HourlyBackups != v.HourlyBackups) changes.Add($"часовых копий: {before.HourlyBackups} → {v.HourlyBackups}");
+        if (before.NightlyBackups != v.NightlyBackups) changes.Add($"ночных копий: {before.NightlyBackups} → {v.NightlyBackups}");
+        if (before.ScanMinutes != v.ScanMinutes) changes.Add($"проверять папки: каждые {before.ScanMinutes} → {v.ScanMinutes} мин");
+        if (before.Port != v.Port) changes.Add($"порт: {before.Port} → {v.Port} (после перезапуска)");
+        if (before.Network != v.Network) changes.Add($"доступ по сети: {(before.Network ? "да" : "нет")} → {(v.Network ? "да" : "нет")} (после перезапуска)");
+        if (changes.Count > 0)
+        {
+            var text = string.Join("; ", changes);
+            Data.SiteHistory.Write(_db, null, Data.SiteHistory.Settings, char.ToUpper(text[0]) + text[1..]);
+        }
         return v.Port != RunningPort || v.Network != RunningNetwork;
     }
 

@@ -1,0 +1,109 @@
+@inject ClashStore Store
+
+@* История сайта (DECISIONS.md модуля, «История сайта»): что и когда сделано, новые сверху, по дням.
+   Без ProjectId — все проекты (страница «История»), с ним — один проект (раздел «История» проекта).
+   «Кто» — столбец появится, когда в записях будет автор (учётные записи). *@
+<div class="history">
+    <div class="history-bar">
+        <select @bind="_group" title="Какие действия показать">
+            <option value="">Все действия</option>
+            @foreach (var g in SiteHistory.Groups)
+            {
+                <option value="@g">@g</option>
+            }
+        </select>
+        @if (ProjectId == null)
+        {
+            <select @bind="_project" title="Проект">
+                <option value="">Все проекты</option>
+                @foreach (var p in _rows.Select(r => r.ProjectName).Where(n => !string.IsNullOrEmpty(n)).Distinct().OrderBy(n => n))
+                {
+                    <option value="@p">@p</option>
+                }
+            </select>
+        }
+        <input class="search" type="search" placeholder="Поиск в истории" @bind="_search" @bind:event="oninput" />
+        <span class="spacer"></span>
+        <span class="muted small">@Fmt.Plural(Shown.Count, "запись", "записи", "записей")</span>
+    </div>
+
+    @if (_rows.Count == 0)
+    {
+        <p class="muted">Пока пусто. Здесь появится всё, что делается на сайте: загрузка, замена и удаление отчётов, статусы и комментарии, проекты, настройки.</p>
+    }
+    else if (Shown.Count == 0)
+    {
+        <p class="muted">Ничего не найдено — измените отбор.</p>
+    }
+    @foreach (var day in Shown.GroupBy(r => r.Time.Date))
+    {
+        <h3 class="history-day">@Fmt.Day(day.Key)</h3>
+        <table class="grid history-table">
+            @foreach (var r in day)
+            {
+                <tr>
+                    <td class="h-time">@r.Time.ToString("HH:mm")</td>
+                    @if (ProjectId == null)
+                    {
+                        <td class="h-project">
+                            @if (r.ProjectId != null) { <a href="project/@r.ProjectId">@r.ProjectName</a> }
+                            else { <span class="muted" title="@(r.ProjectName == null ? "" : "Проект удалён с сайта")">@(r.ProjectName ?? "—")</span> }
+                        </td>
+                    }
+                    <td class="h-kind-cell"><span class="h-kind h-@GroupCss(r.Kind)">@SiteHistory.Title(r.Kind)</span></td>
+                    <td class="h-text">
+                        @r.Text
+                        @if (r.ClashId != null) { <a class="h-open" href="clash/@r.ClashId">открыть</a> }
+                    </td>
+                    @if (_anyAuthor) { <td class="h-author">@r.Author</td> }
+                </tr>
+            }
+        </table>
+    }
+    @if (_rows.Count >= _limit)
+    {
+        <button class="btn" @onclick="More">Показать ещё</button>
+    }
+</div>
+
+@code {
+    /// <summary>Проект; null — все проекты.</summary>
+    [Parameter] public long? ProjectId { get; set; }
+
+    private const int Step = 500;
+    private int _limit = Step;
+    private List<HistoryRow> _rows = new();
+    private string _group = "", _project = "", _search = "";
+    private bool _anyAuthor;
+
+    protected override void OnParametersSet() => Load();
+
+    private void Load()
+    {
+        _rows = Store.History(ProjectId, _limit);
+        _anyAuthor = _rows.Any(r => !string.IsNullOrEmpty(r.Author));
+    }
+
+    private void More()
+    {
+        _limit += Step;
+        Load();
+    }
+
+    private List<HistoryRow> Shown => _rows
+        .Where(r => _group == "" || SiteHistory.Group(r.Kind) == _group)
+        .Where(r => _project == "" || r.ProjectName == _project)
+        .Where(r => string.IsNullOrWhiteSpace(_search)
+                    || r.Text.Contains(_search.Trim(), StringComparison.CurrentCultureIgnoreCase)
+                    || (r.ProjectName ?? "").Contains(_search.Trim(), StringComparison.CurrentCultureIgnoreCase)
+                    || SiteHistory.Title(r.Kind).Contains(_search.Trim(), StringComparison.CurrentCultureIgnoreCase))
+        .ToList();
+
+    private static string GroupCss(string kind) => kind == SiteHistory.Refused || kind == SiteHistory.Warning ? "problem" : SiteHistory.Group(kind) switch
+    {
+        "Отчёты" => "reports",
+        "Коллизии" => "clashes",
+        "Проекты" => "projects",
+        _ => "site",
+    };
+}

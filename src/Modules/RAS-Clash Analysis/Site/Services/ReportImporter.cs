@@ -25,6 +25,20 @@ public sealed class ImportResult
     public bool Suspicious { get; set; }
     /// <summary>Файла больше нет в папке проекта — отчёт удалён с сайта.</summary>
     public bool Deleted { get; set; }
+    /// <summary>Сколько коллизий удалено вместе с отчётом (были только в нём).</summary>
+    public int RemovedClashes { get; set; }
+    /// <summary>Выгружен заново в тот же прогон — заменил прежний вариант.</summary>
+    public bool Replaced { get; set; }
+    /// <summary>Отчёт старше уже загруженных по своим проверкам — только дополнил историю.</summary>
+    public bool Older { get; set; }
+    /// <summary>Проверки, впервые попавшие на сайт с этим отчётом, и их коллизии (не «новые» — их впервые проверили).</summary>
+    public int NewTests { get; set; }
+    public int NewTestClashes { get; set; }
+    /// <summary>Все проверки отчёта — впервые: «первая проверка».</summary>
+    public bool AllTestsNew { get; set; }
+    /// <summary>Блок и день прогона — для истории сайта.</summary>
+    public string Block { get; set; } = "";
+    public DateTime? Day { get; set; }
 }
 
 /// <summary>
@@ -102,9 +116,11 @@ public sealed class ReportImporter
 
         foreach (var p in projects)
         {
+            var start = results.Count;
             if (!Directory.Exists(p.Folder))
             {
                 results.Add(new ImportResult { ProjectName = p.Name, File = p.Folder, Error = true, Message = "Папка отчётов не найдена или недоступна." });
+                WriteHistory(p.Id, results.Skip(start).ToList());
                 continue;
             }
             var candidates = new List<(string Path, string Hash, DateTime FileTime, ClashReport Report, ReportPlace Place, DateTime Date, string DateSource, long? Replaces)>();
@@ -179,6 +195,7 @@ public sealed class ReportImporter
                     results.Add(new ImportResult { ProjectName = p.Name, File = x.Path, Error = true, Message = "Не удалось загрузить: " + ex.Message });
                 }
             }
+            WriteHistory(p.Id, results.Skip(start).ToList());
         }
         return results;
     }
@@ -209,11 +226,11 @@ public sealed class ReportImporter
     private List<ImportResult> RemoveMissing(long projectId, string projectName, string folder, List<string> files)
     {
         var results = new List<ImportResult>();
-        var stored = new List<(long Id, string Path)>();
+        var stored = new List<(long Id, string Path, string Block, DateTime Date)>();
         using (var c = _db.Open())
-        using (var cmd = ClashStore.Command(c, "SELECT Id, FilePath FROM Reports WHERE ProjectId = $p ORDER BY ReportDate DESC, Id DESC", ("$p", projectId)))
+        using (var cmd = ClashStore.Command(c, "SELECT Id, FilePath, Block, ReportDate FROM Reports WHERE ProjectId = $p ORDER BY ReportDate DESC, Id DESC", ("$p", projectId)))
         using (var r = cmd.ExecuteReader())
-            while (r.Read()) stored.Add((r.GetInt64(0), r.GetString(1)));
+            while (r.Read()) stored.Add((r.GetInt64(0), r.GetString(1), r.GetString(2), Database.Time(r.GetString(3))));
         if (stored.Count == 0) return results;
 
         var present = new HashSet<string>(files, StringComparer.OrdinalIgnoreCase);
@@ -232,7 +249,7 @@ public sealed class ReportImporter
             return results;
         }
 
-        foreach (var (id, path) in missing)
+        foreach (var (id, path, block, date) in missing)
         {
             if (LaterRuns(id) is string blocker)
             {
@@ -260,10 +277,62 @@ public sealed class ReportImporter
             }
             _log.LogInformation("Отчёт удалён с сайта — файла нет в папке: {File}; коллизий только из него удалено {Removed}, комментариев у них {Comments}",
                 path, removed, comments);
-            results.Add(new ImportResult { ProjectName = projectName, File = path, Deleted = true,
+            results.Add(new ImportResult { ProjectName = projectName, File = path, Deleted = true, RemovedClashes = removed, Block = block, Day = date.Date,
                 Message = "Файла нет в папке — удалён с сайта" + (removed > 0 ? $"; коллизий только из него — {removed}" : "") });
         }
         return results;
+    }
+
+    /// <summary>Отказы, уже записанные в историю сайта (проект|файл|причина): одна и та же причина при каждой проверке — одна запись.</summary>
+    private readonly HashSet<string> _loggedRefusals = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Итог проверки папки проекта — в историю сайта (DECISIONS.md, «История сайта»): загрузки по прогонам, замены, удаления,
+    /// предупреждения, отказы (повтор той же причины — без новой записи; «файл занят» — не записывается). Ничего не
+    /// изменилось — ничего не пишется. Сбой записи истории загрузку не ломает.
+    /// </summary>
+    private void WriteHistory(long projectId, List<ImportResult> list)
+    {
+        var prefix = projectId + "|";
+        var refusals = list.Where(r => r.Error && !r.Message.StartsWith("Файл занят", StringComparison.Ordinal)).ToList();
+        var keys = refusals.Select(r => prefix + r.File + "|" + r.Message).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        _loggedRefusals.RemoveWhere(k => k.StartsWith(prefix, StringComparison.Ordinal) && !keys.Contains(k));
+        var fresh = refusals.Where(r => _loggedRefusals.Add(prefix + r.File + "|" + r.Message)).ToList();
+        var done = list.Where(r => !r.Error).ToList();
+        if (done.Count == 0 && fresh.Count == 0) return;
+        try
+        {
+            using var c = _db.Open();
+            using var tx = c.BeginTransaction();
+            foreach (var g in done.Where(r => r.Deleted).GroupBy(r => (r.Block, r.Day)).OrderByDescending(g => g.Key.Day))
+            {
+                var removed = g.Sum(r => r.RemovedClashes);
+                SiteHistory.Write(c, tx, projectId, SiteHistory.Remove,
+                    $"{SiteHistory.Run(g.Key.Block, g.Key.Day)}: файлов нет в папке — удалено {Fmt.Plural(g.Count(), "отчёт", "отчёта", "отчётов")}"
+                    + (removed > 0 ? $" (коллизий только из них — {removed})" : ""));
+            }
+            foreach (var r in done.Where(r => r.Replaced))
+                SiteHistory.Write(c, tx, projectId, SiteHistory.Replace,
+                    $"{SiteHistory.Run(r.Block, r.Day)} «{Path.GetFileName(r.File)}» — выгружен заново, теперь по нему: {SiteHistory.Changes(r.New, r.Fixed, r.Reappeared, r.NewTests, r.NewTestClashes)}");
+            foreach (var g in done.Where(r => !r.Deleted && !r.Replaced).GroupBy(r => (r.Block, r.Day)).OrderBy(g => g.Key.Day))
+            {
+                var all = g.ToList();
+                var head = $"{SiteHistory.Run(g.Key.Block, g.Key.Day)}: загружено {Fmt.Plural(all.Count, "отчёт", "отчёта", "отчётов")}";
+                var text = all.All(r => r.Older) ? head + " — более ранний прогон, дополнил историю"
+                    : all.All(r => r.AllTestsNew) ? head + " — первая проверка, " + Fmt.Plural(all.Sum(r => r.NewTestClashes), "коллизия", "коллизии", "коллизий")
+                    : head + " — " + SiteHistory.Changes(all.Sum(r => r.New), all.Sum(r => r.Fixed), all.Sum(r => r.Reappeared), all.Sum(r => r.NewTests), all.Sum(r => r.NewTestClashes));
+                SiteHistory.Write(c, tx, projectId, SiteHistory.Import, text);
+            }
+            foreach (var r in done.Where(r => !r.Deleted && r.Warning != null))
+                SiteHistory.Write(c, tx, projectId, SiteHistory.Warning, $"{SiteHistory.Run(r.Block, r.Day)} «{Path.GetFileName(r.File)}»: {SiteHistory.Cut(r.Warning, 600)}");
+            foreach (var r in fresh)
+                SiteHistory.Write(c, tx, projectId, SiteHistory.Refused, $"«{Path.GetFileName(r.File)}»: {SiteHistory.Cut(r.Message, 600)}");
+            tx.Commit();
+        }
+        catch (Exception ex) when (ex is SqliteException || ex is IOException)
+        {
+            _log.LogWarning(ex, "История сайта: не записан итог проверки папки проекта {Project}", projectId);
+        }
     }
 
     /// <summary>Последний загруженный вариант файла: номер отчёта и его дата; не загружался — null.</summary>
@@ -402,6 +471,7 @@ public sealed class ReportImporter
                 comments += (int)(long)cmd.ExecuteScalar()!;
             }
             Exec(c, tx, "DELETE FROM Events WHERE ClashId = $id", ("$id", id));
+            Exec(c, tx, "UPDATE SiteLog SET ClashId = NULL WHERE ClashId = $id", ("$id", id));
             Exec(c, tx, "DELETE FROM Clashes WHERE Id = $id", ("$id", id));
         }
         Exec(c, tx, "UPDATE Events SET ReportId = NULL WHERE ReportId = $r", ("$r", oldReport));
@@ -417,7 +487,8 @@ public sealed class ReportImporter
     private ImportResult Import(long projectId, string path, string hash, DateTime fileTime, ClashReport report, ReportPlace place,
         DateTime date, string dateSource, long? replaces)
     {
-        var result = new ImportResult { File = path, Message = replaces == null ? "Загружен" : "Заменён (выгружен заново)" };
+        var result = new ImportResult { File = path, Message = replaces == null ? "Загружен" : "Заменён (выгружен заново)",
+            Replaced = replaces != null, Block = place.Block, Day = date.Date, AllTestsNew = true };
         var reportDate = Database.Time(date);
         var now = Database.Time(DateTime.Now);
         using var c = _db.Open();
@@ -440,6 +511,11 @@ public sealed class ReportImporter
             Exec(c, tx, "INSERT OR IGNORE INTO ReportTests(ReportId, TestId) VALUES($r, $t)", ("$r", reportId), ("$t", testId));
             // отчёт старше уже загруженного по этой проверке: только дополняет историю, статусы не трогает
             var latest = lastDate == null || string.CompareOrdinal(reportDate, lastDate) >= 0;
+            // проверка впервые на сайте: её коллизии — не «новые», их впервые проверили
+            var firstForTest = lastDate == null;
+            if (firstForTest) result.NewTests++;
+            else result.AllTestsNew = false;
+            if (!latest) result.Older = true;
             var known = KnownClashes(c, tx, testId);
             var dateText = date.ToString(dateSource == ReportPath.DateFromFolder ? "dd.MM.yyyy" : "dd.MM.yyyy HH:mm");
             // неполный отчёт (выгружены не все статусы): пропавшие не считаем исправленными — DECISIONS.md, «Неполный отчёт»
@@ -478,7 +554,8 @@ public sealed class ReportImporter
                     AddOccurrence(c, tx, step.Known.Id, reportId, report, step.Result, step.Points, makeLast: true, reportDate);
                     Exec(c, tx, "UPDATE Events SET ReportId = $r WHERE ClashId = $id AND Kind = 'found' AND ReportId = $old",
                         ("$r", reportId), ("$id", step.Known.Id), ("$old", replaces));
-                    result.New++;
+                    if (firstForTest) result.NewTestClashes++;
+                    else result.New++;
                     continue;
                 }
                 if (!latest)
@@ -501,7 +578,8 @@ public sealed class ReportImporter
                         var cid = NewClash(c, tx, projectId, testId, step.IdentityKey, step.NewState, step.Present, reportDate, reportId,
                             "Найдена в отчёте от " + dateText);
                         AddOccurrence(c, tx, cid, reportId, report, step.Result, step.Points, makeLast: true, reportDate);
-                        result.New++;
+                        if (firstForTest) result.NewTestClashes++;
+                        else result.New++;
                         break;
                     }
                     case MergeAction.Again:

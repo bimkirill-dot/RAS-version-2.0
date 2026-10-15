@@ -145,6 +145,9 @@
                 <button class="side-btn @(_view.Tab == 2 ? "on" : "")" @onclick="() => _view.Tab = 2" title="Загруженные отчёты Navisworks этого проекта">
                     <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 2.5h7l3.5 3.5v11.5h-10.5z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"/><path d="M8 10h5M8 13.5h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Отчёты</span><b>@ScopeReports.Count()</b>
                 </button>
+                <button class="side-btn @(_view.Tab == 4 ? "on" : "")" @onclick="() => _view.Tab = 4" title="Что и когда сделано в этом проекте">
+                    <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M10 6v4l2.8 1.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg><span>История</span>
+                </button>
                 <button class="side-btn @(_view.Tab == 3 ? "on" : "")" @onclick="() => _view.Tab = 3" title="Название и папка проекта">
                     <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="2.6" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M10 2.5v2.2M10 15.3v2.2M2.5 10h2.2M15.3 10h2.2M4.7 4.7l1.6 1.6M13.7 13.7l1.6 1.6M4.7 15.3l1.6-1.6M13.7 6.3l1.6-1.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Проект</span>
                 </button>
@@ -396,6 +399,13 @@
                             </tbody>
                         }
                     </table>
+                </section>
+            }
+            else if (_view.Tab == 4)
+            {
+                <section class="content scroll">
+                    <div class="list-title"><h2>История проекта</h2></div>
+                    <HistoryList ProjectId="Id" />
                 </section>
             }
             else

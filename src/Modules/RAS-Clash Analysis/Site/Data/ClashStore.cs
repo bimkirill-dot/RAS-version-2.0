@@ -70,16 +70,29 @@ public sealed class ClashStore
     public long AddProject(string name, string folder)
     {
         using var c = _db.Open();
+        using var tx = c.BeginTransaction();
         using var cmd = Command(c, "INSERT INTO Projects(Name, Folder, Created) VALUES($n, $f, $t); SELECT last_insert_rowid();",
             ("$n", name.Trim()), ("$f", folder.Trim()), ("$t", Database.Time(DateTime.Now)));
-        return (long)cmd.ExecuteScalar();
+        cmd.Transaction = tx;
+        var id = (long)cmd.ExecuteScalar();
+        SiteHistory.Write(c, tx, id, SiteHistory.ProjectAdded, "Папка " + folder.Trim());
+        tx.Commit();
+        return id;
     }
 
     public void UpdateProject(long id, string name, string folder)
     {
+        var was = Project(id);
         using var c = _db.Open();
+        using var tx = c.BeginTransaction();
         using var cmd = Command(c, "UPDATE Projects SET Name = $n, Folder = $f WHERE Id = $id", ("$n", name.Trim()), ("$f", folder.Trim()), ("$id", id));
+        cmd.Transaction = tx;
         cmd.ExecuteNonQuery();
+        var changes = new List<string>();
+        if (was != null && was.Name != name.Trim()) changes.Add($"название «{was.Name}» → «{name.Trim()}»");
+        if (was != null && !string.Equals(was.Folder, folder.Trim(), StringComparison.OrdinalIgnoreCase)) changes.Add($"папка {was.Folder} → {folder.Trim()}");
+        if (changes.Count > 0) SiteHistory.Write(c, tx, id, SiteHistory.ProjectChanged, char.ToUpper(changes[0][0]) + string.Join("; ", changes)[1..]);
+        tx.Commit();
     }
 
     public ProjectContents ProjectContents(long id)
@@ -110,6 +123,12 @@ public sealed class ClashStore
         using (var r = Query(c, "SELECT Id FROM Reports WHERE ProjectId = $p", ("$p", id)))
             while (r.Read()) reports.Add(r.GetInt64(0));
         using var tx = c.BeginTransaction();
+        // история сайта остаётся — с названием проекта, без ссылок (номера проекта и коллизий могут достаться новым)
+        using (var keep = Command(c, "UPDATE SiteLog SET ProjectId = NULL, ClashId = NULL WHERE ProjectId = $p", ("$p", id)))
+        {
+            keep.Transaction = tx;
+            keep.ExecuteNonQuery();
+        }
         // по ссылкам — снизу вверх: элементы → появления → история → коллизии → проверки → отчёты → проект
         const string clashes = "SELECT Id FROM Clashes WHERE ProjectId = $p";
         const string reportIds = "SELECT Id FROM Reports WHERE ProjectId = $p";
@@ -257,6 +276,18 @@ public sealed class ClashStore
         {
             mark.Transaction = tx;
             mark.ExecuteNonQuery();
+        }
+        using (var info = Command(c, "SELECT ProjectId, FilePath, Block, ReportDate FROM Reports WHERE Id = $r", ("$r", reportId)))
+        {
+            info.Transaction = tx;
+            using var r = info.ExecuteReader();
+            if (r.Read())
+            {
+                var (project, file, block, date) = (r.GetInt64(0), r.GetString(1), r.GetString(2), Database.Time(r.GetString(3)));
+                r.Close();
+                SiteHistory.Write(c, tx, project, SiteHistory.UndoFixes,
+                    $"{Services.Fmt.Plural(ids.Count, "коллизия", "коллизии", "коллизий")} снова «Активная» — отчёт «{Path.GetFileName(file)}» ({SiteHistory.Run(block, date)})");
+            }
         }
         tx.Commit();
         return ids.Count;
@@ -409,6 +440,7 @@ public sealed class ClashStore
         using var tx = c.BeginTransaction();
         var now = Database.Time(DateTime.Now);
         var changed = 0;
+        var touched = new List<(long Id, long Project, string Name, string Block, string Test)>();
         foreach (var id in ids.Distinct())
         {
             using var get = Command(c, "SELECT State FROM Clashes WHERE Id = $id", ("$id", id));
@@ -422,9 +454,60 @@ public sealed class ClashStore
             }
             AddEvent(c, tx, id, now, EventKinds.Status, NullIfEmpty(comment), Convert.ToInt32(old), (int)state, author, null);
             changed++;
+            touched.Add(ClashInfo(c, tx, id));
+        }
+        // в историю сайта — одной строкой на проект: «Допущена» — 12 коллизий (S2 · АР Стены/МЕР Трубы)
+        foreach (var g in touched.Where(x => x.Project != 0).GroupBy(x => x.Project))
+        {
+            var list = g.ToList();
+            var what = list.Count == 1
+                ? SiteHistory.Clash(list[0].Name, list[0].Block, list[0].Test)
+                : Services.Fmt.Plural(list.Count, "коллизия", "коллизии", "коллизий") + " ("
+                  + (list.Select(x => (x.Block, x.Test)).Distinct().Count() == 1
+                      ? SiteHistory.Run(list[0].Block, null) + list[0].Test
+                      : string.Join(", ", list.Select(x => x.Block).Where(b => b != "").Distinct()) + " · " + Services.Fmt.Plural(list.Select(x => x.Test).Distinct().Count(), "проверка", "проверки", "проверок"))
+                  + ")";
+            SiteHistory.Write(c, tx, g.Key, SiteHistory.Status,
+                $"«{ClashRules.Title(state)}» — {what}" + (string.IsNullOrWhiteSpace(comment) ? "" : $": «{SiteHistory.Cut(comment)}»"),
+                list.Count == 1 ? list[0].Id : null, author);
         }
         tx.Commit();
         return changed;
+    }
+
+    /// <summary>Коллизия для истории сайта: проект, имя, блок, проверка.</summary>
+    private static (long Id, long Project, string Name, string Block, string Test) ClashInfo(SqliteConnection c, SqliteTransaction tx, long id)
+    {
+        using var cmd = Command(c, """
+            SELECT cl.ProjectId, o.Name, t.Block, t.Name FROM Clashes cl JOIN Tests t ON t.Id = cl.TestId
+            LEFT JOIN Occurrences o ON o.Id = cl.LastOccurrenceId WHERE cl.Id = $id
+            """, ("$id", id));
+        cmd.Transaction = tx;
+        using var r = cmd.ExecuteReader();
+        return r.Read() ? (id, r.GetInt64(0), r.IsDBNull(1) ? null : r.GetString(1), r.GetString(2), r.GetString(3)) : (id, 0, null, "", "");
+    }
+
+    /// <summary>История сайта: всё или по проекту, новые сверху; limit — сколько последних.</summary>
+    public List<HistoryRow> History(long? projectId, int limit)
+    {
+        using var c = _db.Open();
+        var list = new List<HistoryRow>();
+        using var r = Query(c, """
+            SELECT s.Id, s.Time, p.Id, COALESCE(p.Name, s.ProjectName), s.Kind, s.Text, cl.Id, s.Author
+            FROM SiteLog s
+            LEFT JOIN Projects p ON p.Id = s.ProjectId
+            LEFT JOIN Clashes cl ON cl.Id = s.ClashId
+            WHERE $p IS NULL OR s.ProjectId = $p
+            ORDER BY s.Id DESC LIMIT $n
+            """, ("$p", projectId), ("$n", limit));
+        while (r.Read())
+            list.Add(new HistoryRow
+            {
+                Id = r.GetInt64(0), Time = Database.Time(r.GetString(1)), ProjectId = r.IsDBNull(2) ? null : r.GetInt64(2),
+                ProjectName = Str(r, 3), Kind = r.GetString(4), Text = r.GetString(5), ClashId = r.IsDBNull(6) ? null : r.GetInt64(6),
+                Author = Str(r, 7),
+            });
+        return list;
     }
 
     public void AddComment(long id, string text, string author)
@@ -433,6 +516,9 @@ public sealed class ClashStore
         using var c = _db.Open();
         using var tx = c.BeginTransaction();
         AddEvent(c, tx, id, Database.Time(DateTime.Now), EventKinds.Comment, text.Trim(), null, null, author, null);
+        var info = ClashInfo(c, tx, id);
+        if (info.Project != 0)
+            SiteHistory.Write(c, tx, info.Project, SiteHistory.Comment, SiteHistory.Clash(info.Name, info.Block, info.Test) + ": «" + SiteHistory.Cut(text) + "»", id, author);
         tx.Commit();
     }
 

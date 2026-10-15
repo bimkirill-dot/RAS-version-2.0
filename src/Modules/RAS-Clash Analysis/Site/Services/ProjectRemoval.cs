@@ -42,6 +42,10 @@ public sealed class ProjectRemoval
         }
 
         var reports = _store.DeleteProject(id);
+        SiteHistory.Write(_db, null, SiteHistory.ProjectDeleted,
+            $"Папка {project.Folder}; удалено с сайта: {Fmt.Plural(contents.Reports, "отчёт", "отчёта", "отчётов")}, {Fmt.Plural(contents.Clashes, "коллизия", "коллизии", "коллизий")}"
+            + (contents.Comments > 0 ? $", комментариев — {contents.Comments}" : "") + ". Копия базы перед удалением сохранена.",
+            projectName: project.Name);
 
         // снимки — после базы: не удалились (заняты) — лишние файлы, а не потерянные данные
         var left = 0;

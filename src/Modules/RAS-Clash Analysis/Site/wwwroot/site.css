@@ -94,6 +94,23 @@ header.top {
 a.head-btn + .head-btn { margin-left: 8px; }
 /* страница «Настройки» */
 .settings-page { max-width: 860px; }
+/* история сайта: страница «История» и раздел «История» проекта */
+.history-page { max-width: 1100px; }
+.history-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 4px; }
+.history-bar .search { min-width: 220px; }
+.history-day { font-size: 13px; color: var(--muted); font-weight: 600; margin: 18px 0 6px; }
+.history-table td { vertical-align: top; padding-top: 7px; padding-bottom: 7px; }
+.history-table .h-time { width: 52px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.history-table .h-project { width: 180px; }
+.history-table .h-kind-cell { width: 150px; }
+.history-table .h-text { overflow-wrap: anywhere; }
+.h-kind { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--accent-bg); color: var(--accent-strong); white-space: nowrap; }
+/* отчёты — акцент, коллизии — зелёный, проекты и сайт — нейтральные; красный — только «не выполнено» и предупреждения */
+.h-kind.h-clashes { background: var(--fixed-bg); color: var(--fixed); }
+.h-kind.h-projects { background: transparent; color: var(--text); border: 1px solid var(--line); }
+.h-kind.h-site { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+.h-kind.h-problem { background: var(--active-bg); color: var(--active); }
+.h-open { margin-left: 8px; font-size: 12px; }
 .set-block { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px 18px 14px; margin: 0 0 14px; }
 .set-block h2 { font-size: 16px; }
 .set-row { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 12px; align-items: center; margin: 8px 0; color: var(--text); font-size: 14px; }

@@ -66,6 +66,21 @@ public sealed class RunDelta
     }
 }
 
+/// <summary>Запись истории сайта (SiteHistory).</summary>
+public sealed class HistoryRow
+{
+    public long Id { get; set; }
+    public DateTime Time { get; set; }
+    /// <summary>Проект ещё есть — на него можно перейти; удалён — только название.</summary>
+    public long? ProjectId { get; set; }
+    public string ProjectName { get; set; }
+    public string Kind { get; set; }
+    public string Text { get; set; }
+    /// <summary>Коллизия ещё есть — на неё можно перейти.</summary>
+    public long? ClashId { get; set; }
+    public string Author { get; set; }
+}
+
 /// <summary>Что удалится вместе с проектом — для вопроса перед удалением.</summary>
 public sealed class ProjectContents
 {

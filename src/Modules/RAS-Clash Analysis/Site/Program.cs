@@ -37,7 +37,10 @@ var log = app.Services.GetRequiredService<ILogger<Program>>();
 log.LogInformation("Сайт запускается (процесс {Pid}). Данные: {Data}; копии базы: {Backups}", Environment.ProcessId, options.Data, options.Backups);
 ExitWatch.Start(log);
 app.Lifetime.ApplicationStopping.Register(() => log.LogInformation("Сайт останавливается."));
-app.Services.GetRequiredService<Database>().Migrate(log);
+var database = app.Services.GetRequiredService<Database>();
+var baseBefore = database.Migrate(log);
+// история сайта: обновление программы и перенос базы (DECISIONS.md модуля, «История сайта»)
+SiteHistory.NoteStart(database, baseBefore);
 
 app.UseExceptionHandler("/Error", createScopeForErrors: true);
 app.UseStaticFiles();
