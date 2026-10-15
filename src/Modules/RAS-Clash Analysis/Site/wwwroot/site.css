@@ -692,7 +692,7 @@ table.clashes tbody tr.selected { background: var(--row-selected); }
 /* карточки проекта одной высоты: строки — на одних местах, полоса «исправлено» — всегда внизу */
 .proj-card { display: flex; flex-direction: column; }
 .pc-progress { display: flex; align-items: center; gap: 10px; margin-top: auto; }
-.pc-progress .kpi-bar { flex: 1; margin: 0; }
+.pc-progress .kpi-bar { flex: 1; margin: 0; position: relative; top: 2px; } /* на глаз — по середине строчных букв подписи «исправлено N %» */
 
 /* карточка коллизии */
 .panel { padding: 0 16px 16px; }
