@@ -28,7 +28,8 @@ public sealed class ImportResult
 /// <summary>
 /// Загрузка отчётов из папок проектов (DECISIONS.md модуля: проект — папка с отчётами; проверка — из отчёта; дата — из XML).
 /// Отчёт — XML в папке проекта и её подпапках (кроме папок снимков «…_files»). Тот же файл с тем же содержимым второй раз
-/// не загружается; Navisworks перезаписал файл — это новый отчёт. Снимки копируются к себе: в папке их перезапишет следующий прогон.
+/// не загружается; Navisworks перезаписал файл — это новый отчёт, а если день прогона тот же (выгрузили заново в ту же папку
+/// прогона) — замена прежнего (DECISIONS.md, «Замена отчёта»). Снимки копируются к себе: в папке их перезапишет следующий прогон.
 /// </summary>
 public sealed class ReportImporter
 {
@@ -87,6 +88,7 @@ public sealed class ReportImporter
     private List<ImportResult> Scan(long? projectId)
     {
         var results = new List<ImportResult>();
+        _backupBeforeReplace = false;
         var projects = new List<(long Id, string Name, string Folder)>();
         using (var c = _db.Open())
         using (var cmd = ClashStore.Command(c, "SELECT Id, Name, Folder FROM Projects"))
@@ -102,7 +104,7 @@ public sealed class ReportImporter
                 results.Add(new ImportResult { ProjectName = p.Name, File = p.Folder, Error = true, Message = "Папка отчётов не найдена или недоступна." });
                 continue;
             }
-            var candidates = new List<(string Path, string Hash, DateTime FileTime, ClashReport Report, ReportPlace Place, DateTime Date, string DateSource)>();
+            var candidates = new List<(string Path, string Hash, DateTime FileTime, ClashReport Report, ReportPlace Place, DateTime Date, string DateSource, long? Replaces)>();
             foreach (var file in ReportFiles(p.Folder))
             {
                 try
@@ -129,7 +131,18 @@ public sealed class ReportImporter
                     // критичность, блок и дата прогона — из названий папок (ReportPath)
                     var place = ReportPath.Parse(p.Folder, file);
                     var date = ReportPath.ReportDate(report, fileTime, place.RunDate, out var dateSource);
-                    candidates.Add((file, hash, fileTime, report, place, date, dateSource));
+                    // тот же файл, тот же день прогона — выгрузили заново: замена прежнего отчёта
+                    var previous = PreviousVariant(p.Id, file);
+                    long? replaces = previous != null && previous.Value.Date.Date == date.Date ? previous.Value.Id : null;
+                    if (replaces != null && LaterRuns(replaces.Value) is string blocker)
+                    {
+                        _badFiles.Add(badKey);
+                        _log.LogWarning("Отчёт заменён, но не загружен: {File} — {Reason}", file, blocker);
+                        results.Add(new ImportResult { ProjectName = p.Name, File = file, Error = true,
+                            Message = "Файл выгружен заново, но " + blocker + " Заменить можно только последний отчёт проверки; иначе — удалить проект и добавить заново." });
+                        continue;
+                    }
+                    candidates.Add((file, hash, fileTime, report, place, date, dateSource, replaces));
                 }
                 catch (IOException ex)
                 {
@@ -141,12 +154,18 @@ public sealed class ReportImporter
                     results.Add(new ImportResult { ProjectName = p.Name, File = file, Error = true, Message = "Нет доступа: " + ex.Message });
                 }
             }
+            // замена отчётов — с копией базы перед первой из них (одна на проверку папок)
+            if (candidates.Any(x => x.Replaces != null) && !_backupBeforeReplace)
+            {
+                BackupBeforeReplace();
+                _backupBeforeReplace = true;
+            }
             // по дате отчёта: история коллизий складывается в том порядке, в каком шли прогоны
             foreach (var x in candidates.OrderBy(x => x.Date).ThenBy(x => x.Path, StringComparer.OrdinalIgnoreCase))
             {
                 try
                 {
-                    var result = Import(p.Id, x.Path, x.Hash, x.FileTime, x.Report, x.Place, x.Date, x.DateSource);
+                    var result = Import(p.Id, x.Path, x.Hash, x.FileTime, x.Report, x.Place, x.Date, x.DateSource, x.Replaces);
                     result.ProjectName = p.Name;
                     results.Add(result);
                     _log.LogInformation("Загружен отчёт {File}: новых {New}, снова {Again}, появились снова {Reappeared}, исправлены {Fixed}",
@@ -179,14 +198,162 @@ public sealed class ReportImporter
         return cmd.ExecuteScalar() as string == hash;
     }
 
-    private ImportResult Import(long projectId, string path, string hash, DateTime fileTime, ClashReport report, ReportPlace place,
-        DateTime date, string dateSource)
+    /// <summary>Последний загруженный вариант файла: номер отчёта и его дата; не загружался — null.</summary>
+    private (long Id, DateTime Date)? PreviousVariant(long projectId, string path)
     {
-        var result = new ImportResult { File = path, Message = "Загружен" };
+        using var c = _db.Open();
+        using var cmd = ClashStore.Command(c, "SELECT Id, ReportDate FROM Reports WHERE ProjectId = $p AND FilePath = $f ORDER BY Id DESC LIMIT 1",
+            ("$p", projectId), ("$f", path));
+        using var r = cmd.ExecuteReader();
+        return r.Read() ? (r.GetInt64(0), Database.Time(r.GetString(1))) : null;
+    }
+
+    /// <summary>
+    /// Почему отчёт нельзя заменить: по его проверке уже загружены более поздние прогоны (их история опирается на него);
+    /// можно — null.
+    /// </summary>
+    private string LaterRuns(long reportId)
+    {
+        using var c = _db.Open();
+        using var cmd = ClashStore.Command(c, """
+            SELECT t.Name, MAX(ro.ReportDate) FROM ReportTests rt
+            JOIN Reports rp ON rp.Id = rt.ReportId
+            JOIN Tests t ON t.Id = rt.TestId
+            JOIN ReportTests o ON o.TestId = rt.TestId AND o.ReportId <> rt.ReportId
+            JOIN Reports ro ON ro.Id = o.ReportId
+            WHERE rt.ReportId = $r AND ro.ReportDate > rp.ReportDate
+            GROUP BY t.Id LIMIT 1
+            """, ("$r", reportId));
+        using var r = cmd.ExecuteReader();
+        return r.Read() ? $"по проверке «{r.GetString(0)}» уже загружен более поздний прогон ({Database.Time(r.GetString(1)):dd.MM.yyyy})." : null;
+    }
+
+    private bool _backupBeforeReplace;
+
+    /// <summary>Копия базы рядом с ней перед заменой отчётов — как перед удалением проекта.</summary>
+    private void BackupBeforeReplace()
+    {
+        var copy = _db.File + $".до-замены-отчётов-{DateTime.Now:yyyyMMdd-HHmmss}";
+        using (var source = _db.Open())
+        using (var target = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = copy, Pooling = false }.ToString()))
+        {
+            target.Open();
+            source.BackupDatabase(target);
+        }
+        _log.LogInformation("Копия базы перед заменой отчётов: {Copy}", copy);
+    }
+
+    /// <summary>
+    /// Отменить всё, что принёс отчёт (он — последний по своим проверкам, LaterRuns): его появления и записи истории
+    /// убираются, у затронутых коллизий — состояние до него (последняя оставшаяся смена статуса, в том числе ручная),
+    /// у проверок — прежний последний отчёт. Коллизии, найденные им, пока остаются без появлений («ждут» новый отчёт):
+    /// есть в новом — сохраняются с историей и комментариями, нет — удаляются (FinishReplace).
+    /// </summary>
+    private static HashSet<long> UndoReport(SqliteConnection c, SqliteTransaction tx, long reportId)
+    {
+        var pending = new HashSet<long>();
+        using (var cmd = ClashStore.Command(c, "SELECT DISTINCT ClashId FROM Events WHERE ReportId = $r AND Kind = 'found'", ("$r", reportId)))
+        {
+            cmd.Transaction = tx;
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) pending.Add(r.GetInt64(0));
+        }
+        var affected = new HashSet<long>();
+        using (var cmd = ClashStore.Command(c, "SELECT ClashId FROM Occurrences WHERE ReportId = $r UNION SELECT ClashId FROM Events WHERE ReportId = $r", ("$r", reportId)))
+        {
+            cmd.Transaction = tx;
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) affected.Add(r.GetInt64(0));
+        }
+        var tests = new List<long>();
+        using (var cmd = ClashStore.Command(c, "SELECT TestId FROM ReportTests WHERE ReportId = $r", ("$r", reportId)))
+        {
+            cmd.Transaction = tx;
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) tests.Add(r.GetInt64(0));
+        }
+
+        Exec(c, tx, """
+            UPDATE Clashes SET ReturnCount = MAX(0, ReturnCount - (SELECT COUNT(*) FROM Events e WHERE e.ClashId = Clashes.Id AND e.ReportId = $r AND e.Kind = 'reappeared'))
+            WHERE Id IN (SELECT ClashId FROM Events WHERE ReportId = $r AND Kind = 'reappeared')
+            """, ("$r", reportId));
+        Exec(c, tx, "DELETE FROM Events WHERE ReportId = $r AND Kind <> 'found'", ("$r", reportId));
+        Exec(c, tx, "DELETE FROM Elements WHERE OccurrenceId IN (SELECT Id FROM Occurrences WHERE ReportId = $r)", ("$r", reportId));
+        Exec(c, tx, "DELETE FROM Occurrences WHERE ReportId = $r", ("$r", reportId));
+        Exec(c, tx, "DELETE FROM ReportTests WHERE ReportId = $r", ("$r", reportId));
+
+        // проверки — прежний последний отчёт
+        foreach (var t in tests)
+            Exec(c, tx, """
+                UPDATE Tests SET
+                    LastReportId = (SELECT rp.Id FROM ReportTests rt JOIN Reports rp ON rp.Id = rt.ReportId WHERE rt.TestId = $t ORDER BY rp.ReportDate DESC, rp.Id DESC LIMIT 1),
+                    LastReportDate = (SELECT rp.ReportDate FROM ReportTests rt JOIN Reports rp ON rp.Id = rt.ReportId WHERE rt.TestId = $t ORDER BY rp.ReportDate DESC, rp.Id DESC LIMIT 1)
+                WHERE Id = $t
+                """, ("$t", t));
+
+        // затронутые коллизии, найденные раньше, — состояние до этого отчёта
+        foreach (var id in affected.Where(id => !pending.Contains(id)))
+            Exec(c, tx, """
+                UPDATE Clashes SET
+                    State = COALESCE((SELECT e.NewState FROM Events e WHERE e.ClashId = $id AND e.NewState IS NOT NULL ORDER BY e.Id DESC LIMIT 1), State),
+                    FirstSeen = COALESCE((SELECT MIN(r.ReportDate) FROM Occurrences o JOIN Reports r ON r.Id = o.ReportId WHERE o.ClashId = $id), FirstSeen),
+                    LastSeen = COALESCE((SELECT MAX(r.ReportDate) FROM Occurrences o JOIN Reports r ON r.Id = o.ReportId WHERE o.ClashId = $id), LastSeen),
+                    LastOccurrenceId = (SELECT o.Id FROM Occurrences o JOIN Reports r ON r.Id = o.ReportId WHERE o.ClashId = $id ORDER BY r.ReportDate DESC, o.Id DESC LIMIT 1),
+                    InLastReport = EXISTS(SELECT 1 FROM Occurrences o JOIN Tests t ON t.Id = Clashes.TestId
+                                          WHERE o.ClashId = $id AND o.ReportId = t.LastReportId AND o.NavisStatus <> $resolved)
+                WHERE Id = $id
+                """, ("$id", id), ("$resolved", (int)NavisworksStatus.Resolved));
+        foreach (var id in pending)
+            Exec(c, tx, "UPDATE Clashes SET LastOccurrenceId = NULL, InLastReport = 0 WHERE Id = $id", ("$id", id));
+        return pending;
+    }
+
+    /// <summary>
+    /// После загрузки нового отчёта вместо прежнего: коллизии прежнего, которых в новом нет, удаляются (их не было —
+    /// отчёт выгрузили неправильно); записи истории, ещё указывающие на прежний отчёт, отвязываются; проверки без отчётов и
+    /// коллизий — из базы; прежний отчёт — из базы.
+    /// Возвращает: сколько коллизий удалено и сколько у них было комментариев.
+    /// </summary>
+    private static (int Clashes, int Comments) FinishReplace(SqliteConnection c, SqliteTransaction tx, long oldReport, HashSet<long> pending)
+    {
+        var gone = new List<long>();
+        foreach (var id in pending)
+        {
+            using var cmd = ClashStore.Command(c, "SELECT COUNT(*) FROM Occurrences WHERE ClashId = $id", ("$id", id));
+            cmd.Transaction = tx;
+            if ((long)cmd.ExecuteScalar()! == 0) gone.Add(id);
+        }
+        var comments = 0;
+        foreach (var id in gone)
+        {
+            using (var cmd = ClashStore.Command(c, "SELECT COUNT(*) FROM Events WHERE ClashId = $id AND Kind = 'comment'", ("$id", id)))
+            {
+                cmd.Transaction = tx;
+                comments += (int)(long)cmd.ExecuteScalar()!;
+            }
+            Exec(c, tx, "DELETE FROM Events WHERE ClashId = $id", ("$id", id));
+            Exec(c, tx, "DELETE FROM Clashes WHERE Id = $id", ("$id", id));
+        }
+        Exec(c, tx, "UPDATE Events SET ReportId = NULL WHERE ReportId = $r", ("$r", oldReport));
+        // проверка, которой не осталось ни в одном отчёте и без коллизий (например, с опечаткой в названии, исправленной при новой выгрузке), — не нужна
+        Exec(c, tx, """
+            DELETE FROM Tests WHERE ProjectId = (SELECT ProjectId FROM Reports WHERE Id = $r)
+              AND NOT EXISTS(SELECT 1 FROM ReportTests rt WHERE rt.TestId = Tests.Id) AND NOT EXISTS(SELECT 1 FROM Clashes cl WHERE cl.TestId = Tests.Id)
+            """, ("$r", oldReport));
+        Exec(c, tx, "DELETE FROM Reports WHERE Id = $r", ("$r", oldReport));
+        return (gone.Count, comments);
+    }
+
+    private ImportResult Import(long projectId, string path, string hash, DateTime fileTime, ClashReport report, ReportPlace place,
+        DateTime date, string dateSource, long? replaces)
+    {
+        var result = new ImportResult { File = path, Message = replaces == null ? "Загружен" : "Заменён (выгружен заново)" };
         var reportDate = Database.Time(date);
         var now = Database.Time(DateTime.Now);
         using var c = _db.Open();
         using var tx = c.BeginTransaction();
+        // выгрузили заново в тот же прогон: сначала отменить всё, что принёс прежний вариант файла
+        var pending = replaces == null ? new HashSet<long>() : UndoReport(c, tx, replaces.Value);
 
         var reportId = Insert(c, tx, """
             INSERT INTO Reports(ProjectId, FilePath, FileHash, FileTime, ReportDate, DateFromReport, Units, Imported, Results, Criticality, Block, DateSource)
@@ -217,8 +384,8 @@ public sealed class ReportImporter
 
             var steps = ReportMerge.Plan(test.Name, known, test.Results, complete);
             // предохранитель: пропало подозрительно много — предупреждение и «Вернуть активными» в «Отчётах» (DECISIONS.md, «Предохранитель»)
-            var activeBefore = known.Count(k => k.State == ClashState.Active);
-            var vanished = steps.Count(s => s.Action == MergeAction.Gone && s.StateChanged);
+            var activeBefore = known.Count(k => k.State == ClashState.Active && !pending.Contains(k.Id));
+            var vanished = steps.Count(s => s.Action == MergeAction.Gone && s.StateChanged && !pending.Contains(s.Known.Id));
             if (latest && ReportMerge.TooManyGone(activeBefore, vanished))
             {
                 var warning = $"«{test.Name}»: исправлены сразу {vanished} из {activeBefore} активных. Если в Navisworks не подгрузилась модель — "
@@ -229,6 +396,21 @@ public sealed class ReportImporter
             }
             foreach (var step in steps)
             {
+                // коллизия, найденная прежним вариантом отчёта: есть в новом — та же коллизия, найдена этим отчётом
+                // (история и комментарии сохраняются); нет — удалится после загрузки (FinishReplace)
+                if (step.Known != null && pending.Contains(step.Known.Id))
+                {
+                    if (step.Result == null) continue;
+                    var state = ManualState(c, tx, step.Known.Id)
+                                ?? (step.Present ? ClashRules.StateOf(step.Result.Status) : ClashState.Fixed);
+                    Exec(c, tx, "UPDATE Clashes SET State = $s, InLastReport = $in, FirstSeen = $d, LastSeen = $d WHERE Id = $id",
+                        ("$s", (int)state), ("$in", step.Present ? 1 : 0), ("$d", reportDate), ("$id", step.Known.Id));
+                    AddOccurrence(c, tx, step.Known.Id, reportId, report, step.Result, step.Points, makeLast: true, reportDate);
+                    Exec(c, tx, "UPDATE Events SET ReportId = $r WHERE ClashId = $id AND Kind = 'found' AND ReportId = $old",
+                        ("$r", reportId), ("$id", step.Known.Id), ("$old", replaces));
+                    result.New++;
+                    continue;
+                }
                 if (!latest)
                 {
                     if (step.Result == null) continue;
@@ -296,8 +478,35 @@ public sealed class ReportImporter
         if (result.Warning != null)
             Exec(c, tx, "UPDATE Reports SET Warning = $w, Suspicious = $s WHERE Id = $id",
                 ("$w", result.Warning), ("$s", result.Suspicious ? 1 : 0), ("$id", reportId));
+        var removed = replaces == null ? (0, 0) : FinishReplace(c, tx, replaces.Value, pending);
         tx.Commit();
+        if (replaces != null)
+        {
+            // снимки прежнего варианта — после базы: не удалились — лишние файлы, а не потерянные данные
+            var folder = Path.Combine(_options.ImagesFolder, replaces.Value.ToString());
+            try
+            {
+                if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                _log.LogWarning("Снимки заменённого отчёта не удалены: {Folder} — {Reason}", folder, ex.Message);
+            }
+            _log.LogInformation("Отчёт {File} заменён (прежний — {Old}): коллизий только из прежнего удалено {Removed}, комментариев у них {Comments}",
+                path, replaces, removed.Item1, removed.Item2);
+        }
         return result;
+    }
+
+    /// <summary>Статус, поставленный человеком (последняя смена статуса — не от загрузки); нет — null.</summary>
+    private static ClashState? ManualState(SqliteConnection c, SqliteTransaction tx, long clashId)
+    {
+        using var cmd = ClashStore.Command(c, """
+            SELECT NewState FROM Events WHERE ClashId = $id AND NewState IS NOT NULL AND Kind = 'status' ORDER BY Id DESC LIMIT 1
+            """, ("$id", clashId));
+        cmd.Transaction = tx;
+        var v = cmd.ExecuteScalar();
+        return v == null || v is DBNull ? null : (ClashState)(int)(long)v;
     }
 
     private static (long Id, string LastDate, long? LastReportId) EnsureTest(SqliteConnection c, SqliteTransaction tx, long projectId, ClashTest test, ReportPlace place)
