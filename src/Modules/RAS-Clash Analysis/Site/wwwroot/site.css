@@ -298,6 +298,12 @@ table.reports th:nth-child(5) { width: 150px; }
 /* проверки, впервые попавшие в прогон, и пропавшие из него — не коллизии, а набор проверок: спокойнее */
 .d-tests { color: var(--accent-strong); font-weight: 500; cursor: help; }
 .d-dropped { color: var(--muted); font-weight: 500; cursor: help; }
+/* удаление отчёта / прогона — тихая ссылка в строке, видна при наведении на строку */
+.row-action { margin-left: 10px; color: var(--muted); opacity: 0; }
+tr:hover .row-action, .row-action:focus-visible { opacity: 1; }
+.row-action:hover { color: var(--danger, #e5484d); }
+.deleted-reports { margin-top: 14px; }
+.deleted-reports summary { cursor: pointer; padding: 6px 0; }
 .pc-run { display: flex; gap: 8px; align-items: baseline; color: var(--muted); margin-top: 2px; }
 .tag.run-new { background: var(--active-bg); color: var(--active); }
 .tag.run-new, .tag.run-fixed, .tag.run-returned { display: inline-block; text-decoration: none; margin-left: 6px; }

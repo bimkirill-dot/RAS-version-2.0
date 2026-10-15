@@ -193,9 +193,78 @@ public sealed class ReportImporter
     private bool Known(long projectId, string path, string hash)
     {
         using var c = _db.Open();
-        using var cmd = ClashStore.Command(c, "SELECT FileHash FROM Reports WHERE ProjectId = $p AND FilePath = $f ORDER BY Id DESC LIMIT 1",
-            ("$p", projectId), ("$f", path));
-        return cmd.ExecuteScalar() as string == hash;
+        using (var cmd = ClashStore.Command(c, "SELECT FileHash FROM Reports WHERE ProjectId = $p AND FilePath = $f ORDER BY Id DESC LIMIT 1",
+                   ("$p", projectId), ("$f", path)))
+            if (cmd.ExecuteScalar() as string == hash) return true;
+        // удалён с сайта в этом виде — пропускается, пока не выгрузят заново (DECISIONS.md, «Удаление отчёта с сайта»)
+        using (var cmd = ClashStore.Command(c, "SELECT 1 FROM DeletedReports WHERE ProjectId = $p AND FilePath = $f AND FileHash = $h",
+                   ("$p", projectId), ("$f", path), ("$h", hash)))
+            return cmd.ExecuteScalar() != null;
+    }
+
+    /// <summary>
+    /// Удалить отчёты с сайта (DECISIONS.md, «Удаление отчёта с сайта»): всё, что они принесли, отменяется — как при замене,
+    /// только без нового отчёта; файлы запоминаются, чтобы проверка папки не загрузила их снова. Только последние отчёты
+    /// своих проверок; перед удалением — копия базы. Идёт, пока не идёт загрузка. Возвращает: сколько коллизий удалено.
+    /// </summary>
+    public Task<int> DeleteReportsAsync(long projectId, IReadOnlyCollection<long> reportIds) => ExclusiveAsync(() => DeleteReports(projectId, reportIds));
+
+    private int DeleteReports(long projectId, IReadOnlyCollection<long> reportIds)
+    {
+        foreach (var id in reportIds)
+            if (LaterRuns(id) is string blocker)
+                throw new InvalidOperationException("Удалить нельзя: " + blocker + " Удалить можно только последний отчёт проверки.");
+
+        var copy = _db.File + $".до-удаления-отчётов-{DateTime.Now:yyyyMMdd-HHmmss}";
+        using (var source = _db.Open())
+        using (var target = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = copy, Pooling = false }.ToString()))
+        {
+            target.Open();
+            source.BackupDatabase(target);
+        }
+
+        var now = Database.Time(DateTime.Now);
+        var removed = 0;
+        var comments = 0;
+        var files = new List<string>();
+        using (var c = _db.Open())
+        using (var tx = c.BeginTransaction())
+        {
+            foreach (var id in reportIds)
+            {
+                string path, hash, date, block;
+                using (var cmd = ClashStore.Command(c, "SELECT FilePath, FileHash, ReportDate, Block FROM Reports WHERE Id = $id AND ProjectId = $p", ("$id", id), ("$p", projectId)))
+                {
+                    cmd.Transaction = tx;
+                    using var r = cmd.ExecuteReader();
+                    if (!r.Read()) throw new InvalidOperationException("Отчёт не найден — возможно, его уже удалили или заменили.");
+                    (path, hash, date, block) = (r.GetString(0), r.GetString(1), r.GetString(2), r.GetString(3));
+                }
+                var pending = UndoReport(c, tx, id);
+                var (gone, notes) = FinishReplace(c, tx, id, pending);
+                removed += gone;
+                comments += notes;
+                Exec(c, tx, "INSERT INTO DeletedReports(ProjectId, FilePath, FileHash, ReportDate, Block, Deleted) VALUES($p, $f, $h, $d, $b, $t)",
+                    ("$p", projectId), ("$f", path), ("$h", hash), ("$d", date), ("$b", block), ("$t", now));
+                files.Add(path);
+            }
+            tx.Commit();
+        }
+        foreach (var id in reportIds)
+        {
+            var folder = Path.Combine(_options.ImagesFolder, id.ToString());
+            try
+            {
+                if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                _log.LogWarning("Снимки удалённого отчёта не удалены: {Folder} — {Reason}", folder, ex.Message);
+            }
+        }
+        _log.LogInformation("Удалены с сайта отчёты ({Count}): {Files}; коллизий только из них удалено {Removed}, комментариев у них {Comments}. Копия базы перед удалением: {Copy}",
+            reportIds.Count, string.Join("; ", files), removed, comments, copy);
+        return removed;
     }
 
     /// <summary>Последний загруженный вариант файла: номер отчёта и его дата; не загружался — null.</summary>

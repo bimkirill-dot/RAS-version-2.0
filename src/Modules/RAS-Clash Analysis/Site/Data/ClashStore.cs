@@ -119,6 +119,7 @@ public sealed class ClashStore
             $"DELETE FROM Occurrences WHERE ClashId IN ({clashes}) OR ReportId IN ({reportIds})",
             $"DELETE FROM Events WHERE ClashId IN ({clashes}) OR ReportId IN ({reportIds})",
             $"DELETE FROM ReportTests WHERE ReportId IN ({reportIds})",
+            "DELETE FROM DeletedReports WHERE ProjectId = $p",
             "DELETE FROM Clashes WHERE ProjectId = $p",
             "DELETE FROM Tests WHERE ProjectId = $p",
             "DELETE FROM TypeNames WHERE ProjectId = $p",
@@ -218,7 +219,61 @@ public sealed class ClashStore
                         x.NewTestClashes += t.GetInt32(3);
                     }
                 }
+        // последний отчёт своих проверок — можно удалить с сайта
+        var lastByTest = new Dictionary<long, DateTime>();
+        foreach (var x in list)
+            foreach (var t in x.TestIds)
+                if (!lastByTest.TryGetValue(t, out var d) || x.ReportDate > d) lastByTest[t] = x.ReportDate;
+        foreach (var x in list) x.Latest = x.TestIds.All(t => lastByTest[t] <= x.ReportDate);
         return list;
+    }
+
+    /// <summary>Что будет, если удалить эти отчёты с сайта (ReportImporter.DeleteReportsAsync).</summary>
+    public ReportDeletion DeletionPreview(IReadOnlyCollection<long> reportIds)
+    {
+        var set = string.Join(",", reportIds.Select(i => i.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        using var c = _db.Open();
+        long Count(string sql)
+        {
+            using var cmd = Command(c, sql);
+            return (long)cmd.ExecuteScalar()!;
+        }
+        var only = $"""
+            SELECT cl.Id FROM Clashes cl
+            WHERE EXISTS(SELECT 1 FROM Events e WHERE e.ClashId = cl.Id AND e.Kind = 'found' AND e.ReportId IN ({set}))
+              AND NOT EXISTS(SELECT 1 FROM Occurrences o WHERE o.ClashId = cl.Id AND o.ReportId NOT IN ({set}))
+            """;
+        return new ReportDeletion
+        {
+            Reports = reportIds.Count,
+            Removed = (int)Count($"SELECT COUNT(*) FROM ({only})"),
+            Comments = (int)Count($"SELECT COUNT(*) FROM Events WHERE Kind = 'comment' AND ClashId IN ({only})"),
+            Unfixed = (int)Count($"SELECT COUNT(DISTINCT e.ClashId) FROM Events e JOIN Clashes cl ON cl.Id = e.ClashId WHERE e.ReportId IN ({set}) AND e.Kind = 'gone' AND cl.State = 1"),
+            Unreturned = (int)Count($"SELECT COUNT(DISTINCT ClashId) FROM Events WHERE ReportId IN ({set}) AND Kind = 'reappeared'"),
+        };
+    }
+
+    /// <summary>Файлы отчётов проекта, удалённые с сайта, — новые сверху.</summary>
+    public List<DeletedReportRow> DeletedReports(long projectId)
+    {
+        using var c = _db.Open();
+        var list = new List<DeletedReportRow>();
+        using var r = Query(c, "SELECT Id, FilePath, Block, ReportDate, Deleted FROM DeletedReports WHERE ProjectId = $p ORDER BY Deleted DESC, Id DESC", ("$p", projectId));
+        while (r.Read())
+            list.Add(new DeletedReportRow
+            {
+                Id = r.GetInt64(0), FilePath = r.GetString(1), Block = r.GetString(2),
+                ReportDate = Database.Time(r.GetString(3)), Deleted = Database.Time(r.GetString(4)),
+            });
+        return list;
+    }
+
+    /// <summary>«Загрузить снова»: файл больше не пропускается — следующая проверка папки загрузит его, если он ещё лежит в папке.</summary>
+    public void ForgetDeleted(long id)
+    {
+        using var c = _db.Open();
+        using var cmd = Command(c, "DELETE FROM DeletedReports WHERE Id = $id", ("$id", id));
+        cmd.ExecuteNonQuery();
     }
 
     /// <summary>

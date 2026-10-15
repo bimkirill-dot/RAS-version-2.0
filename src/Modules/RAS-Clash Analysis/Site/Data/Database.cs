@@ -236,6 +236,20 @@ public sealed class Database
         // 7 — 14.10.2026 (DECISIONS.md, «Имя файла модели — не часть коллизии»): «личность» — номера элементов без имени
         // модели. Коллизии, разошедшиеся из-за переименованной модели, — склеить (MergeRenamed, C#)
         "SELECT 1;",
+
+        // 8 — 15.10.2026 (DECISIONS.md, «Удаление отчёта с сайта»): файлы отчётов, удалённые с сайта, — чтобы проверка папок
+        // не загрузила их снова (путь + содержимое; выгрузили заново — другое содержимое, загрузится)
+        """
+        CREATE TABLE DeletedReports(
+            Id INTEGER PRIMARY KEY,
+            ProjectId INTEGER NOT NULL REFERENCES Projects(Id),
+            FilePath TEXT NOT NULL,
+            FileHash TEXT NOT NULL,
+            ReportDate TEXT NOT NULL,
+            Block TEXT NOT NULL,
+            Deleted TEXT NOT NULL);
+        CREATE INDEX DeletedReportsFile ON DeletedReports(ProjectId, FilePath);
+        """,
     };
 
     /// <summary>

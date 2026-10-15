@@ -326,6 +326,7 @@
                         <span class="path" title="Папка проекта">@_project.Folder</span>
                     </div>
                     <ImportResults Results="Importer.LastResults" />
+                    @if (_reportNotice != null) { <div class="toolbar"><span class="notice">@_reportNotice</span></div> }
                     @MissingBox()
                     <table class="grid reports">
                         <thead>
@@ -365,6 +366,11 @@
                                                 <span class="group-count">@Fmt.Plural(sg.Reports.Count, "отчёт", "отчёта", "отчётов") · @Fmt.Plural(sg.Reports.Sum(r => r.Results), "коллизия", "коллизии", "коллизий") в отчётах</span>
                                                 @SumDelta(sg.Reports, g.Subgroups.Where(x => x.Day < sg.Day).OrderByDescending(x => x.Day).FirstOrDefault()?.Reports)
                                                 @MissingMark(g.Block, sg.Day)
+                                                @if (sg.Day == g.Subgroups.Max(x => x.Day) && sg.Reports.All(r => r.Latest))
+                                                {
+                                                    <button class="btn link small row-action" title="Удалить с сайта все отчёты этого прогона блока"
+                                                            @onclick="() => AskDeleteReports(sg.Reports, BlockRunTitle(g.Block, sg.Day))" @onclick:stopPropagation="true">Удалить прогон</button>
+                                                }
                                             </td>
                                         </tr>
                                         @if (!subCollapsed)
@@ -396,6 +402,25 @@
                             </tbody>
                         }
                     </table>
+                    @if (_deleted.Count > 0)
+                    {
+                        @* удалённые с сайта: проверка папки их пропускает, пока их не выгрузят заново (DECISIONS.md, «Удаление отчёта с сайта») *@
+                        <details class="deleted-reports">
+                            <summary>Удалены с сайта: @Fmt.Plural(_deleted.Count, "отчёт", "отчёта", "отчётов") <span class="muted">— проверка папки их не загружает, пока их не выгрузят заново</span></summary>
+                            <table class="grid">
+                                @foreach (var d in _deleted)
+                                {
+                                    <tr>
+                                        <td>@Fmt.Day(d.ReportDate)</td>
+                                        <td>@ReportPath.BlockTitle(d.Block)</td>
+                                        <td class="file" title="@d.FilePath"><div class="cut">@System.IO.Path.GetFileName(d.FilePath)</div></td>
+                                        <td class="muted small">удалён @Fmt.Date(d.Deleted)</td>
+                                        <td><button class="btn small" title="Загрузить этот файл снова, если он ещё лежит в папке проекта" @onclick="() => RestoreDeleted(d)">Загрузить снова</button></td>
+                                    </tr>
+                                }
+                            </table>
+                        </details>
+                    }
                 </section>
             }
             else
@@ -451,8 +476,93 @@
     </div>
 }
 
+@if (_delReports != null)
+{
+    <div class="dialog-back">
+        <div class="dialog" role="dialog" aria-modal="true">
+            <h2>Удалить с сайта @_delTitle?</h2>
+            <p>@Fmt.Plural(_delPreview.Reports, "отчёт", "отчёта", "отчётов"). Всё, что принесли, отменится:</p>
+            <ul>
+                @if (_delPreview.Removed > 0)
+                {
+                    <li>@Fmt.Plural(_delPreview.Removed, "коллизия найдена", "коллизии найдены", "коллизий найдены") только в них — удалятся@(_delPreview.Comments > 0 ? $" (комментариев у них — {_delPreview.Comments})" : "");</li>
+                }
+                @if (_delPreview.Unfixed > 0)
+                {
+                    <li>@Fmt.Plural(_delPreview.Unfixed, "исправленная", "исправленные", "исправленных") ими — снова «Активная»;</li>
+                }
+                @if (_delPreview.Unreturned > 0)
+                {
+                    <li>@Fmt.Plural(_delPreview.Unreturned, "вернувшаяся", "вернувшиеся", "вернувшихся") в них — снова «Исправлена»;</li>
+                }
+                <li>у остальных — как было до них; статусы, поставленные вручную, сохраняются.</li>
+            </ul>
+            <p class="muted">
+                Файлы в папке проекта не удаляются. Сайт их больше не загрузит, пока их не выгрузят заново (вернуть — «Удалены с сайта» под отчётами).
+                Перед удалением сохраняется копия базы.
+            </p>
+            @if (_delError != null) { <p class="error">@_delError</p> }
+            <div class="actions dialog-buttons">
+                <button class="btn" disabled="@_delBusy" @onclick="() => _delReports = null">Отмена</button>
+                <button class="btn danger" disabled="@_delBusy" @onclick="DeleteReports">@(_delBusy ? "Удаляем…" : "Удалить")</button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter] public long Id { get; set; }
+
+    // ───── удаление отчётов с сайта (DECISIONS.md, «Удаление отчёта с сайта») ─────
+
+    private List<ReportRow> _delReports;
+    private ReportDeletion _delPreview;
+    private string _delTitle, _delError, _reportNotice;
+    private bool _delBusy;
+    private List<DeletedReportRow> _deleted = new();
+
+    private static string BlockRunTitle(string block, DateTime? day) =>
+        "прогон " + (string.IsNullOrEmpty(block) ? "" : ReportPath.BlockTitle(block) + " · ") + (day.HasValue ? Fmt.Day(day.Value) : "");
+
+    private void AskDeleteReport(ReportRow r) => AskDeleteReports(new[] { r }, "отчёт «" + System.IO.Path.GetFileName(r.FilePath) + "»");
+
+    private void AskDeleteReports(IEnumerable<ReportRow> reports, string title)
+    {
+        _delReports = reports.ToList();
+        _delTitle = title;
+        _delPreview = Store.DeletionPreview(_delReports.Select(r => r.Id).ToList());
+        _delError = null;
+    }
+
+    private async Task DeleteReports()
+    {
+        _delBusy = true;
+        _delError = null;
+        try
+        {
+            var removed = await Importer.DeleteReportsAsync(Id, _delReports.Select(r => r.Id).ToList());
+            _reportNotice = $"Удалено с сайта: {Fmt.Plural(_delReports.Count, "отчёт", "отчёта", "отчётов")}"
+                            + (removed > 0 ? $", коллизий только из них — {removed}." : ".");
+            _delReports = null;
+            LoadAll();
+        }
+        catch (Exception ex)
+        {
+            _delError = "Не удалено: " + ex.Message;
+        }
+        finally
+        {
+            _delBusy = false;
+        }
+    }
+
+    private async Task RestoreDeleted(DeletedReportRow d)
+    {
+        Store.ForgetDeleted(d.Id);
+        await Importer.ScanAsync(Id);
+        _reportNotice = "Файл снова загружается из папки проекта: " + System.IO.Path.GetFileName(d.FilePath);
+        LoadAll();
+    }
 
     /// <summary>Строка списка: заголовок группы или коллизия.</summary>
     private sealed class ListItem
@@ -554,6 +664,7 @@
         _editFolder ??= _project.Folder;
         _tests = Store.Tests(Id);
         _reports = Store.Reports(Id);
+        _deleted = Store.DeletedReports(Id);
         _criticalities = _tests.Select(t => t.Criticality).Distinct().OrderBy(ReportPath.CriticalityOrder).ToList();
         if (!_view.ScopeChosen || (_filter.Criticality != null && !_criticalities.Contains(_filter.Criticality)))
         {
@@ -1074,9 +1185,16 @@
                 }
             </td>
             <td class="num">@r.Results</td>
-            <td>@Fmt.Date(r.Imported)</td>
+            <td>
+                @Fmt.Date(r.Imported)
+                @if (r.Latest)
+                {
+                    <button class="btn link small row-action" title="Удалить этот отчёт с сайта" @onclick="() => AskDeleteReport(r)">Удалить</button>
+                }
+            </td>
         </tr>
     };
+
 
     private RenderFragment ReportSortHeader(string key, string title, string css = null) => __builder =>
     {
