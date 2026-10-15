@@ -23,13 +23,16 @@ public sealed class ImportResult
     public string Warning { get; set; }
     /// <summary>Пропало подозрительно много (ReportMerge.TooManyGone) — у отчёта «Вернуть активными».</summary>
     public bool Suspicious { get; set; }
+    /// <summary>Файла больше нет в папке проекта — отчёт удалён с сайта.</summary>
+    public bool Deleted { get; set; }
 }
 
 /// <summary>
 /// Загрузка отчётов из папок проектов (DECISIONS.md модуля: проект — папка с отчётами; проверка — из отчёта; дата — из XML).
 /// Отчёт — XML в папке проекта и её подпапках (кроме папок снимков «…_files»). Тот же файл с тем же содержимым второй раз
 /// не загружается; Navisworks перезаписал файл — это новый отчёт, а если день прогона тот же (выгрузили заново в ту же папку
-/// прогона) — замена прежнего (DECISIONS.md, «Замена отчёта»). Снимки копируются к себе: в папке их перезапишет следующий прогон.
+/// прогона) — замена прежнего (DECISIONS.md, «Замена отчёта»); файла больше нет в папке — отчёт удаляется и с сайта
+/// («Удаление отчёта — по папке»). Снимки копируются к себе: в папке их перезапишет следующий прогон.
 /// </summary>
 public sealed class ReportImporter
 {
@@ -88,7 +91,7 @@ public sealed class ReportImporter
     private List<ImportResult> Scan(long? projectId)
     {
         var results = new List<ImportResult>();
-        _backupBeforeReplace = false;
+        _backupDone = false;
         var projects = new List<(long Id, string Name, string Folder)>();
         using (var c = _db.Open())
         using (var cmd = ClashStore.Command(c, "SELECT Id, Name, Folder FROM Projects"))
@@ -105,7 +108,10 @@ public sealed class ReportImporter
                 continue;
             }
             var candidates = new List<(string Path, string Hash, DateTime FileTime, ClashReport Report, ReportPlace Place, DateTime Date, string DateSource, long? Replaces)>();
-            foreach (var file in ReportFiles(p.Folder))
+            var files = ReportFiles(p.Folder).ToList();
+            // файлов больше нет в папке — удалить и с сайта (до загрузки новых: удалённый прогон мог быть последним)
+            results.AddRange(RemoveMissing(p.Id, p.Name, p.Folder, files));
+            foreach (var file in files)
             {
                 try
                 {
@@ -155,11 +161,7 @@ public sealed class ReportImporter
                 }
             }
             // замена отчётов — с копией базы перед первой из них (одна на проверку папок)
-            if (candidates.Any(x => x.Replaces != null) && !_backupBeforeReplace)
-            {
-                BackupBeforeReplace();
-                _backupBeforeReplace = true;
-            }
+            if (candidates.Any(x => x.Replaces != null)) BackupOnce("замены-отчётов");
             // по дате отчёта: история коллизий складывается в том порядке, в каком шли прогоны
             foreach (var x in candidates.OrderBy(x => x.Date).ThenBy(x => x.Path, StringComparer.OrdinalIgnoreCase))
             {
@@ -193,78 +195,75 @@ public sealed class ReportImporter
     private bool Known(long projectId, string path, string hash)
     {
         using var c = _db.Open();
-        using (var cmd = ClashStore.Command(c, "SELECT FileHash FROM Reports WHERE ProjectId = $p AND FilePath = $f ORDER BY Id DESC LIMIT 1",
-                   ("$p", projectId), ("$f", path)))
-            if (cmd.ExecuteScalar() as string == hash) return true;
-        // удалён с сайта в этом виде — пропускается, пока не выгрузят заново (DECISIONS.md, «Удаление отчёта с сайта»)
-        using (var cmd = ClashStore.Command(c, "SELECT 1 FROM DeletedReports WHERE ProjectId = $p AND FilePath = $f AND FileHash = $h",
-                   ("$p", projectId), ("$f", path), ("$h", hash)))
-            return cmd.ExecuteScalar() != null;
+        using var cmd = ClashStore.Command(c, "SELECT FileHash FROM Reports WHERE ProjectId = $p AND FilePath = $f ORDER BY Id DESC LIMIT 1",
+            ("$p", projectId), ("$f", path));
+        return cmd.ExecuteScalar() as string == hash;
     }
 
     /// <summary>
-    /// Удалить отчёты с сайта (DECISIONS.md, «Удаление отчёта с сайта»): всё, что они принесли, отменяется — как при замене,
-    /// только без нового отчёта; файлы запоминаются, чтобы проверка папки не загрузила их снова. Только последние отчёты
-    /// своих проверок; перед удалением — копия базы. Идёт, пока не идёт загрузка. Возвращает: сколько коллизий удалено.
+    /// Отчёты, файлов которых больше нет в папке проекта, — удалить и с сайта (DECISIONS.md, «Удаление отчёта — по папке»):
+    /// всё, что они принесли, отменяется, как при замене, только без нового отчёта. С последних: удалить можно только
+    /// последний отчёт своих проверок (LaterRuns) — по одному, от новых к старым, так удаляются и несколько прогонов подряд.
+    /// Защита от недоступной папки: в папке нет ни одного отчёта или пропало больше половины — ничего не удаляется.
     /// </summary>
-    public Task<int> DeleteReportsAsync(long projectId, IReadOnlyCollection<long> reportIds) => ExclusiveAsync(() => DeleteReports(projectId, reportIds));
-
-    private int DeleteReports(long projectId, IReadOnlyCollection<long> reportIds)
+    private List<ImportResult> RemoveMissing(long projectId, string projectName, string folder, List<string> files)
     {
-        foreach (var id in reportIds)
-            if (LaterRuns(id) is string blocker)
-                throw new InvalidOperationException("Удалить нельзя: " + blocker + " Удалить можно только последний отчёт проверки.");
-
-        var copy = _db.File + $".до-удаления-отчётов-{DateTime.Now:yyyyMMdd-HHmmss}";
-        using (var source = _db.Open())
-        using (var target = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = copy, Pooling = false }.ToString()))
-        {
-            target.Open();
-            source.BackupDatabase(target);
-        }
-
-        var now = Database.Time(DateTime.Now);
-        var removed = 0;
-        var comments = 0;
-        var files = new List<string>();
+        var results = new List<ImportResult>();
+        var stored = new List<(long Id, string Path)>();
         using (var c = _db.Open())
-        using (var tx = c.BeginTransaction())
+        using (var cmd = ClashStore.Command(c, "SELECT Id, FilePath FROM Reports WHERE ProjectId = $p ORDER BY ReportDate DESC, Id DESC", ("$p", projectId)))
+        using (var r = cmd.ExecuteReader())
+            while (r.Read()) stored.Add((r.GetInt64(0), r.GetString(1)));
+        if (stored.Count == 0) return results;
+
+        var present = new HashSet<string>(files, StringComparer.OrdinalIgnoreCase);
+        var root = Path.GetFullPath(folder).TrimEnd('\\', '/') + Path.DirectorySeparatorChar;
+        // только отчёты из этой папки проекта (папку проекта могли сменить — прежние не трогаем)
+        var missing = stored.Where(x => !present.Contains(x.Path) && x.Path.StartsWith(root, StringComparison.OrdinalIgnoreCase) && !File.Exists(x.Path)).ToList();
+        if (missing.Count == 0) return results;
+
+        if (files.Count == 0 || missing.Count * 2 > stored.Count)
         {
-            foreach (var id in reportIds)
-            {
-                string path, hash, date, block;
-                using (var cmd = ClashStore.Command(c, "SELECT FilePath, FileHash, ReportDate, Block FROM Reports WHERE Id = $id AND ProjectId = $p", ("$id", id), ("$p", projectId)))
-                {
-                    cmd.Transaction = tx;
-                    using var r = cmd.ExecuteReader();
-                    if (!r.Read()) throw new InvalidOperationException("Отчёт не найден — возможно, его уже удалили или заменили.");
-                    (path, hash, date, block) = (r.GetString(0), r.GetString(1), r.GetString(2), r.GetString(3));
-                }
-                var pending = UndoReport(c, tx, id);
-                var (gone, notes) = FinishReplace(c, tx, id, pending);
-                removed += gone;
-                comments += notes;
-                Exec(c, tx, "INSERT INTO DeletedReports(ProjectId, FilePath, FileHash, ReportDate, Block, Deleted) VALUES($p, $f, $h, $d, $b, $t)",
-                    ("$p", projectId), ("$f", path), ("$h", hash), ("$d", date), ("$b", block), ("$t", now));
-                files.Add(path);
-            }
-            tx.Commit();
+            var why = files.Count == 0 ? "в папке проекта не найдено ни одного отчёта" : $"из папки пропало {missing.Count} отчётов из {stored.Count}";
+            _log.LogWarning("Проект «{Name}»: {Why} — с сайта ничего не удалено", projectName, why);
+            results.Add(new ImportResult { ProjectName = projectName, File = folder, Error = true,
+                Message = $"{char.ToUpper(why[0])}{why[1..]} — похоже, папка недоступна или её переложили. С сайта ничего не удалено. "
+                          + "Удалить проект целиком — «Удалить проект» в разделе «Проект»." });
+            return results;
         }
-        foreach (var id in reportIds)
+
+        foreach (var (id, path) in missing)
         {
-            var folder = Path.Combine(_options.ImagesFolder, id.ToString());
+            if (LaterRuns(id) is string blocker)
+            {
+                results.Add(new ImportResult { ProjectName = projectName, File = path, Error = true,
+                    Message = "Файла нет в папке, но на сайте отчёт оставлен: " + blocker + " Удалять прогоны можно с последнего." });
+                continue;
+            }
+            BackupOnce("удаления-отчётов");
+            int removed, comments;
+            using (var c = _db.Open())
+            using (var tx = c.BeginTransaction())
+            {
+                var pending = UndoReport(c, tx, id);
+                (removed, comments) = FinishReplace(c, tx, id, pending);
+                tx.Commit();
+            }
+            var images = Path.Combine(_options.ImagesFolder, id.ToString());
             try
             {
-                if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
+                if (Directory.Exists(images)) Directory.Delete(images, recursive: true);
             }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
             {
-                _log.LogWarning("Снимки удалённого отчёта не удалены: {Folder} — {Reason}", folder, ex.Message);
+                _log.LogWarning("Снимки удалённого отчёта не удалены: {Folder} — {Reason}", images, ex.Message);
             }
+            _log.LogInformation("Отчёт удалён с сайта — файла нет в папке: {File}; коллизий только из него удалено {Removed}, комментариев у них {Comments}",
+                path, removed, comments);
+            results.Add(new ImportResult { ProjectName = projectName, File = path, Deleted = true,
+                Message = "Файла нет в папке — удалён с сайта" + (removed > 0 ? $"; коллизий только из него — {removed}" : "") });
         }
-        _log.LogInformation("Удалены с сайта отчёты ({Count}): {Files}; коллизий только из них удалено {Removed}, комментариев у них {Comments}. Копия базы перед удалением: {Copy}",
-            reportIds.Count, string.Join("; ", files), removed, comments, copy);
-        return removed;
+        return results;
     }
 
     /// <summary>Последний загруженный вариант файла: номер отчёта и его дата; не загружался — null.</summary>
@@ -297,19 +296,21 @@ public sealed class ReportImporter
         return r.Read() ? $"по проверке «{r.GetString(0)}» уже загружен более поздний прогон ({Database.Time(r.GetString(1)):dd.MM.yyyy})." : null;
     }
 
-    private bool _backupBeforeReplace;
+    private bool _backupDone;
 
-    /// <summary>Копия базы рядом с ней перед заменой отчётов — как перед удалением проекта.</summary>
-    private void BackupBeforeReplace()
+    /// <summary>Копия базы рядом с ней перед заменой или удалением отчётов — как перед удалением проекта; одна на проверку папок.</summary>
+    private void BackupOnce(string why)
     {
-        var copy = _db.File + $".до-замены-отчётов-{DateTime.Now:yyyyMMdd-HHmmss}";
+        if (_backupDone) return;
+        _backupDone = true;
+        var copy = _db.File + $".до-{why}-{DateTime.Now:yyyyMMdd-HHmmss}";
         using (var source = _db.Open())
         using (var target = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = copy, Pooling = false }.ToString()))
         {
             target.Open();
             source.BackupDatabase(target);
         }
-        _log.LogInformation("Копия базы перед заменой отчётов: {Copy}", copy);
+        _log.LogInformation("Копия базы перед изменением отчётов: {Copy}", copy);
     }
 
     /// <summary>

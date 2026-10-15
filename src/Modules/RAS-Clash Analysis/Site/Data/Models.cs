@@ -115,31 +115,6 @@ public sealed class ReportRow
     /// <summary>Проверки, для которых это первый отчёт, и сколько в нём их коллизий.</summary>
     public List<long> NewTestIds { get; } = new List<long>();
     public int NewTestClashes { get; set; }
-    /// <summary>Последний отчёт своих проверок — его можно удалить с сайта (более поздних прогонов по ним нет).</summary>
-    public bool Latest { get; set; }
-}
-
-/// <summary>Что будет при удалении отчётов с сайта — для вопроса перед удалением.</summary>
-public sealed class ReportDeletion
-{
-    public int Reports { get; set; }
-    /// <summary>Коллизии, которые есть только в этих отчётах, — удалятся.</summary>
-    public int Removed { get; set; }
-    public int Comments { get; set; }
-    /// <summary>Исправлены этими отчётами — снова станут «Активная».</summary>
-    public int Unfixed { get; set; }
-    /// <summary>Вернулись в этих отчётах — снова станут «Исправлена».</summary>
-    public int Unreturned { get; set; }
-}
-
-/// <summary>Файл отчёта, удалённый с сайта: проверка папок его пропускает, пока его не выгрузят заново.</summary>
-public sealed class DeletedReportRow
-{
-    public long Id { get; set; }
-    public string FilePath { get; set; }
-    public string Block { get; set; } = "";
-    public DateTime ReportDate { get; set; }
-    public DateTime Deleted { get; set; }
 }
 
 public sealed class ElementView

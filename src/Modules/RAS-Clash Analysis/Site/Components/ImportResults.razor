@@ -4,14 +4,14 @@
 {
     <details class="import" open="@Results.Any(r => r.Error)">
         <summary>
-            Последняя проверка: загружено отчётов — @Results.Count(r => !r.Error)@(Results.Any(r => r.Error) ? $", не загружено — {Results.Count(r => r.Error)}" : "")
+            Последняя проверка: загружено отчётов — @Results.Count(r => !r.Error && !r.Deleted)@(Results.Any(r => r.Deleted) ? $", удалено (файлов нет в папке) — {Results.Count(r => r.Deleted)}" : "")@(Results.Any(r => r.Error) ? $", не загружено или не удалено — {Results.Count(r => r.Error)}" : "")
         </summary>
         <ul>
             @foreach (var r in Results)
             {
                 <li class="@(r.Error ? "error" : "")">
                     <b>@r.ProjectName</b> · <span class="path">@Path.GetFileName(r.File)</span> —
-                    @if (r.Error)
+                    @if (r.Error || r.Deleted)
                     {
                         @r.Message
                     }
