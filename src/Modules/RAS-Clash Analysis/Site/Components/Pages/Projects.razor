@@ -161,8 +161,9 @@ else
     /// <summary>Папку ввели — название проекта берётся из её имени (если название ещё не меняли руками).</summary>
     private void FolderChanged(ChangeEventArgs e)
     {
-        _folder = e.Value?.ToString();
-        var folder = (_folder ?? "").Trim().Trim('"').TrimEnd('\\', '/');
+        // путь из проводника — без кавычек («Копировать как путь») и косой черты в конце
+        var folder = (e.Value?.ToString() ?? "").Trim().Trim('"').TrimEnd('\\', '/');
+        _folder = folder;
         var fromFolder = folder.Length == 0 ? null : Path.GetFileName(folder);
         if (string.IsNullOrWhiteSpace(_name) || _name == _autoName)
         {
