@@ -3,6 +3,7 @@
 @inject ReportImporter Importer
 @inject SiteOptions Options
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>Проекты · Clash Analysis</PageTitle>
 
@@ -18,6 +19,18 @@
                     title="@(Importer.Busy ? "Проверяем папки…" : "Проверить папки сейчас. Сайт проверяет и сам — " + (Options.ScanMinutes > 0 ? $"каждые {Options.ScanMinutes} мин" : "выключено") + (Importer.LastScan.HasValue ? $"; последняя проверка — {Fmt.Date(Importer.LastScan)}" : ""))">
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.2 8a5.2 5.2 0 1 1-1.6-3.75" /><path d="M13 2.2v3.1H9.9" /></svg>
             </button>
+            @if (_projects.Count > 0)
+            {
+                <span class="spacer"></span>
+                <span class="view-switch" role="group" aria-label="Вид">
+                    <button class="icon-btn @(_view != "list" ? "on" : "")" title="Панелями" aria-label="Панелями" @onclick="@(() => SetView("cards"))">
+                        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1" /><rect x="9" y="2" width="5" height="5" rx="1" /><rect x="2" y="9" width="5" height="5" rx="1" /><rect x="9" y="9" width="5" height="5" rx="1" /></svg>
+                    </button>
+                    <button class="icon-btn @(_view == "list" ? "on" : "")" title="Списком" aria-label="Списком" @onclick="@(() => SetView("list"))">
+                        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 4h8.5M5.5 8h8.5M5.5 12h8.5" /><path d="M2.2 4h.6M2.2 8h.6M2.2 12h.6" /></svg>
+                    </button>
+                </span>
+            }
         </div>
         <div class="muted">Коллизии из отчётов Navisworks по всем проектам компании</div>
     </div>
@@ -32,34 +45,68 @@
 }
 else
 {
-    @* карточки проектов: активные, исправлены, исправлено % — для показа руководству *@
-    <div class="proj-grid">
-        @foreach (var p in _projects)
-        {
-            var pct = FixedPercent(p);
-            <a class="proj-card" href="project/@p.Id">
-                <div class="pc-name">@p.Name</div>
-                <div class="pc-meta muted small">@(p.LastReport.HasValue ? "Последний отчёт — " + Fmt.Day(p.LastReport.Value) : "Отчётов ещё нет")</div>
-                @if (p.ManualBlocks && p.Blocks == 0) { <div class="pc-warn small">⚠ Нет блоков — отчёты не загружаются</div> }
-                else if (p.ManualBlocks && Importer.OutsideBlocks(p.Id).Count > 0) { <div class="pc-warn small">⚠ Есть папки вне блоков</div> }
-                @* строка есть всегда (и без перемен) — чтобы цифры и полоса у всех карточек стояли на одних местах *@
-                <div class="pc-run small" title="Что принёс последний прогон каждой проверки">Последний прогон:
-                    @if (p.LastRun.Any) { <Delta Value="p.LastRun" /> }
-                    else if (p.Runs == 0) { <span>—</span> }
-                    else if (p.Runs <= 1) { <span class="d-first">первая проверка</span> }
-                    else { <span>без изменений</span> }
-                </div>
-                <div class="pc-nums">
-                    <div class="pc-num k-active"><b>@p.Counts.Active</b><span>активные</span></div>
-                    <div class="pc-num k-fixed"><b>@p.Counts.Fixed</b><span>исправлены</span></div>
-                </div>
-                <div class="pc-progress" title="Исправлено из всех, кроме допущенных">
-                    <div class="kpi-bar"><i style="width:@pct%"></i></div>
-                    <span class="small muted">исправлено @pct %</span>
-                </div>
-            </a>
-        }
-    </div>
+    @if (_view == "list")
+    {
+        @* списком — одна строка на проект (выбор вида — у заголовка, запоминается в браузере) *@
+        <table class="grid proj-list">
+            <thead>
+                <tr>
+                    <th>Проект</th>
+                    <th>Последний отчёт</th>
+                    <th>Последний прогон</th>
+                    <th class="num">Активные</th>
+                    <th class="num">Исправлены</th>
+                    <th class="pl-progress-head">Исправлено</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in _projects)
+                {
+                    var pct = FixedPercent(p);
+                    var project = p;
+                    <tr class="pl-row" @onclick="() => OpenProject(project.Id)">
+                        <td>
+                            <a class="pl-name" href="project/@p.Id">@p.Name</a>
+                            @Warning(p)
+                        </td>
+                        <td class="muted">@(p.LastReport.HasValue ? Fmt.Day(p.LastReport.Value) : "—")</td>
+                        <td>@LastRun(p)</td>
+                        <td class="num k-active"><b>@p.Counts.Active</b></td>
+                        <td class="num k-fixed"><b>@p.Counts.Fixed</b></td>
+                        <td class="pl-progress" title="Исправлено из всех, кроме допущенных">
+                            <div class="kpi-bar"><i style="width:@pct%"></i></div>
+                            <span class="small muted">@pct %</span>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        @* карточки проектов: активные, исправлены, исправлено % — для показа руководству *@
+        <div class="proj-grid">
+            @foreach (var p in _projects)
+            {
+                var pct = FixedPercent(p);
+                <a class="proj-card" href="project/@p.Id">
+                    <div class="pc-name">@p.Name</div>
+                    <div class="pc-meta muted small">@(p.LastReport.HasValue ? "Последний отчёт — " + Fmt.Day(p.LastReport.Value) : "Отчётов ещё нет")</div>
+                    @Warning(p)
+                    @* строка есть всегда (и без перемен) — чтобы цифры и полоса у всех карточек стояли на одних местах *@
+                    <div class="pc-run small" title="Что принёс последний прогон каждой проверки">Последний прогон: @LastRun(p)</div>
+                    <div class="pc-nums">
+                        <div class="pc-num k-active"><b>@p.Counts.Active</b><span>активные</span></div>
+                        <div class="pc-num k-fixed"><b>@p.Counts.Fixed</b><span>исправлены</span></div>
+                    </div>
+                    <div class="pc-progress" title="Исправлено из всех, кроме допущенных">
+                        <div class="kpi-bar"><i style="width:@pct%"></i></div>
+                        <span class="small muted">исправлено @pct %</span>
+                    </div>
+                </a>
+            }
+        </div>
+    }
 }
 
 @if (!string.IsNullOrEmpty(Deleted))
@@ -129,6 +176,46 @@ else
     private bool _blocksAuto = true;
 
     protected override void OnInitialized() => Load();
+
+    // ───── вид: панелями или списком (запоминается в браузере — удобство одного зрителя) ─────
+
+    private const string ViewKey = "ras-projects-view";
+    private string _view = "cards";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        var saved = await JS.InvokeAsync<string>("ras.load", ViewKey);
+        if (saved == "list" && _view != "list")
+        {
+            _view = "list";
+            StateHasChanged();
+        }
+    }
+
+    private void OpenProject(long id) => Nav.NavigateTo("project/" + id);
+
+    private async Task SetView(string view)
+    {
+        _view = view;
+        await JS.InvokeVoidAsync("ras.save", ViewKey, view);
+    }
+
+    /// <summary>Что принёс последний прогон — и в панели, и в строке списка.</summary>
+    private RenderFragment LastRun(ProjectRow p) => __builder =>
+    {
+        if (p.LastRun.Any) { <Delta Value="p.LastRun" /> }
+        else if (p.Runs == 0) { <span class="muted">—</span> }
+        else if (p.Runs <= 1) { <span class="d-first">первая проверка</span> }
+        else { <span class="muted">без изменений</span> }
+    };
+
+    /// <summary>Блоки: нет блоков или есть папки вне блоков — и в панели, и в строке списка.</summary>
+    private RenderFragment Warning(ProjectRow p) => __builder =>
+    {
+        if (p.ManualBlocks && p.Blocks == 0) { <div class="pc-warn small">⚠ Нет блоков — отчёты не загружаются</div> }
+        else if (p.ManualBlocks && Importer.OutsideBlocks(p.Id).Count > 0) { <div class="pc-warn small">⚠ Есть папки вне блоков</div> }
+    };
 
     /// <summary>Сколько исправлено из всех, кроме допущенных, — %.</summary>
     private static int FixedPercent(ProjectRow p)

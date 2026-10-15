@@ -36,6 +36,13 @@ window.ras = {
         document.documentElement.dataset.theme = next;
         try { localStorage.setItem('ras-theme', next); } catch (e) { }
     },
+    // удобства одного зрителя (вид списка проектов и т. п.) — в браузере; нет доступа к хранилищу — по умолчанию
+    load: function (key) {
+        try { return localStorage.getItem(key); } catch (e) { return null; }
+    },
+    save: function (key, value) {
+        try { localStorage.setItem(key, value); } catch (e) { }
+    },
     // карточка коллизии — в начало (открыта другая коллизия)
     top: function (el) {
         if (el) el.scrollTop = 0;

@@ -657,6 +657,21 @@ table.clashes tbody tr.selected { background: var(--row-selected); }
 .icon-btn:disabled { cursor: default; opacity: .7; }
 .icon-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .icon-btn.busy svg { animation: spin 1s linear infinite; }
+.title-row .spacer { flex: 1; }
+.view-switch { display: inline-flex; gap: 4px; }
+.icon-btn.on { color: var(--accent-strong); border-color: var(--accent); background: var(--accent-bg); }
+/* проекты списком */
+.proj-list { margin-bottom: 16px; }
+.proj-list .pl-row { cursor: pointer; }
+.proj-list .pl-row:hover td { background: var(--row-hover); }
+.proj-list .pl-name { font-weight: 600; color: var(--text); }
+.proj-list .num b { font-size: 16px; }
+.proj-list .k-active b { color: var(--active); }
+.proj-list .k-fixed b { color: var(--fixed); }
+.proj-list .pl-progress { width: 200px; }
+.proj-list .pl-progress, .proj-list .pl-progress-head { white-space: nowrap; }
+.proj-list .pl-progress .kpi-bar { display: inline-block; width: 120px; margin: 0 8px 0 0; vertical-align: middle; }
+.proj-list .pc-warn { margin-top: 2px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 /* ⚙ с красной точкой — копия базы не удалась */
 .head-btn.alert { position: relative; }
