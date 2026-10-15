@@ -152,7 +152,15 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .cat-none summary { cursor: pointer; }
 /* «Тип проверки»: категории — заголовками, их проверки — с отступом */
 .side-sub.side-cat span { font-weight: 600; color: var(--text); }
-.side-sub.nested { padding-left: 22px; }
+.side-sub.nested { padding-left: 30px; }
+.side-cat-row { display: flex; align-items: center; margin-top: 2px; }
+/* панель шире (300) — на средних экранах подпись «Группировка» прячется, чтобы строка над списком не переносилась */
+@media (max-width: 1560px) { .list-title .dd > span { display: none; } }
+.side-cat-row .side-sub { margin-top: 0; padding-left: 4px; }
+.side-fold { flex: none; display: grid; place-items: center; width: 22px; height: 26px; border: none; background: none; border-radius: 6px; cursor: pointer; color: var(--muted); padding: 0; }
+.side-fold:hover { background: var(--row-hover); }
+.side-fold .chev { width: 6px; height: 6px; border: solid var(--muted); border-width: 0 1.5px 1.5px 0; transform: rotate(-45deg); transition: transform .15s; }
+.side-fold.open .chev { transform: rotate(45deg); margin-top: -3px; }
 .icon-btn.small-icon { width: 26px; height: 26px; }
 .icon-btn.small-icon svg { width: 14px; height: 14px; }
 .file-btn { position: relative; overflow: hidden; cursor: pointer; }
@@ -275,8 +283,10 @@ textarea { width: 100%; resize: vertical; }
 .project-page { display: flex; flex-direction: column; height: calc(100vh - 75px); min-height: 480px; }
 .project-head { flex: none; }
 .project-head .tabs { margin-bottom: 8px; }
-.body { flex: 1; min-height: 0; display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 12px; }
-.body.with-panel { grid-template-columns: 230px minmax(380px, 1fr) minmax(360px, 480px); }
+/* боковая панель: 300 на широких экранах, на узких — уже (просьба разработчика 15.10.2026: шире, чтобы названия проверок читались) */
+:root { --side-w: clamp(240px, 20vw, 300px); }
+.body { flex: 1; min-height: 0; display: grid; grid-template-columns: var(--side-w) minmax(0, 1fr); gap: 12px; }
+.body.with-panel { grid-template-columns: var(--side-w) minmax(380px, 1fr) minmax(360px, 480px); }
 .content { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .content.scroll { overflow: auto; display: block; }
 
@@ -475,7 +485,7 @@ td.what { overflow: hidden; }
 }
 /* узкий экран (ноутбук): карточка выезжает поверх списка справа, список — во всю ширину */
 @media (min-width: 1101px) and (max-width: 1399px) {
-    .body.with-panel { grid-template-columns: 230px minmax(0, 1fr); }
+    .body.with-panel { grid-template-columns: var(--side-w) minmax(0, 1fr); }
     .body.with-panel > aside.panel {
         position: fixed; top: 64px; right: 12px; bottom: 12px; width: min(500px, calc(100vw - 24px)); z-index: 40;
         box-shadow: 0 12px 40px rgba(0, 0, 0, .28);
