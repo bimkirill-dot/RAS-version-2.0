@@ -555,7 +555,7 @@ public sealed class ClashStore
 
     // ───────────── категории проверок (DECISIONS.md, «Категории проверок») ─────────────
 
-    /// <summary>Категории по порядку — с проверками (по алфавиту).</summary>
+    /// <summary>Категории по порядку — с подкатегориями по порядку и проверками (по алфавиту).</summary>
     public List<CategoryRow> Categories()
     {
         using var c = _db.Open();
@@ -563,20 +563,38 @@ public sealed class ClashStore
         using (var r = Query(c, "SELECT Id, Name FROM Categories ORDER BY Sort, Id"))
             while (r.Read()) list.Add(new CategoryRow { Id = r.GetInt64(0), Name = r.GetString(1) });
         var byId = list.ToDictionary(x => x.Id);
-        using (var r = Query(c, "SELECT CategoryId, Key, Name FROM CategoryTests"))
+        var subs = new Dictionary<long, SubcategoryRow>();
+        using (var r = Query(c, "SELECT Id, CategoryId, Name FROM Subcategories ORDER BY Sort, Id"))
             while (r.Read())
-                if (byId.TryGetValue(r.GetInt64(0), out var cat)) cat.Tests.Add((r.GetString(1), r.GetString(2)));
-        foreach (var cat in list) cat.Tests.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.CurrentCultureIgnoreCase));
+                if (byId.TryGetValue(r.GetInt64(1), out var cat))
+                {
+                    var sub = new SubcategoryRow { Id = r.GetInt64(0), Name = r.GetString(2) };
+                    cat.Subcategories.Add(sub);
+                    subs[sub.Id] = sub;
+                }
+        using (var r = Query(c, "SELECT CategoryId, Key, Name, SubcategoryId FROM CategoryTests"))
+            while (r.Read())
+                if (!r.IsDBNull(3) && subs.TryGetValue(r.GetInt64(3), out var sub)) sub.Tests.Add((r.GetString(1), r.GetString(2)));
+                else if (byId.TryGetValue(r.GetInt64(0), out var cat)) cat.Tests.Add((r.GetString(1), r.GetString(2)));
+        static void Sort(List<(string Key, string Name)> t) => t.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.CurrentCultureIgnoreCase));
+        foreach (var cat in list)
+        {
+            Sort(cat.Tests);
+            foreach (var sub in cat.Subcategories) Sort(sub.Tests);
+        }
         return list;
     }
 
-    /// <summary>Категория проверки по её названию: ключ (TestCategories.Key) → название категории.</summary>
-    public Dictionary<string, string> CategoryMap()
+    /// <summary>Место проверки по её названию: ключ (TestCategories.Key) → категория и подкатегория ("" — без подкатегории).</summary>
+    public Dictionary<string, (string Category, string Subcategory)> CategoryMap()
     {
         using var c = _db.Open();
-        var map = new Dictionary<string, string>(StringComparer.Ordinal);
-        using var r = Query(c, "SELECT t.Key, k.Name FROM CategoryTests t JOIN Categories k ON k.Id = t.CategoryId");
-        while (r.Read()) map[r.GetString(0)] = r.GetString(1);
+        var map = new Dictionary<string, (string, string)>(StringComparer.Ordinal);
+        using var r = Query(c, """
+            SELECT t.Key, k.Name, COALESCE(s.Name, '') FROM CategoryTests t JOIN Categories k ON k.Id = t.CategoryId
+            LEFT JOIN Subcategories s ON s.Id = t.SubcategoryId
+            """);
+        while (r.Read()) map[r.GetString(0)] = (r.GetString(1), r.GetString(2));
         return map;
     }
 
@@ -626,13 +644,13 @@ public sealed class ClashStore
         if (cat == null) return;
         using var c = _db.Open();
         using var tx = c.BeginTransaction();
-        foreach (var sql in new[] { "DELETE FROM CategoryTests WHERE CategoryId = $id", "DELETE FROM Categories WHERE Id = $id" })
+        foreach (var sql in new[] { "DELETE FROM CategoryTests WHERE CategoryId = $id", "DELETE FROM Subcategories WHERE CategoryId = $id", "DELETE FROM Categories WHERE Id = $id" })
         {
             using var cmd = Command(c, sql, ("$id", id));
             cmd.Transaction = tx;
             cmd.ExecuteNonQuery();
         }
-        SiteHistory.Write(c, tx, null, SiteHistory.Settings, $"Категория проверок удалена: «{cat.Name}» ({Services.Fmt.Plural(cat.Tests.Count, "проверка", "проверки", "проверок")} — без категории)");
+        SiteHistory.Write(c, tx, null, SiteHistory.Settings, $"Категория проверок удалена: «{cat.Name}» ({Services.Fmt.Plural(cat.TotalTests, "проверка", "проверки", "проверок")} — без категории)");
         tx.Commit();
     }
 
@@ -659,12 +677,21 @@ public sealed class ClashStore
     /// Добавить проверки в категорию. Уже в этой — пропускаются; в другой категории — переносятся, только если move
     /// (иначе остаются там). Возвращает: добавлено, и какие из названий — в других категориях (название, категория).
     /// </summary>
-    public (int Added, List<(string Name, string Category)> Elsewhere) AddCategoryTests(long categoryId, IEnumerable<string> names, bool move)
+    public (int Added, List<(string Name, string Category)> Elsewhere) AddCategoryTests(long categoryId, IEnumerable<string> names, bool move, long? subcategoryId = null)
     {
         var all = Categories();
         var cat = all.FirstOrDefault(x => x.Id == categoryId);
         if (cat == null) return (0, new List<(string, string)>());
-        var owner = all.SelectMany(x => x.Tests.Select(t => (t.Key, Category: x))).ToDictionary(x => x.Key, x => x.Category);
+        var target = subcategoryId == null ? null : cat.Subcategories.FirstOrDefault(x => x.Id == subcategoryId);
+        if (subcategoryId != null && target == null) return (0, new List<(string, string)>());
+        // где проверка сейчас: категория и подкатегория (null — без неё)
+        var owner = new Dictionary<string, (CategoryRow Category, long? Sub)>(StringComparer.Ordinal);
+        foreach (var x in all)
+        {
+            foreach (var t in x.Tests) owner[t.Key] = (x, null);
+            foreach (var sub in x.Subcategories)
+                foreach (var t in sub.Tests) owner[t.Key] = (x, sub.Id);
+        }
         var elsewhere = new List<(string Name, string Category)>();
         var added = 0;
         using var c = _db.Open();
@@ -676,21 +703,137 @@ public sealed class ClashStore
             if (key.Length == 0) continue;
             if (owner.TryGetValue(key, out var other))
             {
-                if (other.Id == categoryId) continue;
-                elsewhere.Add((name, other.Name));
-                if (!move) continue;
+                // в той же категории — просто в другую подкатегорию (или из неё): не переспрашиваем
+                if (other.Category.Id == categoryId && other.Sub == subcategoryId) continue;
+                if (other.Category.Id != categoryId)
+                {
+                    elsewhere.Add((name, other.Category.Name));
+                    if (!move) continue;
+                }
             }
-            using var cmd = Command(c, "INSERT OR REPLACE INTO CategoryTests(Key, Name, CategoryId) VALUES($k, $n, $c)", ("$k", key), ("$n", name), ("$c", categoryId));
+            using var cmd = Command(c, "INSERT OR REPLACE INTO CategoryTests(Key, Name, CategoryId, SubcategoryId) VALUES($k, $n, $c, $s)",
+                ("$k", key), ("$n", name), ("$c", categoryId), ("$s", subcategoryId));
             cmd.Transaction = tx;
             cmd.ExecuteNonQuery();
-            owner[key] = cat;
+            owner[key] = (cat, subcategoryId);
             added++;
         }
         if (added > 0)
             SiteHistory.Write(c, tx, null, SiteHistory.Settings,
-                $"В категорию «{cat.Name}» — {Services.Fmt.Plural(added, "проверка", "проверки", "проверок")}" + (move && elsewhere.Count > 0 ? $" (перенесено из других категорий — {elsewhere.Count})" : ""));
+                $"В {(target == null ? $"категорию «{cat.Name}»" : $"подкатегорию «{cat.Name} → {target.Name}»")} — {Services.Fmt.Plural(added, "проверка", "проверки", "проверок")}"
+                + (move && elsewhere.Count > 0 ? $" (перенесено из других категорий — {elsewhere.Count})" : ""));
         tx.Commit();
         return (added, elsewhere);
+    }
+
+    /// <summary>Подкатегория проверки внутри её категории (null — без подкатегории).</summary>
+    public void SetTestSubcategory(string key, long? subcategoryId)
+    {
+        using var c = _db.Open();
+        using var tx = c.BeginTransaction();
+        using (var cmd = Command(c, """
+            UPDATE CategoryTests SET SubcategoryId = $s
+            WHERE Key = $k AND ($s IS NULL OR $s IN (SELECT Id FROM Subcategories WHERE CategoryId = CategoryTests.CategoryId))
+            """, ("$k", key), ("$s", subcategoryId)))
+        {
+            cmd.Transaction = tx;
+            cmd.ExecuteNonQuery();
+        }
+        using (var info = Command(c, """
+            SELECT t.Name, k.Name, s.Name FROM CategoryTests t JOIN Categories k ON k.Id = t.CategoryId LEFT JOIN Subcategories s ON s.Id = t.SubcategoryId WHERE t.Key = $k
+            """, ("$k", key)))
+        {
+            info.Transaction = tx;
+            using var r = info.ExecuteReader();
+            if (r.Read())
+            {
+                var (name, cat, sub) = (r.GetString(0), r.GetString(1), r.IsDBNull(2) ? null : r.GetString(2));
+                r.Close();
+                SiteHistory.Write(c, tx, null, SiteHistory.Settings, $"Проверка «{name}» — " + (sub == null ? $"в «{cat}» без подкатегории" : $"в подкатегорию «{cat} → {sub}»"));
+            }
+        }
+        tx.Commit();
+    }
+
+    /// <summary>Новая подкатегория в категории — в конец. Что не так — текст; добавлена — null.</summary>
+    public string AddSubcategory(long categoryId, string name)
+    {
+        name = (name ?? "").Trim();
+        var cat = Categories().FirstOrDefault(x => x.Id == categoryId);
+        if (cat == null) return "Категория не найдена — возможно, её уже удалили.";
+        if (name.Length == 0) return "Впишите название подкатегории.";
+        if (cat.Subcategories.Any(x => string.Equals(x.Name, name, StringComparison.CurrentCultureIgnoreCase))) return $"Подкатегория «{name}» в «{cat.Name}» уже есть.";
+        using var c = _db.Open();
+        using var tx = c.BeginTransaction();
+        using (var cmd = Command(c, "INSERT INTO Subcategories(CategoryId, Name, Sort) VALUES($c, $n, COALESCE((SELECT MAX(Sort) FROM Subcategories WHERE CategoryId = $c), 0) + 1)",
+                   ("$c", categoryId), ("$n", name)))
+        {
+            cmd.Transaction = tx;
+            cmd.ExecuteNonQuery();
+        }
+        SiteHistory.Write(c, tx, null, SiteHistory.Settings, $"Подкатегория добавлена: «{cat.Name} → {name}»");
+        tx.Commit();
+        return null;
+    }
+
+    public string RenameSubcategory(long id, string name)
+    {
+        name = (name ?? "").Trim();
+        var cat = Categories().FirstOrDefault(x => x.Subcategories.Any(s => s.Id == id));
+        var sub = cat?.Subcategories.First(s => s.Id == id);
+        if (sub == null) return "Подкатегория не найдена — возможно, её уже удалили.";
+        if (name.Length == 0) return "Впишите название подкатегории.";
+        if (name == sub.Name) return null;
+        if (cat.Subcategories.Any(x => x.Id != id && string.Equals(x.Name, name, StringComparison.CurrentCultureIgnoreCase))) return $"Подкатегория «{name}» в «{cat.Name}» уже есть.";
+        using var c = _db.Open();
+        using var tx = c.BeginTransaction();
+        using (var cmd = Command(c, "UPDATE Subcategories SET Name = $n WHERE Id = $id", ("$n", name), ("$id", id)))
+        {
+            cmd.Transaction = tx;
+            cmd.ExecuteNonQuery();
+        }
+        SiteHistory.Write(c, tx, null, SiteHistory.Settings, $"Подкатегория переименована: «{cat.Name} → {sub.Name}» → «{name}»");
+        tx.Commit();
+        return null;
+    }
+
+    /// <summary>Удалить подкатегорию: её проверки остаются в категории, без подкатегории.</summary>
+    public void DeleteSubcategory(long id)
+    {
+        var cat = Categories().FirstOrDefault(x => x.Subcategories.Any(s => s.Id == id));
+        var sub = cat?.Subcategories.First(s => s.Id == id);
+        if (sub == null) return;
+        using var c = _db.Open();
+        using var tx = c.BeginTransaction();
+        foreach (var sql in new[] { "UPDATE CategoryTests SET SubcategoryId = NULL WHERE SubcategoryId = $id", "DELETE FROM Subcategories WHERE Id = $id" })
+        {
+            using var cmd = Command(c, sql, ("$id", id));
+            cmd.Transaction = tx;
+            cmd.ExecuteNonQuery();
+        }
+        SiteHistory.Write(c, tx, null, SiteHistory.Settings, $"Подкатегория удалена: «{cat.Name} → {sub.Name}» ({Services.Fmt.Plural(sub.Tests.Count, "проверка", "проверки", "проверок")} — в категории без подкатегории)");
+        tx.Commit();
+    }
+
+    /// <summary>Поднять (−1) или опустить (+1) подкатегорию внутри её категории.</summary>
+    public void MoveSubcategory(long id, int delta)
+    {
+        var cat = Categories().FirstOrDefault(x => x.Subcategories.Any(s => s.Id == id));
+        if (cat == null) return;
+        var list = cat.Subcategories;
+        var i = list.FindIndex(x => x.Id == id);
+        var j = i + delta;
+        if (j < 0 || j >= list.Count) return;
+        (list[i], list[j]) = (list[j], list[i]);
+        using var c = _db.Open();
+        using var tx = c.BeginTransaction();
+        for (var k = 0; k < list.Count; k++)
+        {
+            using var cmd = Command(c, "UPDATE Subcategories SET Sort = $s WHERE Id = $id", ("$s", k + 1), ("$id", list[k].Id));
+            cmd.Transaction = tx;
+            cmd.ExecuteNonQuery();
+        }
+        tx.Commit();
     }
 
     /// <summary>Убрать проверку из её категории — станет «без категории».</summary>

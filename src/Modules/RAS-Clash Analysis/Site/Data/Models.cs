@@ -84,6 +84,18 @@ public sealed class CategoryRow
 {
     public long Id { get; set; }
     public string Name { get; set; }
+    /// <summary>Проверки категории без подкатегории.</summary>
+    public List<(string Key, string Name)> Tests { get; } = new();
+    public List<SubcategoryRow> Subcategories { get; } = new();
+    /// <summary>Все проверки категории — и в подкатегориях.</summary>
+    public int TotalTests => Tests.Count + Subcategories.Sum(s => s.Tests.Count);
+}
+
+/// <summary>Подкатегория — внутри своей категории (один уровень).</summary>
+public sealed class SubcategoryRow
+{
+    public long Id { get; set; }
+    public string Name { get; set; }
     public List<(string Key, string Name)> Tests { get; } = new();
 }
 
@@ -226,6 +238,8 @@ public sealed class ClashFilter
     public string Block { get; set; }
     /// <summary>Категория проверок («Высокая критичность», "" — без категории); null — любая (DECISIONS.md, «Категории проверок»).</summary>
     public string Category { get; set; }
+    /// <summary>Подкатегория выбранной категории; null — вся категория.</summary>
+    public string Subcategory { get; set; }
     /// <summary>
     /// Тип проверки — название проверки Navisworks («АР Стены/МЕР Трубы») или своё название в проекте (TypeNames);
     /// одинаковое в разных блоках и критичностях — один тип (решение разработчика). null — все.

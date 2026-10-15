@@ -291,6 +291,17 @@ public sealed class Database
             Name TEXT NOT NULL,
             CategoryId INTEGER NOT NULL REFERENCES Categories(Id));
         """,
+
+        // 12 — 15.10.2026 (DECISIONS.md, «Категории проверок»): подкатегории — внутри своей категории (один уровень);
+        // проверка — в категории и, если задано, в одной её подкатегории
+        """
+        CREATE TABLE Subcategories(
+            Id INTEGER PRIMARY KEY,
+            CategoryId INTEGER NOT NULL REFERENCES Categories(Id),
+            Name TEXT NOT NULL,
+            Sort INTEGER NOT NULL);
+        ALTER TABLE CategoryTests ADD COLUMN SubcategoryId INTEGER REFERENCES Subcategories(Id);
+        """,
     };
 
     /// <summary>

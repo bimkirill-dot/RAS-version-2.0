@@ -148,11 +148,18 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .cat-tests li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .cat-tests li select { font-size: 12px; }
 .cat-conflict { margin: 6px 0; padding: 8px 10px; border: 1px solid var(--pending); border-radius: 8px; font-size: 13px; display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+/* подкатегория — внутри карточки категории */
+.sub-card { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; background: var(--bg); padding: 8px 12px; margin: 8px 0 8px 14px; }
+.sub-card .sub-name { font-weight: 600; min-width: 180px; }
+.cat-direct { margin: 10px 0 2px; }
 .cat-none { margin-top: 12px; }
 .cat-none summary { cursor: pointer; }
 /* «Тип проверки»: категории — заголовками, их проверки — с отступом */
 .side-sub.side-cat span { font-weight: 600; color: var(--text); }
 .side-sub.nested { padding-left: 30px; }
+.side-sub.nested2 { padding-left: 52px; }
+.side-cat-row.lvl1 { padding-left: 22px; }
+.side-sub.side-subcat span { font-weight: 600; color: var(--muted); }
 .side-cat-row { display: flex; align-items: center; margin-top: 2px; }
 /* панель шире (300) — на средних экранах подпись «Группировка» прячется, чтобы строка над списком не переносилась */
 @media (max-width: 1560px) { .list-title .dd > span { display: none; } }
