@@ -103,32 +103,6 @@
             @* боковая панель — разделы этого проекта *@
             <aside class="side" aria-label="Разделы проекта">
                 <div class="side-title">Проект</div>
-                @* «Категория» — деление проверок из «Настроек» (DECISIONS.md, «Категории проверок»): как «Блок» — подразделами *@
-                @if (_categoryOrder.Count > 0)
-                {
-                    <button class="side-btn side-group @(_view.CategoriesOpen ? "open" : "")" @onclick="() => _view.CategoriesOpen = !_view.CategoriesOpen"
-                            title="Категория проверок — показать коллизии проверок одной категории" aria-expanded="@(_view.CategoriesOpen ? "true" : "false")">
-                        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 4.5h13M3.5 10h9M3.5 15.5h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg><span>
-                            Категория
-                            <small class="side-chosen two @(_filter.Category == null ? "all" : "")" title="@_filter.Category">@(_filter.Category == null ? "все" : _filter.Category == "" ? "без категории" : _filter.Category)</small>
-                        </span><i class="chev" aria-hidden="true"></i>
-                    </button>
-                    @if (_view.CategoriesOpen)
-                    {
-                        <div class="side-subs">
-                            <button class="side-sub @(_filter.Category == null ? "on" : "")" @onclick="() => PickCategory(null)">
-                                <span>Все</span><b>@ActiveInCategory(null)</b>
-                            </button>
-                            @foreach (var c in CategoriesHere)
-                            {
-                                var category = c;
-                                <button class="side-sub @(_filter.Category == category ? "on" : "")" @onclick="() => PickCategory(category)" title="@category">
-                                    <span>@(category == "" ? "Без категории" : category)</span><b>@ActiveInCategory(category)</b>
-                                </button>
-                            }
-                        </div>
-                    }
-                }
                 @* «Блок» — первым, как остальные разделы; нажать — блоки раскрываются подразделами (просьба разработчика 13.10.2026) *@
                 @if (ShowBlocks)
                 {
@@ -162,21 +136,33 @@
                     <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="11" y="11" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M9 6h5v5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg><span>
                         Тип проверки
                         @* две строки всегда (длинное — многоточием, полностью — в подсказке): высота не меняется *@
-                        <small class="side-chosen two @(_filter.TestType == null ? "all" : "")" title="@_filter.TestType">@(_filter.TestType ?? "все")</small>
+                        <small class="side-chosen two @(TypeChosen == null ? "all" : "")" title="@TypeChosen">@(TypeChosen ?? "все")</small>
                     </span><i class="chev" aria-hidden="true"></i>
                 </button>
                 @if (_view.TypesOpen)
                 {
                     <div class="side-subs">
-                        <button class="side-sub @(_filter.TestType == null ? "on" : "")" @onclick="() => PickTestType(null)">
-                            <span>Все</span><b>@ActiveIn(_filter.Criticality, _filter.Block, null)</b>
+                        <button class="side-sub @(_filter.TestType == null && _filter.Category == null ? "on" : "")" @onclick="() => PickCategory(null)">
+                            <span>Все</span><b>@ActiveInCategory(null)</b>
                         </button>
-                        @foreach (var (name, active) in TestTypes)
+                        @* категории проверок (DECISIONS.md, «Категории проверок») — заголовками, под ними их проверки (просьба разработчика 15.10.2026) *@
+                        @foreach (var (category, types) in TypeTree)
                         {
-                            var type = name;
-                            <button class="side-sub @(_filter.TestType == type ? "on" : "")" @onclick="() => PickTestType(type)" title="@type">
-                                <span>@type</span><b>@active</b>
-                            </button>
+                            var cat = category;
+                            @if (cat != null)
+                            {
+                                <button class="side-sub side-cat @(_filter.Category == cat && _filter.TestType == null ? "on" : "")" @onclick="() => PickCategory(cat)"
+                                        title="Все проверки категории «@(cat == "" ? "без категории" : cat)»">
+                                    <span>@(cat == "" ? "Без категории" : cat)</span><b>@ActiveInCategory(cat)</b>
+                                </button>
+                            }
+                            @foreach (var (name, active) in types)
+                            {
+                                var type = name;
+                                <button class="side-sub @(cat != null ? "nested" : "") @(_filter.TestType == type ? "on" : "")" @onclick="() => PickTestType(type)" title="@type">
+                                    <span>@type</span><b>@active</b>
+                                </button>
+                            }
                         }
                     </div>
                 }
@@ -1156,6 +1142,33 @@
         }
     }
 
+    /// <summary>
+    /// «Тип проверки» с категориями: категория (null — категорий нет, простой список; "" — без категории) и её типы
+    /// проверок с активными — в выбранных критичности и блоке, без отбора категории (видны все категории).
+    /// </summary>
+    private List<(string Category, List<(string Name, int Active)> Types)> TypeTree
+    {
+        get
+        {
+            var types = _tests
+                .Where(t => (_filter.Criticality == null || t.Criticality == _filter.Criticality) && (_filter.Block == null || t.Block == _filter.Block))
+                .GroupBy(t => t.Type)
+                .Select(g => (Name: g.Key, Active: g.Sum(t => t.Counts.Active), Category: CategoryOf(g.First().Name)))
+                .OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+            if (_categoryOrder.Count == 0)
+                return new List<(string, List<(string, int)>)> { (null, types.Select(x => (x.Name, x.Active)).ToList()) };
+            var order = _categoryOrder.Concat(new[] { "" }).ToList();
+            return types.GroupBy(x => x.Category)
+                .OrderBy(g => order.IndexOf(g.Key) < 0 ? int.MaxValue : order.IndexOf(g.Key))
+                .Select(g => (g.Key, g.Select(x => (x.Name, x.Active)).ToList()))
+                .ToList();
+        }
+    }
+
+    /// <summary>Выбранное в «Типе проверки»: проверка, категория или null («все»).</summary>
+    private string TypeChosen => _filter.TestType ?? (_filter.Category == null ? null : _filter.Category == "" ? "Без категории" : _filter.Category);
+
     /// <summary>Активные в категории (null — во всех) — в выбранном блоке.</summary>
     private int ActiveInCategory(string category) =>
         _tests.Where(t => (category == null || CategoryOf(t.Name) == category) && (_filter.Block == null || t.Block == _filter.Block)).Sum(t => t.Counts.Active);
@@ -1164,10 +1177,9 @@
     private void PickCategory(string category)
     {
         _filter.Category = category;
-        _view.CategoriesOpen = false;
+        _view.TypesOpen = false;
         var block = _filter.Block != null && _tests.Any(t => t.Block == _filter.Block && InCategory(t)) ? _filter.Block : null;
-        var type = _filter.TestType != null && _tests.Any(t => t.Type == _filter.TestType && InCategory(t) && (block == null || t.Block == block)) ? _filter.TestType : null;
-        SetScope(_filter.Criticality, block, type);
+        SetScope(_filter.Criticality, block, null);
     }
 
     /// <summary>Другая критичность, блок или проверка — другая работа: отметки и выбранная коллизия сбрасываются, отборы — нет.</summary>
@@ -1214,6 +1226,7 @@
 
     private void PickTestType(string type)
     {
+        _filter.Category = null;
         SetTestType(type);
         _view.TypesOpen = false;
     }

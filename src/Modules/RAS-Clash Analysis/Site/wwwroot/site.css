@@ -150,6 +150,9 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .cat-conflict { margin: 6px 0; padding: 8px 10px; border: 1px solid var(--pending); border-radius: 8px; font-size: 13px; display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
 .cat-none { margin-top: 12px; }
 .cat-none summary { cursor: pointer; }
+/* «Тип проверки»: категории — заголовками, их проверки — с отступом */
+.side-sub.side-cat span { font-weight: 600; color: var(--text); }
+.side-sub.nested { padding-left: 22px; }
 .icon-btn.small-icon { width: 26px; height: 26px; }
 .icon-btn.small-icon svg { width: 14px; height: 14px; }
 .file-btn { position: relative; overflow: hidden; cursor: pointer; }
