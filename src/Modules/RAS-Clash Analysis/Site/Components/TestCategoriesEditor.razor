@@ -15,7 +15,7 @@
     @if (_adding)
     {
         <div class="cat-new">
-            <input placeholder="Название категории, например «Высокая критичность»" @bind="_newName" @bind:event="oninput" @onkeydown="NewKey" />
+            <input @bind="_newName" @bind:event="oninput" @onkeydown="NewKey" />
             <button class="btn primary small" @onclick="AddCategory">Добавить</button>
             <button class="btn small" @onclick="() => { _adding = false; _newName = null; }">Отмена</button>
         </div>
@@ -62,7 +62,7 @@
                 }
             }
             <div class="cat-add">
-                <input placeholder="Название проверки, например «АР Стены/МЕР Трубы»" value="@Draft(cat.Id)"
+                <input value="@Draft(cat.Id)"
                        @oninput="e => _drafts[cat.Id] = e.Value?.ToString()" @onkeydown="e => DraftKey(e, cat)" />
                 <button class="btn small" @onclick="() => AddTyped(cat)">Добавить</button>
                 <label class="btn small file-btn" title="Названия всех проверок из XML Navisworks — отчёта или файла проверок Clash Detective">
