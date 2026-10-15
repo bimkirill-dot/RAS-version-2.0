@@ -562,23 +562,24 @@ table.clashes { table-layout: fixed; }
 table.clashes td { vertical-align: middle; padding: 4px 8px; }
 table.clashes tbody tr { cursor: pointer; }
 table.clashes tbody tr.selected { background: var(--row-selected); }
-table.clashes tbody tr.has-cat td:first-child { box-shadow: inset 4px 0 0 var(--row-cat); }
-/* две полосы: категория (4 px), просвет, подкатегория (4 px) */
-table.clashes tbody tr.has-cat.has-sub td:first-child { box-shadow: inset 4px 0 0 var(--row-cat), inset 6px 0 0 var(--panel), inset 10px 0 0 var(--row-sub); }
-table.clashes tbody tr.has-cat.has-sub td.sel { padding-left: 12px; }
-table.clashes tbody tr.selected td:first-child, table.clashes tbody tr.selected.has-cat.has-sub td:first-child { box-shadow: inset 4px 0 0 var(--accent); }
+table.clashes tbody tr.selected td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+/* категория и подкатегория — меткой своего цвета */
+.cat-chip { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle;
+            padding: 1px 8px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
+            color: color-mix(in srgb, var(--chip) 80%, var(--text)); background: color-mix(in srgb, var(--chip) 16%, transparent); }
 table.clashes tr.gone td { color: var(--muted); }
 table.clashes td.name { white-space: nowrap; }
 th.c-sel { width: 32px; }
 th.c-date { width: 92px; }
 th.c-test { width: 20%; }
+th.c-cat { width: 150px; }
 th.c-disc { width: 84px; }
 th.c-what { width: auto; }
 th.c-dist { width: 96px; }
 th.c-grid { width: 90px; }
 th.c-level { width: 150px; }
 th.c-state { width: 124px; }
-th.c-rep { width: 150px; }
+th.c-rep { width: 92px; }
 /* «что с чем»: тип А × тип Б, каждая сторона — многоточием */
 td.what { overflow: hidden; }
 td.what .cm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

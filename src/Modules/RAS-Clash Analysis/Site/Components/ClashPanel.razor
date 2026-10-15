@@ -71,7 +71,9 @@
                 @foreach (var f in row)
                 {
                     <th>@f.Label</th>
-                    <td title="@f.Title">@if (f.Dist) { <span class="dist">@f.Value</span> } else { @f.Value }</td>
+                    <td title="@f.Title">@if (f.Dist) { <span class="dist">@f.Value</span> }
+                        else if (f.Color != null) { <span class="cat-chip" style="--chip: var(--cat-@f.Color)">@f.Value</span> }
+                        else { @f.Value }</td>
                 }
                 @if (row.Count == 1) { <th></th><td></td> }
             </tr>
@@ -175,7 +177,7 @@
     };
 
     /// <summary>Сведение карточки: подпись, значение, подсказка; Dist — значение как «расстояние» (красной плашкой).</summary>
-    private sealed record Fact(string Label, string Value, string Title = null, bool Dist = false);
+    private sealed record Fact(string Label, string Value, string Title = null, bool Dist = false, string Color = null);
 
     /// <summary>Сведения по два в строке; расстояние, оси, статус Navisworks — только если они есть в отчёте.</summary>
     private List<List<Fact>> FactRows
@@ -191,6 +193,12 @@
                 new("Повторы", Fmt.Plural(Repeats, "раз", "раза", "раз") + ((l?.Points ?? 1) > 1 ? " · " + Fmt.Plural(l.Points, "точка", "точки", "точек") : ""),
                     (l?.Points ?? 1) > 1 ? "Navisworks нашёл несколько точек касания этих же элементов — это одна коллизия" : null),
             };
+            // категория и подкатегория проверки — метками своего цвета (в списке при открытой карточке их столбцы спрятаны)
+            if (_category.Name != null)
+            {
+                facts.Insert(2, new("Категория", _category.Name, Color: _category.Color));
+                facts.Insert(3, new("Подкатегория", _category.Sub == "" ? "—" : _category.Sub, Color: _category.Sub == "" ? null : _category.SubColor ?? _category.Color));
+            }
             if (l?.Distance != null) facts.Add(new("Расстояние", Fmt.MmAbs(l.Distance, _card.Units), null, true));
             if (!string.IsNullOrEmpty(l?.GridLocation)) facts.Add(new("Оси", l.GridLocation));
             if (l != null && l.NavisStatus != NavisworksStatus.New) facts.Add(new("Статус Navisworks", Fmt.Navis(l.NavisStatus)));
@@ -231,7 +239,12 @@
         _comment = null;
         _copied = -1;
         _card = Store.Card(ClashId);
+        _category = _card != null && Store.CategoryMap().TryGetValue(Logic.TestCategories.Key(_card.TestName), out var c)
+            ? (c.Category, c.Subcategory, c.Color, c.SubColor) : default;
     }
+
+    /// <summary>Категория проверки коллизии (Name null — без категории).</summary>
+    private (string Name, string Sub, string Color, string SubColor) _category;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
