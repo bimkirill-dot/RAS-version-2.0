@@ -553,6 +553,184 @@ public sealed class ClashStore
         return r.Read() ? (id, r.GetInt64(0), r.IsDBNull(1) ? null : r.GetString(1), r.GetString(2), r.GetString(3)) : (id, 0, null, "", "");
     }
 
+    // ───────────── категории проверок (DECISIONS.md, «Категории проверок») ─────────────
+
+    /// <summary>Категории по порядку — с проверками (по алфавиту).</summary>
+    public List<CategoryRow> Categories()
+    {
+        using var c = _db.Open();
+        var list = new List<CategoryRow>();
+        using (var r = Query(c, "SELECT Id, Name FROM Categories ORDER BY Sort, Id"))
+            while (r.Read()) list.Add(new CategoryRow { Id = r.GetInt64(0), Name = r.GetString(1) });
+        var byId = list.ToDictionary(x => x.Id);
+        using (var r = Query(c, "SELECT CategoryId, Key, Name FROM CategoryTests"))
+            while (r.Read())
+                if (byId.TryGetValue(r.GetInt64(0), out var cat)) cat.Tests.Add((r.GetString(1), r.GetString(2)));
+        foreach (var cat in list) cat.Tests.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.CurrentCultureIgnoreCase));
+        return list;
+    }
+
+    /// <summary>Категория проверки по её названию: ключ (TestCategories.Key) → название категории.</summary>
+    public Dictionary<string, string> CategoryMap()
+    {
+        using var c = _db.Open();
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        using var r = Query(c, "SELECT t.Key, k.Name FROM CategoryTests t JOIN Categories k ON k.Id = t.CategoryId");
+        while (r.Read()) map[r.GetString(0)] = r.GetString(1);
+        return map;
+    }
+
+    /// <summary>Новая категория — в конец. Что не так — текст; добавлена — null.</summary>
+    public string AddCategory(string name)
+    {
+        name = (name ?? "").Trim();
+        if (name.Length == 0) return "Впишите название категории.";
+        if (Categories().Any(x => string.Equals(x.Name, name, StringComparison.CurrentCultureIgnoreCase))) return $"Категория «{name}» уже есть.";
+        using var c = _db.Open();
+        using var tx = c.BeginTransaction();
+        using (var cmd = Command(c, "INSERT INTO Categories(Name, Sort) VALUES($n, COALESCE((SELECT MAX(Sort) FROM Categories), 0) + 1)", ("$n", name)))
+        {
+            cmd.Transaction = tx;
+            cmd.ExecuteNonQuery();
+        }
+        SiteHistory.Write(c, tx, null, SiteHistory.Settings, $"Категория проверок добавлена: «{name}»");
+        tx.Commit();
+        return null;
+    }
+
+    public string RenameCategory(long id, string name)
+    {
+        name = (name ?? "").Trim();
+        var all = Categories();
+        var cat = all.FirstOrDefault(x => x.Id == id);
+        if (cat == null) return "Категория не найдена — возможно, её уже удалили.";
+        if (name.Length == 0) return "Впишите название категории.";
+        if (name == cat.Name) return null;
+        if (all.Any(x => x.Id != id && string.Equals(x.Name, name, StringComparison.CurrentCultureIgnoreCase))) return $"Категория «{name}» уже есть.";
+        using var c = _db.Open();
+        using var tx = c.BeginTransaction();
+        using (var cmd = Command(c, "UPDATE Categories SET Name = $n WHERE Id = $id", ("$n", name), ("$id", id)))
+        {
+            cmd.Transaction = tx;
+            cmd.ExecuteNonQuery();
+        }
+        SiteHistory.Write(c, tx, null, SiteHistory.Settings, $"Категория проверок переименована: «{cat.Name}» → «{name}»");
+        tx.Commit();
+        return null;
+    }
+
+    /// <summary>Удалить категорию: её проверки станут «без категории».</summary>
+    public void DeleteCategory(long id)
+    {
+        var cat = Categories().FirstOrDefault(x => x.Id == id);
+        if (cat == null) return;
+        using var c = _db.Open();
+        using var tx = c.BeginTransaction();
+        foreach (var sql in new[] { "DELETE FROM CategoryTests WHERE CategoryId = $id", "DELETE FROM Categories WHERE Id = $id" })
+        {
+            using var cmd = Command(c, sql, ("$id", id));
+            cmd.Transaction = tx;
+            cmd.ExecuteNonQuery();
+        }
+        SiteHistory.Write(c, tx, null, SiteHistory.Settings, $"Категория проверок удалена: «{cat.Name}» ({Services.Fmt.Plural(cat.Tests.Count, "проверка", "проверки", "проверок")} — без категории)");
+        tx.Commit();
+    }
+
+    /// <summary>Поднять (delta −1) или опустить (+1) категорию в порядке.</summary>
+    public void MoveCategory(long id, int delta)
+    {
+        var list = Categories();
+        var i = list.FindIndex(x => x.Id == id);
+        var j = i + delta;
+        if (i < 0 || j < 0 || j >= list.Count) return;
+        (list[i], list[j]) = (list[j], list[i]);
+        using var c = _db.Open();
+        using var tx = c.BeginTransaction();
+        for (var k = 0; k < list.Count; k++)
+        {
+            using var cmd = Command(c, "UPDATE Categories SET Sort = $s WHERE Id = $id", ("$s", k + 1), ("$id", list[k].Id));
+            cmd.Transaction = tx;
+            cmd.ExecuteNonQuery();
+        }
+        tx.Commit();
+    }
+
+    /// <summary>
+    /// Добавить проверки в категорию. Уже в этой — пропускаются; в другой категории — переносятся, только если move
+    /// (иначе остаются там). Возвращает: добавлено, и какие из названий — в других категориях (название, категория).
+    /// </summary>
+    public (int Added, List<(string Name, string Category)> Elsewhere) AddCategoryTests(long categoryId, IEnumerable<string> names, bool move)
+    {
+        var all = Categories();
+        var cat = all.FirstOrDefault(x => x.Id == categoryId);
+        if (cat == null) return (0, new List<(string, string)>());
+        var owner = all.SelectMany(x => x.Tests.Select(t => (t.Key, Category: x))).ToDictionary(x => x.Key, x => x.Category);
+        var elsewhere = new List<(string Name, string Category)>();
+        var added = 0;
+        using var c = _db.Open();
+        using var tx = c.BeginTransaction();
+        foreach (var raw in names)
+        {
+            var name = (raw ?? "").Trim();
+            var key = Logic.TestCategories.Key(name);
+            if (key.Length == 0) continue;
+            if (owner.TryGetValue(key, out var other))
+            {
+                if (other.Id == categoryId) continue;
+                elsewhere.Add((name, other.Name));
+                if (!move) continue;
+            }
+            using var cmd = Command(c, "INSERT OR REPLACE INTO CategoryTests(Key, Name, CategoryId) VALUES($k, $n, $c)", ("$k", key), ("$n", name), ("$c", categoryId));
+            cmd.Transaction = tx;
+            cmd.ExecuteNonQuery();
+            owner[key] = cat;
+            added++;
+        }
+        if (added > 0)
+            SiteHistory.Write(c, tx, null, SiteHistory.Settings,
+                $"В категорию «{cat.Name}» — {Services.Fmt.Plural(added, "проверка", "проверки", "проверок")}" + (move && elsewhere.Count > 0 ? $" (перенесено из других категорий — {elsewhere.Count})" : ""));
+        tx.Commit();
+        return (added, elsewhere);
+    }
+
+    /// <summary>Убрать проверку из её категории — станет «без категории».</summary>
+    public void RemoveCategoryTest(string key)
+    {
+        using var c = _db.Open();
+        using var tx = c.BeginTransaction();
+        string name = null, category = null;
+        using (var get = Command(c, "SELECT t.Name, k.Name FROM CategoryTests t JOIN Categories k ON k.Id = t.CategoryId WHERE t.Key = $k", ("$k", key)))
+        {
+            get.Transaction = tx;
+            using var r = get.ExecuteReader();
+            if (r.Read()) (name, category) = (r.GetString(0), r.GetString(1));
+        }
+        if (name == null) return;
+        using (var cmd = Command(c, "DELETE FROM CategoryTests WHERE Key = $k", ("$k", key)))
+        {
+            cmd.Transaction = tx;
+            cmd.ExecuteNonQuery();
+        }
+        SiteHistory.Write(c, tx, null, SiteHistory.Settings, $"Из категории «{category}» убрана проверка «{name}»");
+        tx.Commit();
+    }
+
+    /// <summary>Проверки, которые есть на сайте (в любом проекте), но не входят ни в одну категорию, — по алфавиту.</summary>
+    public List<string> UncategorizedTests()
+    {
+        var map = CategoryMap();
+        using var c = _db.Open();
+        var names = new Dictionary<string, string>(StringComparer.Ordinal);
+        using (var r = Query(c, "SELECT DISTINCT Name FROM Tests"))
+            while (r.Read())
+            {
+                var name = r.GetString(0);
+                var key = Logic.TestCategories.Key(name);
+                if (key.Length > 0 && !map.ContainsKey(key) && !names.ContainsKey(key)) names[key] = name;
+            }
+        return names.Values.OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase).ToList();
+    }
+
     /// <summary>История сайта: всё или по проекту, новые сверху; limit — сколько последних.</summary>
     public List<HistoryRow> History(long? projectId, int limit)
     {

@@ -1,0 +1,234 @@
+@inject ClashStore Store
+
+@* Категории проверок (DECISIONS.md модуля, «Категории проверок»): деление проверок по названиям, например по критичности, —
+   на весь сайт. Изменения сохраняются сразу (отдельно от «Сохранить» внизу страницы). Проверка — в одной категории. *@
+<section class="set-block cat-block">
+    <div class="cat-top">
+        <h2>Категории проверок</h2>
+        <button class="btn small" @onclick="() => { _adding = true; _error = null; }">+ Категория</button>
+    </div>
+    <p class="muted small">
+        Деление проверок, например по критичности: в проекте появится отбор «Категория». Проверка входит в одну категорию;
+        названия сравниваются без учёта регистра и пробелов. Изменения сохраняются сразу и действуют на все проекты — и на уже загруженное.
+    </p>
+
+    @if (_adding)
+    {
+        <div class="cat-new">
+            <input placeholder="Название категории, например «Высокая критичность»" @bind="_newName" @bind:event="oninput" @onkeydown="NewKey" />
+            <button class="btn primary small" @onclick="AddCategory">Добавить</button>
+            <button class="btn small" @onclick="() => { _adding = false; _newName = null; }">Отмена</button>
+        </div>
+    }
+    @if (_error != null) { <p class="error small">@_error</p> }
+
+    @if (_categories.Count == 0 && !_adding)
+    {
+        <div class="bf-empty muted">Категорий пока нет. Добавьте, например, «Высокая критичность», «Средняя», «Низкая» — и проверки в них.</div>
+    }
+
+    @for (var i = 0; i < _categories.Count; i++)
+    {
+        var cat = _categories[i];
+        var first = i == 0;
+        var last = i == _categories.Count - 1;
+        var open = _expanded.Contains(cat.Id);
+        <div class="cat-card">
+            <div class="cat-title">
+                <input class="cat-name" value="@cat.Name" title="Название категории — можно поменять" @onchange="e => Rename(cat, e.Value?.ToString())" />
+                <span class="muted small">@Fmt.Plural(cat.Tests.Count, "проверка", "проверки", "проверок")</span>
+                <span class="spacer"></span>
+                <button class="icon-btn small-icon" title="Выше" disabled="@first" @onclick="() => Move(cat, -1)"><svg viewBox="0 0 16 16"><path d="M8 12.5V3.5M4 7.5l4-4 4 4" /></svg></button>
+                <button class="icon-btn small-icon" title="Ниже" disabled="@last" @onclick="() => Move(cat, 1)"><svg viewBox="0 0 16 16"><path d="M8 3.5v9M4 8.5l4 4 4-4" /></svg></button>
+                <button class="btn link small b-del" title="Удалить категорию — её проверки станут «без категории»" @onclick="() => Delete(cat)">
+                    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+                </button>
+            </div>
+            @if (cat.Tests.Count > 0)
+            {
+                <ul class="cat-tests">
+                    @foreach (var t in open ? cat.Tests : cat.Tests.Take(Shown))
+                    {
+                        var key = t.Key;
+                        <li>
+                            <span>@t.Name</span>
+                            <button class="btn link small" title="Убрать из категории" @onclick="() => RemoveTest(key)">✕</button>
+                        </li>
+                    }
+                </ul>
+                @if (cat.Tests.Count > Shown)
+                {
+                    <button class="btn link small" @onclick="() => Toggle(cat.Id)">@(open ? "Свернуть" : $"Показать все ({cat.Tests.Count})")</button>
+                }
+            }
+            <div class="cat-add">
+                <input placeholder="Название проверки, например «АР Стены/МЕР Трубы»" value="@Draft(cat.Id)"
+                       @oninput="e => _drafts[cat.Id] = e.Value?.ToString()" @onkeydown="e => DraftKey(e, cat)" />
+                <button class="btn small" @onclick="() => AddTyped(cat)">Добавить</button>
+                <label class="btn small file-btn" title="Названия всех проверок из XML Navisworks — отчёта или файла проверок Clash Detective">
+                    Из файла XML…
+                    <InputFile accept=".xml" OnChange="e => FromXml(cat, e)" />
+                </label>
+            </div>
+            @if (_pending != null && _pending.CategoryId == cat.Id)
+            {
+                <div class="cat-conflict">
+                    @(_pending.Elsewhere.Count == 1 ? "Проверка уже в другой категории:" : $"Уже в других категориях — {_pending.Elsewhere.Count}:")
+                    @string.Join("; ", _pending.Elsewhere.Take(5).Select(x => $"«{x.Name}» — в «{x.Category}»"))@(_pending.Elsewhere.Count > 5 ? "; …" : "").
+                    <button class="btn small primary" @onclick="MovePending">Перенести сюда</button>
+                    <button class="btn small" @onclick="() => _pending = null">Оставить там</button>
+                </div>
+            }
+            @if (_notice != null && _noticeFor == cat.Id) { <div class="notice small">@_notice</div> }
+        </div>
+    }
+
+    @if (_categories.Count > 0 && _uncategorized.Count > 0)
+    {
+        <details class="cat-none">
+            <summary>Без категории: @Fmt.Plural(_uncategorized.Count, "проверка", "проверки", "проверок") <span class="muted">— есть на сайте, ни в одну категорию не входят</span></summary>
+            <ul class="cat-tests">
+                @foreach (var name in _uncategorized)
+                {
+                    var test = name;
+                    <li>
+                        <span>@test</span>
+                        <select title="Добавить в категорию" @onchange="e => AddTo(test, e.Value?.ToString())">
+                            <option value="">в категорию…</option>
+                            @foreach (var c in _categories) { <option value="@c.Id">@c.Name</option> }
+                        </select>
+                    </li>
+                }
+            </ul>
+        </details>
+    }
+</section>
+
+@code {
+    private const int Shown = 8;
+
+    private List<CategoryRow> _categories = new();
+    private List<string> _uncategorized = new();
+    private readonly HashSet<long> _expanded = new();
+    private readonly Dictionary<long, string> _drafts = new();
+    private bool _adding;
+    private string _newName, _error, _notice;
+    private long _noticeFor;
+
+    /// <summary>Названия, которые уже в других категориях, — ждут «Перенести сюда» или «Оставить там».</summary>
+    private sealed class Pending
+    {
+        public long CategoryId;
+        public List<string> Names;
+        public List<(string Name, string Category)> Elsewhere;
+    }
+    private Pending _pending;
+
+    protected override void OnInitialized() => Load();
+
+    private void Load()
+    {
+        _categories = Store.Categories();
+        _uncategorized = Store.UncategorizedTests();
+    }
+
+    private string Draft(long id) => _drafts.TryGetValue(id, out var v) ? v : "";
+
+    private void NewKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") AddCategory();
+    }
+
+    private void AddCategory()
+    {
+        _error = Store.AddCategory(_newName);
+        if (_error != null) return;
+        _adding = false;
+        _newName = null;
+        Load();
+    }
+
+    private void Rename(CategoryRow cat, string name)
+    {
+        _error = Store.RenameCategory(cat.Id, name);
+        Load();
+    }
+
+    private void Move(CategoryRow cat, int delta)
+    {
+        Store.MoveCategory(cat.Id, delta);
+        Load();
+    }
+
+    private void Delete(CategoryRow cat)
+    {
+        Store.DeleteCategory(cat.Id);
+        if (_pending?.CategoryId == cat.Id) _pending = null;
+        Load();
+    }
+
+    private void Toggle(long id)
+    {
+        if (!_expanded.Remove(id)) _expanded.Add(id);
+    }
+
+    private void RemoveTest(string key)
+    {
+        Store.RemoveCategoryTest(key);
+        Load();
+    }
+
+    private void DraftKey(KeyboardEventArgs e, CategoryRow cat)
+    {
+        if (e.Key == "Enter") AddTyped(cat);
+    }
+
+    private void AddTyped(CategoryRow cat)
+    {
+        var name = Draft(cat.Id).Trim();
+        if (name.Length == 0) return;
+        _drafts[cat.Id] = "";
+        Add(cat.Id, new List<string> { name });
+    }
+
+    private void AddTo(string test, string categoryId)
+    {
+        if (long.TryParse(categoryId, out var id)) Add(id, new List<string> { test });
+    }
+
+    /// <summary>Названия проверок из XML — в категорию (файл читается в браузере и передаётся сайту; путь не нужен).</summary>
+    private async Task FromXml(CategoryRow cat, InputFileChangeEventArgs e)
+    {
+        _error = null;
+        try
+        {
+            using var buffer = new MemoryStream();
+            await e.File.OpenReadStream(maxAllowedSize: 200L * 1024 * 1024).CopyToAsync(buffer);
+            buffer.Position = 0;
+            Add(cat.Id, TestCategories.NamesFromXml(buffer), $"Из файла «{e.File.Name}»");
+        }
+        catch (Exception ex) when (ex is InvalidDataException || ex is IOException)
+        {
+            _error = $"«{e.File.Name}»: {ex.Message}";
+        }
+    }
+
+    private void Add(long categoryId, List<string> names, string source = null)
+    {
+        var (added, elsewhere) = Store.AddCategoryTests(categoryId, names, move: false);
+        _pending = elsewhere.Count > 0 ? new Pending { CategoryId = categoryId, Names = elsewhere.Select(x => x.Name).ToList(), Elsewhere = elsewhere } : null;
+        _noticeFor = categoryId;
+        _notice = (source == null ? "" : source + ": ") + (added > 0 ? "добавлено — " + Fmt.Plural(added, "проверка", "проверки", "проверок") : "новых проверок нет")
+                  + (names.Count > added + elsewhere.Count ? $" (уже здесь — {names.Count - added - elsewhere.Count})" : "") + ".";
+        Load();
+    }
+
+    private void MovePending()
+    {
+        var (added, _) = Store.AddCategoryTests(_pending.CategoryId, _pending.Names, move: true);
+        _noticeFor = _pending.CategoryId;
+        _notice = "Перенесено сюда — " + Fmt.Plural(added, "проверка", "проверки", "проверок") + ".";
+        _pending = null;
+        Load();
+    }
+}

@@ -278,6 +278,19 @@ public sealed class Database
             Created TEXT NOT NULL);
         CREATE INDEX BlocksProject ON Blocks(ProjectId);
         """,
+
+        // 11 — 15.10.2026 (DECISIONS.md, «Категории проверок»): категории проверок на весь сайт — по названию проверки
+        // (ключ — Logic.TestCategories.Key); проверка — в одной категории
+        """
+        CREATE TABLE Categories(
+            Id INTEGER PRIMARY KEY,
+            Name TEXT NOT NULL,
+            Sort INTEGER NOT NULL);
+        CREATE TABLE CategoryTests(
+            Key TEXT PRIMARY KEY,
+            Name TEXT NOT NULL,
+            CategoryId INTEGER NOT NULL REFERENCES Categories(Id));
+        """,
     };
 
     /// <summary>

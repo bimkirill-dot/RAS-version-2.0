@@ -79,6 +79,14 @@ public sealed class BlockRow
     public int Reports { get; set; }
 }
 
+/// <summary>Категория проверок (на весь сайт): название и проверки (ключ сравнения и название, как добавили).</summary>
+public sealed class CategoryRow
+{
+    public long Id { get; set; }
+    public string Name { get; set; }
+    public List<(string Key, string Name)> Tests { get; } = new();
+}
+
 /// <summary>Блок в форме ввода (ещё не сохранён).</summary>
 public sealed class BlockDraft
 {
@@ -216,6 +224,8 @@ public sealed class ClashFilter
     public string Criticality { get; set; }
     /// <summary>Блок («S1», "" — без блока); null — любой.</summary>
     public string Block { get; set; }
+    /// <summary>Категория проверок («Высокая критичность», "" — без категории); null — любая (DECISIONS.md, «Категории проверок»).</summary>
+    public string Category { get; set; }
     /// <summary>
     /// Тип проверки — название проверки Navisworks («АР Стены/МЕР Трубы») или своё название в проекте (TypeNames);
     /// одинаковое в разных блоках и критичностях — один тип (решение разработчика). null — все.

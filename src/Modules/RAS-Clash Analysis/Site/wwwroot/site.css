@@ -132,6 +132,28 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .bc-head .b-del { margin-left: auto; }
 .bc-field { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; font-size: 12px; color: var(--muted); }
 .bc-field input { width: 100%; color: var(--text); }
+/* категории проверок — «Настройки» */
+.cat-top { display: flex; align-items: center; gap: 10px; }
+.cat-top h2 { margin-right: auto; }
+.cat-new, .cat-add { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
+.cat-new input, .cat-add input { flex: 1; min-width: 0; }
+.cat-card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); box-shadow: var(--shadow); padding: 10px 14px; margin: 10px 0; }
+.cat-title { display: flex; align-items: center; gap: 8px; }
+.cat-title .spacer { flex: 1; }
+.cat-name { font-weight: 600; border-color: transparent; background: transparent; padding-left: 4px; min-width: 220px; }
+.cat-name:hover, .cat-name:focus { border-color: var(--line); background: var(--bg); }
+.cat-tests { list-style: none; margin: 6px 0 4px; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.cat-tests li { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 6px; font-size: 13px; }
+.cat-tests li:hover { background: var(--row-hover); }
+.cat-tests li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.cat-tests li select { font-size: 12px; }
+.cat-conflict { margin: 6px 0; padding: 8px 10px; border: 1px solid var(--pending); border-radius: 8px; font-size: 13px; display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.cat-none { margin-top: 12px; }
+.cat-none summary { cursor: pointer; }
+.icon-btn.small-icon { width: 26px; height: 26px; }
+.icon-btn.small-icon svg { width: 14px; height: 14px; }
+.file-btn { position: relative; overflow: hidden; cursor: pointer; }
+.file-btn input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .empty-state { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin: 12px 0 18px; }
 .block-actions { display: flex; gap: 10px; align-items: center; margin-top: 6px; }
 .b-del { color: var(--muted); }
