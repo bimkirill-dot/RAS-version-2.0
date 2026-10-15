@@ -98,16 +98,13 @@ namespace RASv2.ClashAnalysis.Reports
             return Simplify(key);
         }
 
-        /// <summary>Статус Navisworks → наш: «Подтверждено» — «Допущена», «Исправлено» — «Исправлена», остальное — «Активная».</summary>
-        public static ClashState StateOf(NavisworksStatus status)
-        {
-            switch (status)
-            {
-                case NavisworksStatus.Approved: return ClashState.Accepted;
-                case NavisworksStatus.Resolved: return ClashState.Fixed;
-                default: return ClashState.Active;
-            }
-        }
+        /// <summary>
+        /// Статус новой коллизии по Navisworks: «Исправлено» — «Исправлена» (точки в модели уже нет — то же, что нет в отчёте),
+        /// остальное — «Активная». «Подтверждено» в Navisworks — тоже «Активная»: статусы ставит только сайт (решение
+        /// разработчика 15.10.2026; до того — «Допущена»).
+        /// </summary>
+        public static ClashState StateOf(NavisworksStatus status) =>
+            status == NavisworksStatus.Resolved ? ClashState.Fixed : ClashState.Active;
 
         public static string Title(ClashState state)
         {

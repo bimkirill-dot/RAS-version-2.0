@@ -199,6 +199,8 @@ public sealed class ClashRow
     public string LastComment { get; set; }
     public DateTime? LastCommentTime { get; set; }
     public int Comments { get; set; }
+    /// <summary>Все комментарии одной строкой — для поиска.</summary>
+    public string CommentsText { get; set; }
     public long Id { get; set; }
     public string Name { get; set; }
     public long TestId { get; set; }

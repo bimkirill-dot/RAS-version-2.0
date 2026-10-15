@@ -43,7 +43,7 @@ namespace RASv2.Tests
                 });
                 Check(steps.All(s => s.Action == MergeAction.New), "все новые");
                 Check(Step(steps, 1, 2).NewState == ClashState.Active && Step(steps, 1, 2).Present, "новая — активная, в отчёте");
-                Check(Step(steps, 3, 4).NewState == ClashState.Accepted, "подтверждённая — допущена");
+                Check(Step(steps, 3, 4).NewState == ClashState.Active, "подтверждённая в Navisworks — активная: статусы ставит только сайт");
                 Check(Step(steps, 5, 6).NewState == ClashState.Fixed && !Step(steps, 5, 6).Present, "исправленная — исправлена, не «в отчёте»");
                 Check(Step(steps, 7, 8).NewState == ClashState.Active, "проверенная — активная");
             });

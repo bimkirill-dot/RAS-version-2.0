@@ -80,7 +80,7 @@
                 <span class="off-note" title="Остальные отборы — для списка коллизий">Отборы — для списка коллизий</span>
             }
             @* поиск — справа (просьба разработчика 13.10.2026) *@
-            <input class="search @(_view.Tab == 0 ? "" : "off")" type="search" placeholder="Поиск: номер элемента, тип, имя…" value="@_filter.Search" @oninput="OnSearch" />
+            <input class="search @(_view.Tab == 0 ? "" : "off")" type="search" placeholder="Поиск: номер элемента, тип, комментарий…" value="@_filter.Search" @oninput="OnSearch" />
         </div>
     }
 

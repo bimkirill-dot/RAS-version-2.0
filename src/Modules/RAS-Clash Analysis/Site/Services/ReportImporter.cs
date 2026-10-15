@@ -582,7 +582,7 @@ public sealed class ReportImporter
             var complete = ReportMerge.IsComplete(test);
             if (!complete)
             {
-                var warning = $"«{test.Name}»: отчёт неполный — в проверке {test.Summary.Total} коллизий, в отчёте {test.ResultsInFile}. "
+                var warning = $"«{test.Name}»: отчёт неполный — в проверке {Fmt.Plural(test.Summary.Total, "коллизия", "коллизии", "коллизий")}, в отчёте {test.ResultsInFile}. "
                               + "Пропавшие из отчёта не считаются исправленными. Выгрузите отчёт со всеми статусами.";
                 result.Warning = result.Warning == null ? warning : result.Warning + " " + warning;
                 _log.LogWarning("{File}: {Warning}", path, warning);

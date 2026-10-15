@@ -377,7 +377,8 @@ public sealed class ClashStore
                 WHERE e.ClashId = c.Id AND e.Kind = 'reappeared'),
                (SELECT e.Text FROM Events e WHERE e.ClashId = c.Id AND e.Kind = 'comment' ORDER BY e.Id DESC LIMIT 1),
                (SELECT e.Time FROM Events e WHERE e.ClashId = c.Id AND e.Kind = 'comment' ORDER BY e.Id DESC LIMIT 1),
-               (SELECT COUNT(*) FROM Events e WHERE e.ClashId = c.Id AND e.Kind = 'comment')
+               (SELECT COUNT(*) FROM Events e WHERE e.ClashId = c.Id AND e.Kind = 'comment'),
+               (SELECT group_concat(e.Text, ' ') FROM Events e WHERE e.ClashId = c.Id AND e.Kind = 'comment')
         FROM Clashes c
         JOIN Tests t ON t.Id = c.TestId
         LEFT JOIN TypeNames tn ON tn.ProjectId = c.ProjectId AND tn.Name = t.Name
@@ -1004,7 +1005,7 @@ public sealed class ClashStore
         Criticality = r.GetString(24), Block = r.GetString(25), Type = r.GetString(26), ReturnCount = r.GetInt32(27),
         NewInLastRun = r.GetInt32(28) != 0, FixedInLastRun = r.GetInt32(29) != 0, ReturnedInLastRun = r.GetInt32(30) != 0,
         Distance = Num(r, 31), GridLocation = Str(r, 32), Units = Str(r, 33) ?? "m",
-        LastComment = Str(r, 37), LastCommentTime = r.IsDBNull(38) ? null : Database.Time(r.GetString(38)), Comments = r.GetInt32(39),
+        LastComment = Str(r, 37), LastCommentTime = r.IsDBNull(38) ? null : Database.Time(r.GetString(38)), Comments = r.GetInt32(39), CommentsText = Str(r, 40),
     }.WithRuns(Str(r, 34), Str(r, 35), Str(r, 36));
 
     private static ElementView ReadElement(SqliteDataReader r, int i) => new ElementView

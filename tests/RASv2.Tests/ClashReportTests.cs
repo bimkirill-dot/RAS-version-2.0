@@ -212,7 +212,7 @@ namespace RASv2.Tests
             {
                 Check(ClashRules.StateOf(NavisworksStatus.New) == ClashState.Active, "новая");
                 Check(ClashRules.StateOf(NavisworksStatus.Reviewed) == ClashState.Active, "проверенная");
-                Check(ClashRules.StateOf(NavisworksStatus.Approved) == ClashState.Accepted, "подтверждённая");
+                Check(ClashRules.StateOf(NavisworksStatus.Approved) == ClashState.Active, "подтверждённая — активная (статусы ставит только сайт)");
                 Check(ClashRules.StateOf(NavisworksStatus.Resolved) == ClashState.Fixed, "исправленная");
                 Check(ClashRules.Title(ClashState.Accepted) == "Допущена", "название");
             });

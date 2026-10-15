@@ -109,7 +109,7 @@ namespace RASv2.ClashAnalysis.Site.Logic
             var s = search?.Trim();
             if (string.IsNullOrEmpty(s)) return true;
             bool Has(string v) => v != null && v.IndexOf(s, StringComparison.CurrentCultureIgnoreCase) >= 0;
-            return Has(c.Name) || Elements(c).Any(e => Has(e.ElementId?.ToString()) || Has(e.Name) || Has(e.Type) || Has(e.Family)
+            return Has(c.Name) || Has(c.CommentsText) || Elements(c).Any(e => Has(e.ElementId?.ToString()) || Has(e.Name) || Has(e.Type) || Has(e.Family)
                                                        || Has(e.ModelFile) || Has(e.Category));
         }
 

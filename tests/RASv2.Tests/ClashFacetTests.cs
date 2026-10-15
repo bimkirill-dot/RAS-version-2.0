@@ -66,6 +66,8 @@ namespace RASv2.Tests
                 var r = Row("1", "1", "Стены", "Трубы", idA: 5556166);
                 Check(ClashFacets.MatchesSearch(r, "5556166") && ClashFacets.MatchesSearch(r, "базовая") && ClashFacets.MatchesSearch(r, "ar01"), "находит");
                 Check(!ClashFacets.MatchesSearch(r, "нет такого") && ClashFacets.MatchesSearch(r, "  "), "не находит / пусто");
+                r.CommentsText = "Согласовано с ОВ: переносим воздуховод";
+                Check(ClashFacets.MatchesSearch(r, "согласовано") && ClashFacets.MatchesSearch(r, "ов:"), "находит по комментарию");
             });
             yield return Case("подпись на кнопке: два значения и «+N»", () =>
             {
