@@ -72,7 +72,7 @@
                 {
                     <th>@f.Label</th>
                     <td title="@f.Title">@if (f.Dist) { <span class="dist">@f.Value</span> }
-                        else if (f.Color != null) { <span class="cat-chip" style="--chip: var(--cat-@f.Color)">@f.Value</span> }
+                        else if (f.Color != null) { <span class="cat-chip" style="--chip: var(--cat-@f.Color)" title="@f.Value">@f.Value</span> }
                         else { @f.Value }</td>
                 }
                 @if (row.Count == 1) { <th></th><td></td> }
