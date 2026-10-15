@@ -195,6 +195,10 @@ public sealed class ElementView
 /// <summary>Строка списка коллизий: «личность» + её последнее появление в отчёте.</summary>
 public sealed class ClashRow
 {
+    /// <summary>Последний комментарий, когда он оставлен и сколько всего комментариев (столбец «Комментарий» списка).</summary>
+    public string LastComment { get; set; }
+    public DateTime? LastCommentTime { get; set; }
+    public int Comments { get; set; }
     public long Id { get; set; }
     public string Name { get; set; }
     public long TestId { get; set; }

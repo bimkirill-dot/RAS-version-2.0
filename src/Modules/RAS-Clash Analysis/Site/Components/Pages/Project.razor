@@ -290,7 +290,7 @@
                                         </th>
                                         @SortHeader("date", "Дата", "Последний прогон, где была коллизия", "c-date opt")
                                         @SortHeader("test", "Проверка", null, "c-test")
-                                        @SortHeader("what", "Что с чем", "Элементы коллизии: тип А × тип Б; имя Navisworks — в подсказке", "c-what")
+                                        @SortHeader("comment", "Комментарий", "Последний комментарий к коллизии (сколько всего — после точки); элементы — в подсказке", "c-what")
                                         @if (HasDistance) { @SortHeader("dist", "Расстояние", "Глубина пересечения, мм", "c-dist opt") }
                                         @if (HasGrid) { @SortHeader("grid", "Оси", "Расположение по осям", "c-grid opt") }
                                         @SortHeader("level", "Уровень", null, "c-level")
@@ -642,6 +642,11 @@
     private int ColumnCount => 7 + (HasDistance ? 1 : 0) + (HasGrid ? 1 : 0);
 
     /// <summary>Подсказка «что с чем»: полностью, с номерами элементов и именем Navisworks.</summary>
+    /// <summary>Подсказка столбца «Комментарий»: комментарий полностью (когда, сколько всего), затем элементы.</summary>
+    private static string CommentTitle(ClashRow x) =>
+        (x.LastComment == null ? "" : $"{x.LastComment}\n— {Fmt.Date(x.LastCommentTime)}" + (x.Comments > 1 ? $", всего комментариев: {x.Comments}" : "") + "\n\n")
+        + WhatTitle(x);
+
     private static string WhatTitle(ClashRow x) =>
         $"{Fmt.Element(x.A)} (ID {x.A?.ElementId}) × {Fmt.Element(x.B)} (ID {x.B?.ElementId}) · {x.Name}";
     private IEnumerable<TestRow> ScopeTests => _tests.Where(InScope);
@@ -1066,10 +1071,15 @@
             <td class="cut" title="@(x.Type != x.TestName ? x.Type + " (в Navisworks: " + x.TestName + ")" : x.TestName)">
                 @if (ShowBlock) { <span class="tag">@x.Block</span> }@x.Type
             </td>
-            @* что с чем пересекается — вместо «Конфликт4»: имя Navisworks — в подсказке и в карточке *@
-            <td class="what" title="@WhatTitle(x)">
+            @* последний комментарий (вместо «что с чем» — просьба разработчика 15.10.2026); элементы и имя Navisworks — в подсказке и в карточке;
+               позже здесь же — ответственный *@
+            <td class="what" title="@CommentTitle(x)">
                 <div class="what-line">
-                    <span class="w">@Fmt.Short(x.A)</span><span class="x">×</span><span class="w">@Fmt.Short(x.B)</span>
+                    @if (x.LastComment != null)
+                    {
+                        <span class="cm">@x.LastComment</span>
+                        @if (x.Comments > 1) { <span class="cm-n" title="Всего комментариев">· @x.Comments</span> }
+                    }
                     @if (RunIs(x, "new")) { <span class="tag run-new" title="Появилась в этом прогоне">новая</span> }
                     @if (RunIs(x, "returned")) { <span class="tag run-returned" title="Вернулась после исправления в этом прогоне">↺ вернулась</span> }
                     else if (RunIs(x, "fixed")) { <span class="tag run-fixed" title="Исправлена этим прогоном">исправлена</span> }
@@ -1090,7 +1100,7 @@
         static string Q(string v) => "\"" + (v ?? "").Replace("\"", "\"\"") + "\"";
         var sb = new System.Text.StringBuilder();
         sb.AppendLine(string.Join(";", new[] { "Дата", "Блок", "Тип проверки", "Проверка в Navisworks", "Имя", "Расстояние, мм", "Оси", "Уровень",
-            "Статус", "Прогонов", "Возвращалась", "Элемент 1", "Номер 1", "Модель 1", "Элемент 2", "Номер 2", "Модель 2" }.Select(Q)));
+            "Статус", "Прогонов", "Возвращалась", "Элемент 1", "Номер 1", "Модель 1", "Элемент 2", "Номер 2", "Модель 2", "Последний комментарий", "Комментариев" }.Select(Q)));
         foreach (var x in _clashes)
             sb.AppendLine(string.Join(";", new[]
             {
@@ -1099,6 +1109,7 @@
                 Fmt.State(x.State), x.Repeats.ToString(), x.ReturnCount.ToString(),
                 Fmt.Element(x.A), x.A?.ElementId?.ToString(), Fmt.Model(x.A?.ModelFile),
                 Fmt.Element(x.B), x.B?.ElementId?.ToString(), Fmt.Model(x.B?.ModelFile),
+                x.LastComment, x.Comments.ToString(),
             }.Select(Q)));
         var name = $"Коллизии — {_project.Name} — {DateTime.Now:yyyy-MM-dd}.csv";
         await JS.InvokeVoidAsync("ras.download", name, sb.ToString());
@@ -1546,7 +1557,7 @@
             "date" => c => c.LastSeen,
             "test" => c => c.Type,
             "name" => c => NameNumber(c.Name),
-            "what" => c => Fmt.Short(c.A) + " × " + Fmt.Short(c.B),
+            "comment" => c => c.LastCommentTime ?? DateTime.MinValue,
             "dist" => c => c.Distance.HasValue ? Math.Abs(c.Distance.Value) : -1,
             "grid" => c => c.GridLocation ?? "",
             "level" => c => LevelOrder(c),

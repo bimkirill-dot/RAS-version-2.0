@@ -492,6 +492,8 @@ th.c-state { width: 124px; }
 th.c-rep { width: 86px; }
 /* «что с чем»: тип А × тип Б, каждая сторона — многоточием */
 td.what { overflow: hidden; }
+td.what .cm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+td.what .cm-n { color: var(--muted); font-size: 12px; flex: none; }
 .what-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .what-line .w { min-width: 0; flex: 1 1 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .what-line .x { flex: none; color: var(--muted); }
