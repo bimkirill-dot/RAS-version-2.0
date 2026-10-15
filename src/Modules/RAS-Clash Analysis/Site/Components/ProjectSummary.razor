@@ -146,30 +146,39 @@
             </table>
         </section>
 
-        @* 7. висят дольше всего *@
+        @* 7. повторяющиеся — как «Рекуррентность» у автора: все статусы, кто встречался в прогонах чаще *@
         <section class="sum-block">
-            <h3>Висят дольше всего <span class="muted small">— активные, которые встречались @Fmt.Plural(LongMin, "раз", "раза", "раз") и больше: @_long.Count</span></h3>
-            @if (_long.Count == 0) { <p class="muted">Таких нет.</p> }
+            <h3>Повторяющиеся коллизии <span class="muted small">— встречались в @Fmt.Plural(RecurMin, "прогоне", "прогонах", "прогонах") и больше, любой статус: @_recur.Count; нажать — коллизия</span></h3>
+            <div class="recur-dist">
+                @foreach (var (title, count, hint) in _recurDist)
+                {
+                    <span class="chip" title="@hint">@title <b>@count</b></span>
+                }
+            </div>
+            @if (_recur.Count == 0) { <p class="muted">Таких нет — пока прогонов меньше двух или всё исправляется с первого раза.</p> }
             else
             {
-                <table class="grid sum-table">
-                    <thead><tr><th>Проверка</th><th>Элементы</th><th>Уровень</th><th class="num">Встречалась, раз</th><th>Впервые</th><th>Комментарий</th></tr></thead>
+                <table class="grid sum-table recur-table">
+                    <colgroup><col style="width:22%" /><col style="width:25%" /><col style="width:13%" /><col style="width:8.5%" /><col style="width:8.5%" /><col style="width:7.5%" /><col style="width:7.5%" /><col style="width:8%" /></colgroup>
+                    <thead><tr><th>Проверка</th><th>Элементы</th><th>Оси · уровень</th><th class="num" title="В скольких прогонах была в отчёте">Встречалась,<br />раз</th><th class="num" title="Сколько раз появлялась снова после исправления">↺ Вернулась,<br />раз</th><th>Первый</th><th>Последний</th><th>Статус</th></tr></thead>
                     <tbody>
-                        @foreach (var x in _long.Take(_longShown))
+                        @foreach (var x in _recur.Take(_recurShown))
                         {
                             var clash = x;
-                            <tr class="clickable" @onclick="() => Drill.InvokeAsync(new SummaryDrill { ClashId = clash.Id })" title="Открыть коллизию">
+                            <tr class="clickable" @onclick="() => Drill.InvokeAsync(new SummaryDrill { ClashId = clash.Id })" title="@ElementsTitle(clash)">
                                 <td class="cut">@if (clash.Block != "") { <span class="tag">@clash.Block</span> }@clash.Type</td>
                                 <td class="cut">@Fmt.Short(clash.A) × @Fmt.Short(clash.B)</td>
-                                <td class="cut">@LevelOf(clash)</td>
+                                <td class="cut">@PlaceOf(clash)</td>
                                 <td class="num"><b>@clash.Repeats</b></td>
+                                <td class="num">@(clash.ReturnCount > 0 ? clash.ReturnCount.ToString() : "")</td>
                                 <td>@Fmt.Day(clash.FirstSeen)</td>
-                                <td class="cut muted">@clash.LastComment</td>
+                                <td>@Fmt.Day(clash.LastSeen)</td>
+                                <td><span class="badge @Fmt.StateClass(clash.State)">@Fmt.State(clash.State)</span></td>
                             </tr>
                         }
                     </tbody>
                 </table>
-                @if (_long.Count > _longShown) { <button class="btn link small" @onclick="() => _longShown += 30">Показать ещё (@(_long.Count - _longShown))</button> }
+                @if (_recur.Count > _recurShown) { <button class="btn link small" @onclick="() => _recurShown += 30">Показать ещё (@(_recur.Count - _recurShown))</button> }
             }
         </section>
 
@@ -253,11 +262,11 @@
     [Parameter] public Dictionary<string, string> Colors { get; set; } = new();
     [Parameter] public EventCallback<SummaryDrill> Drill { get; set; }
 
-    private const int LongMin = 3;
+    private const int RecurMin = 2;
     private List<ClashRow> _rows = new();
     private List<DateTime> _days = new();
     private Counts _now = new(), _prev;
-    private int _newLast, _longShown = 30;
+    private int _newLast, _recurShown = 30;
     private List<BarChart.Bar> _trend = new();
     private List<(string, string)> _trendLegend = new() { ("Активные", "--active"), ("Исправленные", "--fixed"), ("Допущенные", "--accepted") };
     private List<FacetValue> _levels = new();
@@ -266,7 +275,9 @@
     private int _cellMax;
     private List<Group> _groups = new(), _tests = new();
     private List<(string, string, List<double?>)> _progressLines = new();
-    private List<ClashRow> _long = new();
+    private List<ClashRow> _recur = new();
+    /// <summary>Сколько коллизий встречалось 1, 2, 3 и больше раз; сколько возвращалось после исправления.</summary>
+    private List<(string Title, int Count, string Hint)> _recurDist = new();
     private List<(string Text, string Hint, bool Reports)> _quality = new();
     private RunHistory _history;
     private Func<long, bool> _filter;
@@ -355,8 +366,17 @@
             Active = g.Count(r => r.State == ClashState.Active), Fixed = g.Count(r => r.State == ClashState.Fixed), Accepted = g.Count(r => r.State == ClashState.Accepted),
         }).ToList();
 
-        // 7: висят дольше всего
-        _long = active.Where(r => r.Repeats >= LongMin).OrderByDescending(r => r.Repeats).ThenBy(r => r.FirstSeen).ToList();
+        // 7: повторяющиеся — сначала чаще встречавшиеся, при равенстве — чаще возвращавшиеся, активные выше
+        _recur = _rows.Where(r => r.Repeats >= RecurMin)
+            .OrderByDescending(r => r.Repeats).ThenByDescending(r => r.ReturnCount).ThenBy(r => r.State == ClashState.Active ? 0 : 1).ThenBy(r => r.FirstSeen)
+            .ToList();
+        _recurDist = new()
+        {
+            ("1 раз", _rows.Count(r => r.Repeats <= 1), "Были в одном прогоне"),
+            ("2 раза", _rows.Count(r => r.Repeats == 2), "Были в двух прогонах"),
+            ("3 и больше", _rows.Count(r => r.Repeats >= 3), "Были в трёх прогонах и больше"),
+            ("↺ вернулись", _rows.Count(r => r.ReturnCount > 0), "Исправлялись и появлялись снова"),
+        };
 
         // 8: качество данных
         _quality = new();
@@ -424,6 +444,13 @@
     private string Heat(int n) => n == 0 || _cellMax == 0 ? null : $"background: color-mix(in srgb, var(--active) {Math.Round(12 + 58.0 * n / _cellMax)}%, transparent)";
 
     private string CategoryOfType(string type) => CategoryOf((Tests ?? new()).FirstOrDefault(t => t.Type == type)?.Name ?? type);
+
+    /// <summary>Оси и уровень: «Ж-7 · 3 Этаж».</summary>
+    private static string PlaceOf(ClashRow x) =>
+        string.Join(" · ", new[] { x.GridLocation, LevelOf(x) }.Where(p => !string.IsNullOrWhiteSpace(p)));
+
+    private static string ElementsTitle(ClashRow x) =>
+        $"{Fmt.Element(x.A)} (ID {x.A?.ElementId}) × {Fmt.Element(x.B)} (ID {x.B?.ElementId})" + (string.IsNullOrEmpty(x.LastComment) ? "" : " · " + x.LastComment);
 
     private static string LevelOf(ClashRow x)
     {

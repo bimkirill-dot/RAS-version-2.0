@@ -167,6 +167,13 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .chart .dot { fill: var(--panel); stroke-width: 2; }
 .chart-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: center; font-size: 12.5px; color: var(--muted); margin-top: 4px; }
 .chart-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.recur-table { table-layout: fixed; width: 100%; }
+.grid.recur-table th { white-space: normal; vertical-align: bottom; }
+.grid.recur-table td .badge { white-space: nowrap; }
+.recur-table td.cut { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recur-dist { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.recur-dist .chip { padding: 3px 10px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+.recur-dist .chip b { color: var(--text); margin-left: 4px; font-variant-numeric: tabular-nums; }
 .hbars { display: flex; flex-direction: column; gap: 2px; max-height: 360px; overflow: auto; }
 .hbar { display: grid; grid-template-columns: minmax(90px, 38%) 1fr 48px; align-items: center; gap: 10px; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-size: 13px; }
 .hbar:hover { background: var(--row-hover); }

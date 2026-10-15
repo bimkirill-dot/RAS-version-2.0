@@ -46,6 +46,51 @@ public sealed class ProjectView
     public bool TypesOpen { get; set; }
     /// <summary>Развёрнутые категории в «Типе проверки» (при открытии свёрнуты; выбранная — разворачивается).</summary>
     public HashSet<string> CategoriesExpanded { get; } = new HashSet<string>();
+
+    /// <summary>
+    /// Шаги «назад / вперёд» браузера (адрес …?view=…&amp;n=шаг): у шага — разделы и отборы, какими их оставили,
+    /// чтобы «назад» из списка вернул сводку такой, какой она была.
+    /// </summary>
+    public Dictionary<int, ViewSnapshot> Steps { get; } = new Dictionary<int, ViewSnapshot>();
+    public int Step { get; set; }
+    /// <summary>Последний выданный номер шага.</summary>
+    public int LastStep { get; set; }
+    /// <summary>Шаг, отборы которого уже запомнены перед переходом (переход из сводки меняет их до смены адреса).</summary>
+    public int Frozen { get; set; } = -1;
+
+    public ViewSnapshot Snapshot() => new ViewSnapshot
+    {
+        Tab = Tab, Criticality = Filter.Criticality, Block = Filter.Block, Category = Filter.Category, Subcategory = Filter.Subcategory,
+        TestType = Filter.TestType, State = Filter.State, Search = Filter.Search, RunFilter = RunFilter, RunDate = RunDate, SelectedId = SelectedId,
+        Facets = Filter.Facets.ToDictionary(f => f.Key, f => new HashSet<string>(f.Value)),
+    };
+
+    public void Restore(ViewSnapshot s)
+    {
+        Tab = s.Tab;
+        Filter.Criticality = s.Criticality;
+        Filter.Block = s.Block;
+        Filter.Category = s.Category;
+        Filter.Subcategory = s.Subcategory;
+        Filter.TestType = s.TestType;
+        Filter.State = s.State;
+        Filter.Search = s.Search;
+        RunFilter = s.RunFilter;
+        RunDate = s.RunDate;
+        SelectedId = s.SelectedId;
+        Filter.Facets.Clear();
+        foreach (var f in s.Facets) Filter.Facets[f.Key] = new HashSet<string>(f.Value);
+    }
+}
+
+/// <summary>Раздел и отборы проекта на одном шаге истории браузера.</summary>
+public sealed class ViewSnapshot
+{
+    public int Tab;
+    public string Criticality, Block, Category, Subcategory, TestType, Search, RunFilter, RunDate;
+    public ClashState? State;
+    public long? SelectedId;
+    public Dictionary<string, HashSet<string>> Facets = new Dictionary<string, HashSet<string>>();
 }
 
 /// <summary>
