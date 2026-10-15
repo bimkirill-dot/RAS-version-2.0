@@ -1,7 +1,6 @@
 @page "/"
 @inject ClashStore Store
 @inject ReportImporter Importer
-@inject SiteOptions Options
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
@@ -15,8 +14,7 @@
             <button class="icon-btn" title="Добавить проект" aria-label="Добавить проект" @onclick="OpenNew">
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" /></svg>
             </button>
-            <button class="icon-btn @(Importer.Busy ? "busy" : "")" disabled="@Importer.Busy" aria-label="Проверить папки сейчас" @onclick="ScanAll"
-                    title="@(Importer.Busy ? "Проверяем папки…" : "Проверить папки сейчас. Сайт проверяет и сам — " + (Options.ScanMinutes > 0 ? $"каждые {Options.ScanMinutes} мин" : "выключено") + (Importer.LastScan.HasValue ? $"; последняя проверка — {Fmt.Date(Importer.LastScan)}" : ""))">
+            <button class="icon-btn @(Importer.Busy ? "busy" : "")" disabled="@Importer.Busy" aria-label="Обновить" title="Обновить" @onclick="ScanAll">
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.2 8a5.2 5.2 0 1 1-1.6-3.75" /><path d="M13 2.2v3.1H9.9" /></svg>
             </button>
             @if (_projects.Count > 0)
