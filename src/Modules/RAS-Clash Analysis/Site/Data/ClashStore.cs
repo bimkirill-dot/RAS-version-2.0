@@ -905,6 +905,22 @@ public sealed class ClashStore
         return names.Values.OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase).ToList();
     }
 
+    /// <summary>Отчёты, их проверки, коллизии и их появления проекта — для сводки по прогонам (Logic.RunHistory).</summary>
+    public Logic.RunHistory RunHistory(long projectId)
+    {
+        var h = new Logic.RunHistory();
+        using var c = _db.Open();
+        using (var r = Query(c, "SELECT Id, ReportDate FROM Reports WHERE ProjectId = $p", ("$p", projectId)))
+            while (r.Read()) h.Reports.Add((r.GetInt64(0), Database.Time(r.GetString(1))));
+        using (var r = Query(c, "SELECT rt.ReportId, rt.TestId FROM ReportTests rt JOIN Reports rp ON rp.Id = rt.ReportId WHERE rp.ProjectId = $p", ("$p", projectId)))
+            while (r.Read()) h.ReportTests.Add((r.GetInt64(0), r.GetInt64(1)));
+        using (var r = Query(c, "SELECT Id, TestId, State FROM Clashes WHERE ProjectId = $p", ("$p", projectId)))
+            while (r.Read()) h.Clashes.Add((r.GetInt64(0), r.GetInt64(1), (ClashState)r.GetInt32(2)));
+        using (var r = Query(c, "SELECT o.ClashId, o.ReportId, o.NavisStatus FROM Occurrences o JOIN Clashes cl ON cl.Id = o.ClashId WHERE cl.ProjectId = $p", ("$p", projectId)))
+            while (r.Read()) h.Occurrences.Add((r.GetInt64(0), r.GetInt64(1), r.GetInt32(2) != (int)NavisworksStatus.Resolved));
+        return h;
+    }
+
     /// <summary>История сайта: всё или по проекту, новые сверху; limit — сколько последних.</summary>
     public List<HistoryRow> History(long? projectId, int limit)
     {

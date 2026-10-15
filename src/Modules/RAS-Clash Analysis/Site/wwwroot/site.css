@@ -137,6 +137,73 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .bc-head .b-del { margin-left: auto; }
 .bc-field { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; font-size: 12px; color: var(--muted); }
 .bc-field input { width: 100%; color: var(--text); }
+/* сводка проекта: плитки, блоки графиков, матрица, таблицы */
+.summary { display: flex; flex-direction: column; gap: 14px; padding-bottom: 20px; }
+.sum-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.sum-tile { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px 14px; }
+.st-label { color: var(--muted); font-size: 12.5px; }
+.st-value { font-size: 28px; font-weight: 700; line-height: 1.2; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.st-value.small-value { font-size: 20px; }
+.st-value.k-active { color: var(--active); }
+.st-value.k-fixed { color: var(--fixed); }
+.st-value.k-accepted { color: var(--accepted); }
+.st-change { font-size: 12px; margin-top: 2px; font-weight: 600; }
+.st-change.good { color: var(--fixed); }
+.st-change.bad { color: var(--active); }
+.sum-tile .kpi-bar { margin-top: 8px; }
+.sum-block { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px 16px; }
+.sum-block h3 { margin: 0 0 10px; font-size: 15px; }
+.sum-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+@media (max-width: 1300px) { .sum-grid { grid-template-columns: 1fr; } }
+.chart-wrap { width: 100%; }
+.chart { width: 100%; height: auto; display: block; }
+.chart .grid-line { stroke: var(--line); stroke-width: 1; }
+.chart .axis { fill: var(--muted); font-size: 12px; }
+.chart .note { fill: var(--text); font-size: 12px; font-weight: 600; }
+.chart .bar-hit { fill: transparent; }
+.chart .bar.clickable { cursor: pointer; }
+.chart .bar.clickable:hover .bar-hit { fill: var(--row-hover); }
+.chart .line { fill: none; stroke-width: 2.2; }
+.chart .dot { fill: var(--panel); stroke-width: 2; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: center; font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+.chart-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.hbars { display: flex; flex-direction: column; gap: 2px; max-height: 360px; overflow: auto; }
+.hbar { display: grid; grid-template-columns: minmax(90px, 38%) 1fr 48px; align-items: center; gap: 10px; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.hbar:hover { background: var(--row-hover); }
+.hb-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hb-track { height: 12px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.hb-track i { display: block; height: 100%; background: var(--active); border-radius: 4px; }
+.hb-value { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.matrix-wrap { overflow: auto; }
+.matrix { border-collapse: separate; border-spacing: 3px; width: 100%; font-size: 13px; }
+.matrix th { font-weight: 600; color: var(--muted); text-align: left; padding: 4px 8px; white-space: nowrap; }
+.matrix td.cell { text-align: center; padding: 8px; border-radius: 6px; cursor: pointer; font-weight: 600; font-variant-numeric: tabular-nums; }
+.matrix td.cell.zero { color: var(--muted); font-weight: 400; background: var(--bg); }
+.matrix td.cell:hover, .matrix td.total:hover { outline: 2px solid var(--accent); }
+.matrix td.total { text-align: center; color: var(--active); font-weight: 700; cursor: pointer; border-radius: 6px; }
+.sum-table tr.clickable { cursor: pointer; }
+.sum-table tr.clickable:hover td { background: var(--row-hover); }
+.sum-table td.k-active { color: var(--active); font-weight: 600; }
+.sum-table td.k-fixed { color: var(--fixed); font-weight: 600; }
+.sum-progress { width: 220px; white-space: nowrap; }
+.sum-progress .kpi-bar { display: inline-block; width: 140px; margin: 0 8px 0 0; vertical-align: middle; }
+.sum-progress span { font-size: 12.5px; color: var(--muted); }
+.quality { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.quality li { padding: 6px 10px; border-radius: 8px; background: color-mix(in srgb, var(--pending) 10%, transparent); font-size: 13.5px; }
+.quality li.clickable { cursor: pointer; }
+.quality li.clickable:hover { outline: 1px solid var(--pending); }
+.quality-ok { color: var(--fixed); font-weight: 600; margin: 0; }
+.compare-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.delta-total { font-weight: 700; }
+.delta-total.down, .delta-cell.down { color: var(--fixed); }
+.delta-total.up, .delta-cell.up { color: var(--active); }
+/* печать сводки — на A4: без шапки, боковой панели и отборов */
+@media print {
+    header.top, aside.side, .ribbon, .project-head .kpis, .blocks-warn { display: none !important; }
+    .body { display: block !important; }
+    .sum-block, .sum-tile { break-inside: avoid; box-shadow: none; }
+    .summary { gap: 10px; }
+}
 /* категории проверок — «Настройки» */
 .cat-top { display: flex; align-items: center; gap: 10px; }
 .cat-top h2 { margin-right: auto; }

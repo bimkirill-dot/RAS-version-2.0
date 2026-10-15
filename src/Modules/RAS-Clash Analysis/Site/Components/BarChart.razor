@@ -1,0 +1,89 @@
+@* Столбики (в том числе стопкой) для сводки проекта — SVG без сторонних библиотек (DECISIONS.md модуля, «Сводка проекта»):
+   цвета — переменными темы, значения — в подсказке; Clicked — нажатый столбик (номер). *@
+<div class="chart-wrap">
+    <svg class="chart" viewBox="0 0 @W @Height" role="img" aria-label="@Title">
+        @for (var t = 0; t <= Ticks; t++)
+        {
+            var v = Max / Ticks * t;
+            var y = Y(v);
+            <line class="grid-line" x1="@Left" x2="@(W - Right)" y1="@F(y)" y2="@F(y)" />
+            @Txt("axis", Left - 6, y + 4, "end", Fmt0(v))
+        }
+        @for (var i = 0; i < Bars.Count; i++)
+        {
+            var bar = Bars[i];
+            var index = i;
+            var x = Left + Slot * i + (Slot - BarWidth) / 2;
+            var bottom = Y(0);
+            <g class="@(Clicked.HasDelegate ? "bar clickable" : "bar")" @onclick="() => Click(index)">
+                <title>@bar.Label: @string.Join(", ", bar.Parts.Where(p => p.Value > 0).Select(p => $"{p.Name} — {Fmt0(p.Value)}"))@(bar.Note == null ? "" : " · " + bar.Note)</title>
+                <rect class="bar-hit" x="@F(Left + Slot * i)" y="@Top" width="@F(Slot)" height="@F(bottom - Top)" />
+                @foreach (var part in bar.Parts.Where(p => p.Value > 0))
+                {
+                    var h = Y(0) - Y(part.Value);
+                    <rect x="@F(x)" y="@F(bottom - h)" width="@F(BarWidth)" height="@F(Math.Max(h, 0.5))" rx="2" style="fill: var(@part.Color)" />
+                    bottom -= h;
+                }
+                @if (bar.Note != null) { @Txt("note", x + BarWidth / 2, bottom - 5, "middle", bar.Note) }
+                @if (Rotate) { @Txt("axis", 0, 0, "end", Cut(bar.Label), $"translate({F(x + BarWidth / 2)}, {F(Height - Bottom + 12)}) rotate(-30)") }
+                else { @Txt("axis", x + BarWidth / 2, Height - Bottom + 16, "middle", Cut(bar.Label)) }
+            </g>
+        }
+    </svg>
+    @if (Legend != null && Legend.Count > 0)
+    {
+        <div class="chart-legend">
+            @foreach (var (name, color) in Legend) { <span><i style="background: var(@color)"></i>@name</span> }
+        </div>
+    }
+</div>
+
+@code {
+    public sealed class Bar
+    {
+        public string Label;
+        /// <summary>Над столбиком (например, «+6» — новые за прогон).</summary>
+        public string Note;
+        /// <summary>Части стопкой снизу вверх: значение, переменная цвета («--active»), название.</summary>
+        public List<(double Value, string Color, string Name)> Parts = new();
+    }
+
+    [Parameter] public List<Bar> Bars { get; set; } = new();
+    [Parameter] public List<(string Name, string Color)> Legend { get; set; }
+    [Parameter] public string Title { get; set; }
+    [Parameter] public int Height { get; set; } = 240;
+    [Parameter] public EventCallback<int> Clicked { get; set; }
+
+    private const int W = 900, Left = 46, Right = 12, Top = 22, Ticks = 4;
+    private int Bottom => Rotate ? 70 : 30;
+    private double Slot => Bars.Count == 0 ? 1 : (W - Left - Right) / (double)Bars.Count;
+    private double BarWidth => Math.Min(Slot * 0.62, 90);
+    private bool Rotate => Bars.Count > 10;
+
+    /// <summary>Верх шкалы — «круглое» число: 1, 2, 5 × 10ⁿ на деление.</summary>
+    private double Max
+    {
+        get
+        {
+            var top = Bars.Select(b => b.Parts.Sum(p => Math.Max(p.Value, 0))).DefaultIfEmpty(0).Max();
+            if (top <= 0) return Ticks;
+            var raw = top / Ticks;
+            var mag = Math.Pow(10, Math.Floor(Math.Log10(raw)));
+            var step = new[] { 1, 2, 2.5, 5, 10 }.Select(k => k * mag).First(s => s >= raw);
+            return Math.Max(step * Ticks, Ticks);
+        }
+    }
+
+    private double Y(double v) => Top + (Height - Bottom - Top) * (1 - v / Max);
+
+    private static string F(double v) => v.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+    private static string Fmt0(double v) => Math.Round(v).ToString("#,0", System.Globalization.CultureInfo.GetCultureInfo("ru-RU"));
+    private string Cut(string s) => s == null ? "" : s.Length > (Rotate ? 18 : 14) ? s[..(Rotate ? 17 : 13)] + "…" : s;
+
+    /// <summary>Подпись в SVG (тег text в разметке Blazor внутри циклов писать нельзя).</summary>
+    private static MarkupString Txt(string css, double x, double y, string anchor, string content, string transform = null) =>
+        new MarkupString($"<text class=\"{css}\" " + (transform != null ? $"transform=\"{transform}\"" : $"x=\"{F(x)}\" y=\"{F(y)}\"")
+                         + $" text-anchor=\"{anchor}\">{System.Net.WebUtility.HtmlEncode(content ?? "")}</text>");
+
+    private Task Click(int index) => Clicked.HasDelegate ? Clicked.InvokeAsync(index) : Task.CompletedTask;
+}

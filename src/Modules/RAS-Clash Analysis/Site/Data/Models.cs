@@ -114,6 +114,21 @@ public sealed class BlockDraft
     public bool Suggested { get; set; }
 }
 
+/// <summary>
+/// Переход из сводки проекта к коллизиям: какие отборы поставить (не заданное — как было) или открыть коллизию / отчёты.
+/// </summary>
+public sealed class SummaryDrill
+{
+    public bool SetBlock { get; set; }
+    public string Block { get; set; }
+    public bool SetCategory { get; set; }
+    public string Category { get; set; }
+    public string TestType { get; set; }
+    public string LevelKey { get; set; }
+    public long? ClashId { get; set; }
+    public bool ToReports { get; set; }
+}
+
 /// <summary>Запись истории сайта (SiteHistory).</summary>
 public sealed class HistoryRow
 {
