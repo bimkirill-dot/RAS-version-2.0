@@ -1221,6 +1221,8 @@
                 .Where(t => (_filter.Criticality == null || t.Criticality == _filter.Criticality) && (_filter.Block == null || t.Block == _filter.Block))
                 .GroupBy(t => t.Type)
                 .Select(g => (Name: g.Key, Active: g.Sum(t => t.Counts.Active), Category: CategoryOf(g.First().Name), Sub: SubOf(g.First().Name)))
+                // без активных коллизий — не показываются (просьба разработчика 15.10.2026); выбранная — видна всегда
+                .Where(x => x.Active > 0 || x.Name == _filter.TestType)
                 .OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase)
                 .ToList();
             if (_categoryOrder.Count == 0)
