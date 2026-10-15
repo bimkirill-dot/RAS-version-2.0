@@ -290,11 +290,10 @@
                                         </th>
                                         @SortHeader("date", "Дата", "Последний прогон, где была коллизия", "c-date opt")
                                         @SortHeader("test", "Проверка", null, "c-test")
-                                        @SortHeader("comment", "Комментарий", "Последний комментарий к коллизии (сколько всего — после точки); элементы — в подсказке", "c-what")
                                         @if (HasDistance) { @SortHeader("dist", "Расстояние", "Глубина пересечения, мм", "c-dist opt") }
                                         @if (HasGrid) { @SortHeader("grid", "Оси", "Расположение по осям", "c-grid opt") }
-                                        @SortHeader("level", "Уровень", null, "c-level")
                                         @SortHeader("state", "Статус", null, "c-state")
+                                        @SortHeader("comment", "Комментарий", "Последний комментарий к коллизии (сколько всего — после точки); элементы — в подсказке", "c-what")
                                         @SortHeader("repeats", "Прогонов", "В скольких прогонах встречалась", "c-rep opt")
                                     </tr>
                                 </thead>
@@ -352,15 +351,24 @@
                 {
                     <aside class="panel">
                         <div class="panel-nav">
-                            <button class="btn small" disabled="@(SelectedIndex <= 0)" @onclick="() => Move(-1)" title="Предыдущая (↑)">‹</button>
+                            <button class="icon-btn small-icon" disabled="@(SelectedIndex <= 0)" @onclick="() => Move(-1)" title="Предыдущая (↑)" aria-label="Предыдущая">
+                                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" /></svg>
+                            </button>
                             <span class="muted small">@(SelectedIndex >= 0 ? $"{SelectedIndex + 1} из {_visible.Count}" : "нет в списке")</span>
-                            <button class="btn small" disabled="@(SelectedIndex < 0 || SelectedIndex >= _visible.Count - 1)" @onclick="() => Move(1)" title="Следующая (↓)">›</button>
+                            <button class="icon-btn small-icon" disabled="@(SelectedIndex < 0 || SelectedIndex >= _visible.Count - 1)" @onclick="() => Move(1)" title="Следующая (↓)" aria-label="Следующая">
+                                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" /></svg>
+                            </button>
                             <label class="check small" title="После смены статуса сразу открывать следующую коллизию">
                                 <input type="checkbox" @bind="_view.AutoNext" /> после статуса — к следующей
                             </label>
                             <span class="spacer"></span>
-                            <a class="small" href="clash/@_view.SelectedId">отдельно</a>
-                            <button class="btn link small" title="Закрыть карточку (Esc)" @onclick="() => _view.SelectedId = null">✕</button>
+                            @* «отдельно» и «закрыть» — значками, как остальные кнопки сайта (просьба разработчика 15.10.2026) *@
+                            <a class="icon-btn small-icon" href="clash/@_view.SelectedId" title="Открыть отдельной страницей" aria-label="Открыть отдельной страницей">
+                                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 2.5h4.5V7M13.5 2.5 7.5 8.5" /><path d="M11.5 9.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3" /></svg>
+                            </a>
+                            <button class="icon-btn small-icon" title="Закрыть карточку (Esc)" aria-label="Закрыть карточку" @onclick="() => _view.SelectedId = null">
+                                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg>
+                            </button>
                         </div>
                         <ClashPanel ClashId="_view.SelectedId.Value" Compact="true" Changed="OnPanelChanged" />
                     </aside>
@@ -639,7 +647,7 @@
     private bool HasDistance => _base.Any(c => c.Distance.HasValue);
     private bool HasGrid => _base.Any(c => !string.IsNullOrEmpty(c.GridLocation));
     /// <summary>Столбцов в таблице (для строки группы).</summary>
-    private int ColumnCount => 7 + (HasDistance ? 1 : 0) + (HasGrid ? 1 : 0);
+    private int ColumnCount => 6 + (HasDistance ? 1 : 0) + (HasGrid ? 1 : 0);
 
     /// <summary>Подсказка «что с чем»: полностью, с номерами элементов и именем Navisworks.</summary>
     /// <summary>Подсказка столбца «Комментарий»: комментарий полностью (когда, сколько всего), затем элементы.</summary>
@@ -1071,6 +1079,9 @@
             <td class="cut" title="@(x.Type != x.TestName ? x.Type + " (в Navisworks: " + x.TestName + ")" : x.TestName)">
                 @if (ShowBlock) { <span class="tag">@x.Block</span> }@x.Type
             </td>
+            @if (HasDistance) { <td class="opt">@if (x.Distance.HasValue) { <span class="dist">@Fmt.MmAbs(x.Distance, x.Units)</span> } else { <span class="muted">—</span> }</td> }
+            @if (HasGrid) { <td class="cut opt" title="@x.GridLocation">@(x.GridLocation ?? "—")</td> }
+            <td><span class="badge @Fmt.StateClass(x.State)">@Fmt.State(x.State)</span></td>
             @* последний комментарий (вместо «что с чем» — просьба разработчика 15.10.2026); элементы и имя Navisworks — в подсказке и в карточке;
                позже здесь же — ответственный *@
             <td class="what" title="@CommentTitle(x)">
@@ -1086,10 +1097,6 @@
                     else if (x.ReturnCount > 0) { <span class="tag returned" title="Возвращалась после исправления: @x.ReturnCount">↺@(x.ReturnCount > 1 ? x.ReturnCount.ToString() : "")</span> }
                 </div>
             </td>
-            @if (HasDistance) { <td class="opt">@if (x.Distance.HasValue) { <span class="dist">@Fmt.MmAbs(x.Distance, x.Units)</span> } else { <span class="muted">—</span> }</td> }
-            @if (HasGrid) { <td class="cut opt" title="@x.GridLocation">@(x.GridLocation ?? "—")</td> }
-            <td class="cut" title="@Level(x)">@Level(x)</td>
-            <td><span class="badge @Fmt.StateClass(x.State)">@Fmt.State(x.State)</span></td>
             <td class="num opt">@x.Repeats</td>
         </tr>
     };

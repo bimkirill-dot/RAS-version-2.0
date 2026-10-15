@@ -181,7 +181,8 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .side-fold:hover { background: var(--row-hover); }
 .side-fold .chev { width: 6px; height: 6px; border: solid var(--muted); border-width: 0 1.5px 1.5px 0; transform: rotate(-45deg); transition: transform .15s; }
 .side-fold.open .chev { transform: rotate(45deg); margin-top: -3px; }
-.icon-btn.small-icon { width: 26px; height: 26px; }
+.icon-btn.small-icon { width: 26px; height: 26px; text-decoration: none; }
+.panel-nav .icon-btn.small-icon { width: 28px; height: 28px; }
 .icon-btn.small-icon svg { width: 14px; height: 14px; }
 .file-btn { position: relative; overflow: hidden; cursor: pointer; }
 .file-btn input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
