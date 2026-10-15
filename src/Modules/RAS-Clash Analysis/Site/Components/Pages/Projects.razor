@@ -1,7 +1,6 @@
 @page "/"
 @inject ClashStore Store
 @inject ReportImporter Importer
-@inject BackupService Backup
 @inject SiteOptions Options
 @inject NavigationManager Nav
 
@@ -9,7 +8,17 @@
 
 <div class="page-head">
     <div>
-        <h1>Проекты</h1>
+        @* у заголовка — «+» (добавить проект) и «обновить» (проверить папки сейчас; сайт проверяет и сам) — просьба разработчика 15.10.2026 *@
+        <div class="title-row">
+            <h1>Проекты</h1>
+            <button class="icon-btn" title="Добавить проект" aria-label="Добавить проект" @onclick="OpenNew">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" /></svg>
+            </button>
+            <button class="icon-btn @(Importer.Busy ? "busy" : "")" disabled="@Importer.Busy" aria-label="Проверить папки сейчас" @onclick="ScanAll"
+                    title="@(Importer.Busy ? "Проверяем папки…" : "Проверить папки сейчас. Сайт проверяет и сам — " + (Options.ScanMinutes > 0 ? $"каждые {Options.ScanMinutes} мин" : "выключено") + (Importer.LastScan.HasValue ? $"; последняя проверка — {Fmt.Date(Importer.LastScan)}" : ""))">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.2 8a5.2 5.2 0 1 1-1.6-3.75" /><path d="M13 2.2v3.1H9.9" /></svg>
+            </button>
+        </div>
         <div class="muted">Коллизии из отчётов Navisworks по всем проектам компании</div>
     </div>
 </div>
@@ -52,17 +61,6 @@ else
         }
     </div>
 }
-
-<div class="actions">
-    @if (_projects.Count > 0)
-    {
-        <button class="btn primary" @onclick="OpenNew">+ Добавить проект</button>
-    }
-    <button class="btn" disabled="@Importer.Busy" @onclick="ScanAll">@(Importer.Busy ? "Проверяем папки…" : "Проверить папки сейчас")</button>
-    <span class="muted">
-        Новые отчёты в папках проектов сайт ищет и сам — @(Options.ScanMinutes > 0 ? $"каждые {Options.ScanMinutes} мин" : "выключено")@(Importer.LastScan.HasValue ? $"; последняя проверка — {Fmt.Date(Importer.LastScan)}" : "").
-    </span>
-</div>
 
 @if (!string.IsNullOrEmpty(Deleted))
 {
@@ -114,20 +112,6 @@ else
     </div>
 }
 
-<footer class="status" title="База: @Options.DatabaseFile">
-    @if (Backup.LastError != null)
-    {
-        <span class="error">@Backup.LastError</span>
-    }
-    else if (Backup.LastServerCopy.HasValue)
-    {
-        <span>Копия на сервере — @Fmt.Date(Backup.LastServerCopy).</span>
-    }
-    else
-    {
-        <span class="muted">Копия базы на сервер — через 2 минуты после запуска сайта, потом каждый час.</span>
-    }
-</footer>
 
 @code {
     /// <summary>Название только что удалённого проекта — для сообщения.</summary>

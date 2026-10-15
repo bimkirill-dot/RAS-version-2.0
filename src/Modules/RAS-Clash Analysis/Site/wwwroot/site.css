@@ -553,7 +553,6 @@ ul.history .ev-comment .text { font-style: italic; }
 details.import { margin: 8px 0; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; }
 details.import ul { margin: 6px 0; padding-left: 18px; }
 
-footer.status { margin-top: 28px; font-size: 12px; color: var(--muted); }
 
 /* полоски в таблицах */
 .bar-cell { position: relative; display: inline-block; min-width: 120px; text-align: right; }
@@ -650,6 +649,18 @@ table.clashes tbody tr.selected { background: var(--row-selected); }
 
 /* главная — карточки проектов */
 .page-head { margin-bottom: 16px; }
+.title-row { display: flex; align-items: center; gap: 8px; }
+.title-row h1 { margin-right: 6px; }
+/* квадратная кнопка со значком — как в шапке: «+», «обновить» */
+.icon-btn { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; padding: 0; }
+.icon-btn:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
+.icon-btn:disabled { cursor: default; opacity: .7; }
+.icon-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.icon-btn.busy svg { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+/* ⚙ с красной точкой — копия базы не удалась */
+.head-btn.alert { position: relative; }
+.head-btn.alert::after { content: ""; position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: var(--active); }
 .proj-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; margin-bottom: 16px; }
 .proj-card {
     display: flex; flex-direction: column; gap: 10px; padding: 16px 18px; color: var(--text); text-decoration: none;
