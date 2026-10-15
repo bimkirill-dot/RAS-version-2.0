@@ -80,17 +80,7 @@
         }
     </table>
 
-    <div class="cc-shot">
-        @if (_card.Last?.HasImage == true)
-        {
-            <a href="snimok/@_card.Last.Id" target="_blank" title="Открыть снимок целиком"><img src="snimok/@_card.Last.Id" alt="Снимок коллизии" /></a>
-        }
-        else
-        {
-            <div class="no-shot">Снимка нет</div>
-        }
-    </div>
-
+    @* объекты А и Б — выше снимка (просьба разработчика 15.10.2026) *@
     @if (_card.Last != null)
     {
         for (var i = 0; i < _card.Last.Elements.Count; i++)
@@ -119,6 +109,17 @@
             </div>
         }
     }
+
+    <div class="cc-shot">
+        @if (_card.Last?.HasImage == true)
+        {
+            <a href="snimok/@_card.Last.Id" target="_blank" title="Открыть снимок целиком"><img src="snimok/@_card.Last.Id" alt="Снимок коллизии" /></a>
+        }
+        else
+        {
+            <div class="no-shot">Снимка нет</div>
+        }
+    </div>
 
     <details class="cc-more" open="@(!Compact)">
         <summary>История (@_card.Events.Count)</summary>
