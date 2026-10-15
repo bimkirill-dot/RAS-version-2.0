@@ -371,7 +371,7 @@
                             <a class="icon-btn small-icon" href="clash/@_view.SelectedId" title="Открыть отдельной страницей" aria-label="Открыть отдельной страницей">
                                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 2.5h4.5V7M13.5 2.5 7.5 8.5" /><path d="M11.5 9.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3" /></svg>
                             </a>
-                            <button class="icon-btn small-icon" title="Закрыть карточку (Esc)" aria-label="Закрыть карточку" @onclick="() => _view.SelectedId = null">
+                            <button class="icon-btn small-icon" title="Закрыть карточку (Esc)" aria-label="Закрыть карточку" @onclick="CloseCard">
                                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg>
                             </button>
                         </div>
@@ -600,6 +600,8 @@
     /// <summary>Раздел в адресе (…?view=summary&amp;n=3): «назад» браузера возвращает прежний раздел с его отборами.</summary>
     [SupplyParameterFromQuery(Name = "view")] public string ViewKey { get; set; }
     [SupplyParameterFromQuery(Name = "n")] public int? StepNo { get; set; }
+    /// <summary>Карточка справа открыта (…&amp;card=1) — «назад» браузера и боковая кнопка мыши её закрывают.</summary>
+    [SupplyParameterFromQuery(Name = "card")] public int? CardParam { get; set; }
 
     private static readonly string[] TabKeys = { "clashes", "", "reports", "project", "history", "summary" };
 
@@ -714,7 +716,45 @@
         }
         var tab = Array.IndexOf(TabKeys, ViewKey ?? "");
         if (!string.IsNullOrEmpty(ViewKey) && tab >= 0) _view.Tab = tab;
+        // карточка: ушли со строки с card=1 («назад») — закрыть; пришли на неё снова («вперёд») — открыть последнюю
+        var card = CardParam == 1;
+        if (card && !_view.CardInUrl && _view.SelectedId == null) _view.SelectedId = _view.LastCardId;
+        else if (!card && _view.CardInUrl) _view.SelectedId = null;
+        _view.CardInUrl = card;
         LoadAll();
+    }
+
+    /// <summary>Карточку закрыли иначе (смена отборов, прогона) — убрать card=1 из адреса, не добавляя шага.</summary>
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (_view.CardInUrl && _view.SelectedId == null && !_closing)
+        {
+            _view.CardInUrl = false;
+            Nav.NavigateTo(Nav.GetUriWithQueryParameter("card", (int?)null), replace: true);
+        }
+    }
+
+    private bool _closing;
+
+    /// <summary>Открыть карточку: из закрытой — новым шагом истории браузера, чтобы «назад» её закрыл.</summary>
+    private void ShowCard(long id)
+    {
+        var wasOpen = _view.SelectedId.HasValue;
+        _view.SelectedId = id;
+        _view.LastCardId = id;
+        if (!wasOpen && _view.Tab == 0 && !_view.CardInUrl) Nav.NavigateTo(Nav.GetUriWithQueryParameter("card", 1));
+    }
+
+    /// <summary>✕ и Esc: как «назад» браузера, если карточка открыта шагом истории; иначе просто закрыть.</summary>
+    private async Task CloseCard()
+    {
+        if (_view.CardInUrl)
+        {
+            _closing = true;
+            try { await JS.InvokeVoidAsync("ras.back"); }
+            finally { _closing = false; }
+        }
+        else _view.SelectedId = null;
     }
 
     /// <summary>Другой раздел — новым шагом истории браузера (адрес меняется, «назад» вернёт этот раздел).</summary>
@@ -1717,7 +1757,7 @@
 
     private void Select(long id)
     {
-        _view.SelectedId = id;
+        ShowCard(id);
         _notice = null;
     }
 
@@ -1726,7 +1766,7 @@
         var i = SelectedIndex;
         var next = i < 0 ? 0 : i + step;
         if (next < 0 || next >= _visible.Count) return;
-        _view.SelectedId = _visible[next].Id;
+        ShowCard(_visible[next].Id);
         _page = PageOf(_view.SelectedId.Value);
         StateHasChanged();
         await JS.InvokeVoidAsync("ras.reveal", "row-" + _view.SelectedId);
@@ -1736,7 +1776,7 @@
     {
         if (e.Key == "ArrowDown") await Move(1);
         else if (e.Key == "ArrowUp") await Move(-1);
-        else if (e.Key == "Escape") _view.SelectedId = null;
+        else if (e.Key == "Escape") await CloseCard();
     }
 
     /// <summary>В карточке сменили статус или добавили комментарий: обновить список; по желанию — к следующей.</summary>

@@ -57,6 +57,10 @@ public sealed class ProjectView
     public int LastStep { get; set; }
     /// <summary>Шаг, отборы которого уже запомнены перед переходом (переход из сводки меняет их до смены адреса).</summary>
     public int Frozen { get; set; } = -1;
+    /// <summary>Карточка справа открыта шагом истории браузера (…&amp;card=1): «назад» её закрывает.</summary>
+    public bool CardInUrl { get; set; }
+    /// <summary>Последняя открытая карточка — «вперёд» после «назад» открывает её снова.</summary>
+    public long? LastCardId { get; set; }
 
     public ViewSnapshot Snapshot() => new ViewSnapshot
     {

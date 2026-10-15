@@ -20,6 +20,8 @@ window.ras = {
         document.body.removeChild(ta);
         return ok;
     },
+    // шаг назад в истории браузера (закрыть карточку коллизии так же, как боковой кнопкой мыши)
+    back: function () { history.back(); },
     // скачать текст файлом (CSV для Excel: с BOM — иначе Excel искажает кириллицу)
     download: function (name, text) {
         const blob = new Blob(['\ufeff' + text], { type: 'text/csv;charset=utf-8' });
