@@ -104,7 +104,8 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .pd-head { display: flex; align-items: center; padding: 14px 22px; border-bottom: 1px solid var(--line); }
 .pd-head h2 { margin: 0; font-size: 18px; }
 .pd-close { margin-left: auto; font-size: 16px; color: var(--muted); }
-.pd-body { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); min-height: 0; flex: 1; }
+/* высота — всегда под три карточки блоков (просьба разработчика): больше — прокрутка списка блоков; низкий экран — по экрану */
+.pd-body { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); min-height: 0; flex: none; height: 612px; max-height: calc(100vh - 160px); }
 .pd-left { padding: 18px 22px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 16px; }
 .pd-right { padding: 18px 22px; overflow: auto; min-height: 280px; }
 .pd-field { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--muted); }
@@ -114,7 +115,7 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .pd-note b { color: var(--accent-strong); }
 .pd-foot { display: flex; gap: 8px; align-items: center; padding: 12px 22px; border-top: 1px solid var(--line); }
 @media (max-width: 760px) {
-    .pd-body { grid-template-columns: 1fr; overflow: auto; }
+    .pd-body { grid-template-columns: 1fr; overflow: auto; height: auto; }
     .pd-left { border-right: none; border-bottom: 1px solid var(--line); }
     .pd-right { overflow: visible; }
 }
