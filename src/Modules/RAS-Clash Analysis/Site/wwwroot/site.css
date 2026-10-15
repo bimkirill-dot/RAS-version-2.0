@@ -98,12 +98,44 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .blocks-warn { margin: 0 0 12px; padding: 10px 14px; border: 1px solid var(--pending); border-radius: 10px; background: color-mix(in srgb, var(--pending) 10%, transparent); }
 .blocks-warn .btn { margin-left: 10px; }
 .blocks-form, .blocks-zone { margin: 14px 0; }
-.form .folder-pick { display: flex; gap: 8px; max-width: 760px; }
-.form .folder-pick input { flex: 1; min-width: 0; }
 .blocks-head { font-weight: 600; margin-bottom: 6px; }
-.block-row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
-.block-row .b-name { width: 160px; }
-.block-row .b-folder { flex: 1; min-width: 200px; }
+/* окно «Добавить проект»: слева папка и название, справа — блоки карточками (образец разработчика) */
+.dialog.project-dialog { max-width: 980px; padding: 0; display: flex; flex-direction: column; max-height: calc(100vh - 32px); overflow: hidden; border-radius: var(--radius); }
+.pd-head { display: flex; align-items: center; padding: 14px 22px; border-bottom: 1px solid var(--line); }
+.pd-head h2 { margin: 0; font-size: 18px; }
+.pd-close { margin-left: auto; font-size: 16px; color: var(--muted); }
+.pd-body { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); min-height: 0; flex: 1; }
+.pd-left { padding: 18px 22px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 16px; }
+.pd-right { padding: 18px 22px; overflow: auto; min-height: 280px; }
+.pd-field { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--muted); }
+.pd-field > span:first-child { font-weight: 600; color: var(--text); }
+.pd-field input { width: 100%; color: var(--text); }
+.pd-note { margin-top: auto; font-size: 12.5px; color: var(--muted); background: var(--accent-bg); border-radius: 8px; padding: 10px 12px; line-height: 1.45; }
+.pd-note b { color: var(--accent-strong); }
+.pd-foot { display: flex; gap: 8px; align-items: center; padding: 12px 22px; border-top: 1px solid var(--line); }
+.folder-pick { display: flex; gap: 8px; }
+.folder-pick input { flex: 1; min-width: 0; }
+@media (max-width: 760px) {
+    .pd-body { grid-template-columns: 1fr; overflow: auto; }
+    .pd-left { border-right: none; border-bottom: 1px solid var(--line); }
+    .pd-right { overflow: visible; }
+}
+/* блоки карточками — в окне добавления проекта и в разделе «Проект» */
+.bf-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.bf-title { font-weight: 600; }
+.bf-add { margin-left: auto; }
+.bf-empty { font-size: 13px; border: 1px dashed var(--line); border-radius: 8px; padding: 14px; }
+.bf-list { display: flex; flex-direction: column; gap: 10px; }
+.block-card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); box-shadow: var(--shadow); padding: 10px 14px 12px; max-width: 640px; }
+.bc-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.bc-title { font-weight: 600; }
+.bc-tag { font-size: 11px; color: var(--accent-strong); background: var(--accent-bg); border-radius: 999px; padding: 1px 8px; }
+.bc-head .b-del { margin-left: auto; }
+.bc-field { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.bc-field input { width: 100%; color: var(--text); }
+.bc-folder { display: flex; gap: 8px; }
+.bc-folder input { flex: 1; min-width: 0; }
+.empty-state { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin: 12px 0 18px; }
 .block-actions { display: flex; gap: 10px; align-items: center; margin-top: 6px; }
 .b-del { color: var(--muted); }
 .b-del:hover { color: var(--active); }

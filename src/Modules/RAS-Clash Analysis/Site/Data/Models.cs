@@ -86,6 +86,8 @@ public sealed class BlockDraft
     public string Folder { get; set; } = "";
     /// <summary>Название вписали руками — выбор папки его больше не меняет.</summary>
     public bool NameTouched { get; set; }
+    /// <summary>Подставлен сайтом: папка, похожая на блок, найдена в папке проекта.</summary>
+    public bool Suggested { get; set; }
 }
 
 /// <summary>Запись истории сайта (SiteHistory).</summary>

@@ -305,7 +305,33 @@ public sealed class ReportImporter
     /// Папки проекта с отчётами вне всех блоков (блоки вручную) — по последней проверке папки: отчёты из них не загружены,
     /// на сайте — предупреждение «добавьте блок». «» — отчёты прямо в папке проекта.
     /// </summary>
-    public IReadOnlyList<string> OutsideBlocks(long projectId) => _outside.TryGetValue(projectId, out var list) ? list : Array.Empty<string>();
+    public IReadOnlyList<string> OutsideBlocks(long projectId) => _outside.GetOrAdd(projectId, FindOutside);
+
+    /// <summary>Папки вне блоков — просмотром папки проекта (после запуска сайта, до первой проверки папок).</summary>
+    private List<string> FindOutside(long projectId)
+    {
+        string folder;
+        bool manual;
+        using (var c = _db.Open())
+        using (var cmd = ClashStore.Command(c, "SELECT Folder, ManualBlocks FROM Projects WHERE Id = $p", ("$p", projectId)))
+        using (var r = cmd.ExecuteReader())
+        {
+            if (!r.Read()) return new List<string>();
+            (folder, manual) = (r.GetString(0), r.GetInt32(1) != 0);
+        }
+        var blocks = Blocks(projectId);
+        if (!manual || blocks.Count == 0 || !Directory.Exists(folder)) return new List<string>();
+        try
+        {
+            return ReportFiles(folder).Where(f => ProjectBlocks.BlockOf(blocks, folder, f) == null)
+                .Select(f => ProjectBlocks.Unassigned(blocks.Select(b => b.Folder), folder, f))
+                .Distinct(StringComparer.CurrentCultureIgnoreCase).OrderBy(f => f, StringComparer.CurrentCultureIgnoreCase).ToList();
+        }
+        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+        {
+            return new List<string>();
+        }
+    }
 
     private List<(string Name, string Folder)> Blocks(long projectId)
     {

@@ -16,7 +16,10 @@
 
 @if (_projects.Count == 0)
 {
-    <p class="muted">Проектов ещё нет. Добавьте первый: укажите папку проекта, куда кладутся отчёты Navisworks.</p>
+    <div class="empty-state">
+        <p class="muted">Проектов ещё нет. Добавьте первый: папку проекта, куда кладутся отчёты Navisworks, и его блоки.</p>
+        <button class="btn primary" @onclick="OpenNew">+ Добавить проект</button>
+    </div>
 }
 else
 {
@@ -51,9 +54,9 @@ else
 }
 
 <div class="actions">
-    @if (_projects.Count > 0 && !_showNew)
+    @if (_projects.Count > 0)
     {
-        <button class="btn primary" @onclick="() => _showNew = true">+ Добавить проект</button>
+        <button class="btn primary" @onclick="OpenNew">+ Добавить проект</button>
     }
     <button class="btn" disabled="@Importer.Busy" @onclick="ScanAll">@(Importer.Busy ? "Проверяем папки…" : "Проверить папки сейчас")</button>
     <span class="muted">
@@ -71,33 +74,48 @@ else
 
 <ImportResults Results="Importer.LastResults" />
 
-@if (_projects.Count == 0 || _showNew)
+@* добавление проекта — своим окном (образец разработчика, 15.10.2026): слева папка и название, справа — блоки карточками *@
+@if (_showNew)
 {
-    <h2>Новый проект</h2>
-    <div class="form">
-        <label>
-            Папка проекта — путь из проводника или «Обзор…»
-            <span class="folder-pick">
-                <input class="wide" value="@_folder" @onchange="FolderChanged" placeholder="\\сервер\…\Арман Кала" />
-                <button class="btn" @onclick="() => _pickFolder = true">Обзор…</button>
-            </span>
-        </label>
-        <FolderPicker @bind-Open="_pickFolder" Title="Папка проекта" Start="@_folder" Chosen="@(p => FolderChanged(new ChangeEventArgs { Value = p }))" />
-        <label>
-            Название — как у папки; можно поменять
-            <input @bind="_name" placeholder="Арман Кала" />
-        </label>
-        @* блоки — вручную (DECISIONS.md модуля, «Блоки — вручную»): найденные S1, «Блок 2» подставляются, лишнее — корзиной *@
-        <div class="blocks-form">
-            <div class="blocks-head">Блоки <span class="muted small">— папка внутри папки проекта и название на сайте. Отчёты загружаются только из папок блоков; без блоков — не загружаются, даже если блок один. Можно добавить и потом, в разделе «Проект».</span></div>
-            <BlocksForm ProjectFolder="@_folder" Items="_blocks" Changed="() => _blocksAuto = false" />
+    <div class="dialog-back">
+        <div class="dialog project-dialog" role="dialog" aria-modal="true" aria-label="Добавить проект">
+            <div class="pd-head">
+                <h2>Добавить проект</h2>
+                <button class="btn link pd-close" title="Закрыть" disabled="@_creating" @onclick="CloseNew">✕</button>
+            </div>
+            <div class="pd-body">
+                <div class="pd-left">
+                    <label class="pd-field">
+                        <span>Папка проекта</span>
+                        <span class="folder-pick">
+                            <input value="@_folder" @onchange="FolderChanged" placeholder="\\сервер\…\Арман Кала" />
+                            <button class="btn" @onclick="() => _pickFolder = true">Обзор…</button>
+                        </span>
+                        <small class="muted">Папка, куда кладутся отчёты Navisworks этого проекта</small>
+                    </label>
+                    <label class="pd-field">
+                        <span>Название проекта</span>
+                        <input @bind="_name" placeholder="Как у папки" />
+                        <small class="muted">Подставляется из папки; можно поменять</small>
+                    </label>
+                    <div class="pd-note">
+                        <b>Блок</b> — папка внутри папки проекта. Отчёты загружаются только из папок блоков; без блоков — не загружаются,
+                        даже если блок один. Блоки можно добавить и потом, в разделе «Проект».
+                    </div>
+                </div>
+                <div class="pd-right">
+                    <BlocksForm Title="Список блоков" ProjectFolder="@_folder" Items="_blocks" Changed="() => _blocksAuto = false" />
+                </div>
+            </div>
+            <div class="pd-foot">
+                @if (_error != null) { <span class="error">@_error</span> }
+                <span class="spacer"></span>
+                <button class="btn" disabled="@_creating" @onclick="CloseNew">Отмена</button>
+                <button class="btn primary" disabled="@_creating" @onclick="Create">@(_creating ? "Добавляем и загружаем…" : "Добавить и загрузить отчёты")</button>
+            </div>
         </div>
-        <div class="actions">
-            <button class="btn primary" @onclick="Create">Добавить и загрузить отчёты</button>
-            @if (_projects.Count > 0) { <button class="btn link" @onclick="() => { _showNew = false; _error = null; }">Отмена</button> }
-        </div>
-        @if (_error != null) { <p class="error">@_error</p> }
     </div>
+    <FolderPicker @bind-Open="_pickFolder" Title="Папка проекта" Start="@_folder" Chosen="@(p => FolderChanged(new ChangeEventArgs { Value = p }))" />
 }
 
 <footer class="status" title="База: @Options.DatabaseFile">
@@ -125,7 +143,7 @@ else
     /// <summary>Название, подставленное из папки: пока человек его не менял, оно следует за папкой.</summary>
     private string _autoName;
     private string _error;
-    private bool _showNew, _pickFolder;
+    private bool _showNew, _pickFolder, _creating;
     private List<BlockDraft> _blocks = new();
     /// <summary>Блоки подставлены из папки и их не трогали — при смене папки подставляются заново.</summary>
     private bool _blocksAuto = true;
@@ -163,6 +181,20 @@ else
         }
     }
 
+    private void OpenNew()
+    {
+        _name = _folder = _autoName = _error = null;
+        _blocks = new List<BlockDraft>();
+        _blocksAuto = true;
+        _showNew = true;
+    }
+
+    private void CloseNew()
+    {
+        _showNew = false;
+        _error = null;
+    }
+
     private async Task ScanAll()
     {
         await Importer.ScanAsync();
@@ -183,12 +215,16 @@ else
         if (conflict != null) { _error = conflict; return; }
         var problem = BlocksForm.Collect(folder, _blocks, out var blocks);
         if (problem != null) { _error = problem; return; }
-        var id = Store.AddProject(_name, folder, blocks);
-        _name = _folder = _autoName = null;
-        _blocks = new List<BlockDraft>();
-        _blocksAuto = true;
-        _showNew = false;
-        await Importer.ScanAsync(id);
-        Nav.NavigateTo("project/" + id);
+        _creating = true;
+        try
+        {
+            var id = Store.AddProject(_name, folder, blocks);
+            await Importer.ScanAsync(id);
+            Nav.NavigateTo("project/" + id);
+        }
+        finally
+        {
+            _creating = false;
+        }
     }
 }

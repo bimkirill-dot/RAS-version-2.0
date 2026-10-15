@@ -1,23 +1,54 @@
-@* Ввод блоков (DECISIONS.md модуля, «Блоки — вручную»): строка блока — название и папка внутри папки проекта
-   («Обзор…» — выбор папки, название подставляется из неё, пока его не меняли руками), «+ Добавить блок» и корзина.
-   Список — у вызывающего: при добавлении проекта и в разделе «Проект». *@
-@foreach (var b in Items)
+@* Ввод блоков (DECISIONS.md модуля, «Блоки — вручную»): карточка блока — папка внутри папки проекта («Обзор…») и имя на
+   сайте (подставляется из папки, пока его не меняли руками), корзина; «+» — добавить блок. С заголовком (Title) — плюсик
+   в заголовке (окно добавления проекта), без него — кнопка под карточками (раздел «Проект»). Список — у вызывающего. *@
+@if (Title != null)
 {
-    var block = b;
-    <div class="block-row">
-        <input class="b-name" placeholder="Название, например S1" value="@block.Name"
-               @onchange="e => { block.Name = e.Value?.ToString() ?? string.Empty; block.NameTouched = true; }" />
-        <input class="b-folder" placeholder="Папка внутри папки проекта, например S1" @bind="block.Folder" />
-        <button class="btn small" disabled="@string.IsNullOrWhiteSpace(ProjectFolder)" title="Выбрать папку блока внутри папки проекта" @onclick="() => Pick(block)">Обзор…</button>
-        <button class="btn link small b-del" title="Убрать блок из списка" @onclick="() => Remove(block)">
-            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
-        </button>
+    <div class="bf-head">
+        <span class="bf-title">@Title&nbsp;@if (Items.Count > 0) { <span class="muted">(@Items.Count)</span> }</span>
+        <button class="btn small bf-add" title="Добавить блок" @onclick="Add">+ Блок</button>
     </div>
 }
-<div class="block-actions">
-    <button class="btn small" @onclick="Add">+ Добавить блок</button>
-    @if (_error != null) { <span class="error small">@_error</span> }
+@if (Items.Count == 0 && Title != null)
+{
+    <div class="bf-empty muted">
+        Блоков пока нет. Выберите папку проекта — сайт предложит папки, похожие на блоки (S1, «Блок 2»), — или добавьте блок плюсиком.
+    </div>
+}
+<div class="bf-list">
+    @for (var i = 0; i < Items.Count; i++)
+    {
+        var block = Items[i];
+        var number = i + 1;
+        <div class="block-card">
+            <div class="bc-head">
+                <span class="bc-title">@(string.IsNullOrWhiteSpace(block.Name) ? $"Блок {number}" : block.Name)</span>
+                @if (block.Suggested) { <span class="bc-tag" title="Сайт нашёл эту папку в папке проекта">найден в папке</span> }
+                <button class="btn link small b-del" title="Убрать блок" @onclick="() => Remove(block)">
+                    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+                </button>
+            </div>
+            <label class="bc-field">
+                <span>Папка блока</span>
+                <span class="bc-folder">
+                    <input class="b-folder" placeholder="Папка внутри папки проекта, например S1" @bind="block.Folder" @bind:after="() => FolderTyped(block)" />
+                    <button class="btn small" disabled="@string.IsNullOrWhiteSpace(ProjectFolder)" title="Выбрать папку внутри папки проекта" @onclick="() => Pick(block)">Обзор…</button>
+                </span>
+            </label>
+            <label class="bc-field">
+                <span>Имя на сайте</span>
+                <input class="b-name" placeholder="Как у папки, например S1" value="@block.Name"
+                       @onchange="e => NameTyped(block, e.Value?.ToString())" />
+            </label>
+        </div>
+    }
 </div>
+@if (Title == null)
+{
+    <div class="block-actions">
+        <button class="btn small" @onclick="Add">+ Добавить блок</button>
+    </div>
+}
+@if (_error != null) { <div class="error small">@_error</div> }
 <FolderPicker @bind-Open="_open" Title="Папка блока — внутри папки проекта" Start="@StartFolder"
               Extra="@(new[] { ("Папка проекта", ProjectFolders.Clean(ProjectFolder)) })" Chosen="Chosen" />
 
@@ -25,6 +56,8 @@
     /// <summary>Папка проекта: папки блоков — внутри неё.</summary>
     [Parameter] public string ProjectFolder { get; set; }
     [Parameter] public List<BlockDraft> Items { get; set; } = new();
+    /// <summary>Заголовок списка с плюсиком («Список блоков»); null — без заголовка, кнопка «+ Добавить блок» снизу.</summary>
+    [Parameter] public string Title { get; set; }
     /// <summary>Список изменился (строку добавили, убрали, выбрали папку) — чтобы страница показала или спрятала «Сохранить».</summary>
     [Parameter] public EventCallback Changed { get; set; }
 
@@ -49,6 +82,20 @@
         return Changed.InvokeAsync();
     }
 
+    private Task NameTyped(BlockDraft b, string name)
+    {
+        b.Name = name ?? string.Empty;
+        b.NameTouched = !string.IsNullOrWhiteSpace(b.Name);
+        return Changed.InvokeAsync();
+    }
+
+    /// <summary>Папку вписали руками — имя из неё, если его не меняли.</summary>
+    private Task FolderTyped(BlockDraft b)
+    {
+        AutoName(b, ProjectFolders.Clean(b.Folder));
+        return Changed.InvokeAsync();
+    }
+
     private void Pick(BlockDraft b)
     {
         _target = b;
@@ -56,7 +103,7 @@
         _open = true;
     }
 
-    /// <summary>Папка выбрана: внутри папки проекта — относительный путь, название — из неё (если не меняли руками).</summary>
+    /// <summary>Папка выбрана: внутри папки проекта — относительный путь, имя — из неё (если не меняли руками).</summary>
     private Task Chosen(string path)
     {
         var relative = ProjectBlocks.Relative(ProjectFolder, path);
@@ -66,17 +113,19 @@
             return Task.CompletedTask;
         }
         _target.Folder = relative;
-        if (!_target.NameTouched || string.IsNullOrWhiteSpace(_target.Name))
-        {
-            var last = relative.Split('\\').Last();
-            _target.Name = ReportPath.Block(last) ?? last;
-            _target.NameTouched = false;
-        }
+        AutoName(_target, relative);
         return Changed.InvokeAsync();
     }
 
+    private static void AutoName(BlockDraft b, string folder)
+    {
+        if (b.NameTouched || string.IsNullOrWhiteSpace(folder)) return;
+        var last = folder.Split('\\').Last();
+        b.Name = ReportPath.Block(last) ?? last;
+    }
+
     /// <summary>
-    /// Готовые блоки из строк формы: пустые строки пропускаются, папки — относительно папки проекта; что не так (папка вне
+    /// Готовые блоки из карточек: пустые пропускаются, папки — относительно папки проекта; что не так (папка вне
     /// проекта или её нет, повторы) — текст, всё хорошо — null.
     /// </summary>
     public static string Collect(string projectFolder, IEnumerable<BlockDraft> items, out List<(string Name, string Folder)> blocks)
@@ -94,7 +143,7 @@
         return ProjectBlocks.Validate(blocks);
     }
 
-    /// <summary>Подсказка по папке проекта: вложенные папки, похожие на блоки (S1, «Блок 2»), — строками формы.</summary>
+    /// <summary>Подсказка по папке проекта: вложенные папки, похожие на блоки (S1, «Блок 2»), — карточками.</summary>
     public static List<BlockDraft> Suggest(string projectFolder)
     {
         var root = ProjectFolders.Clean(projectFolder);
@@ -102,7 +151,7 @@
         {
             if (root.Length == 0 || !Directory.Exists(root)) return new List<BlockDraft>();
             return ProjectBlocks.Suggest(Directory.GetDirectories(root).Select(Path.GetFileName))
-                .Select(x => new BlockDraft { Name = x.Name, Folder = x.Folder }).ToList();
+                .Select(x => new BlockDraft { Name = x.Name, Folder = x.Folder, Suggested = true }).ToList();
         }
         catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
         {
