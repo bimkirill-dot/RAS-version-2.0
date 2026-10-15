@@ -57,9 +57,19 @@ public static class Fmt
     public static string Short(Data.ElementView e)
     {
         if (e == null) return "—";
+        // тип без смысла («По умолчанию» у воздуховодов в Zamon S6, 15.10.2026) — с семейством: «Воздуховод круглого сечения · По умолчанию»
+        if (IsGenericType(e.Type) && !string.IsNullOrWhiteSpace(e.Family) && e.Family.Trim() != e.Type.Trim())
+            return e.Family.Trim() + " · " + e.Type.Trim();
         foreach (var v in new[] { e.Type, e.Family, e.Category, e.Name })
             if (!string.IsNullOrWhiteSpace(v)) return v.Trim();
         return "—";
+    }
+
+    /// <summary>Название типа, которое ничего не говорит без семейства: стандартные имена Revit.</summary>
+    private static bool IsGenericType(string type)
+    {
+        var t = (type ?? "").Trim().ToLowerInvariant();
+        return t is "по умолчанию" or "default" or "стандартный" or "стандарт" or "standard" or "типовой" or "generic" or "тип 1" or "type 1";
     }
 
     /// <summary>«у 1 коллизии», «у 21 коллизии», «у 5 коллизий» — после «у».</summary>
