@@ -17,8 +17,12 @@ public sealed class ClashStore
     {
         using var c = _db.Open();
         var list = new List<ProjectRow>();
-        using (var r = Query(c, "SELECT Id, Name, Folder FROM Projects ORDER BY Name"))
-            while (r.Read()) list.Add(new ProjectRow { Id = r.GetInt64(0), Name = r.GetString(1), Folder = r.GetString(2) });
+        using (var r = Query(c, "SELECT Id, Name, Folder, ManualBlocks, (SELECT COUNT(*) FROM Blocks b WHERE b.ProjectId = Projects.Id) FROM Projects ORDER BY Name"))
+            while (r.Read())
+                list.Add(new ProjectRow
+                {
+                    Id = r.GetInt64(0), Name = r.GetString(1), Folder = r.GetString(2), ManualBlocks = r.GetInt32(3) != 0, Blocks = r.GetInt32(4),
+                });
         var byId = list.ToDictionary(p => p.Id);
         using (var r = Query(c, "SELECT ProjectId, State, COUNT(*) FROM Clashes GROUP BY ProjectId, State"))
             while (r.Read())
@@ -67,17 +71,78 @@ public sealed class ClashStore
 
     public ProjectRow Project(long id) => Projects().FirstOrDefault(p => p.Id == id);
 
-    public long AddProject(string name, string folder)
+    /// <summary>
+    /// Новый проект — с блоками, заданными вручную (DECISIONS.md, «Блоки — вручную»); блоков может не быть: тогда отчёты
+    /// не загружаются, пока их не добавят. blocks — проверенные (ProjectBlocks.Validate), папки — относительно папки проекта.
+    /// </summary>
+    public long AddProject(string name, string folder, IReadOnlyList<(string Name, string Folder)> blocks)
     {
         using var c = _db.Open();
         using var tx = c.BeginTransaction();
-        using var cmd = Command(c, "INSERT INTO Projects(Name, Folder, Created) VALUES($n, $f, $t); SELECT last_insert_rowid();",
+        using var cmd = Command(c, "INSERT INTO Projects(Name, Folder, Created, ManualBlocks) VALUES($n, $f, $t, 1); SELECT last_insert_rowid();",
             ("$n", name.Trim()), ("$f", folder.Trim()), ("$t", Database.Time(DateTime.Now)));
         cmd.Transaction = tx;
         var id = (long)cmd.ExecuteScalar();
-        SiteHistory.Write(c, tx, id, SiteHistory.ProjectAdded, "Папка " + folder.Trim());
+        foreach (var b in blocks) InsertBlock(c, tx, id, b.Name, b.Folder);
+        SiteHistory.Write(c, tx, id, SiteHistory.ProjectAdded, "Папка " + folder.Trim() + "; "
+            + (blocks.Count == 0 ? "блоков пока нет" : "блоки: " + string.Join(", ", blocks.Select(b => $"{b.Name.Trim()} ({b.Folder})"))));
         tx.Commit();
         return id;
+    }
+
+    private static void InsertBlock(SqliteConnection c, SqliteTransaction tx, long projectId, string name, string folder)
+    {
+        using var cmd = Command(c, "INSERT INTO Blocks(ProjectId, Name, Folder, Created) VALUES($p, $n, $f, $t)",
+            ("$p", projectId), ("$n", name.Trim()), ("$f", Logic.ProjectFolders.Clean(folder)), ("$t", Database.Time(DateTime.Now)));
+        cmd.Transaction = tx;
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>Блоки проекта, заданные вручную, — по порядку блоков; у каждого — сколько отчётов из него загружено.</summary>
+    public List<BlockRow> Blocks(long projectId)
+    {
+        using var c = _db.Open();
+        var list = new List<BlockRow>();
+        using var r = Query(c, """
+            SELECT b.Id, b.Name, b.Folder, (SELECT COUNT(*) FROM Reports r WHERE r.ProjectId = b.ProjectId AND r.Block = b.Name)
+            FROM Blocks b WHERE b.ProjectId = $p
+            """, ("$p", projectId));
+        while (r.Read()) list.Add(new BlockRow { Id = r.GetInt64(0), Name = r.GetString(1), Folder = r.GetString(2), Reports = r.GetInt32(3) });
+        return list.OrderBy(b => Logic.ReportPath.BlockOrder(b.Name)).ThenBy(b => b.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+    }
+
+    /// <summary>Добавить блоки к проекту (вместе с уже заданными — без повторов и вложенных папок). Что не так — текст; всё хорошо — null.</summary>
+    public string AddBlocks(long projectId, IReadOnlyList<(string Name, string Folder)> blocks)
+    {
+        if (blocks.Count == 0) return null;
+        var all = Blocks(projectId).Select(b => (b.Name, b.Folder)).Concat(blocks).ToList();
+        var problem = Logic.ProjectBlocks.Validate(all);
+        if (problem != null) return problem;
+        using var c = _db.Open();
+        using var tx = c.BeginTransaction();
+        foreach (var b in blocks) InsertBlock(c, tx, projectId, b.Name, b.Folder);
+        SiteHistory.Write(c, tx, projectId, SiteHistory.ProjectChanged,
+            (blocks.Count == 1 ? "Блок добавлен: " : "Блоки добавлены: ") + string.Join(", ", blocks.Select(b => $"{b.Name.Trim()} ({b.Folder})")));
+        tx.Commit();
+        return null;
+    }
+
+    /// <summary>Удалить блок — только если из него ещё ничего не загружено (загруженное не переносится). Что не так — текст; удалён — null.</summary>
+    public string DeleteBlock(long projectId, long blockId)
+    {
+        var block = Blocks(projectId).FirstOrDefault(b => b.Id == blockId);
+        if (block == null) return "Блок не найден — возможно, его уже удалили.";
+        if (block.Reports > 0) return $"Из блока «{block.Name}» уже загружены отчёты — его нельзя удалить.";
+        using var c = _db.Open();
+        using var tx = c.BeginTransaction();
+        using (var cmd = Command(c, "DELETE FROM Blocks WHERE Id = $id AND ProjectId = $p", ("$id", blockId), ("$p", projectId)))
+        {
+            cmd.Transaction = tx;
+            cmd.ExecuteNonQuery();
+        }
+        SiteHistory.Write(c, tx, projectId, SiteHistory.ProjectChanged, $"Блок удалён: {block.Name} ({block.Folder})");
+        tx.Commit();
+        return null;
     }
 
     public void UpdateProject(long id, string name, string folder)
@@ -139,6 +204,7 @@ public sealed class ClashStore
             $"DELETE FROM Events WHERE ClashId IN ({clashes}) OR ReportId IN ({reportIds})",
             $"DELETE FROM ReportTests WHERE ReportId IN ({reportIds})",
             "DELETE FROM DeletedReports WHERE ProjectId = $p",
+            "DELETE FROM Blocks WHERE ProjectId = $p",
             "DELETE FROM Clashes WHERE ProjectId = $p",
             "DELETE FROM Tests WHERE ProjectId = $p",
             "DELETE FROM TypeNames WHERE ProjectId = $p",

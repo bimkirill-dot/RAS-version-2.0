@@ -106,13 +106,13 @@ public sealed class ReportImporter
     {
         var results = new List<ImportResult>();
         _backupDone = false;
-        var projects = new List<(long Id, string Name, string Folder)>();
+        var projects = new List<(long Id, string Name, string Folder, bool Manual)>();
         using (var c = _db.Open())
-        using (var cmd = ClashStore.Command(c, "SELECT Id, Name, Folder FROM Projects"))
+        using (var cmd = ClashStore.Command(c, "SELECT Id, Name, Folder, ManualBlocks FROM Projects"))
         using (var r = cmd.ExecuteReader())
             while (r.Read())
                 if (projectId == null || r.GetInt64(0) == projectId)
-                    projects.Add((r.GetInt64(0), r.GetString(1), r.GetString(2)));
+                    projects.Add((r.GetInt64(0), r.GetString(1), r.GetString(2), r.GetInt32(3) != 0));
 
         foreach (var p in projects)
         {
@@ -125,10 +125,25 @@ public sealed class ReportImporter
             }
             var candidates = new List<(string Path, string Hash, DateTime FileTime, ClashReport Report, ReportPlace Place, DateTime Date, string DateSource, long? Replaces)>();
             var files = ReportFiles(p.Folder).ToList();
+            // блоки вручную: без блоков отчёты не загружаются; отчёт вне всех блоков — тоже, его папка — в предупреждении
+            List<(string Name, string Folder)> blocks = null;
+            if (p.Manual)
+            {
+                blocks = Blocks(p.Id);
+                var outside = new SortedSet<string>(StringComparer.CurrentCultureIgnoreCase);
+                if (blocks.Count > 0)
+                    foreach (var f in files)
+                        if (ProjectBlocks.BlockOf(blocks, p.Folder, f) == null)
+                            outside.Add(ProjectBlocks.Unassigned(blocks.Select(b => b.Folder), p.Folder, f));
+                _outside[p.Id] = outside.ToList();
+                if (blocks.Count == 0) continue;
+            }
             // файлов больше нет в папке — удалить и с сайта (до загрузки новых: удалённый прогон мог быть последним)
             results.AddRange(RemoveMissing(p.Id, p.Name, p.Folder, files));
             foreach (var file in files)
             {
+                string block = null;
+                if (blocks != null && (block = ProjectBlocks.BlockOf(blocks, p.Folder, file)) == null) continue;
                 try
                 {
                     var bytes = File.ReadAllBytes(file);
@@ -150,8 +165,9 @@ public sealed class ReportImporter
                         results.Add(new ImportResult { ProjectName = p.Name, File = file, Error = true, Message = ex.Message });
                         continue;
                     }
-                    // критичность, блок и дата прогона — из названий папок (ReportPath)
+                    // критичность, блок и дата прогона — из названий папок (ReportPath); блок проекта с блоками вручную — его блок
                     var place = ReportPath.Parse(p.Folder, file);
+                    if (block != null) place.Block = block;
                     var date = ReportPath.ReportDate(report, fileTime, place.RunDate, out var dateSource);
                     // тот же файл, тот же день прогона — выгрузили заново: замена прежнего отчёта
                     var previous = PreviousVariant(p.Id, file);
@@ -281,6 +297,24 @@ public sealed class ReportImporter
                 Message = "Файла нет в папке — удалён с сайта" + (removed > 0 ? $"; коллизий только из него — {removed}" : "") });
         }
         return results;
+    }
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<long, List<string>> _outside = new();
+
+    /// <summary>
+    /// Папки проекта с отчётами вне всех блоков (блоки вручную) — по последней проверке папки: отчёты из них не загружены,
+    /// на сайте — предупреждение «добавьте блок». «» — отчёты прямо в папке проекта.
+    /// </summary>
+    public IReadOnlyList<string> OutsideBlocks(long projectId) => _outside.TryGetValue(projectId, out var list) ? list : Array.Empty<string>();
+
+    private List<(string Name, string Folder)> Blocks(long projectId)
+    {
+        using var c = _db.Open();
+        using var cmd = ClashStore.Command(c, "SELECT Name, Folder FROM Blocks WHERE ProjectId = $p", ("$p", projectId));
+        using var r = cmd.ExecuteReader();
+        var list = new List<(string, string)>();
+        while (r.Read()) list.Add((r.GetString(0), r.GetString(1)));
+        return list;
     }
 
     /// <summary>Отказы, уже записанные в историю сайта (проект|файл|причина): одна и та же причина при каждой проверке — одна запись.</summary>

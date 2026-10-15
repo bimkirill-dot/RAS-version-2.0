@@ -94,6 +94,21 @@ header.top {
 a.head-btn + .head-btn { margin-left: 8px; }
 /* страница «Настройки» */
 .settings-page { max-width: 860px; }
+/* блоки вручную: предупреждение, форма, таблица */
+.blocks-warn { margin: 0 0 12px; padding: 10px 14px; border: 1px solid var(--pending); border-radius: 10px; background: color-mix(in srgb, var(--pending) 10%, transparent); }
+.blocks-warn .btn { margin-left: 10px; }
+.blocks-form, .blocks-zone { margin: 14px 0; }
+.form .folder-pick { display: flex; gap: 8px; max-width: 760px; }
+.form .folder-pick input { flex: 1; min-width: 0; }
+.blocks-head { font-weight: 600; margin-bottom: 6px; }
+.block-row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+.block-row .b-name { width: 160px; }
+.block-row .b-folder { flex: 1; min-width: 200px; }
+.block-actions { display: flex; gap: 10px; align-items: center; margin-top: 6px; }
+.b-del { color: var(--muted); }
+.b-del:hover { color: var(--active); }
+.blocks-table { max-width: 720px; margin-bottom: 10px; }
+.pc-warn { color: var(--pending); margin-top: 2px; }
 /* история сайта: страница «История» и раздел «История» проекта */
 .history-page { max-width: 1100px; }
 .history-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 4px; }

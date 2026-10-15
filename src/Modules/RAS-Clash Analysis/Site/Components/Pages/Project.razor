@@ -84,6 +84,21 @@
         </div>
     }
 
+    @* блоки вручную (DECISIONS.md, «Блоки — вручную»): без блоков отчёты не загружаются; папки вне блоков — тоже *@
+    @if (_project.ManualBlocks && _blocks.Count == 0)
+    {
+        <div class="blocks-warn">⚠ В проекте нет блоков — отчёты не загружаются. Добавьте блоки в разделе «Проект», даже если блок один.
+            @if (_view.Tab != 3) { <button class="btn small" @onclick="() => _view.Tab = 3">Добавить блоки</button> }
+        </div>
+    }
+    else if (_project.ManualBlocks && _outside.Count > 0)
+    {
+        <div class="blocks-warn">⚠ В папке проекта есть @(_outside.Count == 1 ? "папка" : "папки") вне блоков — отчёты из них не загружены:
+            <b>@string.Join(", ", _outside.Select(f => f == "" ? "(сама папка проекта)" : f))</b>. Добавьте блоки в разделе «Проект».
+            @if (_view.Tab != 3) { <button class="btn small" @onclick="() => _view.Tab = 3">Добавить блоки</button> }
+        </div>
+    }
+
     <div class="body @(_view.Tab == 0 && SelectedVisible ? "with-panel" : "")">
             @* боковая панель — разделы этого проекта *@
             <aside class="side" aria-label="Разделы проекта">
@@ -418,6 +433,59 @@
                         <button class="btn primary" @onclick="SaveProject">Сохранить</button>
                         @if (_editMessage != null) { <p class="@(_editError ? "error" : "muted")">@_editMessage</p> }
                     </div>
+                    <div class="blocks-zone">
+                        <h2>Блоки</h2>
+                        @if (!_project.ManualBlocks)
+                        {
+                            <p class="muted">Проект добавлен до ручных блоков: блоки распознаются по названиям папок (S1, «Блок 2»).</p>
+                        }
+                        else
+                        {
+                            <p class="muted">
+                                Блок — папка внутри папки проекта; отчёты загружаются только из папок блоков. Новые блоки действуют на отчёты,
+                                которые загрузятся дальше; уже загруженное остаётся в своих блоках. Удалить можно блок, из которого ещё ничего не загружено.
+                            </p>
+                            @if (_blocks.Count > 0)
+                            {
+                                <table class="grid blocks-table">
+                                    <thead><tr><th>Название</th><th>Папка</th><th class="num">Отчётов</th><th></th></tr></thead>
+                                    @foreach (var b in _blocks)
+                                    {
+                                        var block = b;
+                                        <tr>
+                                            <td><b>@block.Name</b></td>
+                                            <td class="path">@block.Folder</td>
+                                            <td class="num">@block.Reports</td>
+                                            <td>
+                                                @if (block.Reports == 0)
+                                                {
+                                                    <button class="btn link small b-del" title="Удалить блок — из него ещё ничего не загружено" @onclick="() => DeleteBlock(block)">
+                                                        <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+                                                    </button>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </table>
+                            }
+                            @if (_outside.Count > 0)
+                            {
+                                <p class="small">Папки вне блоков:
+                                    @foreach (var f in _outside.Where(f => f != ""))
+                                    {
+                                        var folder = f;
+                                        <button class="btn small link" title="Добавить блок с этой папкой" @onclick="() => AddDraft(folder)">+ @folder</button>
+                                    }
+                                </p>
+                            }
+                            <BlocksForm ProjectFolder="@_project.Folder" Items="_newBlocks" Changed="StateHasChanged" />
+                            @if (_newBlocks.Count > 0)
+                            {
+                                <div class="actions"><button class="btn primary" @onclick="SaveBlocks">Сохранить блоки и загрузить отчёты</button></div>
+                            }
+                            @if (_blocksMessage != null) { <p class="@(_blocksError ? "error" : "notice")">@_blocksMessage</p> }
+                        }
+                    </div>
                     @* удаление — отдельно от остального, с вопросом (DECISIONS.md модуля, «Удаление проекта») *@
                     <div class="danger-zone">
                         <h2>Удалить проект с сайта</h2>
@@ -556,10 +624,49 @@
 
     // ───── загрузка ─────
 
+    // ───── блоки вручную (DECISIONS.md, «Блоки — вручную») ─────
+
+    private List<BlockRow> _blocks = new();
+    private List<BlockDraft> _newBlocks = new();
+    /// <summary>Папки с отчётами вне блоков — по последней проверке папки.</summary>
+    private IReadOnlyList<string> _outside = Array.Empty<string>();
+    private string _blocksMessage;
+    private bool _blocksError;
+
+    private void AddDraft(string folder)
+    {
+        var last = folder.Split('\\').Last();
+        _newBlocks.Add(new BlockDraft { Folder = folder, Name = ReportPath.Block(last) ?? last });
+    }
+
+    private async Task SaveBlocks()
+    {
+        _blocksError = true;
+        var problem = BlocksForm.Collect(_project.Folder, _newBlocks, out var blocks);
+        if (problem == null && blocks.Count == 0) problem = "Заполните название и папку блока.";
+        problem ??= Store.AddBlocks(Id, blocks);
+        if (problem != null) { _blocksMessage = problem; return; }
+        _newBlocks = new List<BlockDraft>();
+        _blocksError = false;
+        _blocksMessage = blocks.Count == 1 ? "Блок добавлен — отчёты из его папки загружаются." : "Блоки добавлены — отчёты из их папок загружаются.";
+        await Importer.ScanAsync(Id);
+        LoadAll();
+    }
+
+    private void DeleteBlock(BlockRow b)
+    {
+        var problem = Store.DeleteBlock(Id, b.Id);
+        _blocksError = problem != null;
+        _blocksMessage = problem ?? $"Блок «{b.Name}» удалён.";
+        LoadAll();
+    }
+
     private void LoadAll()
     {
         _project = Store.Project(Id);
         if (_project == null) return;
+        _blocks = _project.ManualBlocks ? Store.Blocks(Id) : new List<BlockRow>();
+        _outside = Importer.OutsideBlocks(Id);
         _editName ??= _project.Name;
         _editFolder ??= _project.Folder;
         _tests = Store.Tests(Id);

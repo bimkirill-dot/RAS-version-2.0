@@ -265,6 +265,19 @@ public sealed class Database
             Author TEXT);
         CREATE INDEX SiteLogProject ON SiteLog(ProjectId, Id);
         """,
+
+        // 10 — 15.10.2026 (DECISIONS.md, «Блоки — вручную»): блоки проекта — название и папка внутри папки проекта.
+        // У проектов, добавленных раньше, блоки по-прежнему распознаются по названиям папок (ManualBlocks = 0)
+        """
+        ALTER TABLE Projects ADD COLUMN ManualBlocks INTEGER NOT NULL DEFAULT 0;
+        CREATE TABLE Blocks(
+            Id INTEGER PRIMARY KEY,
+            ProjectId INTEGER NOT NULL REFERENCES Projects(Id),
+            Name TEXT NOT NULL,
+            Folder TEXT NOT NULL,
+            Created TEXT NOT NULL);
+        CREATE INDEX BlocksProject ON Blocks(ProjectId);
+        """,
     };
 
     /// <summary>

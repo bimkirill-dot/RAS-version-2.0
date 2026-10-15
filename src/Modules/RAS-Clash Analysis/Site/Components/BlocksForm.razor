@@ -1,0 +1,112 @@
+@* Ввод блоков (DECISIONS.md модуля, «Блоки — вручную»): строка блока — название и папка внутри папки проекта
+   («Обзор…» — выбор папки, название подставляется из неё, пока его не меняли руками), «+ Добавить блок» и корзина.
+   Список — у вызывающего: при добавлении проекта и в разделе «Проект». *@
+@foreach (var b in Items)
+{
+    var block = b;
+    <div class="block-row">
+        <input class="b-name" placeholder="Название, например S1" value="@block.Name"
+               @onchange="e => { block.Name = e.Value?.ToString() ?? string.Empty; block.NameTouched = true; }" />
+        <input class="b-folder" placeholder="Папка внутри папки проекта, например S1" @bind="block.Folder" />
+        <button class="btn small" disabled="@string.IsNullOrWhiteSpace(ProjectFolder)" title="Выбрать папку блока внутри папки проекта" @onclick="() => Pick(block)">Обзор…</button>
+        <button class="btn link small b-del" title="Убрать блок из списка" @onclick="() => Remove(block)">
+            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        </button>
+    </div>
+}
+<div class="block-actions">
+    <button class="btn small" @onclick="Add">+ Добавить блок</button>
+    @if (_error != null) { <span class="error small">@_error</span> }
+</div>
+<FolderPicker @bind-Open="_open" Title="Папка блока — внутри папки проекта" Start="@StartFolder"
+              Extra="@(new[] { ("Папка проекта", ProjectFolders.Clean(ProjectFolder)) })" Chosen="Chosen" />
+
+@code {
+    /// <summary>Папка проекта: папки блоков — внутри неё.</summary>
+    [Parameter] public string ProjectFolder { get; set; }
+    [Parameter] public List<BlockDraft> Items { get; set; } = new();
+    /// <summary>Список изменился (строку добавили, убрали, выбрали папку) — чтобы страница показала или спрятала «Сохранить».</summary>
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private bool _open;
+    private BlockDraft _target;
+    private string _error;
+
+    private string StartFolder => _target == null || string.IsNullOrWhiteSpace(_target.Folder)
+        ? ProjectFolders.Clean(ProjectFolder)
+        : Path.Combine(ProjectFolders.Clean(ProjectFolder), ProjectFolders.Clean(_target.Folder));
+
+    private Task Add()
+    {
+        Items.Add(new BlockDraft());
+        _error = null;
+        return Changed.InvokeAsync();
+    }
+
+    private Task Remove(BlockDraft b)
+    {
+        Items.Remove(b);
+        return Changed.InvokeAsync();
+    }
+
+    private void Pick(BlockDraft b)
+    {
+        _target = b;
+        _error = null;
+        _open = true;
+    }
+
+    /// <summary>Папка выбрана: внутри папки проекта — относительный путь, название — из неё (если не меняли руками).</summary>
+    private Task Chosen(string path)
+    {
+        var relative = ProjectBlocks.Relative(ProjectFolder, path);
+        if (relative == null)
+        {
+            _error = "Папка блока должна быть внутри папки проекта.";
+            return Task.CompletedTask;
+        }
+        _target.Folder = relative;
+        if (!_target.NameTouched || string.IsNullOrWhiteSpace(_target.Name))
+        {
+            var last = relative.Split('\\').Last();
+            _target.Name = ReportPath.Block(last) ?? last;
+            _target.NameTouched = false;
+        }
+        return Changed.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Готовые блоки из строк формы: пустые строки пропускаются, папки — относительно папки проекта; что не так (папка вне
+    /// проекта или её нет, повторы) — текст, всё хорошо — null.
+    /// </summary>
+    public static string Collect(string projectFolder, IEnumerable<BlockDraft> items, out List<(string Name, string Folder)> blocks)
+    {
+        blocks = new List<(string Name, string Folder)>();
+        foreach (var b in items)
+        {
+            if (string.IsNullOrWhiteSpace(b.Name) && string.IsNullOrWhiteSpace(b.Folder)) continue;
+            var relative = string.IsNullOrWhiteSpace(b.Folder) ? "" : ProjectBlocks.Relative(projectFolder, b.Folder);
+            if (relative == null) return $"Папка блока «{b.Name?.Trim()}» — вне папки проекта: {b.Folder}";
+            if (relative.Length > 0 && !Directory.Exists(Path.Combine(ProjectFolders.Clean(projectFolder), relative)))
+                return $"Папка блока «{b.Name?.Trim()}» не найдена: {relative}";
+            blocks.Add(((b.Name ?? "").Trim(), relative));
+        }
+        return ProjectBlocks.Validate(blocks);
+    }
+
+    /// <summary>Подсказка по папке проекта: вложенные папки, похожие на блоки (S1, «Блок 2»), — строками формы.</summary>
+    public static List<BlockDraft> Suggest(string projectFolder)
+    {
+        var root = ProjectFolders.Clean(projectFolder);
+        try
+        {
+            if (root.Length == 0 || !Directory.Exists(root)) return new List<BlockDraft>();
+            return ProjectBlocks.Suggest(Directory.GetDirectories(root).Select(Path.GetFileName))
+                .Select(x => new BlockDraft { Name = x.Name, Folder = x.Folder }).ToList();
+        }
+        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+        {
+            return new List<BlockDraft>();
+        }
+    }
+}

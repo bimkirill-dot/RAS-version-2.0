@@ -27,6 +27,10 @@ public sealed class StateCounts
 
 public sealed class ProjectRow
 {
+    /// <summary>Блоки — вручную (проекты, добавленные с 15.10.2026); иначе — распознаются по названиям папок.</summary>
+    public bool ManualBlocks { get; set; }
+    /// <summary>Сколько блоков задано вручную.</summary>
+    public int Blocks { get; set; }
     public long Id { get; set; }
     public string Name { get; set; }
     public string Folder { get; set; }
@@ -64,6 +68,24 @@ public sealed class RunDelta
         NewTestClashes += d.NewTestClashes;
         DroppedTests.AddRange(d.DroppedTests);
     }
+}
+
+/// <summary>Блок проекта, заданный вручную: название и папка внутри папки проекта; сколько отчётов из него загружено.</summary>
+public sealed class BlockRow
+{
+    public long Id { get; set; }
+    public string Name { get; set; }
+    public string Folder { get; set; }
+    public int Reports { get; set; }
+}
+
+/// <summary>Блок в форме ввода (ещё не сохранён).</summary>
+public sealed class BlockDraft
+{
+    public string Name { get; set; } = "";
+    public string Folder { get; set; } = "";
+    /// <summary>Название вписали руками — выбор папки его больше не меняет.</summary>
+    public bool NameTouched { get; set; }
 }
 
 /// <summary>Запись истории сайта (SiteHistory).</summary>
