@@ -84,6 +84,8 @@ public sealed class CategoryRow
 {
     public long Id { get; set; }
     public string Name { get; set; }
+    /// <summary>Цвет — ключ палитры (TestCategories.Colors); null — без цвета.</summary>
+    public string Color { get; set; }
     /// <summary>Проверки категории без подкатегории.</summary>
     public List<(string Key, string Name)> Tests { get; } = new();
     public List<SubcategoryRow> Subcategories { get; } = new();
@@ -96,6 +98,8 @@ public sealed class SubcategoryRow
 {
     public long Id { get; set; }
     public string Name { get; set; }
+    /// <summary>Цвет — ключ палитры; null — как у категории.</summary>
+    public string Color { get; set; }
     public List<(string Key, string Name)> Tests { get; } = new();
 }
 

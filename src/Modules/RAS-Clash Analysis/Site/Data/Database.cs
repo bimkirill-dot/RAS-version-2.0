@@ -302,6 +302,13 @@ public sealed class Database
             Sort INTEGER NOT NULL);
         ALTER TABLE CategoryTests ADD COLUMN SubcategoryId INTEGER REFERENCES Subcategories(Id);
         """,
+
+        // 13 — 15.10.2026 (DECISIONS.md, «Категории проверок»): цвет категории и подкатегории — ключ готовой палитры
+        // (Logic.TestCategories.Colors); null — без цвета
+        """
+        ALTER TABLE Categories ADD COLUMN Color TEXT;
+        ALTER TABLE Subcategories ADD COLUMN Color TEXT;
+        """,
     };
 
     /// <summary>

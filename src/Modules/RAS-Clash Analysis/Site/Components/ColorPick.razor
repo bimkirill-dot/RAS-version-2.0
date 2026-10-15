@@ -1,0 +1,31 @@
+@* Цвет категории или подкатегории (DECISIONS.md модуля, «Категории проверок»): кружок текущего цвета; нажать — образцы
+   готовой палитры (TestCategories.Colors) и «без цвета». Палитра — спокойная и одинаково хорошая в светлой и тёмной теме. *@
+<span class="color-pick">
+    <button class="swatch @(Value == null ? "none" : "")" style="@(Value == null ? "" : $"background: var(--cat-{Value})")"
+            title="@(Value == null ? "Цвет: нет — выбрать" : $"Цвет: {TestCategories.ColorTitle(Value)} — изменить")" @onclick="() => _open = !_open"></button>
+    @if (_open)
+    {
+        <span class="swatches">
+            @foreach (var (key, title) in TestCategories.Colors)
+            {
+                var color = key;
+                <button class="swatch @(color == Value ? "on" : "")" style="background: var(--cat-@color)" title="@title" @onclick="() => Pick(color)"></button>
+            }
+            <button class="swatch none @(Value == null ? "on" : "")" title="Без цвета" @onclick="() => Pick(null)"></button>
+        </span>
+    }
+</span>
+
+@code {
+    /// <summary>Ключ цвета из палитры; null — без цвета.</summary>
+    [Parameter] public string Value { get; set; }
+    [Parameter] public EventCallback<string> Changed { get; set; }
+
+    private bool _open;
+
+    private Task Pick(string color)
+    {
+        _open = false;
+        return Changed.InvokeAsync(color);
+    }
+}

@@ -158,7 +158,7 @@
                                             @onclick="() => ToggleExpanded(cat)"><i class="chev" aria-hidden="true"></i></button>
                                     <button class="side-sub side-cat @(_filter.Category == cat && _filter.Subcategory == null && _filter.TestType == null ? "on" : "")" @onclick="() => PickCategory(cat)"
                                             title="Все проверки категории «@(cat == "" ? "без категории" : cat)»">
-                                        <span>@(cat == "" ? "Без категории" : cat)</span><b>@ActiveInCategory(cat)</b>
+                                        <span>@CatDot(GroupColor(cat))@(cat == "" ? "Без категории" : cat)</span><b>@ActiveInCategory(cat)</b>
                                     </button>
                                 </div>
                             }
@@ -174,7 +174,7 @@
                                                 @onclick="() => ToggleExpanded(subKey)"><i class="chev" aria-hidden="true"></i></button>
                                         <button class="side-sub side-subcat @(_filter.Category == cat && _filter.Subcategory == sub && _filter.TestType == null ? "on" : "")"
                                                 @onclick="() => PickSubcategory(cat, sub)" title="Все проверки подкатегории «@sub»">
-                                            <span>@sub</span><b>@ActiveInCategory(cat, sub)</b>
+                                            <span>@CatDot(GroupColor(subKey))@sub</span><b>@ActiveInCategory(cat, sub)</b>
                                         </button>
                                     </div>
                                     @foreach (var (name, active) in subOpen ? subTypes : new List<(string, int)>())
@@ -718,6 +718,13 @@
         var categories = Store.Categories();
         _categoryOrder = categories.Select(c => c.Name).ToList();
         _subOrder = categories.ToDictionary(c => c.Name, c => c.Subcategories.Select(x => x.Name).ToList());
+        _groupColors = new Dictionary<string, string>();
+        foreach (var c in categories)
+        {
+            if (c.Color != null) _groupColors[c.Name] = c.Color;
+            foreach (var sub in c.Subcategories)
+                if ((sub.Color ?? c.Color) != null) _groupColors[c.Name + "\u001f" + sub.Name] = sub.Color ?? c.Color;
+        }
         _testNames = _tests.ToDictionary(t => t.Id, t => t.Name);
         if (_filter.Category != null && !CategoriesHere.Contains(_filter.Category)) _filter.Category = null;
         if (_filter.Category == null || (_filter.Subcategory != null && !_tests.Any(t => CategoryOf(t.Name) == _filter.Category && SubOf(t.Name) == _filter.Subcategory)))
@@ -1048,7 +1055,10 @@
     /// <summary>Строка списка.</summary>
     private RenderFragment Row(ClashRow x) => __builder =>
     {
-        <tr id="row-@x.Id" class="@(x.Id == _view.SelectedId ? "selected" : "") @(x.InLastReport ? "" : "gone")" @onclick="() => Select(x.Id)">
+        var color = ColorOf(x.TestName);
+        @* цвет категории / подкатегории — тонкой полосой слева (DECISIONS.md, «Категории проверок»); выбранная строка — акцентом *@
+        <tr id="row-@x.Id" class="@(x.Id == _view.SelectedId ? "selected" : "") @(x.InLastReport ? "" : "gone") @(color != null ? "has-cat" : "")"
+            style="@(color != null ? $"--row-cat: var(--cat-{color})" : null)" @onclick="() => Select(x.Id)">
             <td class="sel" @onclick:stopPropagation="true">
                 <input type="checkbox" checked="@_selected.Contains(x.Id)" @onchange="e => Toggle(x.Id, e)" />
             </td>
@@ -1156,7 +1166,13 @@
     // ───── категории проверок (DECISIONS.md, «Категории проверок») ─────
 
     /// <summary>Категория проверки по названию (ключ — TestCategories.Key) → название категории; нет — "".</summary>
-    private Dictionary<string, (string Category, string Subcategory)> _categoryMap = new();
+    private Dictionary<string, (string Category, string Subcategory, string Color)> _categoryMap = new();
+    /// <summary>Цвета в «Типе проверки»: категория → цвет, «категория\u001fподкатегория» → цвет (свой или категории).</summary>
+    private Dictionary<string, string> _groupColors = new();
+
+    private string ColorOf(string testName) => _categoryMap.TryGetValue(TestCategories.Key(testName), out var c) ? c.Color : null;
+
+    private string GroupColor(string key) => key != null && _groupColors.TryGetValue(key, out var c) ? c : null;
     private List<string> _categoryOrder = new();
     /// <summary>Подкатегории каждой категории — по порядку из «Настроек».</summary>
     private Dictionary<string, List<string>> _subOrder = new();
@@ -1235,6 +1251,12 @@
     private int ActiveInCategory(string category, string sub = null) =>
         _tests.Where(t => (category == null || CategoryOf(t.Name) == category) && (sub == null || SubOf(t.Name) == sub)
                           && (_filter.Block == null || t.Block == _filter.Block)).Sum(t => t.Counts.Active);
+
+    /// <summary>Цветная точка перед названием категории / подкатегории; без цвета — ничего.</summary>
+    private static RenderFragment CatDot(string color) => __builder =>
+    {
+        if (color != null) { <i class="cat-dot" style="background: var(--cat-@color)" aria-hidden="true"></i> }
+    };
 
     /// <summary>Подкатегория: вся её категория — отбор, подкатегория — уточнение.</summary>
     private void PickSubcategory(string category, string sub)

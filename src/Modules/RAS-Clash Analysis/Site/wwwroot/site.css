@@ -30,6 +30,9 @@
     --d-other: #5b6478;
     --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 1px 3px rgba(16, 24, 40, .07);
     --radius: 10px;
+    /* палитра категорий проверок — спокойные оттенки (TestCategories.Colors) */
+    --cat-red: #e06c75; --cat-orange: #e8914f; --cat-yellow: #d6b03a; --cat-green: #4caf7a;
+    --cat-teal: #3aa8b0; --cat-blue: #5b8def; --cat-violet: #8b74e8; --cat-gray: #9aa1ad;
     color-scheme: light;
 }
 
@@ -60,6 +63,8 @@ html[data-theme="dark"] {
     --d-ov: #2fc2ce;
     --d-other: #a6aec0;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3);
+    --cat-red: #e5737b; --cat-orange: #e99a5e; --cat-yellow: #d9b84e; --cat-green: #5cbf89;
+    --cat-teal: #4db6be; --cat-blue: #6f9cf2; --cat-violet: #9d8aef; --cat-gray: #8f97a5;
     color-scheme: dark;
 }
 
@@ -148,6 +153,14 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .cat-tests li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .cat-tests li select { font-size: 12px; }
 .cat-conflict { margin: 6px 0; padding: 8px 10px; border: 1px solid var(--pending); border-radius: 8px; font-size: 13px; display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+/* цвет категории: кружок выбора, образцы, точка в «Типе проверки» */
+.color-pick { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--line); padding: 0; cursor: pointer; flex: none; }
+.swatch:hover { box-shadow: 0 0 0 1px var(--accent); }
+.swatch.on { box-shadow: 0 0 0 2px var(--text); }
+.swatch.none { background: transparent; border: 1.5px dashed var(--muted); box-shadow: none; }
+.swatches { display: inline-flex; gap: 6px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); box-shadow: var(--shadow); }
+.cat-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; }
 /* подкатегория — внутри карточки категории */
 .sub-card { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; background: var(--bg); padding: 8px 12px; margin: 8px 0 8px 14px; }
 .sub-card .sub-name { font-weight: 600; min-width: 180px; }
@@ -463,6 +476,7 @@ table.clashes { table-layout: fixed; }
 table.clashes td { vertical-align: middle; padding: 4px 8px; }
 table.clashes tbody tr { cursor: pointer; }
 table.clashes tbody tr.selected { background: var(--row-selected); }
+table.clashes tbody tr.has-cat td:first-child { box-shadow: inset 3px 0 0 var(--row-cat); }
 table.clashes tbody tr.selected td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 table.clashes tr.gone td { color: var(--muted); }
 table.clashes td.name { white-space: nowrap; }

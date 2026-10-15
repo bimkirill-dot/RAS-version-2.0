@@ -13,6 +13,20 @@ namespace RASv2.ClashAnalysis.Site.Logic
     public static class TestCategories
     {
         /// <summary>
+        /// Цвета категорий и подкатегорий — готовая палитра (ключ → название); на сайте ключ — переменная CSS «--cat-ключ»
+        /// со своим оттенком для светлой и тёмной темы. Строка коллизии помечается тонкой полосой этого цвета.
+        /// </summary>
+        public static readonly (string Key, string Title)[] Colors =
+        {
+            ("red", "красный"), ("orange", "оранжевый"), ("yellow", "жёлтый"), ("green", "зелёный"),
+            ("teal", "бирюзовый"), ("blue", "синий"), ("violet", "фиолетовый"), ("gray", "серый"),
+        };
+
+        public static bool IsColor(string key) => key != null && Array.Exists(Colors, c => c.Key == key);
+
+        public static string ColorTitle(string key) => Array.Find(Colors, c => c.Key == key).Title ?? key;
+
+        /// <summary>
         /// Ключ названия проверки для сравнения: без учёта регистра и лишних пробелов, пробелы вокруг «/» не важны —
         /// «АР Стены/МЕР Трубы» = «ар стены / мер  трубы».
         /// </summary>

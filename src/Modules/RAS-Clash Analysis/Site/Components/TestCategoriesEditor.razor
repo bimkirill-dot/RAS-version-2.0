@@ -36,6 +36,7 @@
         var last = i == _categories.Count - 1;
         <div class="cat-card">
             <div class="cat-title">
+                <ColorPick Value="@cat.Color" Changed="c => SetColor(cat.Id, false, c)" />
                 <input class="cat-name" value="@cat.Name" title="Название категории — можно поменять" @onchange="e => Rename(cat, e.Value?.ToString())" />
                 <span class="muted small">@Fmt.Plural(cat.TotalTests, "проверка", "проверки", "проверок")</span>
                 <span class="spacer"></span>
@@ -62,6 +63,7 @@
                 var subLast = j == cat.Subcategories.Count - 1;
                 <div class="sub-card">
                     <div class="cat-title">
+                        <ColorPick Value="@sub.Color" Changed="c => SetColor(sub.Id, true, c)" />
                         <input class="cat-name sub-name" value="@sub.Name" title="Название подкатегории — можно поменять" @onchange="e => RenameSub(sub, e.Value?.ToString())" />
                         <span class="muted small">@Fmt.Plural(sub.Tests.Count, "проверка", "проверки", "проверок")</span>
                         <span class="spacer"></span>
@@ -215,6 +217,12 @@
     private void Rename(CategoryRow cat, string name)
     {
         _error = Store.RenameCategory(cat.Id, name);
+        Load();
+    }
+
+    private void SetColor(long id, bool subcategory, string color)
+    {
+        Store.SetCategoryColor(id, subcategory, color);
         Load();
     }
 

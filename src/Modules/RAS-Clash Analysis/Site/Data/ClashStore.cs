@@ -560,15 +560,15 @@ public sealed class ClashStore
     {
         using var c = _db.Open();
         var list = new List<CategoryRow>();
-        using (var r = Query(c, "SELECT Id, Name FROM Categories ORDER BY Sort, Id"))
-            while (r.Read()) list.Add(new CategoryRow { Id = r.GetInt64(0), Name = r.GetString(1) });
+        using (var r = Query(c, "SELECT Id, Name, Color FROM Categories ORDER BY Sort, Id"))
+            while (r.Read()) list.Add(new CategoryRow { Id = r.GetInt64(0), Name = r.GetString(1), Color = Str(r, 2) });
         var byId = list.ToDictionary(x => x.Id);
         var subs = new Dictionary<long, SubcategoryRow>();
-        using (var r = Query(c, "SELECT Id, CategoryId, Name FROM Subcategories ORDER BY Sort, Id"))
+        using (var r = Query(c, "SELECT Id, CategoryId, Name, Color FROM Subcategories ORDER BY Sort, Id"))
             while (r.Read())
                 if (byId.TryGetValue(r.GetInt64(1), out var cat))
                 {
-                    var sub = new SubcategoryRow { Id = r.GetInt64(0), Name = r.GetString(2) };
+                    var sub = new SubcategoryRow { Id = r.GetInt64(0), Name = r.GetString(2), Color = Str(r, 3) };
                     cat.Subcategories.Add(sub);
                     subs[sub.Id] = sub;
                 }
@@ -585,17 +585,44 @@ public sealed class ClashStore
         return list;
     }
 
-    /// <summary>Место проверки по её названию: ключ (TestCategories.Key) → категория и подкатегория ("" — без подкатегории).</summary>
-    public Dictionary<string, (string Category, string Subcategory)> CategoryMap()
+    /// <summary>
+    /// Место проверки по её названию: ключ (TestCategories.Key) → категория, подкатегория ("" — без подкатегории) и цвет
+    /// (подкатегории, а без него — категории; null — без цвета).
+    /// </summary>
+    public Dictionary<string, (string Category, string Subcategory, string Color)> CategoryMap()
     {
         using var c = _db.Open();
-        var map = new Dictionary<string, (string, string)>(StringComparer.Ordinal);
+        var map = new Dictionary<string, (string, string, string)>(StringComparer.Ordinal);
         using var r = Query(c, """
-            SELECT t.Key, k.Name, COALESCE(s.Name, '') FROM CategoryTests t JOIN Categories k ON k.Id = t.CategoryId
+            SELECT t.Key, k.Name, COALESCE(s.Name, ''), COALESCE(s.Color, k.Color) FROM CategoryTests t JOIN Categories k ON k.Id = t.CategoryId
             LEFT JOIN Subcategories s ON s.Id = t.SubcategoryId
             """);
-        while (r.Read()) map[r.GetString(0)] = (r.GetString(1), r.GetString(2));
+        while (r.Read()) map[r.GetString(0)] = (r.GetString(1), r.GetString(2), Str(r, 3));
         return map;
+    }
+
+    /// <summary>Цвет категории (subcategory false) или подкатегории — ключ палитры; null — без цвета.</summary>
+    public void SetCategoryColor(long id, bool subcategory, string color)
+    {
+        if (color != null && !Logic.TestCategories.IsColor(color)) return;
+        var table = subcategory ? "Subcategories" : "Categories";
+        using var c = _db.Open();
+        using var tx = c.BeginTransaction();
+        string name;
+        using (var get = Command(c, $"SELECT Name FROM {table} WHERE Id = $id", ("$id", id)))
+        {
+            get.Transaction = tx;
+            name = get.ExecuteScalar() as string;
+        }
+        if (name == null) return;
+        using (var cmd = Command(c, $"UPDATE {table} SET Color = $c WHERE Id = $id", ("$c", color), ("$id", id)))
+        {
+            cmd.Transaction = tx;
+            cmd.ExecuteNonQuery();
+        }
+        SiteHistory.Write(c, tx, null, SiteHistory.Settings,
+            $"Цвет {(subcategory ? "подкатегории" : "категории")} «{name}»: {(color == null ? "без цвета" : Logic.TestCategories.ColorTitle(color))}");
+        tx.Commit();
     }
 
     /// <summary>Новая категория — в конец. Что не так — текст; добавлена — null.</summary>
