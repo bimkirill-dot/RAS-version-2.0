@@ -87,11 +87,8 @@ else
                 <div class="pd-left">
                     <label class="pd-field">
                         <span>Папка проекта</span>
-                        <span class="folder-pick">
-                            <input value="@_folder" @onchange="FolderChanged" placeholder="\\сервер\…\Арман Кала" />
-                            <button class="btn" @onclick="() => _pickFolder = true">Обзор…</button>
-                        </span>
-                        <small class="muted">Папка, куда кладутся отчёты Navisworks этого проекта</small>
+                        <input value="@_folder" @onchange="FolderChanged" placeholder="\\сервер\…\Арман Кала" />
+                        <small class="muted">Скопируйте путь из адресной строки проводника и вставьте сюда</small>
                     </label>
                     <label class="pd-field">
                         <span>Название проекта</span>
@@ -115,7 +112,6 @@ else
             </div>
         </div>
     </div>
-    <FolderPicker @bind-Open="_pickFolder" Title="Папка проекта" Start="@_folder" Chosen="@(p => FolderChanged(new ChangeEventArgs { Value = p }))" />
 }
 
 <footer class="status" title="База: @Options.DatabaseFile">
@@ -143,7 +139,7 @@ else
     /// <summary>Название, подставленное из папки: пока человек его не менял, оно следует за папкой.</summary>
     private string _autoName;
     private string _error;
-    private bool _showNew, _pickFolder, _creating;
+    private bool _showNew, _creating;
     private List<BlockDraft> _blocks = new();
     /// <summary>Блоки подставлены из папки и их не трогали — при смене папки подставляются заново.</summary>
     private bool _blocksAuto = true;

@@ -1,5 +1,5 @@
-@* Ввод блоков (DECISIONS.md модуля, «Блоки — вручную»): карточка блока — папка внутри папки проекта («Обзор…») и имя на
-   сайте (подставляется из папки, пока его не меняли руками), корзина; «+» — добавить блок. С заголовком (Title) — плюсик
+@* Ввод блоков (DECISIONS.md модуля, «Блоки — вручную»): карточка блока — папка внутри папки проекта (путь из проводника или
+   имя папки; окна выбора нет — 15.10.2026) и имя на сайте (подставляется из папки, пока его не меняли руками), корзина; «+» — добавить блок. С заголовком (Title) — плюсик
    в заголовке (окно добавления проекта), без него — кнопка под карточками (раздел «Проект»). Список — у вызывающего. *@
 @if (Title != null)
 {
@@ -29,10 +29,7 @@
             </div>
             <label class="bc-field">
                 <span>Папка блока</span>
-                <span class="bc-folder">
-                    <input class="b-folder" placeholder="Папка внутри папки проекта, например S1" @bind="block.Folder" @bind:after="() => FolderTyped(block)" />
-                    <button class="btn small" disabled="@string.IsNullOrWhiteSpace(ProjectFolder)" title="Выбрать папку внутри папки проекта" @onclick="() => Pick(block)">Обзор…</button>
-                </span>
+                <input class="b-folder" placeholder="Путь из проводника или имя папки, например S1" @bind="block.Folder" @bind:after="() => FolderTyped(block)" />
             </label>
             <label class="bc-field">
                 <span>Имя на сайте</span>
@@ -48,9 +45,6 @@
         <button class="btn small" @onclick="Add">+ Добавить блок</button>
     </div>
 }
-@if (_error != null) { <div class="error small">@_error</div> }
-<FolderPicker @bind-Open="_open" Title="Папка блока — внутри папки проекта" Start="@StartFolder"
-              Extra="@(new[] { ("Папка проекта", ProjectFolders.Clean(ProjectFolder)) })" Chosen="Chosen" />
 
 @code {
     /// <summary>Папка проекта: папки блоков — внутри неё.</summary>
@@ -61,18 +55,9 @@
     /// <summary>Список изменился (строку добавили, убрали, выбрали папку) — чтобы страница показала или спрятала «Сохранить».</summary>
     [Parameter] public EventCallback Changed { get; set; }
 
-    private bool _open;
-    private BlockDraft _target;
-    private string _error;
-
-    private string StartFolder => _target == null || string.IsNullOrWhiteSpace(_target.Folder)
-        ? ProjectFolders.Clean(ProjectFolder)
-        : Path.Combine(ProjectFolders.Clean(ProjectFolder), ProjectFolders.Clean(_target.Folder));
-
     private Task Add()
     {
         Items.Add(new BlockDraft());
-        _error = null;
         return Changed.InvokeAsync();
     }
 
@@ -89,31 +74,15 @@
         return Changed.InvokeAsync();
     }
 
-    /// <summary>Папку вписали руками — имя из неё, если его не меняли.</summary>
+    /// <summary>
+    /// Папку вставили: полный путь внутри папки проекта — сокращается до части внутри неё («…\Арман Кала\S1» → «S1»);
+    /// имя — из папки, если его не меняли. Путь вне папки проекта остаётся как есть — «Добавить» скажет, что не так.
+    /// </summary>
     private Task FolderTyped(BlockDraft b)
     {
-        AutoName(b, ProjectFolders.Clean(b.Folder));
-        return Changed.InvokeAsync();
-    }
-
-    private void Pick(BlockDraft b)
-    {
-        _target = b;
-        _error = null;
-        _open = true;
-    }
-
-    /// <summary>Папка выбрана: внутри папки проекта — относительный путь, имя — из неё (если не меняли руками).</summary>
-    private Task Chosen(string path)
-    {
-        var relative = ProjectBlocks.Relative(ProjectFolder, path);
-        if (relative == null)
-        {
-            _error = "Папка блока должна быть внутри папки проекта.";
-            return Task.CompletedTask;
-        }
-        _target.Folder = relative;
-        AutoName(_target, relative);
+        var relative = ProjectBlocks.Relative(ProjectFolder, b.Folder);
+        if (relative != null) b.Folder = relative;
+        AutoName(b, relative ?? ProjectFolders.Clean(b.Folder));
         return Changed.InvokeAsync();
     }
 

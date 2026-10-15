@@ -17,12 +17,9 @@
         <div class="set-row">
             <span class="set-label">Папка на сервере</span>
             <span class="set-field set-inline set-path">
-                <input class="wide" @bind="_v.BackupFolder" @bind:event="oninput" />
-                <button class="btn" @onclick="() => _pick = true">Обзор…</button>
+                <input class="wide" @bind="_v.BackupFolder" @bind:event="oninput" placeholder="Путь из адресной строки проводника" />
             </span>
         </div>
-        <FolderPicker @bind-Open="_pick" Title="Папка копий базы" Start="@_v.BackupFolder"
-                      Extra="@(new[] { ("Папка плагина на сервере", Cfg.DefaultBackupFolder) })" Chosen="@(p => { _v.BackupFolder = p; _check = null; })" />
         <div class="set-row">
             <span class="set-label"></span>
             <span class="set-field set-inline">
@@ -94,7 +91,7 @@
 @code {
     private SiteSettingsValues _v = new();
     private string _error, _saved, _check;
-    private bool _checkOk, _pick;
+    private bool _checkOk;
 
     protected override void OnInitialized() => Reset();
 

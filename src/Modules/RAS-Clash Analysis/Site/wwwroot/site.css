@@ -113,8 +113,6 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .pd-note { margin-top: auto; font-size: 12.5px; color: var(--muted); background: var(--accent-bg); border-radius: 8px; padding: 10px 12px; line-height: 1.45; }
 .pd-note b { color: var(--accent-strong); }
 .pd-foot { display: flex; gap: 8px; align-items: center; padding: 12px 22px; border-top: 1px solid var(--line); }
-.folder-pick { display: flex; gap: 8px; }
-.folder-pick input { flex: 1; min-width: 0; }
 @media (max-width: 760px) {
     .pd-body { grid-template-columns: 1fr; overflow: auto; }
     .pd-left { border-right: none; border-bottom: 1px solid var(--line); }
@@ -133,8 +131,6 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .bc-head .b-del { margin-left: auto; }
 .bc-field { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; font-size: 12px; color: var(--muted); }
 .bc-field input { width: 100%; color: var(--text); }
-.bc-folder { display: flex; gap: 8px; }
-.bc-folder input { flex: 1; min-width: 0; }
 .empty-state { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin: 12px 0 18px; }
 .block-actions { display: flex; gap: 10px; align-items: center; margin-top: 6px; }
 .b-del { color: var(--muted); }
@@ -169,18 +165,6 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .set-actions { position: sticky; bottom: 0; padding: 10px 0; background: var(--bg); }
 .set-path { flex-wrap: nowrap; }
 .set-path input.wide { flex: 1; min-width: 0; }
-/* выбор папки на странице */
-.folder-dialog { max-width: 720px; display: flex; flex-direction: column; gap: 8px; }
-.fp-path { display: flex; gap: 8px; }
-.fp-path input { flex: 1; min-width: 0; }
-.fp-bar { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
-.fp-list { height: 300px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 4px; background: var(--bg); }
-.fp-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 8px; border: none; border-radius: 6px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
-.fp-item:hover { background: var(--row-hover); }
-.fp-item svg { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--muted); stroke-width: 1.4; }
-.fp-msg { padding: 10px; }
-.folder-dialog .dialog-buttons { flex-wrap: nowrap; }
-.fp-current { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* под названием проекта: последний прогон, отчёты, папка — со значками */
 .ph-meta { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); font-size: 13px; }
 .ph-meta span { display: inline-flex; align-items: center; gap: 6px; }
