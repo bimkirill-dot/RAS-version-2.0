@@ -127,6 +127,13 @@ public sealed class SummaryDrill
     public string Subcategory { get; set; }
     public string TestType { get; set; }
     public string LevelKey { get; set; }
+    /// <summary>К «что принёс прогон»: день прогона (yyyy-MM-dd) и new / tests / returned / fixed.</summary>
+    public string RunDay { get; set; }
+    public string RunKind { get; set; }
+    /// <summary>Поиск в списке.</summary>
+    public string Search { get; set; }
+    /// <summary>Тип элемента (ClashFacets.ElementTypeKey).</summary>
+    public string ElementType { get; set; }
     public long? ClashId { get; set; }
     public bool ToReports { get; set; }
 }

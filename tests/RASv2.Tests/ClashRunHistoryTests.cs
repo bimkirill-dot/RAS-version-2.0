@@ -68,6 +68,31 @@ namespace RASv2.Tests
                 Check(h.NewAt(D2).SetEquals(new[] { 3L }), "08: новая 3");
                 Check(h.NewAt(D3).Count == 0, "14: 6 — первый прогон своей проверки, не новая");
             });
+            yield return Case("мост прогона: было + пришли − ушли = стало", () =>
+            {
+                var h = Sample();
+                var a = h.Change(D1, D2);
+                Check(a.Was == 3 && a.New == 1 && a.Fixed == 2 && a.Now == 2 && a.Returned == 0 && a.NewTests == 0,
+                      $"01→08: было {a.Was}, новые {a.New}, исправлены {a.Fixed}, стало {a.Now}");
+                var b = h.Change(D2, D3);
+                Check(b.Was == 2 && b.Returned == 1 && b.NewTests == 1 && b.New == 0 && b.Fixed == 0 && b.Now == 4,
+                      $"08→14: было {b.Was}, вернулись {b.Returned}, в новых проверках {b.NewTests}, стало {b.Now}");
+                foreach (var c in h.Changes())
+                    Check(c.Was + c.Appeared - c.Fixed - c.Accepted - c.Gone == c.Now, "сходится " + c.Day.Day);
+            });
+            yield return Case("время до исправления — только исправленные сейчас", () =>
+            {
+                var f = Sample().FixTimes();
+                Check(f.Count == 1 && f.ContainsKey(2) && f[2].First == D1 && f[2].Fixed == D2, "2: с 01 по 08; 4 вернулась — не считается");
+            });
+            yield return Case("прогноз: убывают — день нуля, растут — нет", () =>
+            {
+                var changes = Sample().Changes();
+                var one = RunHistory.Forecast(changes.Take(1).ToList(), 2);
+                Check(one.PerRun == -1 && one.DaysPerRun == 7 && one.Zero == new DateTime(2026, 10, 22), $"−1 за прогон, раз в 7 дней, 2 активных → 22.10: {one.Zero}");
+                Check(RunHistory.Forecast(changes, 4).Zero == null, "за два прогона в среднем 0 — нуля не будет");
+                Check(RunHistory.Forecast(changes, 0).Zero == D3, "активных нет — уже ноль");
+            });
         }
     }
 }

@@ -1,22 +1,25 @@
 @* Столбики (в том числе стопкой) для сводки проекта — SVG без сторонних библиотек (DECISIONS.md модуля, «Сводка проекта»):
-   цвета — переменными темы, значения — в подсказке; Clicked — нажатый столбик (номер). *@
+   цвета — переменными темы, значения — в подсказке; Clicked — нажатый столбик (номер). Parts2 — второй столбик рядом
+   (например, «появились» и «исправлены» одного прогона). *@
 <div class="chart-wrap">
-    <svg class="chart" viewBox="0 0 @W @Height" role="img" aria-label="@Title">
+    <svg class="chart" viewBox="0 0 @Width @Height" role="img" aria-label="@Title">
         @for (var t = 0; t <= Ticks; t++)
         {
             var v = Max / Ticks * t;
             var y = Y(v);
-            <line class="grid-line" x1="@Left" x2="@(W - Right)" y1="@F(y)" y2="@F(y)" />
+            <line class="grid-line" x1="@Left" x2="@(Width - Right)" y1="@F(y)" y2="@F(y)" />
             @Txt("axis", Left - 6, y + 4, "end", Fmt0(v))
         }
         @for (var i = 0; i < Bars.Count; i++)
         {
             var bar = Bars[i];
             var index = i;
-            var x = Left + Slot * i + (Slot - BarWidth) / 2;
+            var pair = bar.Parts2.Count > 0;
+            var x = Left + Slot * i + (Slot - (pair ? BarWidth * 2 + 4 : BarWidth)) / 2;
             var bottom = Y(0);
+            var center = Left + Slot * i + Slot / 2;
             <g class="@(Clicked.HasDelegate ? "bar clickable" : "bar")" @onclick="() => Click(index)">
-                <title>@bar.Label: @string.Join(", ", bar.Parts.Where(p => p.Value > 0).Select(p => $"{p.Name} — {Fmt0(p.Value)}"))@(bar.Note == null ? "" : " · " + bar.Note)</title>
+                <title>@bar.Label: @string.Join(", ", bar.Parts.Concat(bar.Parts2).Where(p => p.Value > 0).Select(p => $"{p.Name} — {Fmt0(p.Value)}"))@(bar.Note == null ? "" : " · " + bar.Note)</title>
                 <rect class="bar-hit" x="@F(Left + Slot * i)" y="@Top" width="@F(Slot)" height="@F(bottom - Top)" />
                 @foreach (var part in bar.Parts.Where(p => p.Value > 0))
                 {
@@ -25,8 +28,20 @@
                     bottom -= h;
                 }
                 @if (bar.Note != null) { @Txt("note", x + BarWidth / 2, bottom - 5, "middle", bar.Note) }
-                @if (Rotate) { @Txt("axis", 0, 0, "end", Cut(bar.Label), $"translate({F(x + BarWidth / 2)}, {F(Height - Bottom + 12)}) rotate(-30)") }
-                else { @Txt("axis", x + BarWidth / 2, Height - Bottom + 16, "middle", Cut(bar.Label)) }
+                @if (pair)
+                {
+                    var x2 = x + BarWidth + 4;
+                    var bottom2 = Y(0);
+                    @foreach (var part in bar.Parts2.Where(p => p.Value > 0))
+                    {
+                        var h = Y(0) - Y(part.Value);
+                        <rect x="@F(x2)" y="@F(bottom2 - h)" width="@F(BarWidth)" height="@F(Math.Max(h, 0.5))" rx="2" style="fill: var(@part.Color)" />
+                        bottom2 -= h;
+                    }
+                    @if (bar.Note2 != null) { @Txt("note", x2 + BarWidth / 2, bottom2 - 5, "middle", bar.Note2) }
+                }
+                @if (Rotate) { @Txt("axis", 0, 0, "end", Cut(bar.Label), $"translate({F(center)}, {F(Height - Bottom + 12)}) rotate(-30)") }
+                else { @Txt("axis", center, Height - Bottom + 16, "middle", Cut(bar.Label)) }
             </g>
         }
     </svg>
@@ -46,6 +61,9 @@
         public string Note;
         /// <summary>Части стопкой снизу вверх: значение, переменная цвета («--active»), название.</summary>
         public List<(double Value, string Color, string Name)> Parts = new();
+        /// <summary>Второй столбик рядом (стопкой так же); пусто — один столбик.</summary>
+        public List<(double Value, string Color, string Name)> Parts2 = new();
+        public string Note2;
     }
 
     [Parameter] public List<Bar> Bars { get; set; } = new();
@@ -53,11 +71,13 @@
     [Parameter] public string Title { get; set; }
     [Parameter] public int Height { get; set; } = 240;
     [Parameter] public EventCallback<int> Clicked { get; set; }
+    /// <summary>Ширина в точках рисунка: в половине страницы — меньше, чтобы подписи не мельчали.</summary>
+    [Parameter] public int Width { get; set; } = 900;
 
-    private const int W = 900, Left = 46, Right = 12, Top = 22, Ticks = 4;
+    private const int Left = 46, Right = 12, Top = 22, Ticks = 4;
     private int Bottom => Rotate ? 70 : 30;
-    private double Slot => Bars.Count == 0 ? 1 : (W - Left - Right) / (double)Bars.Count;
-    private double BarWidth => Math.Min(Slot * 0.62, 90);
+    private double Slot => Bars.Count == 0 ? 1 : (Width - Left - Right) / (double)Bars.Count;
+    private double BarWidth => Bars.Any(b => b.Parts2.Count > 0) ? Math.Min(Slot * 0.36, 48) : Math.Min(Slot * 0.62, 90);
     private bool Rotate => Bars.Count > 10;
 
     /// <summary>Верх шкалы — «круглое» число: 1, 2, 5 × 10ⁿ на деление.</summary>
@@ -65,7 +85,7 @@
     {
         get
         {
-            var top = Bars.Select(b => b.Parts.Sum(p => Math.Max(p.Value, 0))).DefaultIfEmpty(0).Max();
+            var top = Bars.Select(b => Math.Max(b.Parts.Sum(p => Math.Max(p.Value, 0)), b.Parts2.Sum(p => Math.Max(p.Value, 0)))).DefaultIfEmpty(0).Max();
             if (top <= 0) return Ticks;
             var raw = top / Ticks;
             var mag = Math.Pow(10, Math.Floor(Math.Log10(raw)));

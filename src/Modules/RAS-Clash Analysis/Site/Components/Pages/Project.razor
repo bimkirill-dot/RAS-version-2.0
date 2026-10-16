@@ -71,6 +71,14 @@
             </label>
             <FacetMenu Title="Уровень" Values="_facetValues[ClashFacets.Level]" Selected="FacetSet(ClashFacets.Level)" Changed="Recompute" />
             <FacetMenu Title="Статус" Values="_facetValues[ClashFacets.State]" Selected="FacetSet(ClashFacets.State)" Changed="Recompute" />
+            @* отбор из сводки «Какие элементы мешают больше всего» — меткой, ✕ — снять *@
+            @foreach (var key in FacetSet(ClashFacets.ElementType).ToList())
+            {
+                var chosen = key;
+                <span class="filter-chip" title="Коллизии с элементами этого типа (из сводки)">Элемент: <b>@ClashFacets.ElementTypeTitle(chosen)</b>
+                    <button class="chip-x" aria-label="Снять отбор" title="Снять отбор" @onclick="() => { FacetSet(ClashFacets.ElementType).Remove(chosen); _page = 0; Recompute(); }">✕</button>
+                </span>
+            }
             @if (FilterIsSet)
             {
                 <button class="btn link small" @onclick="ResetFilter">Сбросить</button>
@@ -1505,8 +1513,18 @@
         if (d.LevelKey != null) levels.Add(d.LevelKey);
         var states = FacetSet(ClashFacets.State);
         states.Clear();
-        states.Add(((int)ClashState.Active).ToString());
         _view.RunFilter = null;
+        _filter.Search = d.Search;
+        var elementTypes = FacetSet(ClashFacets.ElementType);
+        elementTypes.Clear();
+        if (d.ElementType != null) elementTypes.Add(d.ElementType);
+        if (d.RunKind != null)
+        {
+            // из «моста прогона»: прогон этого дня и что он принёс (статус не отбирается — иначе исправленных не видно)
+            _view.RunDate = d.RunDay;
+            _view.RunFilter = d.RunKind;
+        }
+        else states.Add(((int)ClashState.Active).ToString());
         SetScope(_filter.Criticality, block, type);
         Go(0);
     }

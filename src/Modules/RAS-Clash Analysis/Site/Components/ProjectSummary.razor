@@ -33,11 +33,138 @@
             </div>
         </div>
 
+        @if (_changes.Count > 0)
+        {
+            <div class="sum-grid">
+                @* мост прогона: было → пришли → ушли → стало (16.10.2026) *@
+                <section class="sum-block">
+                    <div class="sum-head">
+                        <h3>Что изменилось за прогон <span class="muted small">— активные: было, пришли, ушли, стало; нажать — эти коллизии</span></h3>
+                        <select class="input small" value="@_bridgeIndex" @onchange="PickBridge" title="Прогон">
+                            @for (var i = _changes.Count - 1; i >= 0; i--)
+                            {
+                                var c = _changes[i];
+                                <option value="@i" @key="i">@Fmt.Day(c.Day) (к @Fmt.Day(c.Before))</option>
+                            }
+                        </select>
+                    </div>
+                    <WaterfallChart Title="Что изменилось за прогон" Steps="_bridge" Clicked="DrillBridge" />
+                </section>
+
+                @* успевает ли команда: пришли и исправлены за каждый прогон + прогноз *@
+                <section class="sum-block">
+                    <h3>Успевает ли команда <span class="muted small">— за каждый прогон: слева пришли, справа ушли</span></h3>
+                    <BarChart Title="Пришли и ушли по прогонам" Bars="_flow" Legend="_flowLegend" Height="240" Width="560" />
+                    <p class="forecast @_forecastCss">@_forecast</p>
+                </section>
+            </div>
+        }
+
         @* 2. тренд: стопкой по прогонам, над столбиком — новые *@
         <section class="sum-block">
             <h3>Как идёт работа <span class="muted small">— по прогонам: активные, исправленные, допущенные; сверху — новые за прогон</span></h3>
             <BarChart Title="Тренд по прогонам" Bars="_trend" Legend="_trendLegend" Height="250" />
         </section>
+
+        <div class="sum-grid">
+            @* возраст активных — сколько висят с первого появления (16.10.2026) *@
+            <section class="sum-block">
+                <h3>Сколько висят активные <span class="muted small">— с первого появления в отчёте@(_ageAvg.HasValue ? $"; в среднем {Fmt.Plural((int)Math.Round(_ageAvg.Value), "день", "дня", "дней")}" : "")</span></h3>
+                @if (_ages.All(a => a.Count == 0)) { <p class="muted">Активных нет.</p> }
+                else
+                {
+                    var topAge = _ages.Max(a => a.Count);
+                    <div class="hbars">
+                        @for (var i = 0; i < _ages.Count; i++)
+                        {
+                            var (title, count) = _ages[i];
+                            <div class="hbar static" title="@title — активных: @count">
+                                <span class="hb-label">@title</span>
+                                <span class="hb-track"><i style="width: @Pct(count, topAge); background: color-mix(in srgb, var(--active) @(40 + 15 * i)%, var(--panel))"></i></span>
+                                <span class="hb-value">@count</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </section>
+
+            @* время до исправления — по группам уровня (категории / подкатегории / типы / блоки) *@
+            <section class="sum-block">
+                <h3>Как быстро исправляют <span class="muted small">— дней от первого появления до прогона, где исправлена</span></h3>
+                @if (_fixTimes.Count == 0) { <p class="muted">Исправленных между прогонами пока нет.</p> }
+                else
+                {
+                    <table class="grid sum-table">
+                        <thead><tr><th>@LevelHead</th><th class="num">Исправлено</th><th class="num">В среднем, дней</th><th class="num">Медиана, дней</th></tr></thead>
+                        <tbody>
+                            @foreach (var (key, title, count, avg, median) in _fixTimes)
+                            {
+                                <tr class="@(key == null ? "total-row" : "")">
+                                    <td>@if (key != null) { @Dot(GroupColor(key)) }@title</td>
+                                    <td class="num k-fixed">@count</td>
+                                    <td class="num">@avg.ToString("0.#")</td>
+                                    <td class="num">@median.ToString("0.#")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </section>
+        </div>
+
+        <div class="sum-grid">
+            @* элементы — главные виновники: типы, которые чаще всего в активных коллизиях (16.10.2026; «По типам» у автора) *@
+            <section class="sum-block">
+                <h3>Какие элементы мешают больше всего <span class="muted small">— типы в активных коллизиях; нажать — их коллизии</span></h3>
+                @if (_culprits.Count == 0) { <p class="muted">Активных нет.</p> }
+                else
+                {
+                    @if (_culpritNote != null) { <p class="culprit-note">@_culpritNote</p> }
+                    var topCulprit = _culprits[0].Count;
+                    <div class="hbars tall">
+                        @foreach (var c in _culprits.Take(_culpritsShown))
+                        {
+                            var item = c;
+                            <div class="hbar culprit" title="@item.Category · @item.Title — в @Fmt.Clashes(item.Count) (@Share(item.Count) % активных)" @onclick="() => DrillCulprit(item.Key)">
+                                <span class="hb-label"><span class="muted small">@item.Category</span> @item.Title</span>
+                                <span class="hb-track"><i style="width: @Pct(item.Count, topCulprit)"></i></span>
+                                <span class="hb-value">@item.Count</span>
+                            </div>
+                        }
+                    </div>
+                    @if (_culprits.Count > _culpritsShown) { <button class="btn link small" @onclick="() => _culpritsShown += 15">Показать ещё (@(_culprits.Count - _culpritsShown))</button> }
+                }
+            </section>
+
+            @* глубина пересечения — полосами (16.10.2026; как у Catenda: мелкое — кандидаты в «Допущена») *@
+            <section class="sum-block">
+                <h3>Насколько глубоко пересекаются <span class="muted small">— активные по глубине пересечения</span></h3>
+                @if (_depths.Take(_depths.Count - 1).All(d => d.Count == 0))
+                {
+                    @* в отчётах глубины нет совсем — подсказать, что включить (у RAS на 16.10.2026 — ни в одном отчёте) *@
+                    <p class="muted">В отчётах нет глубины пересечения. Чтобы она была: в Navisworks при выгрузке отчёта включите в содержимое
+                        «Расстояние» (Clash Detective → «Отчёт» → «Содержимое»; регламент выгрузки отчётов).</p>
+                }
+                else
+                {
+                    var topDepth = _depths.Max(d => d.Count);
+                    <div class="hbars">
+                        @foreach (var (title, count, css) in _depths)
+                        {
+                            <div class="hbar static" title="@title — активных: @count">
+                                <span class="hb-label">@title</span>
+                                <span class="hb-track"><i class="@css" style="width: @Pct(count, topDepth)"></i></span>
+                                <span class="hb-value">@count</span>
+                            </div>
+                        }
+                    </div>
+                    @if (_depths[0].Count > 0)
+                    {
+                        <p class="muted small depth-note">До 10 мм — @Fmt.Clashes(_depths[0].Count): часто это допуск построения, их можно рассмотреть на «Допущена» пачкой.</p>
+                    }
+                }
+            </section>
+        </div>
 
         <div class="sum-grid">
             @* 3. блоки × категории *@
@@ -304,6 +431,26 @@
     [Parameter] public EventCallback<SummaryDrill> Drill { get; set; }
 
     private const int RecurMin = 2;
+    private List<RunChange> _changes = new();
+    private int _bridgeIndex;
+    private List<WaterfallChart.Step> _bridge = new();
+    /// <summary>Что за шаг моста: вид отбора прогона в списке (new / tests / returned / fixed) или null — не нажимается.</summary>
+    private List<string> _bridgeKinds = new();
+    private List<BarChart.Bar> _flow = new();
+    private List<(string, string)> _flowLegend = new()
+    {
+        ("Новые", "--active"), ("В новых проверках", "--cat-violet"), ("Вернулись", "--cat-orange"), ("Исправлены", "--fixed"), ("Допущены", "--accepted"),
+    };
+    private string _forecast, _forecastCss;
+    private List<(string Title, int Count)> _ages = new();
+    private double? _ageAvg;
+    private List<(string Key, string Title, int Count, double Avg, double Median)> _fixTimes = new();
+    private sealed class Culprit { public string Category, Title, Key; public int Count; }
+    private List<Culprit> _culprits = new();
+    private int _culpritsShown = 10;
+    private string _culpritNote;
+    private int _activeCount;
+    private List<(string Title, int Count, string Css)> _depths = new();
     private List<ClashRow> _rows = new();
     private List<DateTime> _days = new();
     private Counts _now = new(), _prev;
@@ -367,6 +514,104 @@
         _now = last;
         _prev = before;
         _dayLabels = _days.Select(d => d.ToString("dd.MM")).ToList();
+
+        // мост и «успевает ли команда» — по переходам от прогона к прогону
+        _changes = _history.Changes(_filter);
+        _bridgeIndex = _changes.Count - 1;
+        BuildBridge();
+        _flow = _changes.Select(c => new BarChart.Bar
+        {
+            Label = Fmt.Day(c.Day),
+            Parts = new() { (c.New, "--active", "новые"), (c.NewTests, "--cat-violet", "в новых проверках"), (c.Returned + c.Unaccepted, "--cat-orange", "вернулись") },
+            Parts2 = new() { (c.Fixed, "--fixed", "исправлены"), (c.Accepted + c.Gone, "--accepted", "допущены") },
+            Note = c.Appeared > 0 ? "+" + c.Appeared : null,
+            Note2 = c.Fixed + c.Accepted + c.Gone > 0 ? "−" + (c.Fixed + c.Accepted + c.Gone) : null,
+        }).ToList();
+        var (zero, perRun, daysPerRun) = RunHistory.Forecast(_changes, _now.Active);
+        var rate = Math.Abs(Math.Round(perRun));
+        var every = daysPerRun >= 1 ? $", прогон примерно раз в {Fmt.Plural((int)Math.Round(daysPerRun), "день", "дня", "дней")}" : "";
+        if (_changes.Count == 0) { _forecast = null; }
+        else if (_now.Active == 0) { _forecast = "Активных нет."; _forecastCss = "good"; }
+        else if (zero.HasValue)
+        {
+            _forecast = $"Успевают: активных меньше на ~{rate} за прогон{every}. При той же скорости — ноль примерно к {Fmt.Day(zero.Value)}.";
+            _forecastCss = "good";
+        }
+        else
+        {
+            _forecast = perRun > 0
+                ? $"Не успевают: активных больше на ~{rate} за прогон{every} (без новых проверок). Новых и вернувшихся больше, чем исправленных."
+                : $"Стоят на месте: сколько приходит, столько и уходит{every}.";
+            _forecastCss = "bad";
+        }
+        if (_changes.Count < 3 && _forecast != null && _now.Active > 0) _forecast += $" Прогонов мало ({_days.Count}) — прогноз грубый.";
+
+        // возраст активных: с первого появления до сегодня
+        var today = DateTime.Today;
+        var actives = _rows.Where(r => r.State == ClashState.Active).ToList();
+        int Age(ClashRow r) => (int)(today - r.FirstSeen.Date).TotalDays;
+        _ages = new()
+        {
+            ("до недели", actives.Count(r => Age(r) < 7)),
+            ("1–2 недели", actives.Count(r => Age(r) >= 7 && Age(r) < 14)),
+            ("2–4 недели", actives.Count(r => Age(r) >= 14 && Age(r) < 28)),
+            ("1–3 месяца", actives.Count(r => Age(r) >= 28 && Age(r) < 90)),
+            ("больше 3 месяцев", actives.Count(r => Age(r) >= 90)),
+        };
+        _ageAvg = actives.Count > 0 ? actives.Average(r => (double)Age(r)) : null;
+
+        // как быстро исправляют — по группам уровня деления и всего
+        var fixes = _history.FixTimes(_filter);
+        var fixedRows = _rows.Where(r => r.State == ClashState.Fixed && fixes.ContainsKey(r.Id)).ToList();
+        double FixDays(ClashRow r) => (fixes[r.Id].Fixed - fixes[r.Id].First).TotalDays;
+        static double Median(List<double> v) { v.Sort(); return v.Count == 0 ? 0 : v.Count % 2 == 1 ? v[v.Count / 2] : (v[v.Count / 2 - 1] + v[v.Count / 2]) / 2; }
+        _fixTimes = new();
+        if (fixedRows.Count > 0)
+        {
+            Func<ClashRow, string> groupKey = _by == By.Block ? r => r.Block : r => KeyOf(r.TestName, r.Type);
+            var fixOrder = _by == By.Block ? _rows.Select(r => r.Block).Distinct().OrderBy(ReportPath.BlockOrder).ToList() : LevelOrder();
+            foreach (var g in fixedRows.GroupBy(groupKey).OrderBy(g => fixOrder.IndexOf(g.Key) < 0 ? int.MaxValue : fixOrder.IndexOf(g.Key)))
+                _fixTimes.Add((g.Key, GroupTitle(g.Key), g.Count(), g.Average(FixDays), Median(g.Select(FixDays).ToList())));
+            if (_fixTimes.Count > 1)
+                _fixTimes.Add((null, "Всего", fixedRows.Count, fixedRows.Average(FixDays), Median(fixedRows.Select(FixDays).ToList())));
+        }
+
+        // элементы — главные виновники: тип элемента (без смысла — с семейством), коллизия считается один раз на тип
+        _activeCount = actives.Count;
+        var byType = new Dictionary<string, (Culprit Item, HashSet<long> Ids)>();
+        foreach (var r in actives)
+            foreach (var e in new[] { r.A, r.B })
+            {
+                if (e == null) continue;
+                var title = Fmt.Short(e);
+                if (title == "—") continue;
+                var typeKey = ClashFacets.ElementTypeKey(e);
+                if (typeKey == null) continue;
+                if (!byType.TryGetValue(typeKey, out var v))
+                    byType[typeKey] = v = (new Culprit { Category = e.Category ?? "", Title = title, Key = typeKey }, new HashSet<long>());
+                v.Ids.Add(r.Id);
+            }
+        _culprits = byType.Values.Select(v => { v.Item.Count = v.Ids.Count; return v.Item; })
+            .OrderByDescending(c => c.Count).ThenBy(c => c.Title, StringComparer.CurrentCultureIgnoreCase).ToList();
+        _culpritsShown = 10;
+        _culpritNote = null;
+        if (_culprits.Count > 5 && actives.Count > 0)
+        {
+            var top5 = byType.Values.OrderByDescending(v => v.Ids.Count).Take(5).SelectMany(v => v.Ids).ToHashSet();
+            _culpritNote = $"5 типов из {_culprits.Count} — в {Math.Round(100.0 * top5.Count / actives.Count)} % активных коллизий.";
+        }
+
+        // глубина пересечения, мм (без знака)
+        double? Mm(ClashRow r) => r.Distance.HasValue ? Math.Abs(r.Distance.Value) * ClashRules.MetersPerUnit(r.Units) * 1000 : null;
+        _depths = new()
+        {
+            ("до 10 мм", actives.Count(r => Mm(r) < 10), "d1"),
+            ("10–50 мм", actives.Count(r => Mm(r) >= 10 && Mm(r) < 50), "d2"),
+            ("50–100 мм", actives.Count(r => Mm(r) >= 50 && Mm(r) < 100), "d3"),
+            ("100–300 мм", actives.Count(r => Mm(r) >= 100 && Mm(r) < 300), "d4"),
+            ("больше 300 мм", actives.Count(r => Mm(r) >= 300), "d5"),
+            ("нет данных", actives.Count(r => Mm(r) == null), "d0"),
+        };
 
         // 3: блоки × категории (нынешние активные)
         var active = _rows.Where(r => r.State == ClashState.Active).ToList();
@@ -640,6 +885,48 @@
     private Task DrillTest(string type) => Drill.InvokeAsync(new SummaryDrill { TestType = type });
     private static string Pct(int value, int top) =>
         (top <= 0 ? 0 : Math.Max(100.0 * value / top, value > 0 ? 1 : 0)).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + "%";
+
+    /// <summary>Шаги моста выбранного прогона; нулевые изменения не показываются.</summary>
+    private void BuildBridge()
+    {
+        _bridge = new();
+        _bridgeKinds = new();
+        if (_bridgeIndex < 0 || _bridgeIndex >= _changes.Count) return;
+        var c = _changes[_bridgeIndex];
+        void Add(string label, string sub, bool total, double value, string color, string kind)
+        {
+            if (!total && value == 0) return;
+            _bridge.Add(new WaterfallChart.Step { Label = label, Sub = sub, Total = total, Value = value, Color = color, Clickable = kind != null });
+            _bridgeKinds.Add(kind);
+        }
+        Add("Было", Fmt.Day(c.Before), true, c.Was, "--accepted", null);
+        Add("Новые", null, false, c.New, "--active", "new");
+        Add("Новые", "проверки", false, c.NewTests, "--cat-violet", "tests");
+        Add("Вернулись", null, false, c.Returned, "--cat-orange", "returned");
+        Add("Сняли", "допуск", false, c.Unaccepted, "--cat-orange", null);
+        Add("Исправлены", null, false, -c.Fixed, "--fixed", "fixed");
+        Add("Допущены", null, false, -c.Accepted, "--accepted", null);
+        Add("Нет", "данных", false, -c.Gone, "--accepted", null);
+        Add("Стало", Fmt.Day(c.Day), true, c.Now, "--active", null);
+    }
+
+    private void PickBridge(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var i)) { _bridgeIndex = i; BuildBridge(); }
+    }
+
+    /// <summary>Шаг моста — к списку: прогон этого дня и отбор «новые / в новых проверках / вернулись / исправлены».</summary>
+    private Task DrillBridge(int index)
+    {
+        var kind = _bridgeKinds[index];
+        if (kind == null) return Task.CompletedTask;
+        return Drill.InvokeAsync(new SummaryDrill { RunDay = _changes[_bridgeIndex].Day.ToString("yyyy-MM-dd"), RunKind = kind });
+    }
+
+    private string Share(int count) => _activeCount == 0 ? "0" : Math.Round(100.0 * count / _activeCount).ToString();
+
+    /// <summary>Тип элемента — к списку: отбор «Тип элемента» (точно, не поиском по части названия).</summary>
+    private Task DrillCulprit(string key) => Drill.InvokeAsync(new SummaryDrill { ElementType = key });
 
     private Task DrillLevel(int index) => Drill.InvokeAsync(new SummaryDrill { LevelKey = _levels[index].Key });
 }

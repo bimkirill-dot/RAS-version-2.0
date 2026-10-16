@@ -1,0 +1,102 @@
+@* «Мост прогона» для сводки проекта (DECISIONS.md модуля, «Сводка проекта»): было → пришли (вверх) → ушли (вниз) → стало.
+   Шкала — не с нуля, когда изменения малы рядом с итогом (иначе их не видно); это подписано. SVG без сторонних библиотек. *@
+<div class="chart-wrap">
+    <svg class="chart" viewBox="0 0 @Width @Height" role="img" aria-label="@Title">
+        @for (var t = 0; t <= Ticks; t++)
+        {
+            var v = _floor + (_top - _floor) / Ticks * t;
+            <line class="grid-line" x1="@Left" x2="@(Width - Right)" y1="@F(Y(v))" y2="@F(Y(v))" />
+            @Txt("axis", Left - 6, Y(v) + 4, "end", Fmt0(v))
+        }
+        @for (var i = 0; i < Steps.Count; i++)
+        {
+            var step = Steps[i];
+            var index = i;
+            var (from, to) = _spans[i];
+            var x = Left + Slot * i + (Slot - BarWidth) / 2;
+            var yTop = Y(Math.Max(from, to));
+            var yBottom = Y(Math.Min(from, to));
+            <g class="@(step.Clickable && Clicked.HasDelegate ? "bar clickable" : "bar")" @onclick="() => Click(index)">
+                <title>@step.Label@(step.Sub == null ? "" : " " + step.Sub): @Sign(step)@Fmt0(Math.Abs(step.Value))@(step.Clickable ? " — нажать: эти коллизии" : "")</title>
+                <rect class="bar-hit" x="@F(Left + Slot * i)" y="@Top" width="@F(Slot)" height="@F(Height - Bottom - Top)" />
+                <rect x="@F(x)" y="@F(yTop)" width="@F(BarWidth)" height="@F(Math.Max(yBottom - yTop, 2))" rx="2" style="fill: var(@step.Color)" />
+                @Txt("note", x + BarWidth / 2, yTop - 5, "middle", Sign(step) + Fmt0(Math.Abs(step.Value)))
+                @Txt("axis", x + BarWidth / 2, Height - Bottom + 15, "middle", step.Label)
+                @if (step.Sub != null) { @Txt("axis sub", x + BarWidth / 2, Height - Bottom + 29, "middle", step.Sub) }
+                @* соединитель — уровень после шага до следующего столбика *@
+                @if (i < Steps.Count - 1)
+                {
+                    <line class="bridge-line" x1="@F(x + BarWidth)" x2="@F(Left + Slot * (i + 1) + (Slot - BarWidth) / 2)" y1="@F(Y(to))" y2="@F(Y(to))" />
+                }
+            </g>
+        }
+    </svg>
+    @if (_floor > 0) { <div class="muted small chart-note">Шкала — с @Fmt0(_floor), чтобы были видны изменения рядом с итогом.</div> }
+</div>
+
+@code {
+    public sealed class Step
+    {
+        public string Label;
+        /// <summary>Вторая строка подписи (например, дата прогона).</summary>
+        public string Sub;
+        /// <summary>Итог (было / стало) — от шкалы; иначе изменение: больше 0 — вверх, меньше 0 — вниз.</summary>
+        public bool Total;
+        public double Value;
+        /// <summary>Переменная цвета («--active»).</summary>
+        public string Color;
+        public bool Clickable;
+    }
+
+    [Parameter] public List<Step> Steps { get; set; } = new();
+    [Parameter] public string Title { get; set; }
+    [Parameter] public int Height { get; set; } = 240;
+    /// <summary>Ширина в точках рисунка: в половине страницы — меньше, чтобы подписи не мельчали.</summary>
+    [Parameter] public int Width { get; set; } = 560;
+    [Parameter] public EventCallback<int> Clicked { get; set; }
+
+    private const int Left = 46, Right = 8, Top = 22, Bottom = 36, Ticks = 4;
+    private double Slot => Steps.Count == 0 ? 1 : (Width - Left - Right) / (double)Steps.Count;
+    private double BarWidth => Math.Min(Slot * 0.62, 64);
+
+    private List<(double From, double To)> _spans = new();
+    private double _floor, _top = 1;
+
+    protected override void OnParametersSet()
+    {
+        _spans = new();
+        double level = 0;
+        foreach (var s in Steps)
+        {
+            if (s.Total) { _spans.Add((0, s.Value)); level = s.Value; }
+            else { _spans.Add((level, level + s.Value)); level += s.Value; }
+        }
+        var levels = _spans.SelectMany(x => new[] { x.From, x.To }).Where((v, i) => !(Steps[i / 2].Total && i % 2 == 0)).ToList();
+        var max = levels.DefaultIfEmpty(0).Max();
+        var min = levels.DefaultIfEmpty(0).Min();
+        // изменения малы рядом с итогом — шкала с «круглого» числа ниже наименьшего уровня
+        var range = Math.Max(max - min, 1);
+        var floor = min - range * 1.5;
+        _floor = floor > max * 0.25 ? Nice(floor, down: true) : 0;
+        _top = Math.Max(Nice(max + range * 0.15, down: false), _floor + Ticks);
+    }
+
+    /// <summary>«Круглое» число: шаг 1, 2, 5 × 10ⁿ от величины.</summary>
+    private static double Nice(double v, bool down)
+    {
+        if (v <= 0) return 0;
+        var mag = Math.Pow(10, Math.Floor(Math.Log10(v)) - 1);
+        return (down ? Math.Floor(v / mag) : Math.Ceiling(v / mag)) * mag;
+    }
+
+    private double Y(double v) => Top + (Height - Bottom - Top) * (1 - (Math.Max(v, _floor) - _floor) / Math.Max(_top - _floor, 1));
+    private static string Sign(Step s) => s.Total ? "" : s.Value >= 0 ? "+" : "−";
+    private static string F(double v) => v.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+    private static string Fmt0(double v) => Math.Round(v).ToString("#,0", System.Globalization.CultureInfo.GetCultureInfo("ru-RU"));
+
+    /// <summary>Подпись в SVG (тег text в разметке Blazor внутри циклов писать нельзя).</summary>
+    private static MarkupString Txt(string css, double x, double y, string anchor, string content) =>
+        new MarkupString($"<text class=\"{css}\" x=\"{F(x)}\" y=\"{F(y)}\" text-anchor=\"{anchor}\">{System.Net.WebUtility.HtmlEncode(content ?? "")}</text>");
+
+    private Task Click(int index) => Steps[index].Clickable && Clicked.HasDelegate ? Clicked.InvokeAsync(index) : Task.CompletedTask;
+}
