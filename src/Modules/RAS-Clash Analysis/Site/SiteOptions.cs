@@ -19,6 +19,8 @@ public sealed class SiteOptions
 
     /// <summary>Сколько хранить копий: часовых и ночных.</summary>
     public int HourlyBackups { get; set; } = 48;
+    /// <summary>«Тип проверки» в проекте: категории и подкатегории из «Настроек» видны всегда, пустые — серым с нулём.</summary>
+    public bool ShowEmptyCategories { get; set; }
     public int NightlyBackups { get; set; } = 60;
 
     /// <summary>Папка сайта на этом компьютере: программа («Программа»), данные, settings.json.</summary>

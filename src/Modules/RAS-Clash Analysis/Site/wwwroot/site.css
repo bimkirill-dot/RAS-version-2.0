@@ -245,6 +245,12 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .swatch.on { box-shadow: 0 0 0 2px var(--text); }
 .swatch.none { background: transparent; border: 1.5px dashed var(--muted); box-shadow: none; }
 .swatches { display: inline-grid; grid-template-columns: repeat(10, 16px); gap: 6px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); box-shadow: var(--shadow); }
+/* пустая категория / подкатегория («Настройки» → показывать пустые) — серым */
+.side-sub.empty:not(.on) { color: var(--muted); }
+.side-sub.empty:not(.on) .cat-dot { opacity: .45; }
+.side-sub.empty:not(.on) b { opacity: .7; }
+.side-fold.none { visibility: hidden; }
+.cat-show-empty { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0 12px; font-size: 13.5px; }
 .cat-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; }
 /* подкатегория — внутри карточки категории */
 .sub-card { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; background: var(--bg); padding: 8px 12px; margin: 8px 0 8px 14px; }

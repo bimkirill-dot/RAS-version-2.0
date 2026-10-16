@@ -6,6 +6,7 @@
 @inject IJSRuntime JS
 @inject ProjectRemoval Removal
 @inject NavigationManager Nav
+@inject SiteOptions Options
 
 <PageTitle>@(_project?.Name ?? "Проект") · Clash Analysis</PageTitle>
 
@@ -156,7 +157,7 @@
                                 <div class="side-cat-row">
                                     <button class="side-fold @(open ? "open" : "")" title="@(open ? "Свернуть" : "Развернуть")" aria-expanded="@(open ? "true" : "false")"
                                             @onclick="() => ToggleExpanded(cat)"><i class="chev" aria-hidden="true"></i></button>
-                                    <button class="side-sub side-cat @(_filter.Category == cat && _filter.Subcategory == null && _filter.TestType == null ? "on" : "")" @onclick="() => PickCategory(cat)"
+                                    <button class="side-sub side-cat @(_filter.Category == cat && _filter.Subcategory == null && _filter.TestType == null ? "on" : "") @(ActiveInCategory(cat) == 0 ? "empty" : "")" @onclick="() => PickCategory(cat)"
                                             title="Все проверки категории «@(cat == "" ? "без категории" : cat)»">
                                         <span>@CatDot(GroupColor(cat))@(cat == "" ? "Без категории" : cat)</span><b>@ActiveInCategory(cat)</b>
                                     </button>
@@ -170,9 +171,9 @@
                                     var subKey = cat + "\u001f" + sub;
                                     var subOpen = _view.CategoriesExpanded.Contains(subKey);
                                     <div class="side-cat-row lvl1">
-                                        <button class="side-fold @(subOpen ? "open" : "")" title="@(subOpen ? "Свернуть" : "Развернуть")" aria-expanded="@(subOpen ? "true" : "false")"
-                                                @onclick="() => ToggleExpanded(subKey)"><i class="chev" aria-hidden="true"></i></button>
-                                        <button class="side-sub side-subcat @(_filter.Category == cat && _filter.Subcategory == sub && _filter.TestType == null ? "on" : "")"
+                                        <button class="side-fold @(subOpen ? "open" : "") @(subTypes.Count == 0 ? "none" : "")" title="@(subOpen ? "Свернуть" : "Развернуть")" aria-expanded="@(subOpen ? "true" : "false")"
+                                                disabled="@(subTypes.Count == 0)" @onclick="() => ToggleExpanded(subKey)"><i class="chev" aria-hidden="true"></i></button>
+                                        <button class="side-sub side-subcat @(_filter.Category == cat && _filter.Subcategory == sub && _filter.TestType == null ? "on" : "") @(ActiveInCategory(cat, sub) == 0 ? "empty" : "")"
                                                 @onclick="() => PickSubcategory(cat, sub)" title="Все проверки подкатегории «@sub»">
                                             <span>@CatDot(GroupColor(subKey))@sub</span><b>@ActiveInCategory(cat, sub)</b>
                                         </button>
@@ -834,8 +835,11 @@
         _testNames = _tests.ToDictionary(t => t.Id, t => t.Name);
         _hasCategories = _tests.Any(t => CategoryOf(t.Name) != "");
         _hasSubcategories = _tests.Any(t => SubOf(t.Name) != "");
-        if (_filter.Category != null && !CategoriesHere.Contains(_filter.Category)) _filter.Category = null;
-        if (_filter.Category == null || (_filter.Subcategory != null && !_tests.Any(t => CategoryOf(t.Name) == _filter.Category && SubOf(t.Name) == _filter.Subcategory)))
+        // выбранная категория / подкатегория остаётся, пока она есть в проекте или в «Настройках» (пустые видны по флажку)
+        if (_filter.Category != null && !CategoriesHere.Contains(_filter.Category) && !(Options.ShowEmptyCategories && _categoryOrder.Contains(_filter.Category)))
+            _filter.Category = null;
+        if (_filter.Category == null || (_filter.Subcategory != null && !_tests.Any(t => CategoryOf(t.Name) == _filter.Category && SubOf(t.Name) == _filter.Subcategory)
+                                         && !(Options.ShowEmptyCategories && _subOrder.TryGetValue(_filter.Category, out var subs) && subs.Contains(_filter.Subcategory))))
             _filter.Subcategory = null;
         _criticalities = _tests.Select(t => t.Criticality).Distinct().OrderBy(ReportPath.CriticalityOrder).ToList();
         if (!_view.ScopeChosen || (_filter.Criticality != null && !_criticalities.Contains(_filter.Criticality)))
@@ -1362,8 +1366,7 @@
             if (_categoryOrder.Count == 0)
                 return new List<TypeNode> { new TypeNode { Types = types.Select(x => (x.Name, x.Active)).ToList() } };
             var order = _categoryOrder.Concat(new[] { "" }).ToList();
-            return types.GroupBy(x => x.Category)
-                .OrderBy(g => order.IndexOf(g.Key) < 0 ? int.MaxValue : order.IndexOf(g.Key))
+            var nodes = types.GroupBy(x => x.Category)
                 .Select(g =>
                 {
                     var subOrder = _subOrder.TryGetValue(g.Key, out var so) ? so : new List<string>();
@@ -1377,6 +1380,19 @@
                     };
                 })
                 .ToList();
+            // «Настройки» → «показывать пустые»: категории и подкатегории из «Настроек» — все, пустые — серым с нулём
+            // (проверки без активных по-прежнему скрыты — 16.10.2026)
+            if (Options.ShowEmptyCategories)
+                foreach (var category in _categoryOrder)
+                {
+                    var node = nodes.FirstOrDefault(n => n.Category == category);
+                    if (node == null) nodes.Add(node = new TypeNode { Category = category });
+                    var subOrder = _subOrder.TryGetValue(category, out var so) ? so : new List<string>();
+                    foreach (var sub in subOrder.Where(s => node.Subs.All(x => x.Name != s)))
+                        node.Subs.Add((sub, new List<(string, int)>()));
+                    node.Subs = node.Subs.OrderBy(s => subOrder.IndexOf(s.Name) < 0 ? int.MaxValue : subOrder.IndexOf(s.Name)).ToList();
+                }
+            return nodes.OrderBy(n => order.IndexOf(n.Category) < 0 ? int.MaxValue : order.IndexOf(n.Category)).ToList();
         }
     }
 

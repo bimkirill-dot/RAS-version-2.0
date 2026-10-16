@@ -120,6 +120,25 @@ public sealed class SiteSettings
         return v.Port != RunningPort || v.Network != RunningNetwork;
     }
 
+    /// <summary>
+    /// Пустые категории и подкатегории в «Типе проверки» — показывать или нет. Сохраняется сразу (флажок у «Категорий проверок»,
+    /// отдельно от «Сохранить» внизу страницы), действует на все проекты.
+    /// </summary>
+    public void SetShowEmptyCategories(bool show)
+    {
+        if (_options.ShowEmptyCategories == show) return;
+        var root = ReadFile() ?? new JsonObject();
+        if (root["Site"] is not JsonObject site) root["Site"] = site = new JsonObject();
+        site["ShowEmptyCategories"] = show;
+        Directory.CreateDirectory(Path.GetDirectoryName(_options.SettingsFile)!);
+        var temp = _options.SettingsFile + ".tmp";
+        File.WriteAllText(temp, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
+        File.Move(temp, _options.SettingsFile, overwrite: true);
+        _options.ShowEmptyCategories = show;
+        Data.SiteHistory.Write(_db, null, Data.SiteHistory.Settings,
+            show ? "Пустые категории и подкатегории в «Типе проверки» — показывать" : "Пустые категории и подкатегории в «Типе проверки» — не показывать");
+    }
+
     /// <summary>Можно ли писать в папку копий: пробный файл создаётся и сразу удаляется (ничего чужого не трогает).</summary>
     public static string CheckFolder(string folder)
     {
