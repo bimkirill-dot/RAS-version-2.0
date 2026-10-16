@@ -1,0 +1,105 @@
+@inject IJSRuntime JS
+
+@* Сводка по компании на главной (DECISIONS.md модуля, «Сводка проекта», вторая волна): все проекты вместе — плитки, активные по
+   неделям стопкой по проектам, «давно не проверяли». Свернуть — запоминается в браузере (удобство одного зрителя). *@
+<section class="company">
+    <button class="company-head" @onclick="Toggle" aria-expanded="@(_open ? "true" : "false")">
+        <i class="chev @(_open ? "open" : "")" aria-hidden="true"></i>
+        <h2>Сводка по компании</h2>
+        <span class="muted small">все проекты@(_open ? "" : $": активных {Fmt0(_active)}, исправлено {_percent} %")</span>
+    </button>
+    @if (_open)
+    {
+        <div class="sum-tiles">
+            <div class="sum-tile">
+                <div class="st-label">Проектов</div>
+                <div class="st-value">@Projects.Count</div>
+                <div class="st-change @(_stale > 0 ? "bad" : "muted")" title="Последний отчёт — больше @StaleDays дней назад">
+                    @(_stale > 0 ? $"давно не проверяли: {_stale}" : "все проверялись недавно")
+                </div>
+            </div>
+            <div class="sum-tile">
+                <div class="st-label">Активные</div>
+                <div class="st-value k-active">@Fmt0(_active)</div>
+                @if (_weekAgo.HasValue)
+                {
+                    var d = _active - _weekAgo.Value;
+                    <div class="st-change @(d < 0 ? "good" : d > 0 ? "bad" : "muted")" title="К тому, что было неделю назад">@(d > 0 ? "↗ +" : d < 0 ? "↘ " : "→ ")@d за неделю</div>
+                }
+            </div>
+            <div class="sum-tile">
+                <div class="st-label">Исправлены</div>
+                <div class="st-value k-fixed">@Fmt0(_fixed)</div>
+            </div>
+            <div class="sum-tile">
+                <div class="st-label">Исправлено</div>
+                <div class="st-value k-fixed">@_percent %</div>
+                <div class="kpi-bar"><i style="width:@_percent%"></i></div>
+            </div>
+            <div class="sum-tile">
+                <div class="st-label">Последние прогоны</div>
+                <div class="st-value small-value">+@_new · −@_fixedLast</div>
+                <div class="st-change muted" title="По последнему прогону каждой проверки">новых · исправлено</div>
+            </div>
+        </div>
+        @if (_bars.Count > 1)
+        {
+            <div class="sum-block">
+                <h3>Активные по неделям <span class="muted small">— все проекты, стопкой по проектам; на конец каждой недели</span></h3>
+                <BarChart Title="Активные по неделям" Bars="_bars" Legend="_legend" Height="170" />
+            </div>
+        }
+    }
+</section>
+
+@code {
+    [Parameter] public List<ProjectRow> Projects { get; set; } = new();
+    /// <summary>Конец каждой недели (по порядку) и активные проекта на него.</summary>
+    [Parameter] public List<DateTime> Weeks { get; set; } = new();
+    [Parameter] public Dictionary<long, List<int>> Weekly { get; set; } = new();
+    [Parameter] public int StaleDays { get; set; } = 14;
+
+    private const string OpenKey = "ras-company-open";
+    private bool _open = true;
+    private int _active, _fixed, _percent, _stale, _new, _fixedLast;
+    private int? _weekAgo;
+    private List<BarChart.Bar> _bars = new();
+    private List<(string, string)> _legend = new();
+    private static readonly string[] Palette =
+        { "--cat-violet", "--cat-teal", "--cat-orange", "--cat-blue", "--cat-green", "--cat-pink", "--cat-amber", "--cat-indigo", "--cat-brown", "--cat-cyan" };
+
+    protected override void OnParametersSet()
+    {
+        _active = Projects.Sum(p => p.Counts.Active);
+        _fixed = Projects.Sum(p => p.Counts.Fixed);
+        _percent = _active + _fixed == 0 ? 0 : (int)Math.Round(100.0 * _fixed / (_active + _fixed));
+        _stale = Projects.Count(p => IsStale(p, StaleDays));
+        _new = Projects.Sum(p => p.LastRun.New);
+        _fixedLast = Projects.Sum(p => p.LastRun.Fixed);
+        _weekAgo = Weeks.Count > 1 ? Projects.Sum(p => Weekly.TryGetValue(p.Id, out var w) ? w[^2] : 0) : null;
+        var withData = Projects.Where(p => Weekly.TryGetValue(p.Id, out var w) && w.Any(v => v > 0)).ToList();
+        _legend = withData.Select((p, i) => (p.Name, Palette[i % Palette.Length])).ToList();
+        _bars = Weeks.Select((week, wi) => new BarChart.Bar
+        {
+            Label = week.ToString("dd.MM"),
+            Parts = withData.Select((p, i) => ((double)Weekly[p.Id][wi], Palette[i % Palette.Length], p.Name)).ToList(),
+        }).ToList();
+    }
+
+    /// <summary>Давно не проверяли: последний отчёт старше StaleDays дней (без отчётов — не считается).</summary>
+    public static bool IsStale(ProjectRow p, int staleDays) => p.LastReport.HasValue && (DateTime.Today - p.LastReport.Value.Date).TotalDays > staleDays;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (await JS.InvokeAsync<string>("ras.load", OpenKey) == "0") { _open = false; StateHasChanged(); }
+    }
+
+    private async Task Toggle()
+    {
+        _open = !_open;
+        await JS.InvokeVoidAsync("ras.save", OpenKey, _open ? "1" : "0");
+    }
+
+    private static string Fmt0(int v) => v.ToString("#,0", System.Globalization.CultureInfo.GetCultureInfo("ru-RU"));
+}

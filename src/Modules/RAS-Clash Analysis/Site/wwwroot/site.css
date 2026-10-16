@@ -187,6 +187,15 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .hbar { display: grid; grid-template-columns: minmax(90px, 38%) 1fr 48px; align-items: center; gap: 10px; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-size: 13px; }
 .hbar:hover { background: var(--row-hover); }
 .hbar.static { cursor: default; }
+/* главная: сводка по компании, маленький график в карточке и строке */
+.company { margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px; }
+.company-head { display: flex; align-items: center; gap: 10px; border: 0; background: none; padding: 0; cursor: pointer; color: inherit; text-align: left; }
+.company-head h2 { margin: 0; font-size: 18px; }
+.company-head .chev { flex: none; width: 8px; height: 8px; border: solid var(--muted); border-width: 0 1.8px 1.8px 0; transform: rotate(-45deg); transition: transform .15s; }
+.company-head .chev.open { transform: rotate(45deg); margin-top: -4px; }
+.spark { display: block; flex: none; }
+.spark polyline { fill: none; stroke: var(--active); stroke-width: 1.6; stroke-linejoin: round; }
+.spark circle { fill: var(--active); }
 .filter-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 10px; border: 1px solid var(--accent); border-radius: 8px;
                background: var(--accent-bg); font-size: 13px; max-width: 340px; }
 .filter-chip b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
