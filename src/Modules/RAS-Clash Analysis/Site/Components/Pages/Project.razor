@@ -318,6 +318,7 @@
                                         @SortHeader("state", "Статус", null, "c-state")
                                         @SortHeader("comment", "Комментарий", "Последний комментарий к коллизии (сколько всего — после точки); элементы — в подсказке", "c-what")
                                         @SortHeader("repeats", "Повторы", "В скольких прогонах коллизия была в отчётах — чем больше, тем дольше она висит", "c-rep opt")
+                                        <th class="c-aim" title="Показать в Revit"><AimIcon Size="14" /></th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -694,7 +695,7 @@
     private bool HasDistance => _base.Any(c => c.Distance.HasValue);
     private bool HasGrid => _base.Any(c => !string.IsNullOrEmpty(c.GridLocation));
     /// <summary>Столбцов в таблице (для строки группы).</summary>
-    private int ColumnCount => 6 + (HasDistance ? 1 : 0) + (HasGrid ? 1 : 0) + (_hasCategories ? 1 : 0) + (_hasSubcategories ? 1 : 0);
+    private int ColumnCount => 7 + (HasDistance ? 1 : 0) + (HasGrid ? 1 : 0) + (_hasCategories ? 1 : 0) + (_hasSubcategories ? 1 : 0);
 
     /// <summary>Подсказка «что с чем»: полностью, с номерами элементов и именем Navisworks.</summary>
     /// <summary>Подсказка столбца «Комментарий»: комментарий полностью (когда, сколько всего), затем элементы.</summary>
@@ -1221,6 +1222,13 @@
                 </div>
             </td>
             <td class="num opt">@x.Repeats</td>
+            @* прицел — «Показать в Revit» прямо из строки (разработчик, 19.10.2026); строку при этом не выбирает *@
+            <td class="aim-cell" @onclick:stopPropagation="true">
+                @if (RevitBridge.CanShow(new[] { x.A, x.B }))
+                {
+                    <button class="aim-btn" title="Показать в Revit" aria-label="Показать в Revit" @onclick="() => RevitBridge.Show(JS, x.Name, new[] { x.A, x.B })"><AimIcon /></button>
+                }
+            </td>
         </tr>
     };
 

@@ -716,9 +716,15 @@ th.sorted .sort-mark { opacity: 1; color: var(--accent); }
 .cc-what { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 6px; font-size: 13px; }
 .cc-what .w { font-weight: 600; }
 .cc-what .x { color: var(--muted); }
-.cc-revit { margin-top: 8px; }
 .revit-show { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
-.revit-mark { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 4px; background: #1e6fb8; color: #fff; font-size: 12px; font-weight: 700; }
+.revit-show .aim-icon { color: var(--accent); }
+/* прицел в строке списка — «Показать в Revit» */
+th.c-aim { width: 40px; text-align: center; color: var(--muted); }
+th.c-aim .aim-icon { vertical-align: -2px; }
+td.aim-cell { text-align: center; padding-left: 0; padding-right: 0; }
+.aim-btn { display: inline-grid; place-items: center; width: 28px; height: 26px; padding: 0; border: 1px solid transparent; border-radius: 6px;
+           background: none; color: var(--muted); cursor: pointer; }
+.aim-btn:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-bg); }
 .state-buttons kbd { margin-left: 6px; padding: 0 4px; border: 1px solid currentColor; border-radius: 3px; font: 10px/14px Consolas, monospace; opacity: .55; }
 /* справа от списка: карточка во всю высоту, прокручивается только низ */
 aside.panel { display: flex; flex-direction: column; overflow: hidden; }
