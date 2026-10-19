@@ -61,18 +61,6 @@ namespace RASv2.Tests
                 Check(!ClashFacets.Matches(rows[0], s) && ClashFacets.Matches(rows[1], s), "только пропавшие");
                 Check(ClashFacets.Count(rows, ClashFacets.Report)[0].Key == ClashFacets.InLastReport, "«есть» — первым");
             });
-            yield return Case("тип элемента — точно по категории, семейству и типу, а не по части названия", () =>
-            {
-                var a = Row("1 Этаж", "1 Этаж", "Стены", "Перекрытия");
-                a.A.Family = "Базовая стена"; a.A.Type = "Бетон_200";
-                var b = Row("1 Этаж", "1 Этаж", "Стены", "Перекрытия", idA: 2);
-                b.A.Family = "Базовая стена"; b.A.Type = "Бетон_200_утепл";
-                var key = ClashFacets.ElementTypeKey(a.A);
-                var sel = Sel((ClashFacets.ElementType, new[] { key }));
-                Check(ClashFacets.Matches(a, sel) && !ClashFacets.Matches(b, sel), "Бетон_200 ≠ Бетон_200_утепл");
-                Check(ClashFacets.ElementTypeTitle(key) == "Бетон_200", "подпись — тип");
-                Check(ClashFacets.ElementTypeKey(new ElementView { Category = "Стены" }) == null, "без семейства и типа — нет ключа");
-            });
             yield return Case("поиск: номер элемента, тип, модель — без учёта регистра", () =>
             {
                 var r = Row("1", "1", "Стены", "Трубы", idA: 5556166);

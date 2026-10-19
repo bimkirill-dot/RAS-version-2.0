@@ -25,8 +25,6 @@ namespace RASv2.ClashAnalysis.Site.Logic
         public const string Category = "category";
         public const string Report = "report";
         public const string State = "state";
-        /// <summary>Тип элемента (категория, семейство, тип) — отбор из «Аналитики» → «По типам», на странице — меткой.</summary>
-        public const string ElementType = "elemtype";
 
         public const string InLastReport = "in";
         public const string NotInLastReport = "out";
@@ -40,7 +38,6 @@ namespace RASv2.ClashAnalysis.Site.Logic
             Category => "Категория",
             Report => "Отчёт",
             State => "Статус",
-            ElementType => "Тип элемента",
             _ => facet,
         };
 
@@ -63,13 +60,7 @@ namespace RASv2.ClashAnalysis.Site.Logic
                 case State:
                     yield return (((int)c.State).ToString(), ClashRules.Title(c.State));
                     break;
-                case ElementType:
-                    foreach (var e in Elements(c))
-                    {
-                        var key = ElementTypeKey(e);
-                        if (key != null) yield return (key, ElementTypeTitle(key));
-                    }
-                    break;
+
 
             }
         }
@@ -112,20 +103,6 @@ namespace RASv2.ClashAnalysis.Site.Logic
                 : facet == Report
                     ? list.OrderBy(v => v.Key == InLastReport ? 0 : 1).ToList()
                     : list.OrderByDescending(v => v.Count).ThenBy(v => v.Title, StringComparer.CurrentCultureIgnoreCase).ToList();
-        }
-
-        /// <summary>Ключ типа элемента: «категория␟семейство␟тип»; без семейства и типа — null.</summary>
-        public static string ElementTypeKey(ElementView e)
-        {
-            if (e == null || (string.IsNullOrWhiteSpace(e.Family) && string.IsNullOrWhiteSpace(e.Type))) return null;
-            return (e.Category ?? "").Trim() + "\u001f" + (e.Family ?? "").Trim() + "\u001f" + (e.Type ?? "").Trim();
-        }
-
-        /// <summary>Как показать тип по ключу: тип, без него — семейство.</summary>
-        public static string ElementTypeTitle(string key)
-        {
-            var parts = (key ?? "").Split('\u001f');
-            return parts.Length < 3 ? key : parts[2] != "" ? parts[2] : parts[1];
         }
 
         /// <summary>Поиск: номер элемента, тип, имя, семейство, категория, модель, имя коллизии — без учёта регистра.</summary>

@@ -1,13 +1,14 @@
 @inject ClashStore Store
 @inject IJSRuntime JS
 
-@* Сводка проекта (DECISIONS.md модуля, «Сводка проекта», четвёртая волна 20.10.2026: «как у автора, но лучше»). Три страницы
-   (подразделы «Сводки» на боковой панели): «Дашборд» — главное в первом экране на выбранную дату: крупные плитки с изменением,
-   мелкие плитки, тренд, проверки; «Аналитика» — вкладки: обзор, по блокам, по моделям, по типам, по уровням, рекуррентность,
-   качество данных, прогресс; «Сравнение отчётов» — две даты. Действуют отборы боковой панели (блок, тип проверки / категория).
-   Деление — уровнем ниже выбранного: весь проект — по категориям, выбрана категория — по её подкатегориям, выбрана подкатегория
-   (или у категории их нет) — по типам проверок; категорий нет — по блокам. Состояние на дату — по отчётам и журналу статусов
-   сайта (Logic.RunHistory). Почти всё нажимается — к коллизиям; на каждой странице — Excel. *@
+@* Сводка проекта (DECISIONS.md модуля, «Сводка проекта»). Три подраздела «Сводки» на боковой панели, у каждой цифры — одно место
+   (19.10.2026, разработчик: «тренд в нескольких местах… в Дашборде и Аналитике повторяющиеся данные»):
+   «Дашборд» — сводно, на выбранную дату: плитки, тренд коллизий (только здесь), по категориям;
+   «Аналитика» — подробно, вкладки: по проверкам (таблица), по блокам, динамика (% исправлено по датам), рекуррентность, качество
+   данных; «Сравнение отчётов» — две даты. Действуют отборы боковой панели (блок, тип проверки / категория). Деление — уровнем
+   ниже выбранного: весь проект — по категориям, выбрана категория — по её подкатегориям, выбрана подкатегория (или у категории
+   их нет) — по типам проверок; категорий нет — по блокам. Состояние на дату — по отчётам и журналу статусов сайта
+   (Logic.RunHistory). Почти всё нажимается — к коллизиям; на каждой странице — Excel. *@
 <div class="summary">
     @if (_days.Count == 0)
     {
@@ -22,13 +23,13 @@
                 @foreach (var (key, title) in Tabs)
                 {
                     var tab = key;
-                    <button class="@(Tab == tab ? "on" : "")" @onclick="() => TabChanged.InvokeAsync(tab)">@title</button>
+                    <button class="@(CurrentTab == tab ? "on" : "")" @onclick="() => TabChanged.InvokeAsync(tab)">@title</button>
                 }
             </nav>
             <button class="btn small no-print" @onclick="ExportAnalytics" title="Таблица этой вкладки — файлом для Excel">Excel</button>
         </div>
 
-        @if (Tab == "blocks")
+        @if (CurrentTab == "blocks")
         {
             <section class="sum-block">
                 <h3>Где больше всего активных <span class="muted small">— блоки × @(_by == By.Block ? "всего" : LevelName); нажать — коллизии</span></h3>
@@ -39,87 +40,15 @@
                 @GroupTable(_blocks, "Блок", DrillBlock)
             </section>
         }
-        else if (Tab == "models")
+        else if (CurrentTab == "dynamics")
         {
             <section class="sum-block">
-                <h3>Матрица моделей <span class="muted small">— активные коллизии между моделями@(_modelKeys.Count < _models.Count ? $" (первые {_modelKeys.Count} по числу активных)" : ""); нажать — коллизии модели</span></h3>
-                <div class="matrix-wrap">
-                    <table class="matrix model-matrix">
-                        <thead>
-                            <tr><th></th>@foreach (var m in _modelKeys) { <th class="col vert" title="@m"><span>@ModelTitle(m)</span></th> }</tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var a in _modelKeys)
-                            {
-                                var model = a;
-                                <tr>
-                                    <th title="@a">@ModelTitle(a)</th>
-                                    @foreach (var b in _modelKeys)
-                                    {
-                                        var n = _pairs.TryGetValue(PairKey(a, b), out var v) ? v : 0;
-                                        <td class="cell @(n == 0 ? "zero" : "")" style="@HeatOf(n, _pairMax)" title="@ModelTitle(a) × @ModelTitle(b): @n" @onclick="() => DrillModel(model)">@(n == 0 ? "" : n.ToString())</td>
-                                    }
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-            <section class="sum-block">
-                <h3>Модели <span class="muted small">— коллизия считается у обеих своих моделей; новые и исправленные — с @Fmt.Day(_days[Math.Max(_days.Count - 2, 0)])</span></h3>
-                <table class="grid sum-table models-table">
-                    <thead><tr><th>Модель</th><th class="num">Всего</th><th class="num">Активные</th><th class="num">Новые</th><th class="num">Исправлены</th><th>Больше всего — с моделью</th><th class="sum-progress-head">Исправлено</th></tr></thead>
-                    <tbody>
-                        @foreach (var m in _models.Take(_modelsShown))
-                        {
-                            var model = m;
-                            <tr class="clickable" @onclick="() => DrillModel(model.File)" title="@model.File">
-                                <td class="cut">@model.Title</td>
-                                <td class="num">@model.Total</td>
-                                <td class="num k-active">@model.Active</td>
-                                <td class="num">@(model.New > 0 ? "+" + model.New : "")</td>
-                                <td class="num k-fixed">@(model.FixedPeriod > 0 ? model.FixedPeriod.ToString() : "")</td>
-                                <td class="cut muted">@model.Partner</td>
-                                <td class="sum-progress"><div class="kpi-bar"><i style="width:@model.Percent%"></i></div><span>@model.Percent %</span></td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-                @if (_models.Count > _modelsShown) { <button class="btn link small" @onclick="() => _modelsShown = _models.Count">Показать все (@_models.Count)</button> }
+                <h3>Динамика исправления по @LevelDative <span class="muted small">— % исправлено на каждую дату отчётов</span></h3>
+                @if (_days.Count < 2) { <p class="muted">Нужны отчёты хотя бы двух дат — сейчас одна.</p> }
+                else { <LineChart Title="% исправлено по датам отчётов" Labels="_dayLabels" Series="_progressLines" Height="260" /> }
             </section>
         }
-        else if (Tab == "types")
-        {
-            <section class="sum-block">
-                <h3>Категория / семейство <span class="muted small">— элементы в активных коллизиях; площадь — число коллизий; нажать — эти коллизии</span></h3>
-                @if (_typeItems.Count == 0) { <p class="muted">Активных нет.</p> }
-                else { <Treemap Title="Элементы в активных коллизиях" Items="_typeItems" Clicked="DrillTypeIndex" /> }
-            </section>
-            <section class="sum-block">
-                <table class="grid sum-table">
-                    <thead><tr><th>Категория</th><th>Семейство · тип</th><th class="num">Коллизий</th></tr></thead>
-                    <tbody>
-                        @foreach (var t in _types.Take(_typesShown))
-                        {
-                            var type = t;
-                            <tr class="clickable" @onclick="() => DrillType(type.Key)">
-                                <td>@type.Category</td><td class="cut">@type.Title</td><td class="num k-active">@type.Count</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-                @if (_types.Count > _typesShown) { <button class="btn link small" @onclick="() => _typesShown = _types.Count">Показать все (@_types.Count)</button> }
-            </section>
-        }
-        else if (Tab == "levels")
-        {
-            <section class="sum-block">
-                <h3>Коллизии по уровням <span class="muted small">— активные, снизу вверх; нажать — коллизии уровня</span></h3>
-                @if (_levels.Count == 0) { <p class="muted">Активных нет.</p> }
-                else { <BarChart Title="Активные по уровням" Bars="_levelBars" Height="300" Clicked="DrillLevel" /> }
-            </section>
-        }
-        else if (Tab == "recur")
+        else if (CurrentTab == "recur")
         {
             <section class="sum-block">
                 <h3>Повторяющиеся коллизии (@_recur.Count) <span class="muted small">— были в отчётах двух дат и больше, любой статус; нажать — коллизия</span></h3>
@@ -156,7 +85,7 @@
                 }
             </section>
         }
-        else if (Tab == "quality")
+        else if (CurrentTab == "quality")
         {
             <section class="sum-block">
                 <h3>Качество данных <span class="muted small">— что мешает считать точно; нажать — к отчётам или коллизиям</span></h3>
@@ -173,30 +102,12 @@
                 }
             </section>
         }
-        else if (Tab == "progress")
-        {
-            <section class="sum-block">
-                <h3>Прогресс по @LevelDative</h3>
-                @GroupTable(_groups, LevelHead, null)
-            </section>
-            @if (_days.Count > 1)
-            {
-                <section class="sum-block">
-                    <h3>Динамика исправления <span class="muted small">— % исправлено по датам отчётов</span></h3>
-                    <LineChart Title="% исправлено по датам отчётов" Labels="_dayLabels" Series="_progressLines" Height="240" />
-                </section>
-            }
-        }
         else
         {
-            @* обзор: проверки сгруппированными столбиками и тренд — как «Обзор» у автора *@
+            @* по проверкам — обычная таблица (было «По типам» прямоугольниками, 19.10.2026) *@
             <section class="sum-block">
-                <h3>Проверки (@_overviewKeys.Count) <span class="muted small">— всего, активные, исправленные; нажать — коллизии проверки</span></h3>
-                <GroupedBarChart Title="Проверки" Labels="_overviewLabels" Series="_overviewSeries" Clicked="DrillOverview" />
-            </section>
-            <section class="sum-block">
-                <h3>Тренд</h3>
-                <BarChart Title="Тренд по датам отчётов" Bars="_trend" Legend="_trendLegend" Height="250" />
+                <h3>Проверки (@_checks.Count) <span class="muted small">— сейчас; нажать на заголовок — сортировка, на строку — коллизии проверки</span></h3>
+                @ChecksTable(_checks)
             </section>
         }
     }
@@ -272,7 +183,7 @@
     }
     else
     {
-        @* дашборд — как у автора: на дату, крупные плитки с изменением к прошлой дате, мелкие плитки, тренд, проверки *@
+        @* дашборд — сводно, на дату: плитки с изменением к прошлой дате, тренд коллизий, по категориям *@
         <div class="sum-bar">
             <div class="dash-date">
                 <span class="muted">на</span>
@@ -285,7 +196,7 @@
                 </select>
                 <span class="muted small">· @Fmt.Plural(_dashReports, "отчёт", "отчёта", "отчётов") · @Fmt.Plural(_dashDayCount, "дата", "даты", "дат")</span>
             </div>
-            <button class="btn small no-print" @onclick="ExportDashboard" title="Плитки и таблица проверок — файлом для Excel">Excel</button>
+            <button class="btn small no-print" @onclick="ExportDashboard" title="Плитки и таблица по категориям — файлом для Excel">Excel</button>
         </div>
 
         <div class="kpi-big">
@@ -317,41 +228,15 @@
             }
         </div>
 
+        @* тренд коллизий — единственный на сводке *@
         <section class="sum-block">
-            <h3>Тренд коллизий</h3>
+            <h3>Тренд коллизий <span class="muted small">— по датам отчётов: активные, исправленные, допущенные; сверху — новые</span></h3>
             <BarChart Title="Тренд по датам отчётов" Bars="_trend" Legend="_trendLegend" Height="240" />
         </section>
 
         <section class="sum-block">
-            <h3>Проверки <span class="muted small">— на @Fmt.Day(DateTime.Parse(_dashDate))@(_dashIsNow ? "" : " (по отчётам)"); нажать на заголовок — сортировка, на строку — коллизии</span></h3>
-            <table class="grid sum-table">
-                <thead>
-                    <tr>
-                        @SortTh("name", "Проверка", null)
-                        <th>Категория</th>
-                        @SortTh("total", "Всего", "num")
-                        @SortTh("active", "Акт.", "num")
-                        @SortTh("fixed", "Испр.", "num")
-                        @SortTh("accepted", "Допуск", "num")
-                        @SortTh("percent", "Исправлено", "sum-progress-head")
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var t in SortedTests)
-                    {
-                        var test = t;
-                        <tr class="clickable" @onclick="() => DrillTest(test.Key)">
-                            <td>@test.Title</td>
-                            <td>@CategoryChips(test.Key)</td>
-                            <td class="num">@test.Total</td>
-                            <td class="num k-active">@test.Active</td>
-                            <td class="num k-fixed">@test.Fixed</td>
-                            <td class="num">@test.Accepted</td>
-                            <td class="sum-progress"><div class="kpi-bar"><i style="width:@test.Percent%"></i></div><span>@test.Percent %</span></td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+            <h3>По @LevelDative <span class="muted small">— на @Fmt.Day(DateTime.Parse(_dashDate))@(_dashIsNow ? "; нажать — коллизии" : " (по отчётам)")</span></h3>
+            @GroupTable(_dashGroups, LevelHead, _dashIsNow ? DrillGroup : null)
         </section>
         @Help()
     }
@@ -375,24 +260,13 @@
         public int Percent => Active + Fixed == 0 ? 0 : (int)Math.Round(100.0 * Fixed / (Active + Fixed));
     }
 
-    /// <summary>Модель (файл): коллизии, где она один из двух элементов.</summary>
-    private sealed class ModelRow
-    {
-        public string File, Title, Partner;
-        public int Active, Fixed, Accepted, New, FixedPeriod;
-        public int Total => Active + Fixed + Accepted;
-        public int Percent => Active + Fixed == 0 ? 0 : (int)Math.Round(100.0 * Fixed / (Active + Fixed));
-    }
-
-    private sealed class TypeRow { public string Category, Title, Key; public int Count; }
-
     private sealed class QualityItem { public string Text, Hint; public SummaryDrill Drill; }
 
     [Parameter] public long ProjectId { get; set; }
     /// <summary>Страница сводки: dash — дашборд, analytics — аналитика, compare — сравнение отчётов.</summary>
     [Parameter] public string Page { get; set; } = "dash";
-    /// <summary>Вкладка «Аналитики» (overview / blocks / models / types / levels / recur / quality / progress).</summary>
-    [Parameter] public string Tab { get; set; } = "overview";
+    /// <summary>Вкладка «Аналитики» (checks / blocks / dynamics / recur / quality).</summary>
+    [Parameter] public string Tab { get; set; } = "checks";
     [Parameter] public EventCallback<string> TabChanged { get; set; }
     /// <summary>Коллизии в отборах боковой панели — нынешнее состояние.</summary>
     [Parameter] public List<ClashRow> Rows { get; set; } = new();
@@ -417,9 +291,11 @@
 
     private static readonly (string Key, string Title)[] Tabs =
     {
-        ("overview", "Обзор"), ("blocks", "По блокам"), ("models", "По моделям"), ("types", "По типам"), ("levels", "По уровням"),
-        ("recur", "Рекуррентность"), ("quality", "Качество данных"), ("progress", "Прогресс"),
+        ("checks", "По проверкам"), ("blocks", "По блокам"), ("dynamics", "Динамика"), ("recur", "Рекуррентность"), ("quality", "Качество данных"),
     };
+
+    /// <summary>Вкладка, которая есть (сохранённая от прежней раскладки — на первую).</summary>
+    private string CurrentTab => Tabs.Any(t => t.Key == Tab) ? Tab : Tabs[0].Key;
 
     /// <summary>По чему делится сводка: на уровень ниже выбранного на боковой панели.</summary>
     private enum By { Block, Category, Sub, Type }
@@ -441,28 +317,16 @@
     private Counts _dash = new(), _dashPrev;
     private RunChange _dashChange;
     private int _dashReports, _dashDayCount;
-    private List<Group> _tests = new();
-    private string _sortKey = "active";
-    private bool _sortDesc = true;
+    private List<Group> _dashGroups = new();
     private List<BarChart.Bar> _trend = new();
     private List<(string, string)> _trendLegend = new() { ("Активные", "--active"), ("Исправленные", "--fixed"), ("Допущенные", "--accepted") };
 
     // аналитика
-    private List<string> _overviewLabels = new(), _overviewKeys = new();
-    private List<(string, string, List<double>)> _overviewSeries = new();
+    private List<Group> _checks = new(), _blocks = new(), _groups = new();
+    private string _sortKey = "active";
+    private bool _sortDesc = true;
     private Dictionary<(string Block, string Col), int> _cells = new();
     private int _cellMax;
-    private List<Group> _blocks = new(), _groups = new();
-    private List<ModelRow> _models = new();
-    private int _modelsShown = 10;
-    private List<string> _modelKeys = new();
-    private Dictionary<string, int> _pairs = new();
-    private int _pairMax;
-    private List<TypeRow> _types = new();
-    private List<Treemap.Item> _typeItems = new();
-    private int _typesShown = 15;
-    private List<FacetValue> _levels = new();
-    private List<BarChart.Bar> _levelBars = new();
     private List<ClashRow> _recur = new();
     private int _recurShown = 30;
     /// <summary>Сколько коллизий встречалось 1, 2, 3 и больше раз; сколько возвращалось после исправления.</summary>
@@ -470,7 +334,6 @@
     private List<QualityItem> _quality = new();
     private List<(string, string, List<double?>)> _progressLines = new();
     private HashSet<long> _explained = new();
-    private RunChange _lastChange;
 
     // сравнение
     private string _cmpA, _cmpB, _cmpError;
@@ -504,7 +367,8 @@
             ? (Subcategory == null && Category != "" && (Tests ?? new()).Any(t => SubOf(t.Name) != "") ? By.Sub : By.Type)
             : _categories.Count > 0 ? By.Category : By.Block;
         _dayLabels = _days.Select(d => d.ToString("dd.MM")).ToList();
-        _lastChange = _days.Count > 1 ? _history.Change(_days[^2], _days[^1], _filter) : null;
+        _matrixRows = _rows.Select(r => r.Block).Distinct().OrderBy(ReportPath.BlockOrder).ThenBy(b => b, StringComparer.CurrentCultureIgnoreCase).ToList();
+        _matrixCols = LevelOrder();
 
         // тренд по датам отчётов: стопкой, над столбиком — новые
         _trend = new();
@@ -534,7 +398,7 @@
 
     // ───── дашборд ─────
 
-    /// <summary>Плитки и проверки на выбранную дату; изменение — к предыдущей дате отчётов.</summary>
+    /// <summary>Плитки и разбивка по категориям на выбранную дату; изменение — к предыдущей дате отчётов.</summary>
     private void BuildDashboard()
     {
         var day = DateTime.Parse(_dashDate);
@@ -553,13 +417,14 @@
         }
         _dashDayCount = index + 1;
         _dashReports = Reports.Count(r => r.ReportDate.Date <= day);
-        // проверки на дату: по типам
-        var typeOf = _rows.ToDictionary(r => r.Id, r => r.Type);
-        _tests = states.Where(x => typeOf.ContainsKey(x.Key)).GroupBy(x => typeOf[x.Key]).Select(g => new Group
+        // по категориям (уровень ниже выбранного) на дату
+        var groupOf = _rows.ToDictionary(r => r.Id, r => _by == By.Block ? r.Block : KeyOf(r.TestName, r.Type));
+        var order = _by == By.Block ? _matrixRows : _matrixCols;
+        _dashGroups = states.Where(x => groupOf.ContainsKey(x.Key)).GroupBy(x => groupOf[x.Key]).Select(g => new Group
         {
-            Key = g.Key, Title = g.Key,
+            Key = g.Key, Title = GroupTitle(g.Key), Color = GroupColor(g.Key),
             Active = g.Count(x => x.Value == ClashState.Active), Fixed = g.Count(x => x.Value == ClashState.Fixed), Accepted = g.Count(x => x.Value == ClashState.Accepted),
-        }).ToList();
+        }).OrderBy(g => order.IndexOf(g.Key) < 0 ? int.MaxValue : order.IndexOf(g.Key)).ToList();
     }
 
     private void PickDashDate(ChangeEventArgs e)
@@ -599,15 +464,17 @@
         </div>
     };
 
-    /// <summary>Категория и подкатегория проверки — цветными метками, как в списке коллизий.</summary>
-    private RenderFragment CategoryChips(string type) => __builder =>
+    /// <summary>Категория или подкатегория — цветной меткой, как в списке коллизий; без неё — прочерк.</summary>
+    private static RenderFragment Chip(string name, string color) => __builder =>
     {
-        var name = (Tests ?? new()).FirstOrDefault(t => t.Type == type)?.Name ?? type;
-        var cat = CategoryOf(name);
-        var sub = SubOf(name);
-        if (cat != "") { <span class="cat-chip" style="--chip: var(--cat-@(Colors.TryGetValue(cat, out var c) ? c : "gray"))">@cat</span> }
-        if (sub != "") { <span class="cat-chip" style="--chip: var(--cat-@(SubColor(cat, sub) ?? "gray"))">@sub</span> }
+        if (string.IsNullOrEmpty(name)) { <span class="muted">—</span> }
+        else { <span class="cat-chip" style="--chip: var(--cat-@(color ?? "gray"))" title="@name">@name</span> }
     };
+
+    private string NameOfType(string type) => (Tests ?? new()).FirstOrDefault(t => t.Type == type)?.Name ?? type;
+    private string CatOfType(string type) => CategoryOf(NameOfType(type));
+    private string SubOfType(string type) => SubOf(NameOfType(type));
+    private string CatColor(string cat) => cat != "" && Colors.TryGetValue(cat, out var c) ? c : null;
 
     // ───── аналитика ─────
 
@@ -615,93 +482,32 @@
     {
         var active = _rows.Where(r => r.State == ClashState.Active).ToList();
 
-        // обзор: проверки по убыванию «всего» — всего, активные, исправленные
-        var byType = _rows.GroupBy(r => r.Type).Select(g => (Type: g.Key, Total: g.Count(), Active: g.Count(r => r.State == ClashState.Active), Fixed: g.Count(r => r.State == ClashState.Fixed)))
-            .OrderByDescending(x => x.Total).ThenBy(x => x.Type, StringComparer.CurrentCultureIgnoreCase).ToList();
-        _overviewKeys = byType.Select(x => x.Type).ToList();
-        _overviewLabels = _overviewKeys;
-        _overviewSeries = new()
-        {
-            ("Всего", "--cat-blue", byType.Select(x => (double)x.Total).ToList()),
-            ("Активные", "--active", byType.Select(x => (double)x.Active).ToList()),
-            ("Исправленные", "--fixed", byType.Select(x => (double)x.Fixed).ToList()),
-        };
+        // по проверкам — сейчас
+        _checks = _rows.GroupBy(r => r.Type).Select(g => GroupOf(g.Key, g.Key, null, g)).ToList();
 
         // по блокам: матрица и таблица
-        _matrixRows = _rows.Select(r => r.Block).Distinct().OrderBy(ReportPath.BlockOrder).ThenBy(b => b, StringComparer.CurrentCultureIgnoreCase).ToList();
-        _matrixCols = LevelOrder();
         _cells = active.GroupBy(r => (r.Block, Col: _by == By.Block ? null : KeyOf(r.TestName, r.Type)))
             .ToDictionary(g => (g.Key.Block, g.Key.Col), g => g.Count());
         _cellMax = _cells.Values.DefaultIfEmpty(0).Max();
         _blocks = _rows.GroupBy(r => r.Block).Select(g => GroupOf(g.Key, BlockTitle(g.Key), null, g))
             .OrderBy(g => _matrixRows.IndexOf(g.Key)).ToList();
 
-        // по моделям: коллизия — у обеих своих моделей; за период — последние изменения
-        var models = new Dictionary<string, (ModelRow Row, Dictionary<string, int> Partners)>(StringComparer.OrdinalIgnoreCase);
-        _pairs = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        foreach (var r in _rows)
+        // динамика: % исправлено по датам — по группам уровня
+        Func<ClashRow, string> groupOf = _by == By.Block ? r => r.Block : r => KeyOf(r.TestName, r.Type);
+        var order = _by == By.Block ? _matrixRows : _matrixCols;
+        _groups = _rows.GroupBy(groupOf).Select(g => GroupOf(g.Key, GroupTitle(g.Key), GroupColor(g.Key), g)).OrderBy(g => order.IndexOf(g.Key)).ToList();
+        var testGroup = (Tests ?? new()).ToDictionary(t => t.Id, t => _by == By.Block ? t.Block : KeyOf(t.Name, t.Type));
+        _progressLines = _days.Count < 2 ? new() : _groups.Select((g, i) =>
         {
-            var files = new[] { r.A?.ModelFile, r.B?.ModelFile }.Where(f => !string.IsNullOrWhiteSpace(f)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            if (r.State == ClashState.Active && files.Count > 0)
+            var color = g.Color is string c ? "--cat-" + c : Palette[i % Palette.Length];
+            var values = _days.Select(day =>
             {
-                var key = PairKey(files[0], files.Count > 1 ? files[1] : files[0]);
-                _pairs[key] = _pairs.TryGetValue(key, out var p) ? p + 1 : 1;
-            }
-            foreach (var file in files)
-            {
-                if (!models.TryGetValue(file, out var m))
-                    models[file] = m = (new ModelRow { File = file, Title = ModelTitle(file) }, new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase));
-                if (r.State == ClashState.Active) m.Row.Active++;
-                else if (r.State == ClashState.Fixed) m.Row.Fixed++;
-                else m.Row.Accepted++;
-                if (_lastChange != null)
-                {
-                    if (_lastChange.Entered.TryGetValue(r.Id, out var e) && (e == RunChange.NewKind || e == RunChange.NewTestsKind)) m.Row.New++;
-                    if (_lastChange.Left.TryGetValue(r.Id, out var l) && (l == RunChange.FixedKind || l == RunChange.FixedManualKind)) m.Row.FixedPeriod++;
-                }
-                if (r.State == ClashState.Active)
-                {
-                    var other = files.FirstOrDefault(f => !string.Equals(f, file, StringComparison.OrdinalIgnoreCase)) ?? file;
-                    m.Partners[other] = m.Partners.TryGetValue(other, out var n) ? n + 1 : 1;
-                }
-            }
-        }
-        _models = models.Values.Select(v =>
-        {
-            var top = v.Partners.OrderByDescending(p => p.Value).FirstOrDefault();
-            v.Row.Partner = top.Key == null ? "" : (string.Equals(top.Key, v.Row.File, StringComparison.OrdinalIgnoreCase) ? "сама с собой" : ModelTitle(top.Key)) + $" — {top.Value}";
-            return v.Row;
-        }).OrderByDescending(m => m.Active).ThenByDescending(m => m.Total).ThenBy(m => m.Title, StringComparer.CurrentCultureIgnoreCase).ToList();
-        _modelsShown = 10;
-        _modelKeys = _models.Where(m => m.Active > 0).Take(12).Select(m => m.File).ToList();
-        _pairMax = _pairs.Values.DefaultIfEmpty(0).Max();
-
-        // по типам: категория / семейство · тип элементов в активных коллизиях (пара одного типа — один раз)
-        var types = new Dictionary<string, (TypeRow Row, HashSet<long> Ids)>(StringComparer.Ordinal);
-        foreach (var r in active)
-            foreach (var e in new[] { r.A, r.B })
-            {
-                if (e == null) continue;
-                var title = Fmt.Short(e);
-                var key = ClashFacets.ElementTypeKey(e);
-                if (title == "—" || key == null) continue;
-                if (!types.TryGetValue(key, out var t))
-                    types[key] = t = (new TypeRow { Category = e.Category ?? "", Title = title, Key = key }, new HashSet<long>());
-                t.Ids.Add(r.Id);
-            }
-        _types = types.Values.Select(v => { v.Row.Count = v.Ids.Count; return v.Row; })
-            .OrderByDescending(t => t.Count).ThenBy(t => t.Title, StringComparer.CurrentCultureIgnoreCase).ToList();
-        _typesShown = 15;
-        var categoryColor = new Dictionary<string, string>(StringComparer.CurrentCultureIgnoreCase);
-        _typeItems = _types.Take(40).Select(t =>
-        {
-            if (!categoryColor.TryGetValue(t.Category, out var color)) categoryColor[t.Category] = color = Palette[categoryColor.Count % Palette.Length];
-            return new Treemap.Item { Label = (t.Category == "" ? "" : t.Category + " / ") + t.Title, Value = t.Count, Color = color };
+                var cnt = new Counts();
+                foreach (var s in _history.StatesAt(day, id => _filter(id) && testGroup.TryGetValue(id, out var k) && k == g.Key).Values) cnt.Add(s);
+                return cnt.Total == 0 ? (double?)null : cnt.Percent;
+            }).ToList();
+            return (g.Title, color, values);
         }).ToList();
-
-        // по уровням: активные, снизу вверх
-        _levels = ClashFacets.Count(active, ClashFacets.Level);
-        _levelBars = _levels.Select(v => new BarChart.Bar { Label = v.Title, Parts = new() { (v.Count, "--cat-violet", "активные") } }).ToList();
 
         // рекуррентность: были в отчётах двух дат и больше
         _recur = _rows.Where(r => r.Repeats >= 2)
@@ -733,23 +539,6 @@
         if (noReason > 0) _quality.Add(new() { Text = $"Допущены без пояснения: {noReason}", Hint = "допуск лучше объяснять комментарием", Drill = new SummaryDrill { State = ClashState.Accepted } });
         var marked = _rows.Count(r => r.State == ClashState.Fixed && r.InLastReport);
         if (marked > 0) _quality.Add(new() { Text = $"Отмечены исправленными на сайте, а в отчёте ещё есть: {marked}", Hint = "подтвердятся следующим отчётом; если коллизия в нём снова будет — вернётся в активные", Drill = new SummaryDrill { State = ClashState.Fixed } });
-
-        // прогресс по категориям (или блокам) + линии % по датам
-        Func<ClashRow, string> groupOf = _by == By.Block ? r => r.Block : r => KeyOf(r.TestName, r.Type);
-        var order = _by == By.Block ? _matrixRows : _matrixCols;
-        _groups = _rows.GroupBy(groupOf).Select(g => GroupOf(g.Key, GroupTitle(g.Key), GroupColor(g.Key), g)).OrderBy(g => order.IndexOf(g.Key)).ToList();
-        var testGroup = (Tests ?? new()).ToDictionary(t => t.Id, t => _by == By.Block ? t.Block : KeyOf(t.Name, t.Type));
-        _progressLines = _groups.Select((g, i) =>
-        {
-            var color = g.Color is string c ? "--cat-" + c : Palette[i % Palette.Length];
-            var values = _days.Select(day =>
-            {
-                var cnt = new Counts();
-                foreach (var s in _history.StatesAt(day, id => _filter(id) && testGroup.TryGetValue(id, out var k) && k == g.Key).Values) cnt.Add(s);
-                return cnt.Total == 0 ? (double?)null : cnt.Percent;
-            }).ToList();
-            return (g.Title, color, values);
-        }).ToList();
     }
 
     private RenderFragment Matrix() => __builder =>
@@ -807,8 +596,48 @@
 
     private static Task GroupClick(Func<string, Task> click, string key) => click == null ? Task.CompletedTask : click(key);
 
-    private static string PairKey(string a, string b) => string.CompareOrdinal(a.ToLowerInvariant(), b.ToLowerInvariant()) <= 0 ? a + "\u001f" + b : b + "\u001f" + a;
-    private static string ModelTitle(string file) => System.IO.Path.GetFileNameWithoutExtension(file);
+    /// <summary>Таблица проверок: проверка, категория метками, всего, активные, исправлены, допущены, % — с сортировкой.</summary>
+    private RenderFragment ChecksTable(List<Group> checks) => __builder =>
+    {
+        var subs = checks.Any(t => SubOfType(t.Key) != "");
+        @* числа — постоянной ширины, остаток — названию проверки; на узком окне таблица прокручивается вбок *@
+        <div class="checks-scroll">
+        <table class="grid sum-table checks-table">
+            <colgroup>
+                <col /><col style="width:172px" />@if (subs) { <col style="width:112px" /> }
+                <col style="width:64px" /><col style="width:96px" /><col style="width:104px" /><col style="width:92px" /><col style="width:160px" />
+            </colgroup>
+            <thead>
+                <tr>
+                    @SortTh("name", "Проверка", null)
+                    <th>Категория</th>
+                    @if (subs) { <th>Подкатегория</th> }
+                    @SortTh("total", "Всего", "num")
+                    @SortTh("active", "Активные", "num")
+                    @SortTh("fixed", "Исправлены", "num")
+                    @SortTh("accepted", "Допущены", "num")
+                    @SortTh("percent", "Исправлено", "sum-progress-head")
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var t in Sorted(checks))
+                {
+                    var test = t;
+                    <tr class="clickable" @onclick="() => DrillTest(test.Key)">
+                        <td class="cut" title="@test.Title">@test.Title</td>
+                        <td class="cut">@Chip(CatOfType(test.Key), CatColor(CatOfType(test.Key)))</td>
+                        @if (subs) { <td class="cut">@Chip(SubOfType(test.Key), SubColor(CatOfType(test.Key), SubOfType(test.Key)))</td> }
+                        <td class="num">@test.Total</td>
+                        <td class="num k-active">@test.Active</td>
+                        <td class="num k-fixed">@test.Fixed</td>
+                        <td class="num">@test.Accepted</td>
+                        <td class="sum-progress"><div class="kpi-bar"><i style="width:@test.Percent%"></i></div><span>@test.Percent %</span></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        </div>
+    };
 
     // ───── сравнение ─────
 
@@ -899,6 +728,9 @@
     private Task Download(string what, string text) =>
         JS.InvokeVoidAsync("ras.download", $"{what} — {DateTime.Now:yyyy-MM-dd}.csv", text).AsTask();
 
+    private static IEnumerable<string[]> GroupRows(IEnumerable<Group> groups) =>
+        groups.Select(g => new[] { g.Title, g.Total.ToString(), g.Active.ToString(), g.Fixed.ToString(), g.Accepted.ToString(), g.Percent.ToString() });
+
     private Task ExportDashboard()
     {
         var kpis = new List<string[]>
@@ -906,27 +738,21 @@
             new[] { "Дата", Fmt.Day(DateTime.Parse(_dashDate)) }, new[] { "Всего коллизий", _dash.Total.ToString() }, new[] { "Активные", _dash.Active.ToString() },
             new[] { "Исправленные", _dash.Fixed.ToString() }, new[] { "Допущенные", _dash.Accepted.ToString() }, new[] { "Прогресс, %", _dash.Percent.ToString() },
         };
-        var tests = SortedTests.Select(t => new[] { t.Title, CategoryText(t.Key), t.Total.ToString(), t.Active.ToString(), t.Fixed.ToString(), t.Accepted.ToString(), t.Percent.ToString() });
         var text = Csv(new[] { "Показатель", "Значение" }, kpis) + Environment.NewLine
-                   + Csv(new[] { "Проверка", "Категория", "Всего", "Активные", "Исправлены", "Допущены", "Исправлено, %" }, tests);
+                   + Csv(new[] { LevelHead, "Всего", "Активные", "Исправлены", "Допущены", "Исправлено, %" }, GroupRows(_dashGroups));
         return Download("Дашборд", text);
     }
 
-    private Task ExportAnalytics() => Tab switch
+    private Task ExportAnalytics() => CurrentTab switch
     {
-        "blocks" => Download("По блокам", Csv(new[] { "Блок", "Всего", "Активные", "Исправлены", "Допущены", "Исправлено, %" },
-            _blocks.Select(g => new[] { g.Title, g.Total.ToString(), g.Active.ToString(), g.Fixed.ToString(), g.Accepted.ToString(), g.Percent.ToString() }))),
-        "models" => Download("По моделям", Csv(new[] { "Модель", "Всего", "Активные", "Новые", "Исправлены за период", "Больше всего — с моделью", "Исправлено, %" },
-            _models.Select(m => new[] { m.Title, m.Total.ToString(), m.Active.ToString(), m.New.ToString(), m.FixedPeriod.ToString(), m.Partner, m.Percent.ToString() }))),
-        "types" => Download("По типам", Csv(new[] { "Категория", "Семейство · тип", "Коллизий" }, _types.Select(t => new[] { t.Category, t.Title, t.Count.ToString() }))),
-        "levels" => Download("По уровням", Csv(new[] { "Уровень", "Активные" }, _levels.Select(l => new[] { l.Title, l.Count.ToString() }))),
+        "blocks" => Download("По блокам", Csv(new[] { "Блок", "Всего", "Активные", "Исправлены", "Допущены", "Исправлено, %" }, GroupRows(_blocks))),
+        "dynamics" => Download("Динамика", Csv(new[] { LevelHead }.Concat(_days.Select(d => Fmt.Day(d) + ", %")),
+            _progressLines.Select(l => new[] { l.Item1 }.Concat(l.Item3.Select(v => v?.ToString() ?? "")).ToArray()))),
         "recur" => Download("Рекуррентность", Csv(new[] { "Блок", "Проверка", "Элемент 1", "Номер 1", "Элемент 2", "Номер 2", "Повторы", "Вернулась", "Первый", "Последний", "Статус" },
             _recur.Select(x => new[] { x.Block, x.Type, Fmt.Element(x.A), x.A?.ElementId?.ToString(), Fmt.Element(x.B), x.B?.ElementId?.ToString(), x.Repeats.ToString(), x.ReturnCount.ToString(), Fmt.Day(x.FirstSeen), Fmt.Day(x.LastSeen), Fmt.State(x.State) }))),
         "quality" => Download("Качество данных", Csv(new[] { "Замечание", "Что сделать" }, _quality.Select(q => new[] { q.Text, q.Hint }))),
-        "progress" => Download("Прогресс", Csv(new[] { LevelHead, "Всего", "Активные", "Исправлены", "Допущены", "Исправлено, %" },
-            _groups.Select(g => new[] { g.Title, g.Total.ToString(), g.Active.ToString(), g.Fixed.ToString(), g.Accepted.ToString(), g.Percent.ToString() }))),
-        _ => Download("Проверки", Csv(new[] { "Проверка", "Всего", "Активные", "Исправлены" },
-            _overviewKeys.Select((k, i) => new[] { k, _overviewSeries[0].Item3[i].ToString(), _overviewSeries[1].Item3[i].ToString(), _overviewSeries[2].Item3[i].ToString() }))),
+        _ => Download("Проверки", Csv(new[] { "Проверка", "Категория", "Всего", "Активные", "Исправлены", "Допущены", "Исправлено, %" },
+            Sorted(_checks).Select(t => new[] { t.Title, CategoryText(t.Key), t.Total.ToString(), t.Active.ToString(), t.Fixed.ToString(), t.Accepted.ToString(), t.Percent.ToString() }))),
     };
 
     private Task ExportCompare()
@@ -1014,7 +840,7 @@
         _ => BlockTitle(key),
     };
 
-    /// <summary>Цвет группы: категории, подкатегории выбранной категории; у типов и блоков — нет.</summary>
+    /// <summary>Цвет группы: категории, подкатегории выбранной категории; у типов — по проверке, у блоков — нет.</summary>
     private string GroupColor(string key) => _by switch
     {
         By.Category => Colors.TryGetValue(key, out var c) ? c : null,
@@ -1076,16 +902,13 @@
         return string.IsNullOrEmpty(a) ? b ?? "" : string.IsNullOrEmpty(b) || ClashRules.LevelKey(a) == ClashRules.LevelKey(b) ? a : a + " / " + b;
     }
 
-    private IEnumerable<Group> SortedTests
+    private IEnumerable<Group> Sorted(IEnumerable<Group> list)
     {
-        get
+        Func<Group, IComparable> key = _sortKey switch
         {
-            Func<Group, IComparable> key = _sortKey switch
-            {
-                "name" => g => g.Title, "total" => g => g.Total, "fixed" => g => g.Fixed, "accepted" => g => g.Accepted, "percent" => g => g.Percent, _ => g => g.Active,
-            };
-            return _sortDesc ? _tests.OrderByDescending(key) : _tests.OrderBy(key);
-        }
+            "name" => g => g.Title, "total" => g => g.Total, "fixed" => g => g.Fixed, "accepted" => g => g.Accepted, "percent" => g => g.Percent, _ => g => g.Active,
+        };
+        return _sortDesc ? list.OrderByDescending(key) : list.OrderBy(key);
     }
 
     private RenderFragment SortTh(string key, string title, string css) => __builder =>
@@ -1119,15 +942,9 @@
         return Drill.InvokeAsync(d);
     }
 
+    private Task DrillGroup(string key) => Drill.InvokeAsync(DrillTo(key));
     private Task DrillBlock(string block) => Drill.InvokeAsync(new SummaryDrill { SetBlock = true, Block = block });
     private Task DrillTest(string type) => Drill.InvokeAsync(new SummaryDrill { TestType = type });
-    private Task DrillOverview(int index) => DrillTest(_overviewKeys[index]);
-    private Task DrillModel(string file) => Drill.InvokeAsync(new SummaryDrill { Search = file });
-    private Task DrillSearch(string text) => Drill.InvokeAsync(new SummaryDrill { Search = text });
-    private Task DrillTypeIndex(int index) => DrillType(_types[index].Key);
-    /// <summary>Тип элемента — к списку: отбор «Тип элемента» (точно, не поиском по части названия).</summary>
-    private Task DrillType(string key) => Drill.InvokeAsync(new SummaryDrill { ElementType = key });
-    private Task DrillLevel(int index) => Drill.InvokeAsync(new SummaryDrill { LevelKey = _levels[index].Key });
     private Task DrillState(ClashState state) => Drill.InvokeAsync(new SummaryDrill { State = state });
     private Task QualityClick(SummaryDrill d) => d == null ? Task.CompletedTask : Drill.InvokeAsync(d);
     private Task DrillCmp(int index) => DrillRun(_cmpKinds[index], _cmpB);
