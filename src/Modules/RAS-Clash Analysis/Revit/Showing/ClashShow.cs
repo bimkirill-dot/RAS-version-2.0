@@ -5,6 +5,7 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using RASv2.ClashAnalysis.Bridge;
 using RASv2.ClashAnalysis.Logic;
+using RASv2.Core;
 
 namespace RASv2.ClashAnalysis.Showing
 {
@@ -61,7 +62,7 @@ namespace RASv2.ClashAnalysis.Showing
                 }
                 if (k < 2)
                 {
-                    var element = doc.GetElement(new ElementId(item.Id));
+                    var element = doc.GetElement(RevitCompat.Id(item.Id));
                     if (element == null) warnings.Add($"В модели «{hostTitle}» нет элемента {item.Id} — его удалили или модель не та.");
                     else found.Add(new Found { Element = element, Color = color });
                     continue;
@@ -74,7 +75,7 @@ namespace RASv2.ClashAnalysis.Showing
                     continue;
                 }
                 var instance = instances.FirstOrDefault(x => x.GetTypeId() == type.Id && x.GetLinkDocument() != null);
-                var linked = instance?.GetLinkDocument()?.GetElement(new ElementId(item.Id));
+                var linked = instance?.GetLinkDocument()?.GetElement(RevitCompat.Id(item.Id));
                 if (linked == null)
                 {
                     warnings.Add($"В связи «{linkName}» нет элемента {item.Id} — его удалили или связь не та.");

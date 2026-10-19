@@ -2,7 +2,6 @@ using System;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
-using Autodesk.Revit.UI;
 using RASv2.ClashAnalysis.Logic;
 
 namespace RASv2.ClashAnalysis.UI
@@ -68,12 +67,10 @@ namespace RASv2.ClashAnalysis.UI
             DialogResult = true;
         }
 
-        /// <summary>Светлая или тёмная — как интерфейс Revit.</summary>
+        /// <summary>Светлая или тёмная — как интерфейс Revit (в Revit 2023 — всегда светлая).</summary>
         private void ApplyTheme()
         {
-            var dark = false;
-            try { dark = UIThemeManager.CurrentTheme == UITheme.Dark; }
-            catch (Exception) { /* тему узнать не удалось — светлая */ }
+            var dark = RASv2.Core.RevitCompat.IsDarkTheme;
             Resources["Bg"] = Brush(dark ? "#2B2F36" : "#FFFFFF");
             Resources["Fg"] = Brush(dark ? "#E6E9EE" : "#1F2328");
             Resources["Muted"] = Brush(dark ? "#9AA3AF" : "#6B7280");

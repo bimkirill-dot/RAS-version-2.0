@@ -111,7 +111,7 @@ ras.revit = (function () {
     async function show(request) {
         if (live.length === 0) await poll();
         if (live.length === 0) {
-            warn('Revit не подключён', ['Запустите Revit 2026 с плагином RAS v. 2.0 и откройте модель коллизии.',
+            warn('Revit не подключён', ['Запустите Revit 2023 или 2026 с плагином RAS v. 2.0 и откройте модель коллизии.',
                 'Revit уже открыт — перезапустите его: мост запускается вместе с Revit.']);
             return;
         }

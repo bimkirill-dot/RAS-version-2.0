@@ -21,14 +21,4 @@
     <EmbeddedResource Include="Icons\*.png" LogicalName="Icons.%(Filename)%(Extension)" />
   </ItemGroup>
 
-  <!--
-    Пока только Revit 2026 (разработчик, 19.10.2026: «делаем только для 2026 пока»): под Revit 2023 собирается только
-    описание модуля, чтобы «О плагине» показало «не работает в Revit 2023».
-  -->
-  <ItemGroup Condition="'$(RevitVersion)' == '2023'">
-    <Compile Remove="**\*.cs" />
-    <Compile Include="ClashAnalysisModule.cs" />
-    <Page Remove="**\*.xaml" />
-  </ItemGroup>
-
 </Project>

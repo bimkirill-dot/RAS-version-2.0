@@ -101,7 +101,7 @@ namespace RASv2.ClashAnalysis.Showing
         {
             var old = new FilteredElementCollector(doc).OfClass(typeof(View)).Cast<View>().FirstOrDefault(v => !v.IsTemplate && v.Name == name);
             if (old == null) return;
-            old.Name = NamePrefix + ", прежний " + old.Id.Value + " (" + _user + ")";
+            old.Name = NamePrefix + ", прежний " + RevitCompat.Value(old.Id) + " (" + _user + ")";
             Track(doc, old).SeenOpen = true;
         }
 

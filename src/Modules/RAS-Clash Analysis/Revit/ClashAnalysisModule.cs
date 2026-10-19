@@ -12,10 +12,9 @@ namespace RASv2.ClashAnalysis
         public string Id => "ClashAnalysis";
         public string Title => "RAS-Clash Analysis";
 
-        // Revit 2023 — позже (19.10.2026: «только для 2026 пока»); под 2023 собирается только этот файл
-        public IReadOnlyList<int> RevitYears => new[] { 2026 };
+        // Revit 2023 и 2026 (19.10.2026: сначала только 2026, в тот же день — и 2023); различия версий — в ядре (RevitCompat)
+        public IReadOnlyList<int> RevitYears => new[] { 2023, 2026 };
 
-#if !REVIT2023
         private BridgeApp _app;
 
         public void Start(IModuleContext context)
@@ -25,14 +24,5 @@ namespace RASv2.ClashAnalysis
         }
 
         public void Stop() => _app?.Stop();
-#else
-        public void Start(IModuleContext context)
-        {
-        }
-
-        public void Stop()
-        {
-        }
-#endif
     }
 }
