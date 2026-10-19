@@ -15,9 +15,70 @@
     }
     else
     {
-        @* страницы сводки — выпадающим списком у заголовка (разработчик, 19.10.2026): обзор, проверки, сравнение отчётов *@
-        @if (Page == "checks")
+        @* страницы сводки — выпадающим списком у заголовка (разработчик, 19.10.2026): последний прогон, общая картина, сравнение отчётов *@
+        @if (Page == "overall")
         {
+            @* 2. тренд: стопкой по прогонам, над столбиком — новые *@
+            <section class="sum-block">
+                <h3>Как идёт работа <span class="muted small">— по прогонам: активные, исправленные, допущенные; сверху — новые за прогон</span></h3>
+                <BarChart Title="Тренд по прогонам" Bars="_trend" Legend="_trendLegend" Height="250" />
+            </section>
+
+            @* 3. блоки × категории *@
+            <section class="sum-block">
+                <h3>Где больше всего активных <span class="muted small">— блоки × @(_by == By.Block ? "всего" : LevelName); нажать — коллизии</span></h3>
+                <div class="matrix-wrap">
+                    <table class="matrix">
+                        <thead>
+                            <tr>
+                                <th></th>
+                                @foreach (var c in _matrixCols) { <th class="col" title="@GroupTitle(c)">@ColHead(c)</th> }
+                                <th class="num">Всего</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var b in _matrixRows)
+                            {
+                                var block = b;
+                                <tr>
+                                    <th>@(block == "" ? "без блока" : ReportPath.BlockTitle(block))</th>
+                                    @foreach (var c in _matrixCols)
+                                    {
+                                        var col = c;
+                                        var n = Cell(block, col);
+                                        <td class="cell @(n == 0 ? "zero" : "")" style="@Heat(n)" title="@(n) активных" @onclick="() => DrillCell(block, col)">@(n == 0 ? "—" : n.ToString())</td>
+                                    }
+                                    <td class="num total" @onclick="() => DrillCell(block, null)">@_rows.Count(r => r.Block == block && r.State == ClashState.Active)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            @* 4. прогресс по категориям (или по блокам, если категорий нет) *@
+            <section class="sum-block">
+                <h3>Прогресс по @LevelDative <span class="muted small">— сколько исправлено; линии — как менялся % по прогонам</span></h3>
+                @* только цифры — без выбора категории и раскрытия подкатегорий (разработчик, 19.10.2026) *@
+                <table class="grid sum-table">
+                    <thead><tr><th>@LevelHead</th><th class="num">Всего</th><th class="num">Активные</th><th class="num">Исправлены</th><th class="num">Допущены</th><th class="sum-progress-head">Исправлено</th></tr></thead>
+                    <tbody>
+                        @foreach (var group in _groups)
+                        {
+                            <tr>
+                                <td>@Dot(GroupColor(group.Key))@group.Title</td>
+                                <td class="num">@group.Total</td>
+                                <td class="num k-active">@group.Active</td>
+                                <td class="num k-fixed">@group.Fixed</td>
+                                <td class="num">@group.Accepted</td>
+                                <td class="sum-progress"><div class="kpi-bar"><i style="width:@group.Percent%"></i></div><span>@group.Percent %</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_days.Count > 1) { <LineChart Title="% исправлено по прогонам" Labels="_dayLabels" Series="_progressLines" Height="200" /> }
+            </section>
+
             @* 6. проверки *@
             <section class="sum-block">
                 <h3>Проверки <span class="muted small">— нажать на заголовок — сортировка, на строку — коллизии проверки</span></h3>
@@ -84,53 +145,46 @@
                     @if (_recur.Count > _recurShown) { <button class="btn link small" @onclick="() => _recurShown += 30">Показать ещё (@(_recur.Count - _recurShown))</button> }
                 }
             </section>
-
-            @* 8. качество данных *@
-            <section class="sum-block">
-                <h3>Качество данных <span class="muted small">— что мешает считать точно; нажать — к отчётам</span></h3>
-                @if (_quality.Count == 0) { <p class="quality-ok">✓ Замечаний нет</p> }
-                else
-                {
-                    <ul class="quality">
-                        @foreach (var (text, hint, reports) in _quality)
-                        {
-                            var toReports = reports;
-                            <li class="@(toReports ? "clickable" : "")" @onclick="() => { if (toReports) Drill.InvokeAsync(new SummaryDrill { ToReports = true }); }">⚠ <b>@text</b> <span class="muted">— @hint</span></li>
-                        }
-                    </ul>
-                }
-            </section>
-
         }
         else if (Page == "compare")
         {
-            @* 9. сравнение отчётов (было «сравнение прогонов» — переименовано 19.10.2026) *@
+            @* сравнение отчётов (было «сравнение прогонов» — переименовано 19.10.2026): две даты — изменение количества активных и по типам проверок *@
             @if (_days.Count < 2) { <p class="muted">Для сравнения нужны отчёты хотя бы двух дат.</p> }
             else
             {
-                <section class="sum-block">
-                    <h3>Сравнение отчётов <span class="muted small">— активные по типам проверок на две даты</span></h3>
-                    <div class="compare-bar">
-                        <select @bind="_cmpA" @bind:after="Compare">@foreach (var d in _days) { <option value="@d.ToString("yyyy-MM-dd")">@Fmt.Day(d)</option> }</select>
-                        <span class="muted">→</span>
-                        <select @bind="_cmpB" @bind:after="Compare">@foreach (var d in _days) { <option value="@d.ToString("yyyy-MM-dd")">@Fmt.Day(d)</option> }</select>
-                        <span class="spacer"></span>
-                        <span class="delta-total @(_cmpTotal > 0 ? "up" : _cmpTotal < 0 ? "down" : "")">Δ = @(_cmpTotal > 0 ? "+" : "")@_cmpTotal</span>
-                    </div>
-                    <table class="grid sum-table">
-                        <thead><tr><th>Тип проверки</th><th class="num">@Fmt.Day(DateTime.Parse(_cmpA))</th><th class="num">@Fmt.Day(DateTime.Parse(_cmpB))</th><th class="num">Δ</th></tr></thead>
-                        <tbody>
-                            @foreach (var (type, a, b) in _cmp)
-                            {
-                                var d = b - a;
-                                <tr>
-                                    <td>@type</td><td class="num">@a</td><td class="num">@b</td>
-                                    <td class="num delta-cell @(d > 0 ? "up" : d < 0 ? "down" : "")">@(d > 0 ? "+" : "")@d</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </section>
+                <div class="compare-bar">
+                    <span class="muted">с</span>
+                    <select @bind="_cmpA" @bind:after="Compare">@foreach (var d in _days) { <option value="@d.ToString("yyyy-MM-dd")">@Fmt.Day(d)</option> }</select>
+                    <span class="muted">по</span>
+                    <select @bind="_cmpB" @bind:after="Compare">@foreach (var d in _days) { <option value="@d.ToString("yyyy-MM-dd")">@Fmt.Day(d)</option> }</select>
+                </div>
+                @if (_cmpError != null) { <p class="muted">@_cmpError</p> }
+                else
+                {
+                    <section class="sum-block">
+                        <h3>Изменение количества активных коллизий <span class="muted small">— было, добавилось, ушло, стало@(_cmpClickable ? "; нажать — эти коллизии" : "")</span></h3>
+                        <WaterfallChart Title="Изменение количества активных коллизий" Steps="_cmpBridge" Clicked="DrillCmp" Width="900" Height="260" />
+                    </section>
+                    <section class="sum-block">
+                        <div class="sum-head">
+                            <h3>По типам проверок <span class="muted small">— активные на две даты</span></h3>
+                            <span class="delta-total @(_cmpTotal > 0 ? "up" : _cmpTotal < 0 ? "down" : "")">Δ = @(_cmpTotal > 0 ? "+" : "")@_cmpTotal</span>
+                        </div>
+                        <table class="grid sum-table">
+                            <thead><tr><th>Тип проверки</th><th class="num">@Fmt.Day(DateTime.Parse(_cmpA))</th><th class="num">@Fmt.Day(DateTime.Parse(_cmpB))</th><th class="num">Δ</th></tr></thead>
+                            <tbody>
+                                @foreach (var (type, a, b) in _cmp)
+                                {
+                                    var d = b - a;
+                                    <tr>
+                                        <td>@type</td><td class="num">@a</td><td class="num">@b</td>
+                                        <td class="num delta-cell @(d > 0 ? "up" : d < 0 ? "down" : "")">@(d > 0 ? "+" : "")@d</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </section>
+                }
             }
         }
         else
@@ -154,89 +208,31 @@
                 </div>
             </div>
 
+            @* мост последнего прогона: две последние даты (19.10.2026) *@
             @if (_days.Count > 1)
             {
-                @* мост: было → пришли → ушли → стало между двумя датами, по умолчанию — две последние (19.10.2026) *@
                 <section class="sum-block">
-                    <div class="sum-head">
-                        <h3>Изменение количества активных коллизий <span class="muted small">— было, добавилось, ушло, стало@(_bridgeClickable ? "; нажать — эти коллизии" : "")</span></h3>
-                        <div class="bridge-dates">
-                            <span class="muted small">с</span>
-                            <select class="input small" value="@_bridgeFrom" @onchange="PickFrom" title="С даты">
-                                @foreach (var d in _days.Take(_days.Count - 1)) { <option value="@d.ToString("yyyy-MM-dd")" @key="d">@Fmt.Day(d)</option> }
-                            </select>
-                            <span class="muted small">по</span>
-                            <select class="input small" value="@_bridgeTo" @onchange="PickTo" title="По дату">
-                                @foreach (var d in _days.Skip(1)) { <option value="@d.ToString("yyyy-MM-dd")" @key="d">@Fmt.Day(d)</option> }
-                            </select>
-                        </div>
-                    </div>
-                    @if (_bridgeError != null) { <p class="muted">@_bridgeError</p> }
-                    else { <WaterfallChart Title="Изменение количества активных коллизий" Steps="_bridge" Clicked="DrillBridge" Width="900" Height="260" /> }
+                    <h3>Изменение количества активных коллизий <span class="muted small">— @Fmt.Day(_days[^2]) → @Fmt.Day(_days[^1]): было, добавилось, ушло, стало; нажать — эти коллизии</span></h3>
+                    <WaterfallChart Title="Изменение количества активных коллизий" Steps="_lastBridge" Clicked="DrillLast" Width="900" Height="260" />
                 </section>
             }
+            else { <p class="muted">Это первый прогон — сравнивать пока не с чем.</p> }
 
-            @* 2. тренд: стопкой по прогонам, над столбиком — новые *@
+            @* 8. качество данных *@
             <section class="sum-block">
-                <h3>Как идёт работа <span class="muted small">— по прогонам: активные, исправленные, допущенные; сверху — новые за прогон</span></h3>
-                <BarChart Title="Тренд по прогонам" Bars="_trend" Legend="_trendLegend" Height="250" />
-            </section>
-
-            @* 3. блоки × категории *@
-            <section class="sum-block">
-                <h3>Где больше всего активных <span class="muted small">— блоки × @(_by == By.Block ? "всего" : LevelName); нажать — коллизии</span></h3>
-                <div class="matrix-wrap">
-                    <table class="matrix">
-                        <thead>
-                            <tr>
-                                <th></th>
-                                @foreach (var c in _matrixCols) { <th class="col" title="@GroupTitle(c)">@ColHead(c)</th> }
-                                <th class="num">Всего</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var b in _matrixRows)
-                            {
-                                var block = b;
-                                <tr>
-                                    <th>@(block == "" ? "без блока" : ReportPath.BlockTitle(block))</th>
-                                    @foreach (var c in _matrixCols)
-                                    {
-                                        var col = c;
-                                        var n = Cell(block, col);
-                                        <td class="cell @(n == 0 ? "zero" : "")" style="@Heat(n)" title="@(n) активных" @onclick="() => DrillCell(block, col)">@(n == 0 ? "—" : n.ToString())</td>
-                                    }
-                                    <td class="num total" @onclick="() => DrillCell(block, null)">@_rows.Count(r => r.Block == block && r.State == ClashState.Active)</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            @* 4. прогресс по категориям (или по блокам, если категорий нет) *@
-            <section class="sum-block">
-                <h3>Прогресс по @LevelDative <span class="muted small">— сколько исправлено; линии — как менялся % по прогонам</span></h3>
-                @* только цифры — без выбора категории и раскрытия подкатегорий (разработчик, 19.10.2026) *@
-                <table class="grid sum-table">
-                    <thead><tr><th>@LevelHead</th><th class="num">Всего</th><th class="num">Активные</th><th class="num">Исправлены</th><th class="num">Допущены</th><th class="sum-progress-head">Исправлено</th></tr></thead>
-                    <tbody>
-                        @foreach (var group in _groups)
+                <h3>Качество данных <span class="muted small">— что мешает считать точно; нажать — к отчётам</span></h3>
+                @if (_quality.Count == 0) { <p class="quality-ok">✓ Замечаний нет</p> }
+                else
+                {
+                    <ul class="quality">
+                        @foreach (var (text, hint, reports) in _quality)
                         {
-                            <tr>
-                                <td>@Dot(GroupColor(group.Key))@group.Title</td>
-                                <td class="num">@group.Total</td>
-                                <td class="num k-active">@group.Active</td>
-                                <td class="num k-fixed">@group.Fixed</td>
-                                <td class="num">@group.Accepted</td>
-                                <td class="sum-progress"><div class="kpi-bar"><i style="width:@group.Percent%"></i></div><span>@group.Percent %</span></td>
-                            </tr>
+                            var toReports = reports;
+                            <li class="@(toReports ? "clickable" : "")" @onclick="() => { if (toReports) Drill.InvokeAsync(new SummaryDrill { ToReports = true }); }">⚠ <b>@text</b> <span class="muted">— @hint</span></li>
                         }
-                    </tbody>
-                </table>
-                @if (_days.Count > 1) { <LineChart Title="% исправлено по прогонам" Labels="_dayLabels" Series="_progressLines" Height="200" /> }
+                    </ul>
+                }
             </section>
-
         }
     }
 </div>
@@ -260,8 +256,8 @@
     }
 
     [Parameter] public long ProjectId { get; set; }
-    /// <summary>Страница сводки: overview — обзор, checks — проверки, compare — сравнение отчётов.</summary>
-    [Parameter] public string Page { get; set; } = "overview";
+    /// <summary>Страница сводки: last — последний прогон, overall — общая картина, compare — сравнение отчётов.</summary>
+    [Parameter] public string Page { get; set; } = "last";
     /// <summary>Коллизии в отборах боковой панели — нынешнее состояние.</summary>
     [Parameter] public List<ClashRow> Rows { get; set; } = new();
     /// <summary>Проверки в отборах боковой панели.</summary>
@@ -288,12 +284,14 @@
     [Parameter] public EventCallback<SummaryDrill> Drill { get; set; }
 
     private const int RecurMin = 2;
-    /// <summary>Мост: даты «с» и «по» (yyyy-MM-dd), шаги; вид отбора «что принёс прогон» у шага (new / tests / returned / fixed) или null.</summary>
-    private string _bridgeFrom, _bridgeTo, _bridgeError;
-    private List<WaterfallChart.Step> _bridge = new();
-    private List<string> _bridgeKinds = new();
-    /// <summary>Шаги нажимаются, только когда даты соседние: «что принёс прогон» в списке — к предыдущему прогону.</summary>
-    private bool _bridgeClickable;
+    /// <summary>
+    /// Мосты: последнего прогона (две последние даты) и сравнения (даты «с» и «по»); у шага — вид отбора «что принёс прогон»
+    /// (new / tests / returned / fixed) или null. В сравнении шаги нажимаются, только когда даты соседние.
+    /// </summary>
+    private List<WaterfallChart.Step> _lastBridge = new(), _cmpBridge = new();
+    private List<string> _lastKinds = new(), _cmpKinds = new();
+    private bool _cmpClickable;
+    private string _cmpError;
     private List<ClashRow> _rows = new();
     private List<DateTime> _days = new();
     private Counts _now = new(), _prev;
@@ -357,10 +355,8 @@
         _prev = before;
         _dayLabels = _days.Select(d => d.ToString("dd.MM")).ToList();
 
-        // мост: по умолчанию — две последние даты
-        _bridgeFrom = _days[Math.Max(_days.Count - 2, 0)].ToString("yyyy-MM-dd");
-        _bridgeTo = _days[^1].ToString("yyyy-MM-dd");
-        BuildBridge();
+        // мост последнего прогона — две последние даты
+        _lastBridge = _days.Count > 1 ? Bridge(_days[^2], _days[^1], true, out _lastKinds) : new();
 
         // 3: блоки × категории (нынешние активные)
         var active = _rows.Where(r => r.State == ClashState.Active).ToList();
@@ -420,7 +416,7 @@
         var uncategorized = Categories.Count > 0 ? (Tests ?? new()).Where(t => CategoryOf(t.Name) == "").Select(t => t.Name).Distinct().Count() : 0;
         if (uncategorized > 0) _quality.Add(($"Проверки без категории: {uncategorized}", "добавьте их в «Настройки» → «Категории проверок»", false));
 
-        // 9: сравнение — по умолчанию прошлый и последний прогон
+        // сравнение отчётов — по умолчанию прошлый и последний прогон
         if (_days.Count > 1 && (_cmpA == null || !_days.Any(d => d.ToString("yyyy-MM-dd") == _cmpA)))
         {
             _cmpA = _days[^2].ToString("yyyy-MM-dd");
@@ -432,6 +428,12 @@
     private void Compare()
     {
         if (_cmpA == null || _cmpB == null) return;
+        _cmpError = string.CompareOrdinal(_cmpA, _cmpB) >= 0 ? "Дата «с» должна быть раньше даты «по»." : null;
+        if (_cmpError != null) return;
+        var from = DateTime.Parse(_cmpA);
+        var to = DateTime.Parse(_cmpB);
+        _cmpClickable = _days.IndexOf(to) == _days.IndexOf(from) + 1;
+        _cmpBridge = Bridge(from, to, _cmpClickable, out _cmpKinds);
         var typeOf = _rows.ToDictionary(r => r.Id, r => r.Type);
         Dictionary<string, int> ActiveByType(string day) => _history.StatesAt(DateTime.Parse(day), _filter)
             .Where(x => x.Value == ClashState.Active && typeOf.ContainsKey(x.Key)).GroupBy(x => typeOf[x.Key]).ToDictionary(g => g.Key, g => g.Count());
@@ -616,23 +618,18 @@
     private static string Pct(int value, int top) =>
         (top <= 0 ? 0 : Math.Max(100.0 * value / top, value > 0 ? 1 : 0)).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + "%";
 
-    /// <summary>Шаги моста между датами «с» и «по»; нулевые изменения не показываются.</summary>
-    private void BuildBridge()
+    /// <summary>Шаги моста между двумя датами; нулевые изменения не показываются; clickable — шаги ведут к списку.</summary>
+    private List<WaterfallChart.Step> Bridge(DateTime from, DateTime to, bool clickable, out List<string> kinds)
     {
-        _bridge = new();
-        _bridgeKinds = new();
-        _bridgeError = null;
-        var from = DateTime.Parse(_bridgeFrom);
-        var to = DateTime.Parse(_bridgeTo);
-        if (from >= to) { _bridgeError = "Дата «с» должна быть раньше даты «по»."; return; }
+        var steps = new List<WaterfallChart.Step>();
+        var list = new List<string>();
         var c = _history.Change(from, to, _filter);
-        _bridgeClickable = _days.IndexOf(to) == _days.IndexOf(from) + 1;
         void Add(string label, string sub, bool total, double value, string color, string kind)
         {
             if (!total && value == 0) return;
-            var clickable = kind != null && _bridgeClickable;
-            _bridge.Add(new WaterfallChart.Step { Label = label, Sub = sub, Total = total, Value = value, Color = color, Clickable = clickable });
-            _bridgeKinds.Add(clickable ? kind : null);
+            var press = kind != null && clickable;
+            steps.Add(new WaterfallChart.Step { Label = label, Sub = sub, Total = total, Value = value, Color = color, Clickable = press });
+            list.Add(press ? kind : null);
         }
         Add("Было", Fmt.Day(c.Before), true, c.Was, "--accepted", null);
         Add("Новые", null, false, c.New, "--active", "new");
@@ -643,15 +640,13 @@
         Add("Допущены", null, false, -c.Accepted, "--accepted", null);
         Add("Нет", "данных", false, -c.Gone, "--accepted", null);
         Add("Стало", Fmt.Day(c.Day), true, c.Now, "--active", null);
+        kinds = list;
+        return steps;
     }
 
-    private void PickFrom(ChangeEventArgs e) { _bridgeFrom = e.Value?.ToString() ?? _bridgeFrom; BuildBridge(); }
-    private void PickTo(ChangeEventArgs e) { _bridgeTo = e.Value?.ToString() ?? _bridgeTo; BuildBridge(); }
-
-    /// <summary>Шаг моста — к списку: дата «по» и отбор «новые / в новых проверках / вернулись / исправлены» (только соседние даты).</summary>
-    private Task DrillBridge(int index)
-    {
-        var kind = _bridgeKinds[index];
-        return kind == null ? Task.CompletedTask : Drill.InvokeAsync(new SummaryDrill { RunDay = _bridgeTo, RunKind = kind });
-    }
+    /// <summary>Шаг моста — к списку: дата «по» и отбор «новые / в новых проверках / вернулись / исправлены».</summary>
+    private Task DrillLast(int index) => DrillRun(_lastKinds[index], _days[^1].ToString("yyyy-MM-dd"));
+    private Task DrillCmp(int index) => DrillRun(_cmpKinds[index], _cmpB);
+    private Task DrillRun(string kind, string day) =>
+        kind == null ? Task.CompletedTask : Drill.InvokeAsync(new SummaryDrill { RunDay = day, RunKind = kind });
 }

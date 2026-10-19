@@ -479,8 +479,8 @@
                     <div class="list-title">
                         <h2>Сводка</h2>
                         <select class="input summary-page" value="@_view.SummaryPage" @onchange="PickSummaryPage" title="Страница сводки">
-                            <option value="overview">Обзор</option>
-                            <option value="checks">Проверки</option>
+                            <option value="last">Последний прогон</option>
+                            <option value="overall">Общая картина</option>
                             <option value="compare">Сравнение отчётов</option>
                         </select>
                         <span class="muted small">@ScopeTitle</span>
@@ -1483,7 +1483,7 @@
         _view.BlocksOpen = false;
     }
 
-    private void PickSummaryPage(ChangeEventArgs e) => _view.SummaryPage = e.Value?.ToString() ?? "overview";
+    private void PickSummaryPage(ChangeEventArgs e) => _view.SummaryPage = e.Value?.ToString() ?? "last";
 
     /// <summary>Подпись отборов над сводкой: «блок S1 · Высокая критичность» или «весь проект».</summary>
     private string ScopeTitle

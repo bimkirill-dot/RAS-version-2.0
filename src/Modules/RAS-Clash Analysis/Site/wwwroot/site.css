@@ -181,7 +181,6 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .sum-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .sum-head select { flex: none; }
 .list-title select.summary-page { font-weight: 600; }
-.bridge-dates { display: flex; align-items: center; gap: 6px; flex: none; }
 .chart .bridge-line { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
 .chart .axis.sub { font-size: 11px; }
 .chart-note { text-align: right; margin-top: 2px; }
