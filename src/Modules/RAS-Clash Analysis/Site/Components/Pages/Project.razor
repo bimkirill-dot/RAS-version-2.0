@@ -203,9 +203,26 @@
                 <button class="side-btn @(_view.Tab == 2 ? "on" : "")" @onclick="() => Go(2)" title="Загруженные отчёты Navisworks этого проекта">
                     <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 2.5h7l3.5 3.5v11.5h-10.5z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"/><path d="M8 10h5M8 13.5h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Отчёты</span><b>@ScopeReports.Count()</b>
                 </button>
-                <button class="side-btn @(_view.Tab == 5 ? "on" : "")" @onclick="() => Go(5)" title="Сводка — тренд, где больше всего, прогресс, качество данных">
-                    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 16.5V9.5M8 16.5V4.5M12.5 16.5v-5M17 16.5V7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg><span>Сводка</span>
+                @* «Сводка» — как «Блок»: стрелка, страницы подразделами, выбранная — второй строкой (разработчик, 19.10.2026) *@
+                <button class="side-btn side-group @(_view.Tab == 5 ? "on" : "") @(_view.SummaryOpen ? "open" : "")" @onclick="ToggleSummary"
+                        title="Сводка — последний прогон, общая картина, сравнение отчётов" aria-expanded="@(_view.SummaryOpen ? "true" : "false")">
+                    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 16.5V9.5M8 16.5V4.5M12.5 16.5v-5M17 16.5V7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg><span>
+                        Сводка
+                        <small class="side-chosen">@SummaryPageTitle(_view.SummaryPage)</small>
+                    </span><i class="chev" aria-hidden="true"></i>
                 </button>
+                @if (_view.SummaryOpen)
+                {
+                    <div class="side-subs">
+                        @foreach (var key in SummaryPages)
+                        {
+                            var page = key;
+                            <button class="side-sub @(_view.Tab == 5 && _view.SummaryPage == page ? "on" : "")" @onclick="() => PickSummaryPage(page)">
+                                <span>@SummaryPageTitle(page)</span>
+                            </button>
+                        }
+                    </div>
+                }
                 <button class="side-btn @(_view.Tab == 4 ? "on" : "")" @onclick="() => Go(4)" title="Что и когда сделано в этом проекте">
                     <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M10 6v4l2.8 1.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg><span>История</span>
                 </button>
@@ -476,15 +493,7 @@
             {
                 @* сводка проекта (DECISIONS.md, «Сводка проекта»): в отборах боковой панели *@
                 <section class="content scroll">
-                    <div class="list-title">
-                        <h2>Сводка</h2>
-                        <select class="input summary-page" value="@_view.SummaryPage" @onchange="PickSummaryPage" title="Страница сводки">
-                            <option value="last">Последний прогон</option>
-                            <option value="overall">Общая картина</option>
-                            <option value="compare">Сравнение отчётов</option>
-                        </select>
-                        <span class="muted small">@ScopeTitle</span>
-                    </div>
+                    <div class="list-title"><h2>@SummaryPageTitle(_view.SummaryPage)</h2><span class="muted small">@ScopeTitle</span></div>
                     <ProjectSummary ProjectId="Id" Page="@_view.SummaryPage" Rows="_base" Tests="ScopeTests.ToList()" Reports="ScopeReports.ToList()"
                                     Missing="_missing.Count(m => InCriticality(m.Test) && (_filter.Block == null || m.Test.Block == _filter.Block))"
                                     Outside="_outside" CategoryOf="CategoryOf" SubOf="SubOf" Categories="_categoryOrder" SubOrder="_subOrder"
@@ -1483,7 +1492,29 @@
         _view.BlocksOpen = false;
     }
 
-    private void PickSummaryPage(ChangeEventArgs e) => _view.SummaryPage = e.Value?.ToString() ?? "last";
+    private static readonly string[] SummaryPages = { "last", "overall", "compare" };
+
+    private static string SummaryPageTitle(string page) => page switch
+    {
+        "overall" => "Общая картина",
+        "compare" => "Сравнение отчётов",
+        _ => "Последний прогон",
+    };
+
+    /// <summary>«Сводка» на боковой панели: не открыта — открыть и показать страницы; открыта — свернуть или развернуть список страниц.</summary>
+    private void ToggleSummary()
+    {
+        if (_view.Tab != 5) { _view.SummaryOpen = true; Go(5); }
+        else _view.SummaryOpen = !_view.SummaryOpen;
+    }
+
+    /// <summary>Страница сводки — список сворачивается, выбранная видна под «Сводкой», как у «Блока».</summary>
+    private void PickSummaryPage(string page)
+    {
+        _view.SummaryPage = page;
+        _view.SummaryOpen = false;
+        if (_view.Tab != 5) Go(5);
+    }
 
     /// <summary>Подпись отборов над сводкой: «блок S1 · Высокая критичность» или «весь проект».</summary>
     private string ScopeTitle
