@@ -502,7 +502,8 @@
                     <ProjectSummary ProjectId="Id" Page="@_view.SummaryPage" Tab="@_view.SummaryTab" TabChanged="tab => _view.SummaryTab = tab" Rows="_base" Tests="ScopeTests.ToList()" Reports="ScopeReports.ToList()"
                                     Missing="_missing.Count(m => InCriticality(m.Test) && (_filter.Block == null || m.Test.Block == _filter.Block))"
                                     Outside="_outside" CategoryOf="CategoryOf" SubOf="SubOf" Categories="_categoryOrder" SubOrder="_subOrder"
-                                    Category="@_filter.Category" Subcategory="@_filter.Subcategory" Colors="_groupColors" Drill="DrillFromSummary" />
+                                    Category="@_filter.Category" Subcategory="@_filter.Subcategory" Colors="_groupColors" Drill="DrillFromSummary"
+                                    OpenCategories="_view.SummaryOpenCategories" />
                 </section>
             }
             else if (_view.Tab == 4)

@@ -50,6 +50,8 @@ public sealed class ProjectView
     public string SummaryTab { get; set; } = "checks";
     /// <summary>Страницы сводки на боковой панели раскрыты.</summary>
     public bool SummaryOpen { get; set; }
+    /// <summary>Категории, у которых на «Дашборде» сводки раскрыты подкатегории.</summary>
+    public HashSet<string> SummaryOpenCategories { get; } = new HashSet<string>();
     /// <summary>Развёрнутые категории в «Типе проверки» (при открытии свёрнуты; выбранная — разворачивается).</summary>
     public HashSet<string> CategoriesExpanded { get; } = new HashSet<string>();
 

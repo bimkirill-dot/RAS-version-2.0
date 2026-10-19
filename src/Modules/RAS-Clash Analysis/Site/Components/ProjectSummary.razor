@@ -150,7 +150,7 @@
                     </table>
                 </section>
                 <section class="sum-block">
-                    <h3>Изменение количества активных коллизий <span class="muted small">— было, добавилось, ушло, стало@(_cmpClickable ? "; нажать — эти коллизии" : "")</span></h3>
+                    <h3>Изменение количества активных коллизий <span class="muted small">— активные на обе даты, между ними — что добавилось и что ушло@(_cmpClickable ? "; нажать — эти коллизии" : "")</span></h3>
                     <WaterfallChart Title="Изменение количества активных коллизий" Steps="_cmpBridge" Clicked="DrillCmp" Width="900" Height="260" />
                 </section>
                 <section class="sum-block">
@@ -235,8 +235,8 @@
         </section>
 
         <section class="sum-block">
-            <h3>По @LevelDative <span class="muted small">— на @Fmt.Day(DateTime.Parse(_dashDate))@(_dashIsNow ? "; нажать — коллизии" : " (по отчётам)")</span></h3>
-            @GroupTable(_dashGroups, LevelHead, _dashIsNow ? DrillGroup : null)
+            <h3>По @LevelDative <span class="muted small">— на @Fmt.Day(DateTime.Parse(_dashDate))@(_dashSubs.Count > 0 ? "; стрелка — подкатегории" : "")@(_dashIsNow ? "; нажать — коллизии" : " (по отчётам)")</span></h3>
+            @GroupTable(_dashGroups, LevelHead, _dashIsNow ? DrillGroup : null, _dashSubs, _dashIsNow ? DrillSub : null)
         </section>
         @Help()
     }
@@ -288,6 +288,8 @@
     /// <summary>Цвет: категория или «категория\u001fподкатегория» → ключ палитры (у подкатегории без своего — цвет категории).</summary>
     [Parameter] public Dictionary<string, string> Colors { get; set; } = new();
     [Parameter] public EventCallback<SummaryDrill> Drill { get; set; }
+    /// <summary>Категории, у которых на «Дашборде» раскрыты подкатегории (ProjectView — помнятся и после перехода к списку).</summary>
+    [Parameter] public HashSet<string> OpenCategories { get; set; } = new();
 
     private static readonly (string Key, string Title)[] Tabs =
     {
@@ -301,8 +303,12 @@
     private enum By { Block, Category, Sub, Type }
     private By _by;
 
-    private static readonly string[] Palette =
-        { "--cat-violet", "--cat-teal", "--cat-orange", "--cat-blue", "--cat-green", "--cat-pink", "--cat-amber", "--cat-indigo", "--cat-red", "--cat-cyan", "--cat-lime", "--cat-brown" };
+    /// <summary>Цвета линий «Динамики» по порядку — соседние далеки друг от друга.</summary>
+    private static readonly string[] LinePalette =
+    {
+        "--cat-blue", "--cat-orange", "--cat-green", "--cat-red", "--cat-violet", "--cat-teal", "--cat-amber", "--cat-pink", "--cat-navy",
+        "--cat-lime", "--cat-brown", "--cat-cyan", "--cat-crimson", "--cat-olive", "--cat-indigo", "--cat-yellow", "--cat-graphite", "--cat-gray",
+    };
 
     private List<ClashRow> _rows = new();
     private Dictionary<long, ClashRow> _byId = new();
@@ -318,6 +324,8 @@
     private RunChange _dashChange;
     private int _dashReports, _dashDayCount;
     private List<Group> _dashGroups = new();
+    /// <summary>Подкатегории категорий на дату — раскрываются стрелкой (только при делении по категориям).</summary>
+    private Dictionary<string, List<Group>> _dashSubs = new();
     private List<BarChart.Bar> _trend = new();
     private List<(string, string)> _trendLegend = new() { ("Активные", "--active"), ("Исправленные", "--fixed"), ("Допущенные", "--accepted") };
 
@@ -425,6 +433,22 @@
             Key = g.Key, Title = GroupTitle(g.Key), Color = GroupColor(g.Key),
             Active = g.Count(x => x.Value == ClashState.Active), Fixed = g.Count(x => x.Value == ClashState.Fixed), Accepted = g.Count(x => x.Value == ClashState.Accepted),
         }).OrderBy(g => order.IndexOf(g.Key) < 0 ? int.MaxValue : order.IndexOf(g.Key)).ToList();
+        // подкатегории категории — из тех же коллизий на ту же дату: сумма строк подкатегорий = строка категории
+        _dashSubs = new();
+        if (_by != By.Category) return;
+        var nameOf = _rows.ToDictionary(r => r.Id, r => r.TestName);
+        foreach (var cat in _dashGroups.Select(g => g.Key).Where(c => c != ""))
+        {
+            var bySub = states.Where(x => nameOf.TryGetValue(x.Key, out var n) && CategoryOf(n) == cat).GroupBy(x => SubOf(nameOf[x.Key])).ToList();
+            if (!bySub.Any(g => g.Key != "")) continue;
+            var subOrder = SubOrder.TryGetValue(cat, out var so) ? so : new List<string>();
+            _dashSubs[cat] = bySub.Select(g => new Group
+            {
+                Key = g.Key, Title = g.Key == "" ? "Без подкатегории" : g.Key, Color = SubColor(cat, g.Key),
+                Active = g.Count(x => x.Value == ClashState.Active), Fixed = g.Count(x => x.Value == ClashState.Fixed), Accepted = g.Count(x => x.Value == ClashState.Accepted),
+            }).OrderBy(g => g.Key == "" ? int.MaxValue : subOrder.IndexOf(g.Key) < 0 ? int.MaxValue - 1 : subOrder.IndexOf(g.Key))
+              .ThenBy(g => g.Title, StringComparer.CurrentCultureIgnoreCase).ToList();
+        }
     }
 
     private void PickDashDate(ChangeEventArgs e)
@@ -497,9 +521,13 @@
         var order = _by == By.Block ? _matrixRows : _matrixCols;
         _groups = _rows.GroupBy(groupOf).Select(g => GroupOf(g.Key, GroupTitle(g.Key), GroupColor(g.Key), g)).OrderBy(g => order.IndexOf(g.Key)).ToList();
         var testGroup = (Tests ?? new()).ToDictionary(t => t.Id, t => _by == By.Block ? t.Block : KeyOf(t.Name, t.Type));
+        // свой цвет у группы — только когда цвета всех линий разные (категории); иначе (типы одной подкатегории, блоки) —
+        // разные цвета по порядку, чтобы линии различались
+        var own = _groups.Select(g => g.Color).ToList();
+        var ownColors = own.All(c => c != null) && own.Distinct().Count() == own.Count;
         _progressLines = _days.Count < 2 ? new() : _groups.Select((g, i) =>
         {
-            var color = g.Color is string c ? "--cat-" + c : Palette[i % Palette.Length];
+            var color = ownColors ? "--cat-" + g.Color : LinePalette[i % LinePalette.Length];
             var values = _days.Select(day =>
             {
                 var cnt = new Counts();
@@ -572,29 +600,68 @@
         </div>
     };
 
-    /// <summary>Таблица групп: всего, активные, исправлены, допущены, % исправлено; click — переход (null — только цифры).</summary>
-    private RenderFragment GroupTable(List<Group> groups, string head, Func<string, Task> click) => __builder =>
+    /// <summary>
+    /// Таблица групп: всего, активные, исправлены, допущены, % исправлено; click — переход (null — только цифры).
+    /// children — строки второго уровня (подкатегории категории), раскрываются стрелкой, как «Тип проверки» на боковой панели.
+    /// </summary>
+    private RenderFragment GroupTable(List<Group> groups, string head, Func<string, Task> click,
+                                      Dictionary<string, List<Group>> children = null, Func<string, string, Task> childClick = null) => __builder =>
     {
-        <table class="grid sum-table">
+        var folds = children != null && children.Count > 0;
+        <table class="grid sum-table @(folds ? "fold-table" : "")">
             <thead><tr><th>@head</th><th class="num">Всего</th><th class="num">Активные</th><th class="num">Исправлены</th><th class="num">Допущены</th><th class="sum-progress-head">Исправлено</th></tr></thead>
             <tbody>
                 @foreach (var g in groups)
                 {
                     var group = g;
+                    var kids = folds && children.TryGetValue(group.Key, out var k) ? k : null;
+                    var open = kids != null && OpenCategories.Contains(group.Key);
                     <tr class="@(click != null ? "clickable" : "")" @onclick="() => GroupClick(click, group.Key)">
-                        <td>@Dot(group.Color)@group.Title</td>
+                        <td>
+                            @if (folds)
+                            {
+                                if (kids != null)
+                                {
+                                    <button class="side-fold @(open ? "open" : "")" title="@(open ? "Свернуть подкатегории" : "Показать подкатегории")" aria-expanded="@(open ? "true" : "false")"
+                                            @onclick="() => ToggleOpen(group.Key)" @onclick:stopPropagation="true"><i class="chev" aria-hidden="true"></i></button>
+                                }
+                                else { <span class="side-fold none"></span> }
+                            }
+                            @Dot(group.Color)@group.Title
+                        </td>
                         <td class="num">@group.Total</td>
                         <td class="num k-active">@group.Active</td>
                         <td class="num k-fixed">@group.Fixed</td>
                         <td class="num">@group.Accepted</td>
                         <td class="sum-progress"><div class="kpi-bar"><i style="width:@group.Percent%"></i></div><span>@group.Percent %</span></td>
                     </tr>
+                    @if (open)
+                    {
+                        foreach (var s in kids)
+                        {
+                            var sub = s;
+                            <tr class="sub-row @(childClick != null ? "clickable" : "")" @onclick="() => ChildClick(childClick, group.Key, sub.Key)">
+                                <td>@Dot(sub.Color)@sub.Title</td>
+                                <td class="num">@sub.Total</td>
+                                <td class="num k-active">@sub.Active</td>
+                                <td class="num k-fixed">@sub.Fixed</td>
+                                <td class="num">@sub.Accepted</td>
+                                <td class="sum-progress"><div class="kpi-bar"><i style="width:@sub.Percent%"></i></div><span>@sub.Percent %</span></td>
+                            </tr>
+                        }
+                    }
                 }
             </tbody>
         </table>
     };
 
     private static Task GroupClick(Func<string, Task> click, string key) => click == null ? Task.CompletedTask : click(key);
+    private static Task ChildClick(Func<string, string, Task> click, string key, string sub) => click == null ? Task.CompletedTask : click(key, sub);
+
+    private void ToggleOpen(string key)
+    {
+        if (!OpenCategories.Remove(key)) OpenCategories.Add(key);
+    }
 
     /// <summary>Таблица проверок: проверка, категория метками, всего, активные, исправлены, допущены, % — с сортировкой.</summary>
     private RenderFragment ChecksTable(List<Group> checks) => __builder =>
@@ -651,7 +718,7 @@
         _cmpDays = _days.Count(d => d >= from && d <= to);
         _cmpClickable = _days.IndexOf(to) == _days.IndexOf(from) + 1;
         _cmpChange = _history.Change(from, to, _filter);
-        _cmpBridge = Bridge(_cmpChange, _cmpClickable, to == _days[^1], out _cmpKinds);
+        _cmpBridge = Bridge(_cmpChange, _cmpClickable, out _cmpKinds);
         var typeOf = _rows.ToDictionary(r => r.Id, r => r.Type);
         Dictionary<string, int> ActiveByType(string day) => _history.StatesAt(DateTime.Parse(day), _filter)
             .Where(x => x.Value == ClashState.Active && typeOf.ContainsKey(x.Key)).GroupBy(x => typeOf[x.Key]).ToDictionary(g => g.Key, g => g.Count());
@@ -688,8 +755,11 @@
         RunChange.GoneKind => "нет данных", _ => null,
     };
 
-    /// <summary>Шаги моста; нулевые изменения не показываются; clickable — шаги ведут к списку; toNow — «стало» = сейчас.</summary>
-    private List<WaterfallChart.Step> Bridge(RunChange c, bool clickable, bool toNow, out List<string> kinds)
+    /// <summary>
+    /// Шаги моста: активные на первую дату, что пришло и ушло, активные на вторую; итоги подписаны датами (разработчик, 19.10.2026:
+    /// «не надо “Было”, “Стало”, “сейчас” — просто даты»). Нулевые изменения не показываются; clickable — шаги ведут к списку.
+    /// </summary>
+    private List<WaterfallChart.Step> Bridge(RunChange c, bool clickable, out List<string> kinds)
     {
         var steps = new List<WaterfallChart.Step>();
         var list = new List<string>();
@@ -700,7 +770,7 @@
             steps.Add(new WaterfallChart.Step { Label = label, Sub = sub, Total = total, Value = value, Color = color, Clickable = press });
             list.Add(press ? kind : null);
         }
-        Add("Было", Fmt.Day(c.Before), true, c.Was, "--accepted", null);
+        Add(Fmt.Day(c.Before), null, true, c.Was, "--accepted", null);
         Add("Новые", null, false, c.New, "--active", "new");
         Add("Новые", "проверки", false, c.NewTests, "--cat-violet", "tests");
         Add("Вернулись", null, false, c.Returned, "--cat-orange", "returned");
@@ -709,7 +779,7 @@
         Add("Отмечены", "на сайте", false, -c.FixedManual, "--fixed", null);
         Add("Допущены", null, false, -c.Accepted, "--accepted", null);
         Add("Нет", "данных", false, -c.Gone, "--accepted", null);
-        Add("Стало", toNow ? "сейчас" : Fmt.Day(c.Day), true, c.Now, "--active", null);
+        Add(Fmt.Day(c.Day), null, true, c.Now, "--active", null);
         kinds = list;
         return steps;
     }
@@ -739,7 +809,14 @@
             new[] { "Исправленные", _dash.Fixed.ToString() }, new[] { "Допущенные", _dash.Accepted.ToString() }, new[] { "Прогресс, %", _dash.Percent.ToString() },
         };
         var text = Csv(new[] { "Показатель", "Значение" }, kpis) + Environment.NewLine
-                   + Csv(new[] { LevelHead, "Всего", "Активные", "Исправлены", "Допущены", "Исправлено, %" }, GroupRows(_dashGroups));
+                   + (_dashSubs.Count == 0
+                       ? Csv(new[] { LevelHead, "Всего", "Активные", "Исправлены", "Допущены", "Исправлено, %" }, GroupRows(_dashGroups))
+                       // с подкатегориями: строка категории (подкатегория пустая), под ней — её подкатегории
+                       : Csv(new[] { LevelHead, "Подкатегория", "Всего", "Активные", "Исправлены", "Допущены", "Исправлено, %" },
+                             _dashGroups.SelectMany(g => GroupRows(new[] { g }).Select(r => r.Take(1).Append("").Concat(r.Skip(1)).ToArray())
+                                 .Concat(_dashSubs.TryGetValue(g.Key, out var subs)
+                                     ? GroupRows(subs).Select(r => new[] { g.Title }.Concat(r).ToArray())
+                                     : Enumerable.Empty<string[]>()))));
         return Download("Дашборд", text);
     }
 
@@ -943,6 +1020,8 @@
     }
 
     private Task DrillGroup(string key) => Drill.InvokeAsync(DrillTo(key));
+    /// <summary>Подкатегория из «По категориям» — к её коллизиям («» — без подкатегории).</summary>
+    private Task DrillSub(string category, string sub) => Drill.InvokeAsync(new SummaryDrill { SetCategory = true, Category = category, Subcategory = sub });
     private Task DrillBlock(string block) => Drill.InvokeAsync(new SummaryDrill { SetBlock = true, Block = block });
     private Task DrillTest(string type) => Drill.InvokeAsync(new SummaryDrill { TestType = type });
     private Task DrillState(ClashState state) => Drill.InvokeAsync(new SummaryDrill { State = state });

@@ -171,6 +171,12 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .chart .dot { fill: var(--panel); stroke-width: 2; }
 .chart-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: center; font-size: 12.5px; color: var(--muted); margin-top: 4px; }
 .chart-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+/* линии: под мышью — ярче, остальные бледнее */
+.chart g.dim { opacity: .15; }
+.chart g.hi .line { stroke-width: 3.4; }
+.chart-legend span { cursor: default; transition: opacity .15s; }
+.chart-legend span.dim { opacity: .4; }
+.chart-legend span.hi { color: var(--text); }
 .recur-table { table-layout: fixed; width: 100%; }
 .grid.recur-table th { white-space: normal; vertical-align: bottom; }
 .grid.recur-table td .badge { white-space: nowrap; }
@@ -204,6 +210,12 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .sum-help { font-size: 13px; color: var(--muted); padding: 0 4px; }
 .sum-help summary { cursor: pointer; color: var(--accent); }
 .sum-help ul { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+/* «По категориям» на дашборде: стрелка — подкатегории (как на боковой панели), они — с отступом */
+.fold-table td:first-child { white-space: nowrap; }
+.fold-table .side-fold { display: inline-grid; vertical-align: middle; height: 22px; margin: -3px 4px -3px -6px; }
+.fold-table .side-fold.none { display: inline-block; }
+.fold-table tr.sub-row td { font-size: 13px; }
+.fold-table tr.sub-row td:first-child { padding-left: 46px; }
 .checks-scroll { overflow-x: auto; }
 .checks-table { table-layout: fixed; width: 100%; min-width: 980px; }
 .checks-table td.cut { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
