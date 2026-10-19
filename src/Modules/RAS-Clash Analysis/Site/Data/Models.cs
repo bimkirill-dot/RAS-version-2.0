@@ -132,8 +132,8 @@ public sealed class SummaryDrill
     public string RunKind { get; set; }
     /// <summary>Поиск в списке.</summary>
     public string Search { get; set; }
-    /// <summary>Тип элемента (ClashFacets.ElementTypeKey).</summary>
-    public string ElementType { get; set; }
+    /// <summary>Только поставить отбор (категория / подкатегория / тип / блок) и остаться в сводке.</summary>
+    public bool Stay { get; set; }
     public long? ClashId { get; set; }
     public bool ToReports { get; set; }
 }

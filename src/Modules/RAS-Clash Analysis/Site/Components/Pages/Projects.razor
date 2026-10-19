@@ -43,10 +43,6 @@
 }
 else
 {
-    @if (_projects.Any(p => p.LastReport.HasValue))
-    {
-        <CompanySummary Projects="_projects" Weeks="_weeks" Weekly="_weekly" StaleDays="StaleDays" />
-    }
     @if (_view == "list")
     {
         @* списком — одна строка на проект (выбор вида — у заголовка, запоминается в браузере) *@
@@ -59,7 +55,6 @@ else
                     <th class="num">Активные</th>
                     <th class="num">Исправлены</th>
                     <th class="pl-progress-head">Исправлено</th>
-                    <th title="Активные на конец каждой недели">За 12 недель</th>
                 </tr>
             </thead>
             <tbody>
@@ -80,7 +75,6 @@ else
                             <div class="kpi-bar"><i style="width:@pct%"></i></div>
                             <span class="small muted">@pct %</span>
                         </td>
-                        <td>@Spark(p)</td>
                     </tr>
                 }
             </tbody>
@@ -102,8 +96,6 @@ else
                     <div class="pc-nums">
                         <div class="pc-num k-active"><b>@p.Counts.Active</b><span>активные</span></div>
                         <div class="pc-num k-fixed"><b>@p.Counts.Fixed</b><span>исправлены</span></div>
-                        <span class="spacer"></span>
-                        @Spark(p)
                     </div>
                     <div class="pc-progress" title="Исправлено из всех, кроме допущенных">
                         <div class="kpi-bar"><i style="width:@pct%"></i></div>
@@ -221,7 +213,7 @@ else
     {
         if (p.ManualBlocks && p.Blocks == 0) { <div class="pc-warn small">⚠ Нет блоков — отчёты не загружаются</div> }
         else if (p.ManualBlocks && Importer.OutsideBlocks(p.Id).Count > 0) { <div class="pc-warn small">⚠ Есть папки вне блоков</div> }
-        else if (CompanySummary.IsStale(p, StaleDays))
+        else if (p.LastReport.HasValue && (DateTime.Today - p.LastReport.Value.Date).TotalDays > StaleDays)
         {
             <div class="pc-warn small" title="Последний отчёт — больше @StaleDays дней назад">⚠ Давно не проверяли — @Fmt.Plural((int)(DateTime.Today - p.LastReport.Value.Date).TotalDays, "день", "дня", "дней")</div>
         }
@@ -236,45 +228,11 @@ else
 
     /// <summary>«Давно не проверяли» — последний отчёт старше стольких дней.</summary>
     private const int StaleDays = 14;
-    private List<DateTime> _weeks = new();
-    private Dictionary<long, List<int>> _weekly = new();
-    /// <summary>С какой недели у проекта есть отчёты — маленький график начинается с неё (раньше — не ноль, а «ещё не было»).</summary>
-    private Dictionary<long, int> _weeklyFrom = new();
 
     private void Load()
     {
         _projects = Store.Projects();
-        // активные на конец каждой из последних 12 недель — по отчётам (Logic.RunHistory), как тренд сводки проекта
-        var today = DateTime.Today;
-        var weeks = Enumerable.Range(0, 12).Select(k => today.AddDays(-7 * (11 - k))).ToList();
-        _weekly = new();
-        DateTime? earliest = null;
-        foreach (var p in _projects)
-        {
-            var history = Store.RunHistory(p.Id);
-            var days = history.Days();
-            if (days.Count > 0 && (earliest == null || days[0] < earliest)) earliest = days[0];
-            _weekly[p.Id] = weeks.Select(w => days.Count == 0 || w < days[0] ? 0 : history.StatesAt(w).Values.Count(s => s == ClashState.Active)).ToList();
-            _weeklyFrom[p.Id] = days.Count == 0 ? weeks.Count : weeks.Count(w => w < days[0]);
-        }
-        // недели до первого отчёта компании — не показываются (кроме двух последних)
-        var skip = earliest.HasValue ? Math.Min(weeks.Count(w => w < earliest.Value.AddDays(-6)), weeks.Count - 2) : 0;
-        _weeks = weeks.Skip(skip).ToList();
-        foreach (var id in _weekly.Keys.ToList())
-        {
-            _weekly[id] = _weekly[id].Skip(skip).ToList();
-            _weeklyFrom[id] = Math.Max(_weeklyFrom[id] - skip, 0);
-        }
     }
-
-    private RenderFragment Spark(ProjectRow p) => __builder =>
-    {
-        if (_weekly.TryGetValue(p.Id, out var all) && all.Any(v => v > 0))
-        {
-            var w = all.Skip(_weeklyFrom[p.Id]).ToList();
-            <Sparkline Values="w" Title="@($"Активные на конец недели: {string.Join(" → ", w)}")" />
-        }
-    };
 
     /// <summary>Папку ввели — название проекта берётся из её имени (если название ещё не меняли руками).</summary>
     private void FolderChanged(ChangeEventArgs e)

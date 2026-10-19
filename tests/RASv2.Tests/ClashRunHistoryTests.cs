@@ -80,18 +80,11 @@ namespace RASv2.Tests
                 foreach (var c in h.Changes())
                     Check(c.Was + c.Appeared - c.Fixed - c.Accepted - c.Gone == c.Now, "сходится " + c.Day.Day);
             });
-            yield return Case("время до исправления — только исправленные сейчас", () =>
+            yield return Case("мост через прогон: появившаяся в промежуточном — новая, а не «в новых проверках»", () =>
             {
-                var f = Sample().FixTimes();
-                Check(f.Count == 1 && f.ContainsKey(2) && f[2].First == D1 && f[2].Fixed == D2, "2: с 01 по 08; 4 вернулась — не считается");
-            });
-            yield return Case("прогноз: убывают — день нуля, растут — нет", () =>
-            {
-                var changes = Sample().Changes();
-                var one = RunHistory.Forecast(changes.Take(1).ToList(), 2);
-                Check(one.PerRun == -1 && one.DaysPerRun == 7 && one.Zero == new DateTime(2026, 10, 22), $"−1 за прогон, раз в 7 дней, 2 активных → 22.10: {one.Zero}");
-                Check(RunHistory.Forecast(changes, 4).Zero == null, "за два прогона в среднем 0 — нуля не будет");
-                Check(RunHistory.Forecast(changes, 0).Zero == D3, "активных нет — уже ноль");
+                var c = Sample().Change(D1, D3);
+                Check(c.Was == 3 && c.New == 1 && c.NewTests == 1 && c.Fixed == 1 && c.Returned == 0 && c.Now == 4,
+                      $"01→14: было {c.Was}, новые {c.New} (3), в новых проверках {c.NewTests} (6), исправлены {c.Fixed} (2), стало {c.Now}");
             });
         }
     }

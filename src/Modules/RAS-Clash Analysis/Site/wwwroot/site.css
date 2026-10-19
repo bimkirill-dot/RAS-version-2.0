@@ -183,48 +183,12 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .recur-dist { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .recur-dist .chip { padding: 3px 10px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
 .recur-dist .chip b { color: var(--text); margin-left: 4px; font-variant-numeric: tabular-nums; }
-.hbars { display: flex; flex-direction: column; gap: 2px; max-height: 360px; overflow: auto; }
-.hbar { display: grid; grid-template-columns: minmax(90px, 38%) 1fr 48px; align-items: center; gap: 10px; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-size: 13px; }
-.hbar:hover { background: var(--row-hover); }
-.hbar.static { cursor: default; }
-/* главная: сводка по компании, маленький график в карточке и строке */
-.company { margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px; }
-.company-head { display: flex; align-items: center; gap: 10px; border: 0; background: none; padding: 0; cursor: pointer; color: inherit; text-align: left; }
-.company-head h2 { margin: 0; font-size: 18px; }
-.company-head .chev { flex: none; width: 8px; height: 8px; border: solid var(--muted); border-width: 0 1.8px 1.8px 0; transform: rotate(-45deg); transition: transform .15s; }
-.company-head .chev.open { transform: rotate(45deg); margin-top: -4px; }
-.spark { display: block; flex: none; }
-.spark polyline { fill: none; stroke: var(--active); stroke-width: 1.6; stroke-linejoin: round; }
-.spark circle { fill: var(--active); }
-.filter-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 10px; border: 1px solid var(--accent); border-radius: 8px;
-               background: var(--accent-bg); font-size: 13px; max-width: 340px; }
-.filter-chip b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.filter-chip .chip-x { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 4px; }
-.filter-chip .chip-x:hover { color: var(--accent); }
-.hbars.tall { max-height: 420px; }
-.hbar.culprit { grid-template-columns: minmax(120px, 55%) 1fr 48px; }
-.culprit-note { margin: 0 0 8px; font-size: 13.5px; font-weight: 600; }
-.depth-note { margin: 8px 0 0; }
-.hb-track i.d1 { background: color-mix(in srgb, var(--active) 35%, var(--panel)); }
-.hb-track i.d2 { background: color-mix(in srgb, var(--active) 55%, var(--panel)); }
-.hb-track i.d3 { background: color-mix(in srgb, var(--active) 70%, var(--panel)); }
-.hb-track i.d4 { background: color-mix(in srgb, var(--active) 85%, var(--panel)); }
-.hb-track i.d5 { background: var(--active); }
-.hb-track i.d0 { background: var(--accepted); }
-.hbar.static:hover { background: none; }
 .sum-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .sum-head select { flex: none; }
+.bridge-dates { display: flex; align-items: center; gap: 6px; flex: none; }
 .chart .bridge-line { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
 .chart .axis.sub { font-size: 11px; }
 .chart-note { text-align: right; margin-top: 2px; }
-.forecast { margin: 8px 0 0; padding: 8px 12px; border-radius: 8px; font-size: 13.5px; font-weight: 600; }
-.forecast.good { background: color-mix(in srgb, var(--fixed) 12%, transparent); color: var(--fixed); }
-.forecast.bad { background: color-mix(in srgb, var(--active) 12%, transparent); color: var(--active); }
-.sum-table tr.total-row td { font-weight: 700; border-top: 2px solid var(--line); }
-.hb-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hb-track { height: 12px; background: var(--bg); border-radius: 4px; overflow: hidden; }
-.hb-track i { display: block; height: 100%; background: var(--active); border-radius: 4px; }
-.hb-value { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
 .matrix-wrap { overflow: auto; }
 .matrix th.col { max-width: 190px; vertical-align: bottom; }
 .matrix th.col .line { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

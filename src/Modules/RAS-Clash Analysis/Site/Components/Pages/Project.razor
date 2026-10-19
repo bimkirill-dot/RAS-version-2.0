@@ -71,14 +71,6 @@
             </label>
             <FacetMenu Title="Уровень" Values="_facetValues[ClashFacets.Level]" Selected="FacetSet(ClashFacets.Level)" Changed="Recompute" />
             <FacetMenu Title="Статус" Values="_facetValues[ClashFacets.State]" Selected="FacetSet(ClashFacets.State)" Changed="Recompute" />
-            @* отбор из сводки «Какие элементы мешают больше всего» — меткой, ✕ — снять *@
-            @foreach (var key in FacetSet(ClashFacets.ElementType).ToList())
-            {
-                var chosen = key;
-                <span class="filter-chip" title="Коллизии с элементами этого типа (из сводки)">Элемент: <b>@ClashFacets.ElementTypeTitle(chosen)</b>
-                    <button class="chip-x" aria-label="Снять отбор" title="Снять отбор" @onclick="() => { FacetSet(ClashFacets.ElementType).Remove(chosen); _page = 0; Recompute(); }">✕</button>
-                </span>
-            }
             @if (FilterIsSet)
             {
                 <button class="btn link small" @onclick="ResetFilter">Сбросить</button>
@@ -1503,6 +1495,15 @@
     {
         if (d.ToReports) { Go(2); return; }
         if (d.ClashId.HasValue) { Nav.NavigateTo("clash/" + d.ClashId.Value); return; }
+        if (d.Stay)
+        {
+            // «Прогресс» сводки: отбор на боковой панели, сводка пересчитывается здесь же (просьба разработчика 19.10.2026)
+            if (d.SetCategory) { _filter.Category = d.Category; _filter.Subcategory = d.Category == null ? null : d.Subcategory; }
+            if (d.TestType != null) { _filter.Category = null; _filter.Subcategory = null; }
+            if (_filter.Category != null) _view.CategoriesExpanded.Add(_filter.Category);
+            SetScope(_filter.Criticality, d.SetBlock ? d.Block : _filter.Block, d.TestType ?? (d.SetCategory ? null : _filter.TestType));
+            return;
+        }
         Freeze();
         if (d.SetCategory) { _filter.Category = d.Category; _filter.Subcategory = d.Category == null ? null : d.Subcategory; }
         var block = d.SetBlock ? d.Block : _filter.Block;
@@ -1515,9 +1516,6 @@
         states.Clear();
         _view.RunFilter = null;
         _filter.Search = d.Search;
-        var elementTypes = FacetSet(ClashFacets.ElementType);
-        elementTypes.Clear();
-        if (d.ElementType != null) elementTypes.Add(d.ElementType);
         if (d.RunKind != null)
         {
             // из «моста прогона»: прогон этого дня и что он принёс (статус не отбирается — иначе исправленных не видно)

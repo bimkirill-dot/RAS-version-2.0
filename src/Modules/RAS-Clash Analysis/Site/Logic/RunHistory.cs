@@ -79,14 +79,19 @@ namespace RASv2.ClashAnalysis.Site.Logic
         }
 
         /// <summary>
-        /// «Мост прогона»: сколько активных было к прошлому прогону, что добавилось и что ушло, сколько стало
-        /// (Was + New + NewTests + Returned + Unaccepted − Fixed − Accepted − Gone = Now).
+        /// «Мост»: сколько активных было на дату before, что добавилось и что ушло к дате day, сколько стало
+        /// (Was + New + NewTests + Returned + Unaccepted − Fixed − Accepted − Gone = Now). Даты — любые две, не обязательно
+        /// соседние: появившаяся между ними — «новая», если у её проверки был прогон не позже before, иначе — «в новых проверках».
         /// </summary>
         public RunChange Change(DateTime before, DateTime day, Func<long, bool> filter = null)
         {
             var was = StatesAt(before, filter);
             var now = StatesAt(day, filter);
-            var fresh = NewAt(day, filter);
+            var reportDay = Reports.ToDictionary(r => r.Id, r => r.Day.Date);
+            var testFirst = ReportTests.Where(x => reportDay.ContainsKey(x.ReportId)).GroupBy(x => x.TestId)
+                .ToDictionary(g => g.Key, g => g.Min(x => reportDay[x.ReportId]));
+            var clashTest = Clashes.ToDictionary(x => x.Id, x => x.TestId);
+            bool OldTest(long id) => clashTest.TryGetValue(id, out var t) && testFirst.TryGetValue(t, out var first) && first <= before.Date;
             var c = new RunChange { Before = before.Date, Day = day.Date };
             foreach (var id in was.Keys.Union(now.Keys))
             {
@@ -104,7 +109,7 @@ namespace RASv2.ClashAnalysis.Site.Logic
                 }
                 else if (!wasActive && isActive)
                 {
-                    if (!hadP) { if (fresh.Contains(id)) c.New++; else c.NewTests++; }
+                    if (!hadP) { if (OldTest(id)) c.New++; else c.NewTests++; }
                     else if (p == ClashState.Fixed) c.Returned++;
                     else c.Unaccepted++;
                 }
@@ -119,50 +124,6 @@ namespace RASv2.ClashAnalysis.Site.Logic
             var list = new List<RunChange>();
             for (var i = 1; i < days.Count; i++) list.Add(Change(days[i - 1], days[i], filter));
             return list;
-        }
-
-        /// <summary>
-        /// Исправленные сейчас коллизии: день, когда встретилась впервые, и прогон, которым исправлена (последний переход
-        /// «активная → исправлена»; вернулась и снова исправлена — по последнему).
-        /// </summary>
-        public Dictionary<long, (DateTime First, DateTime Fixed)> FixTimes(Func<long, bool> filter = null)
-        {
-            var days = Days(filter);
-            var first = new Dictionary<long, DateTime>();
-            var fixedOn = new Dictionary<long, DateTime>();
-            Dictionary<long, ClashState> prev = null, cur = null;
-            foreach (var day in days)
-            {
-                cur = StatesAt(day, filter);
-                foreach (var pair in cur)
-                {
-                    if (!first.ContainsKey(pair.Key)) first[pair.Key] = day;
-                    if (pair.Value == ClashState.Fixed && prev != null && prev.TryGetValue(pair.Key, out var p) && p == ClashState.Active) fixedOn[pair.Key] = day;
-                }
-                prev = cur;
-            }
-            var result = new Dictionary<long, (DateTime, DateTime)>();
-            if (cur == null) return result;
-            foreach (var pair in fixedOn)
-                if (cur.TryGetValue(pair.Key, out var s) && s == ClashState.Fixed) result[pair.Key] = (first[pair.Key], pair.Value);
-            return result;
-        }
-
-        /// <summary>
-        /// Прогноз по последним прогонам (window): изменение активных за прогон без новых проверок (их появление — разовое),
-        /// дней между прогонами и день, когда активных станет 0 при той же скорости; не убывают — Zero = null.
-        /// </summary>
-        public static (DateTime? Zero, double PerRun, double DaysPerRun) Forecast(IReadOnlyList<RunChange> changes, int activeNow, int window = 3)
-        {
-            if (changes == null || changes.Count == 0) return (null, 0, 0);
-            var last = changes.Skip(Math.Max(0, changes.Count - window)).ToList();
-            var perRun = last.Average(c => (double)(c.New + c.Returned + c.Unaccepted - c.Fixed - c.Accepted - c.Gone));
-            var daysPerRun = (last[last.Count - 1].Day - last[0].Before).TotalDays / last.Count;
-            var lastDay = last[last.Count - 1].Day;
-            if (activeNow <= 0) return (lastDay, perRun, daysPerRun);
-            if (perRun >= 0 || daysPerRun <= 0) return (null, perRun, daysPerRun);
-            var runs = Math.Ceiling(activeNow / -perRun);
-            return (lastDay.AddDays(Math.Round(runs * daysPerRun)), perRun, daysPerRun);
         }
     }
 
