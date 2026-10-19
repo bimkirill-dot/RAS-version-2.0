@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Модуль «RAS-Clash Analysis» в Revit — мост: «Показать в Revit» с сайта коллизий (DECISIONS.md модуля,
+    «Мост в Revit: „Показать в Revit“ — договорённость»). Зависит только от ядра. Сайт — отдельный проект (..\Site).
+  -->
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <AssemblyName>RASv2.ClashAnalysis</AssemblyName>
+    <RootNamespace>RASv2.ClashAnalysis</RootNamespace>
+    <UseRevitApi>true</UseRevitApi>
+    <OutputPath>$(RasOut)parts\</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ядро лежит в той же папке сборки — отдельная копия рядом с модулем не нужна -->
+    <ProjectReference Include="..\..\..\Core\RASv2.Core.csproj" Private="false" />
+  </ItemGroup>
+
+  <!--
+    Пока только Revit 2026 (разработчик, 19.10.2026: «делаем только для 2026 пока»): под Revit 2023 собирается только
+    описание модуля, чтобы «О плагине» показало «не работает в Revit 2023».
+  -->
+  <ItemGroup Condition="'$(RevitVersion)' == '2023'">
+    <Compile Remove="**\*.cs" />
+    <Compile Include="ClashAnalysisModule.cs" />
+  </ItemGroup>
+
+</Project>

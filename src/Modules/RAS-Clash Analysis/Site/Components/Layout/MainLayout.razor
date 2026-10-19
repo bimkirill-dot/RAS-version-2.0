@@ -8,6 +8,8 @@
         <span class="brand-dot" aria-hidden="true">·</span>
         <span class="brand-sub">Менеджер коллизий</span>
     </a>
+    @* Revit с мостом на этом компьютере — подключён или нет; заполняет wwwroot\site.js (ras.revit), Blazor его не трогает *@
+    <span id="revit-state" class="revit-state off" title="Revit с мостом не запущен">Revit</span>
     @* тема — без связи с сайтом (обычный обработчик): работает и пока страница подключается *@
     <a class="theme-toggle head-btn" href="history" title="История сайта — что и когда сделано">
         <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.6V8l2.4 1.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>

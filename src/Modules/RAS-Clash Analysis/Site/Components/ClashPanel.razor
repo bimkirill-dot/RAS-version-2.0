@@ -43,6 +43,13 @@
                     <span class="muted"> · @Level</span>
                 </div>
             }
+            @* мост в Revit (DECISIONS.md, «Мост в Revit…»): одна кнопка; что вышло — окном предупреждения (wwwroot\site.js) *@
+            <div class="cc-revit">
+                <button class="btn revit-show" disabled="@(!CanShowInRevit)" @onclick="ShowInRevit"
+                        title="@(CanShowInRevit ? "Открыть в Revit: личный 3D-вид вокруг пары, элементы выделены и покрашены" : "У элементов нет номеров — показать в Revit нельзя")">
+                    <span class="revit-mark" aria-hidden="true">R</span>Показать в Revit
+                </button>
+            </div>
         </div>
         <div class="state-buttons">
             @* три статуса, как у автора статьи; «Исправлена», а следующий прогон её нашёл — снова «Активная» с ↺ *@
@@ -278,6 +285,20 @@
     {
         if (e.Key == "Enter" && e.CtrlKey) await AddComment();
     }
+
+    private bool CanShowInRevit => _card?.Last != null && _card.Last.Elements.Any(e => e.ElementId.HasValue);
+
+    /// <summary>
+    /// Просьба к мосту — из браузера (сервер до компьютера пользователя не достаёт); ответ мост показывает сам, окном
+    /// предупреждения: JS не ждём — Revit может думать до 20 секунд.
+    /// </summary>
+    private Task ShowInRevit() => JS.InvokeVoidAsync("ras.revit.show", new
+    {
+        version = 1,
+        clash = _card.Last.Name,
+        elements = _card.Last.Elements.Where(e => e.ElementId.HasValue)
+            .Select(e => new { model = e.ModelFile ?? "", id = e.ElementId.Value, category = e.Category ?? "" }).ToList(),
+    }).AsTask();
 
     private async Task Copy(int index, long id)
     {

@@ -105,6 +105,23 @@ header.top {
 .head-btn { display: inline-grid; place-items: center; text-decoration: none; }
 .head-btn:hover { text-decoration: none; border-color: var(--accent); color: var(--text); }
 a.head-btn + .head-btn { margin-left: 8px; }
+/* Revit с мостом: подключён (зелёная точка) или нет (серая) — заполняет site.js */
+.revit-state { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border: 1px solid var(--line);
+               border-radius: 999px; font-size: 12px; color: var(--muted); cursor: default; white-space: nowrap; }
+.revit-state::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); opacity: .6; }
+.revit-state.on { color: var(--text); }
+.revit-state + .head-btn { margin-left: 12px; }
+.revit-state.on::before { background: var(--fixed); opacity: 1; box-shadow: 0 0 0 3px color-mix(in srgb, var(--fixed) 25%, transparent); }
+/* окно предупреждения моста: по центру, всё остальное — под тёмным стеклом */
+.ras-modal-back { position: fixed; inset: 0; z-index: 3000; display: flex; align-items: center; justify-content: center; padding: 16px;
+                  background: rgba(8, 10, 16, .62); backdrop-filter: blur(3px); }
+.ras-modal { width: min(520px, 100%); padding: 28px 30px 22px; border-radius: 14px; text-align: center;
+             background: var(--panel); color: var(--text); border: 1px solid var(--line); box-shadow: 0 20px 60px rgba(0, 0, 0, .45); }
+.ras-modal-icon { width: 78px; height: 68px; }
+.ras-modal h2 { margin: 10px 0 10px; font-size: 19px; }
+.ras-modal ul { margin: 0 0 18px; padding: 0; list-style: none; text-align: left; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.45; }
+.ras-modal ul li { padding: 8px 12px; border-radius: 8px; background: var(--row-hover); }
+.ras-modal .btn { min-width: 140px; padding: 7px 18px; }
 /* страница «Настройки» */
 .settings-page { max-width: 860px; }
 /* блоки вручную: предупреждение, форма, таблица */
@@ -699,6 +716,9 @@ th.sorted .sort-mark { opacity: 1; color: var(--accent); }
 .cc-what { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 6px; font-size: 13px; }
 .cc-what .w { font-weight: 600; }
 .cc-what .x { color: var(--muted); }
+.cc-revit { margin-top: 8px; }
+.revit-show { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.revit-mark { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 4px; background: #1e6fb8; color: #fff; font-size: 12px; font-weight: 700; }
 .state-buttons kbd { margin-left: 6px; padding: 0 4px; border: 1px solid currentColor; border-radius: 3px; font: 10px/14px Consolas, monospace; opacity: .55; }
 /* справа от списка: карточка во всю высоту, прокручивается только низ */
 aside.panel { display: flex; flex-direction: column; overflow: hidden; }

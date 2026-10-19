@@ -56,6 +56,117 @@ window.ras = {
     }
 };
 
+// Мост в Revit (DECISIONS.md, «Мост в Revit…»): модуль RAS-Clash Analysis в Revit слушает 127.0.0.1 на компьютере
+// пользователя; спрашивает браузер — сервер сайта до этого компьютера не достаёт. Индикатор в шапке — раз в 4 секунды;
+// «Показать в Revit» — тому Revit, где открыта модель коллизии (открыты два — спрашиваем по очереди).
+ras.revit = (function () {
+    const ports = [5181, 5182, 5183, 5184, 5185];
+    let live = [];
+
+    async function ask(port, path, body, ms) {
+        const ctl = new AbortController();
+        const timer = setTimeout(function () { ctl.abort(); }, ms);
+        try {
+            // тело — простым текстом: без предварительного запроса браузера (JSON внутри мост читает сам)
+            const r = await fetch('http://127.0.0.1:' + port + path, body === undefined
+                ? { signal: ctl.signal, cache: 'no-store' }
+                : { method: 'POST', body: JSON.stringify(body), signal: ctl.signal, cache: 'no-store' });
+            return r.ok ? await r.json() : null;
+        } catch (e) {
+            return null;
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    async function poll() {
+        const found = [];
+        await Promise.all(ports.map(async function (p) {
+            const s = await ask(p, '/status', undefined, 800);
+            if (s) found.push({ port: p, status: s });
+        }));
+        found.sort(function (a, b) { return a.port - b.port; });
+        live = found;
+        paint();
+    }
+
+    function paint() {
+        const el = document.getElementById('revit-state');
+        if (!el) return;
+        if (live.length === 0) {
+            el.className = 'revit-state off';
+            el.textContent = 'Revit';
+            el.title = 'Revit с мостом не запущен — «Показать в Revit» не работает';
+            return;
+        }
+        const s = live[0].status;
+        const docs = s.documents || [];
+        const doc = docs.find(function (d) { return d.active; }) || docs[0];
+        el.className = 'revit-state on';
+        el.textContent = 'Revit ' + s.revit;
+        el.title = 'Revit ' + s.revit + ' подключён' + (doc ? ' — открыта «' + doc.title + '»' : ' — модель не открыта')
+            + (live.length > 1 ? ' (и ещё ' + (live.length - 1) + ')' : '');
+    }
+
+    async function show(request) {
+        if (live.length === 0) await poll();
+        if (live.length === 0) {
+            warn('Revit не подключён', ['Запустите Revit 2026 с плагином RAS v. 2.0 и откройте модель коллизии.',
+                'Revit уже открыт — перезапустите его: мост запускается вместе с Revit.']);
+            return;
+        }
+        let failed = null;
+        for (const b of live) {
+            const r = await ask(b.port, '/show', request, 20000);
+            if (!r) continue;
+            if (r.ok) {
+                if (r.pending) warn('Revit занят', ['Коллизия откроется, как только Revit освободится: закройте открытое в нём окно или дождитесь конца команды.']);
+                else if (r.warnings && r.warnings.length) warn('Показано не всё', r.warnings);
+                return;
+            }
+            failed = failed || r;
+        }
+        if (failed) warn('Не получилось показать в Revit', [failed.error].concat(failed.warnings || []).filter(Boolean));
+        else warn('Revit не ответил', ['Возможно, в Revit открыто окно или идёт долгая команда — закройте его и нажмите ещё раз.']);
+    }
+
+    // предупреждение — окном по центру, всё остальное — как под тёмным стеклом (разработчик, 19.10.2026)
+    function warn(title, lines) {
+        close();
+        const back = document.createElement('div');
+        back.id = 'ras-modal';
+        back.className = 'ras-modal-back';
+        back.innerHTML = '<div class="ras-modal" role="alertdialog" aria-modal="true" aria-labelledby="ras-modal-title">'
+            + '<svg class="ras-modal-icon" viewBox="0 0 64 56" aria-hidden="true"><path d="M32 4 L61 52 H3 Z" fill="#e5484d" stroke="#e5484d" stroke-width="5" stroke-linejoin="round"/>'
+            + '<rect x="29" y="18" width="6" height="19" rx="3" fill="#fff"/><circle cx="32" cy="44" r="3.6" fill="#fff"/></svg>'
+            + '<h2 id="ras-modal-title"></h2><ul></ul><button class="btn primary" type="button">Понятно</button></div>';
+        back.querySelector('h2').textContent = title;
+        const ul = back.querySelector('ul');
+        lines.forEach(function (line) {
+            const li = document.createElement('li');
+            li.textContent = line;
+            ul.appendChild(li);
+        });
+        back.addEventListener('click', function (e) { if (e.target === back) close(); });
+        back.querySelector('button').addEventListener('click', close);
+        document.body.appendChild(back);
+        back.querySelector('button').focus();
+    }
+
+    function close() {
+        const old = document.getElementById('ras-modal');
+        if (old) old.remove();
+    }
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && document.getElementById('ras-modal')) close();
+    });
+    poll();
+    setInterval(poll, 4000);
+    // JS не ждут: ответ Revit показывается здесь же
+    return { show: function (request) { show(request); }, warn: warn };
+})();
+
 // 1 · 2 · 3 — статус открытой коллизии: «Активная», «Исправлена», «Допущена» (кроме набора текста в полях)
 document.addEventListener('keydown', function (e) {
     if (e.ctrlKey || e.altKey || e.metaKey || (e.key !== '1' && e.key !== '2' && e.key !== '3')) return;
