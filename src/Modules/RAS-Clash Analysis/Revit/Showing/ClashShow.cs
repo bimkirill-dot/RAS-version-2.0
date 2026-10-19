@@ -114,7 +114,7 @@ namespace RASv2.ClashAnalysis.Showing
                 ShowOnlyUsedLinks(view, instances, found);
                 PaintOwn(doc, view, views, settings.Paint ? found : new List<Found>());
                 PaintLinked(doc, view, views, settings.Paint ? found : new List<Found>());
-                Isolate(view, found, settings.Isolate);
+                Isolate(doc, view, found, settings.Isolate);
                 t.Commit();
             }
 
@@ -201,13 +201,34 @@ namespace RASv2.ClashAnalysis.Showing
             return view;
         }
 
-        /// <summary>«Изолировать»: временно — только элементы пары (элементы связи по отдельности Revit не изолирует — их связь целиком).</summary>
-        private static void Isolate(View view, List<Found> found, bool isolate)
+        /// <summary>
+        /// «Изолировать»: в самой модели — временно только элементы пары; в связях — только категории элементов коллизии
+        /// (элемент связи по отдельности Revit не изолирует).
+        /// </summary>
+        private static void Isolate(Document doc, View view, List<Found> found, bool isolate)
         {
             if (view.IsInTemporaryViewMode(TemporaryViewMode.TemporaryHideIsolate)) view.DisableTemporaryViewMode(TemporaryViewMode.TemporaryHideIsolate);
+            HideOtherCategories(doc, view, found, isolate);
             if (!isolate) return;
             var ids = found.Select(f => f.Link == null ? f.Element.Id : f.Link.Id).Distinct().ToList();
             view.IsolateElementsTemporary(ids);
+        }
+
+        /// <summary>
+        /// «Изолировать» и в связях — по категориям (разработчик, 19.10.2026: «так же, как покраску, — по категории скрывать то,
+        /// что к коллизии не относится»): в нашем виде скрыты все категории модели, кроме категорий элементов коллизии; связь —
+        /// «по основному виду», и в ней скрывается то же. Связи как таковые не скрываются. Без «Изолировать» — всё видно.
+        /// </summary>
+        private static void HideOtherCategories(Document doc, View view, List<Found> found, bool isolate)
+        {
+            var keep = new HashSet<ElementId>(found.Select(f => (f.Element.Category?.Parent ?? f.Element.Category)?.Id).Where(id => id != null));
+            var links = new ElementId(BuiltInCategory.OST_RvtLinks);
+            foreach (Category c in doc.Settings.Categories)
+            {
+                if (c.CategoryType != CategoryType.Model || c.Id == links || !c.get_AllowsVisibilityControl(view)) continue;
+                var hide = isolate && !keep.Contains(c.Id);
+                if (view.GetCategoryHidden(c.Id) != hide) view.SetCategoryHidden(c.Id, hide);
+            }
         }
 
         private static DisplayStyle Style(string style) => style switch
