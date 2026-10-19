@@ -180,6 +180,7 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .recur-dist .chip b { color: var(--text); margin-left: 4px; font-variant-numeric: tabular-nums; }
 .sum-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .sum-head select { flex: none; }
+.list-title select.summary-page { font-weight: 600; }
 .bridge-dates { display: flex; align-items: center; gap: 6px; flex: none; }
 .chart .bridge-line { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
 .chart .axis.sub { font-size: 11px; }

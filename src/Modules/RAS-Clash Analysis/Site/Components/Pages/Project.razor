@@ -476,8 +476,16 @@
             {
                 @* сводка проекта (DECISIONS.md, «Сводка проекта»): в отборах боковой панели *@
                 <section class="content scroll">
-                    <div class="list-title"><h2>Сводка</h2><span class="muted small">@ScopeTitle</span></div>
-                    <ProjectSummary ProjectId="Id" Rows="_base" Tests="ScopeTests.ToList()" Reports="ScopeReports.ToList()"
+                    <div class="list-title">
+                        <h2>Сводка</h2>
+                        <select class="input summary-page" value="@_view.SummaryPage" @onchange="PickSummaryPage" title="Страница сводки">
+                            <option value="overview">Обзор</option>
+                            <option value="checks">Проверки</option>
+                            <option value="compare">Сравнение отчётов</option>
+                        </select>
+                        <span class="muted small">@ScopeTitle</span>
+                    </div>
+                    <ProjectSummary ProjectId="Id" Page="@_view.SummaryPage" Rows="_base" Tests="ScopeTests.ToList()" Reports="ScopeReports.ToList()"
                                     Missing="_missing.Count(m => InCriticality(m.Test) && (_filter.Block == null || m.Test.Block == _filter.Block))"
                                     Outside="_outside" CategoryOf="CategoryOf" SubOf="SubOf" Categories="_categoryOrder" SubOrder="_subOrder"
                                     Category="@_filter.Category" Subcategory="@_filter.Subcategory" Colors="_groupColors" Drill="DrillFromSummary" />
@@ -1474,6 +1482,8 @@
         SetBlock(block);
         _view.BlocksOpen = false;
     }
+
+    private void PickSummaryPage(ChangeEventArgs e) => _view.SummaryPage = e.Value?.ToString() ?? "overview";
 
     /// <summary>Подпись отборов над сводкой: «блок S1 · Высокая критичность» или «весь проект».</summary>
     private string ScopeTitle

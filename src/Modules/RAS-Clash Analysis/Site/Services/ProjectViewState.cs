@@ -44,6 +44,8 @@ public sealed class ProjectView
     public bool CategoriesOpen { get; set; }
     /// <summary>«Тип проверки» на боковой панели раскрыт — типы видны подразделами.</summary>
     public bool TypesOpen { get; set; }
+    /// <summary>Страница сводки (overview / checks / compare) — помнится, пока открыта вкладка браузера.</summary>
+    public string SummaryPage { get; set; } = "overview";
     /// <summary>Развёрнутые категории в «Типе проверки» (при открытии свёрнуты; выбранная — разворачивается).</summary>
     public HashSet<string> CategoriesExpanded { get; } = new HashSet<string>();
 
