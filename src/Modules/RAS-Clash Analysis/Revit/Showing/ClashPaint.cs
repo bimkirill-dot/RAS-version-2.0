@@ -93,12 +93,16 @@ namespace RASv2.ClashAnalysis.Showing
             }
         }
 
-        /// <summary>Убрать изображение: вид удалён, модель закрывается.</summary>
-        public void Clear(Document document = null)
+        /// <summary>
+        /// Убрать изображение: модель закрывается (document), вид удалён (и view — только если рисовалось в нём: удаляется
+        /// прежний вид, а краска уже в новом), выключили «Красить элементы» (без параметров).
+        /// </summary>
+        public void Clear(Document document = null, ElementId view = null)
         {
             lock (_lock)
             {
                 if (document != null && (_document == null || !_document.IsValidObject || !_document.Equals(document))) return;
+                if (view != null && view != _view) return;
                 _document = null;
                 _view = ElementId.InvalidElementId;
                 _parts = new List<Part>();

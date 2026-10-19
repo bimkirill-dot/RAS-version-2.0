@@ -8,10 +8,12 @@ using RASv2.Core;
 namespace RASv2.ClashAnalysis.Showing
 {
     /// <summary>
-    /// Личный вид коллизии — свой у каждого человека, помечен названием («RAS-Clash Analysis — коллизия (логин)»), рабочие виды
-    /// не трогаются (PRINCIPLES.md, раздел 6). Следующая коллизия — тот же вид перестраивается. Закрыли вкладку вида — вид
-    /// удаляется из модели; оставшийся (Revit закрыли с открытым видом, сбой) — при следующем открытии модели, если не открыт.
-    /// Поведение — как у вида изменений RAS-Model History, код — свой (разработчик, 19.10.2026). Только в контексте Revit API.
+    /// Личные виды коллизии — свои у каждого человека, помечены названием («RAS-Clash Analysis — коллизия (логин)», план и разрез —
+    /// «…, план (логин)», «…, разрез (логин)»), рабочие виды не трогаются (PRINCIPLES.md, раздел 6). На экране — один: открыли
+    /// коллизию в другом виде — вкладка прежнего закрывается. 3D-вид перестраивается для следующей коллизии; план и разрез
+    /// создаются заново (уровень плана и направление разреза у вида не меняются), прежний — переименовывается и закрывается.
+    /// Закрыли вкладку — вид удаляется из модели; оставшийся (Revit закрыли с открытым видом, сбой) — при следующем открытии
+    /// модели. Поведение — как у вида изменений RAS-Model History, код — свой (разработчик, 19.10.2026). Только в контексте Revit API.
     /// </summary>
     internal sealed class ClashViews
     {
@@ -22,7 +24,7 @@ namespace RASv2.ClashAnalysis.Showing
         {
             public Document Document;
             public ElementId View;
-            /// <summary>Вкладку вида видели открытой — значит, «нет среди открытых» — её закрыли.</summary>
+            /// <summary>Вкладку вида видели открытой (или закрыли сами) — «нет среди открытых» значит «закрыли»: удалить.</summary>
             public bool SeenOpen;
             /// <summary>Свои элементы модели, перекрашенные в виде, — снять покраску при следующей коллизии.</summary>
             public List<ElementId> Painted = new List<ElementId>();
@@ -36,60 +38,102 @@ namespace RASv2.ClashAnalysis.Showing
 
         public ClashViews(string user, ClashPaint paint, ModuleLog log)
         {
-            _user = user;
+            _user = new string((user ?? "").Select(ch => "\\:{}[]|;<>?`~".IndexOf(ch) >= 0 ? '_' : ch).ToArray()).Trim();
+            if (_user.Length == 0) _user = "пользователь";
             _paint = paint;
             _log = log;
         }
 
-        public string ViewName
+        private string Name(string kind) => NamePrefix + kind + " (" + _user + ")";
+        private bool IsOurs(View v) => !v.IsTemplate && v.Name.StartsWith(NamePrefix, StringComparison.Ordinal) && v.Name.EndsWith("(" + _user + ")", StringComparison.Ordinal);
+
+        private Tracked Find(Document doc, ElementId view) =>
+            _views.FirstOrDefault(t => t.View == view && t.Document.IsValidObject && t.Document.Equals(doc));
+
+        private Tracked Track(Document doc, View view)
         {
-            get
-            {
-                var clean = new string((_user ?? "").Select(ch => "\\:{}[]|;<>?`~".IndexOf(ch) >= 0 ? '_' : ch).ToArray()).Trim();
-                return NamePrefix + " (" + (clean.Length == 0 ? "пользователь" : clean) + ")";
-            }
+            var t = Find(doc, view.Id);
+            if (t == null) _views.Add(t = new Tracked { Document = doc, View = view.Id });
+            return t;
         }
 
-        private Tracked Find(Document doc) => _views.FirstOrDefault(t => t.Document.IsValidObject && t.Document.Equals(doc));
-
-        /// <summary>Вид этого человека в модели (внутри транзакции): уже открытый для коллизий, оставшийся — или новый.</summary>
-        public View3D Prepare(Document doc)
+        /// <summary>3D-вид (внутри транзакции): уже открытый — перестраивается, иначе — новый.</summary>
+        public View3D Prepare3D(Document doc)
         {
-            var tracked = Find(doc);
-            var view = tracked == null ? null : doc.GetElement(tracked.View) as View3D;
-            view ??= new FilteredElementCollector(doc).OfClass(typeof(View3D)).Cast<View3D>()
-                .FirstOrDefault(v => !v.IsTemplate && v.Name == ViewName);
+            var name = Name("");
+            var view = new FilteredElementCollector(doc).OfClass(typeof(View3D)).Cast<View3D>().FirstOrDefault(v => !v.IsTemplate && v.Name == name);
             if (view == null)
             {
-                var type = new FilteredElementCollector(doc).OfClass(typeof(ViewFamilyType)).Cast<ViewFamilyType>()
-                    .First(t => t.ViewFamily == ViewFamily.ThreeDimensional);
-                view = View3D.CreateIsometric(doc, type.Id);
-                view.Name = ViewName;
+                view = View3D.CreateIsometric(doc, TypeOf(doc, ViewFamily.ThreeDimensional));
+                view.Name = name;
             }
-            if (tracked == null) _views.Add(tracked = new Tracked { Document = doc });
-            if (tracked.View != view.Id)
-            {
-                tracked.View = view.Id;
-                tracked.SeenOpen = false;
-            }
+            Track(doc, view);
             return view;
         }
 
-        public List<ElementId> Painted(Document doc) => Find(doc)?.Painted ?? new List<ElementId>();
-
-        public void SetPainted(Document doc, List<ElementId> ids)
+        /// <summary>Новый план на уровне (внутри транзакции); прежний план коллизии — в сторону.</summary>
+        public ViewPlan NewPlan(Document doc, ElementId level)
         {
-            var tracked = Find(doc);
-            if (tracked != null) tracked.Painted = ids;
+            var name = Name(", план");
+            Retire(doc, name);
+            var view = ViewPlan.Create(doc, TypeOf(doc, ViewFamily.FloorPlan), level);
+            view.Name = name;
+            Track(doc, view);
+            return view;
         }
 
-        /// <summary>Модель открыта: оставшийся вид — убрать в ближайший простой.</summary>
+        /// <summary>Новый разрез по рамке (внутри транзакции); прежний разрез коллизии — в сторону.</summary>
+        public ViewSection NewSection(Document doc, BoundingBoxXYZ box)
+        {
+            var name = Name(", разрез");
+            Retire(doc, name);
+            var view = ViewSection.CreateSection(doc, TypeOf(doc, ViewFamily.Section), box);
+            view.Name = name;
+            Track(doc, view);
+            return view;
+        }
+
+        private static ElementId TypeOf(Document doc, ViewFamily family) =>
+            new FilteredElementCollector(doc).OfClass(typeof(ViewFamilyType)).Cast<ViewFamilyType>().First(t => t.ViewFamily == family).Id;
+
+        /// <summary>Вид с этим названием — под другое название (его вкладку закроет CloseOthers, тогда он и удалится).</summary>
+        private void Retire(Document doc, string name)
+        {
+            var old = new FilteredElementCollector(doc).OfClass(typeof(View)).Cast<View>().FirstOrDefault(v => !v.IsTemplate && v.Name == name);
+            if (old == null) return;
+            old.Name = NamePrefix + ", прежний " + old.Id.Value + " (" + _user + ")";
+            Track(doc, old).SeenOpen = true;
+        }
+
+        /// <summary>После показа: вкладки других своих видов этой модели — закрыть (виды удалятся в простой).</summary>
+        public void CloseOthers(UIDocument uidoc, ElementId keep)
+        {
+            var doc = uidoc.Document;
+            var open = uidoc.GetOpenUIViews();
+            foreach (var t in _views.Where(t => t.View != keep && t.Document.IsValidObject && t.Document.Equals(doc)))
+            {
+                t.SeenOpen = true;
+                var ui = open.FirstOrDefault(v => v.ViewId == t.View);
+                try { ui?.Close(); }
+                catch (Autodesk.Revit.Exceptions.ApplicationException) { /* последняя открытая вкладка — останется, удалится, когда закроют */ }
+            }
+        }
+
+        public List<ElementId> Painted(Document doc, ElementId view) => Find(doc, view)?.Painted ?? new List<ElementId>();
+
+        public void SetPainted(Document doc, ElementId view, List<ElementId> ids)
+        {
+            var t = Find(doc, view);
+            if (t != null) t.Painted = ids;
+        }
+
+        /// <summary>Модель открыта: оставшиеся виды — убрать в ближайший простой.</summary>
         public void Opened(Document doc)
         {
             if (doc != null && !doc.IsLinked && !doc.IsFamilyDocument) _opened.Add(doc);
         }
 
-        /// <summary>Модель закрывается: менять её уже нельзя — вид уберётся при следующем открытии.</summary>
+        /// <summary>Модель закрывается: менять её уже нельзя — виды уберутся при следующем открытии.</summary>
         public void Closing(Document doc)
         {
             _views.RemoveAll(t => !t.Document.IsValidObject || t.Document.Equals(doc));
@@ -97,28 +141,36 @@ namespace RASv2.ClashAnalysis.Showing
             _paint.Clear(doc);
         }
 
-        /// <summary>В простой: закрытые вкладки вида — удалить вид; в только что открытых моделях — оставшиеся.</summary>
+        /// <summary>В простой: закрытые вкладки видов — удалить виды; в только что открытых моделях — оставшиеся.</summary>
         public void OnIdling()
         {
-            for (var i = _views.Count - 1; i >= 0; i--)
+            var gone = new List<Tracked>();
+            foreach (var t in _views)
             {
-                var t = _views[i];
-                if (!t.Document.IsValidObject) { _views.RemoveAt(i); continue; }
-                if (t.Document.GetElement(t.View) == null) { _views.RemoveAt(i); _paint.Clear(t.Document); continue; }
+                if (!t.Document.IsValidObject || t.Document.GetElement(t.View) == null) { gone.Add(t); continue; }
                 if (IsOpen(t.Document, t.View)) { t.SeenOpen = true; continue; }
-                if (!t.SeenOpen || !CanChange(t.Document)) continue;
-                // не удалился — больше не пытаемся (иначе ошибка в каждый простой): уберётся при следующем открытии модели
-                Delete(t.Document, new[] { t.View });
-                _views.RemoveAt(i);
-                _paint.Clear(t.Document);
+                if (t.SeenOpen && CanChange(t.Document)) gone.Add(t);
             }
+            // по моделям (Document сравнивается через Equals — обёртки одной модели могут быть разными объектами)
+            var docs = new List<Document>();
+            foreach (var t in gone.Where(t => t.Document.IsValidObject))
+                if (!docs.Any(d => d.Equals(t.Document))) docs.Add(t.Document);
+            foreach (var doc in docs)
+            {
+                var mine = gone.Where(t => t.Document.IsValidObject && t.Document.Equals(doc)).ToList();
+                var ids = mine.Where(t => doc.GetElement(t.View) != null).Select(t => t.View).ToList();
+                // не удалился — больше не пытаемся (иначе ошибка в каждый простой): уберётся при следующем открытии модели
+                if (ids.Count > 0) Delete(doc, ids);
+                foreach (var t in mine) _paint.Clear(doc, t.View);
+            }
+            _views.RemoveAll(gone.Contains);
+
             if (_opened.Count == 0) return;
             var opened = _opened.ToList();
             _opened.Clear();
             foreach (var doc in opened.Where(d => d.IsValidObject))
             {
-                var leftovers = new FilteredElementCollector(doc).OfClass(typeof(View3D)).Cast<View3D>()
-                    .Where(v => !v.IsTemplate && v.Name == ViewName).Select(v => v.Id).ToList();
+                var leftovers = new FilteredElementCollector(doc).OfClass(typeof(View)).Cast<View>().Where(IsOurs).Select(v => v.Id).ToList();
                 if (leftovers.Count == 0) continue;
                 // модель открылась с этим видом на экране — он снова наш: уберётся, когда закроют вкладку
                 var open = leftovers.Where(id => IsOpen(doc, id)).ToList();
@@ -136,7 +188,7 @@ namespace RASv2.ClashAnalysis.Showing
 
         private static bool CanChange(Document doc) => !doc.IsReadOnly && !doc.IsModifiable;
 
-        private bool Delete(Document doc, IList<ElementId> views)
+        private void Delete(Document doc, IList<ElementId> views)
         {
             try
             {
@@ -144,13 +196,11 @@ namespace RASv2.ClashAnalysis.Showing
                 t.Start();
                 doc.Delete(views);
                 t.Commit();
-                return true;
             }
             catch (Exception ex)
             {
                 // например, вид синхронизирован и занят у коллеги — останется до следующего раза, работе не мешает
                 _log.Error("Вид коллизии не удалён из «" + doc.Title + "»", ex);
-                return false;
             }
         }
     }

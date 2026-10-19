@@ -1,17 +1,21 @@
 using System;
+using System.IO;
 using System.Linq;
+using System.Windows.Interop;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Events;
 using RASv2.ClashAnalysis.Bridge;
+using RASv2.ClashAnalysis.Logic;
 using RASv2.ClashAnalysis.Showing;
+using RASv2.ClashAnalysis.UI;
 using RASv2.Core;
 
 namespace RASv2.ClashAnalysis
 {
     /// <summary>
-    /// Работа модуля: мост (просьбы сайта), очередь в Revit, личный вид и покраска. События Revit — через ядро
-    /// (PRINCIPLES.md, раздел 4).
+    /// Работа модуля: мост (просьбы сайта), очередь в Revit, личный вид и покраска, «Настройки вида» на ленте. События Revit —
+    /// через ядро (PRINCIPLES.md, раздел 4).
     /// </summary>
     internal sealed class BridgeApp
     {
@@ -22,8 +26,12 @@ namespace RASv2.ClashAnalysis
         private const string SiteOrigin = "http://localhost:5080";
         private static readonly TimeSpan StatusEvery = TimeSpan.FromSeconds(2);
 
+        public static BridgeApp Instance { get; private set; }
+
         private ModuleLog _log;
         private int _year;
+        private string _settingsPath;
+        private volatile ViewSettings _settings = new ViewSettings();
         private BridgeServer _server;
         private ShowQueue _queue;
         private ClashViews _views;
@@ -33,15 +41,24 @@ namespace RASv2.ClashAnalysis
 
         internal void Start(IModuleContext context)
         {
+            Instance = this;
             _log = context.Log;
             _year = context.RevitYear;
+            _settingsPath = Path.Combine(context.UserDataDir, "view-settings.json");
+            _settings = ViewSettings.Load(_settingsPath);
             var window = IntPtr.Zero;
             try { window = context.Application.MainWindowHandle; }
             catch (Exception) { /* окна ещё нет — Revit вперёд выходить не будет, остальное работает */ }
             _paint = new ClashPaint();
             _views = new ClashViews(Environment.UserName, _paint, _log);
-            _queue = new ShowQueue((app, request) => ClashShow.Run(app, request, _views, _paint), window, _log);
+            _queue = new ShowQueue((app, request) => ClashShow.Run(app, request, _views, _paint, _settings), window, _log);
             _status = BridgeProtocol.Write(new StatusReply { Revit = _year });
+
+            var settings = context.AddButton("ViewSettings", "Настройки\nвида", typeof(ViewSettingsCommand),
+                "Как открывать коллизию по «Показать в Revit»: тип вида, обрезка, стиль, покраска, предупреждения", icon: "ViewSettings");
+            settings.AvailabilityClassName = typeof(AlwaysAvailable).FullName;
+            settings.LongDescription = "Настройки — ваши, у коллег свои. На сайте коллизий «Показать в Revit» открывает личный вид: " +
+                                       "3D, план, разрез или «Авто» по элементам; закрыли вкладку вида — он удаляется из модели.";
 
             var events = context.Events;
             events.Idling(OnIdling);
@@ -53,6 +70,24 @@ namespace RASv2.ClashAnalysis
         }
 
         internal void Stop() => _server?.Dispose();
+
+        /// <summary>Окно «Настройки вида»; сохранённое действует со следующего «Показать в Revit».</summary>
+        internal void ShowSettings(IntPtr owner)
+        {
+            try
+            {
+                var window = new ViewSettingsWindow(_settings);
+                if (owner != IntPtr.Zero) new WindowInteropHelper(window).Owner = owner;
+                if (window.ShowDialog() != true) return;
+                window.Result.Save(_settingsPath);
+                _settings = window.Result;
+            }
+            catch (Exception ex)
+            {
+                _log.Error("Настройки вида не сохранены", ex);
+                TaskDialog.Show("RAS-Clash Analysis", "Настройки вида не сохранены — подробности в журнале плагина («О плагине» → «Журнал»).");
+            }
+        }
 
         private void OnIdling(object sender, IdlingEventArgs e)
         {
@@ -75,7 +110,7 @@ namespace RASv2.ClashAnalysis
                 if (doc.IsLinked || doc.IsFamilyDocument) continue;
                 var item = new OpenDocument { Title = doc.Title, Active = active != null && doc.Equals(active) };
                 item.Links.AddRange(new FilteredElementCollector(doc).OfClass(typeof(RevitLinkType)).Cast<RevitLinkType>()
-                    .Select(t => Logic.ModelNames.Bare(t.Name)));
+                    .Select(t => ModelNames.Bare(t.Name)));
                 reply.Documents.Add(item);
             }
             return reply;

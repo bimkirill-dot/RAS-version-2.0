@@ -1,0 +1,83 @@
+<Window x:Class="RASv2.ClashAnalysis.UI.ViewSettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Настройки вида коллизии" Width="500" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="{DynamicResource Bg}" Foreground="{DynamicResource Fg}" FontFamily="Segoe UI" FontSize="13">
+    <!-- Личные настройки вида для «Показать в Revit» (DECISIONS.md модуля, «Мост в Revit…»). Цвета — по теме Revit (код окна). -->
+    <Window.Resources>
+        <Style x:Key="Head" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,14,0,6" />
+        </Style>
+        <Style x:Key="Hint" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Muted}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="22,0,0,4" />
+        </Style>
+        <Style TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{DynamicResource Fg}" />
+            <Setter Property="Margin" Value="0,3,0,3" />
+        </Style>
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{DynamicResource Fg}" />
+            <Setter Property="Margin" Value="0,3,0,3" />
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="MinWidth" Value="100" />
+            <Setter Property="Padding" Value="12,4" />
+            <Setter Property="Margin" Value="8,0,0,0" />
+        </Style>
+    </Window.Resources>
+
+    <StackPanel Margin="20,14,20,18">
+        <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,2"
+                   Text="Как открывать коллизию по «Показать в Revit» на сайте коллизий. Настройки — ваши: у коллег свои." />
+
+        <TextBlock Style="{StaticResource Head}" Text="Тип вида" />
+        <RadioButton x:Name="Kind3D" GroupName="kind" Content="3D-вид — рамка вокруг пары" />
+        <RadioButton x:Name="KindPlan" GroupName="kind" Content="План — на уровне коллизии, секущая плоскость на её высоте" />
+        <RadioButton x:Name="KindSection" GroupName="kind" Content="Разрез — через коллизию (у стены — вдоль стены)" />
+        <RadioButton x:Name="KindAuto" GroupName="kind" Content="Авто — по элементам" />
+        <TextBlock Style="{StaticResource Hint}" Text="Перекрытие или фундаментная плита — план, стена — разрез, остальное — 3D." />
+
+        <TextBlock Style="{StaticResource Head}" Text="Показ" />
+        <RadioButton x:Name="ShowCrop" GroupName="show" Content="С обрезкой вокруг пары" />
+        <RadioButton x:Name="ShowIsolate" GroupName="show" Content="Изолировать элементы коллизии" />
+        <TextBlock Style="{StaticResource Hint}" Text="Остальное скрыто временно. Элемент связи по отдельности Revit не изолирует — видна вся его связь, но только в обрезке." />
+
+        <TextBlock Style="{StaticResource Head}" Text="Обрезка" />
+        <RadioButton x:Name="MarginSize" GroupName="margin" Content="По размеру элементов — половина размера пары, не меньше 0,5 м" />
+        <StackPanel Orientation="Horizontal">
+            <RadioButton x:Name="MarginFixed" GroupName="margin" Content="Запас" VerticalAlignment="Center" />
+            <TextBox x:Name="MarginBox" Width="60" Margin="8,0,6,0" Padding="3,1" VerticalContentAlignment="Center"
+                     Background="{DynamicResource Field}" Foreground="{DynamicResource Fg}" BorderBrush="{DynamicResource Line}" />
+            <TextBlock Text="м" VerticalAlignment="Center" />
+        </StackPanel>
+
+        <TextBlock Style="{StaticResource Head}" Text="Стиль" />
+        <ComboBox x:Name="StyleBox" Width="220" HorizontalAlignment="Left">
+            <ComboBoxItem Content="Каркас" />
+            <ComboBoxItem Content="Скрытые линии" />
+            <ComboBoxItem Content="Тонированный" />
+            <ComboBoxItem Content="Согласованные цвета" />
+            <ComboBoxItem Content="Реалистичный" />
+        </ComboBox>
+
+        <TextBlock Style="{StaticResource Head}" Text="Покраска" />
+        <CheckBox x:Name="Paint" Content="Красить элементы: первый — красный, второй — зелёный, как в Navisworks" />
+
+        <TextBlock Style="{StaticResource Head}" Text="Предупреждения на сайте" />
+        <CheckBox x:Name="WarnUnloaded" Content="Нужная связь выгружена" />
+        <CheckBox x:Name="WarnMissingLink" Content="Нужной связи нет в модели" />
+        <TextBlock Style="{StaticResource Hint}" Text="Когда показать нельзя совсем (нет моделей коллизии, нет элемента) — сообщение будет всегда." />
+
+        <TextBlock x:Name="Error" Foreground="#E5484D" TextWrapping="Wrap" Margin="0,10,0,0" Visibility="Collapsed" />
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+            <Button Content="Сохранить" IsDefault="True" Click="Save_Click" />
+            <Button Content="Отмена" IsCancel="True" />
+        </StackPanel>
+    </StackPanel>
+</Window>

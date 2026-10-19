@@ -57,6 +57,53 @@ namespace RASv2.Tests
                 var reply = BridgeProtocol.Text(BridgeProtocol.Write(new ShowReply { Ok = true, Warnings = { "Связь «Дом_OV01» выгружена" } }));
                 Check(reply.Contains("\"ok\":true") && reply.Contains("Дом_OV01") && reply.Contains("\"version\":1"), "ответ: " + reply);
             });
+            yield return Case("настройки вида: по умолчанию, запись и чтение, испорченный файл", () =>
+            {
+                var d = new ViewSettings();
+                Check(d.Kind == ViewSettings.Kind3D && !d.Isolate && d.MarginBySize && d.Style == ViewSettings.StyleShaded && d.Paint
+                      && d.WarnUnloaded && d.WarnMissingLink, "по умолчанию: 3D, по размеру, «Тонированный», красить, предупреждения");
+                var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "rasv2-tests-" + Guid.NewGuid().ToString("N"));
+                var path = System.IO.Path.Combine(dir, "view.json");
+                try
+                {
+                    Check(ViewSettings.Load(path).Kind == ViewSettings.Kind3D, "файла нет — по умолчанию");
+                    var s = new ViewSettings { Kind = ViewSettings.KindAuto, Isolate = true, MarginBySize = false, MarginMeters = 2.5, Style = ViewSettings.StyleHidden, Paint = false, WarnUnloaded = false };
+                    s.Save(path);
+                    s.Save(path); // повторная запись — заменой
+                    var r = ViewSettings.Load(path);
+                    Check(r.Kind == ViewSettings.KindAuto && r.Isolate && !r.MarginBySize && r.MarginMeters == 2.5 && r.Style == ViewSettings.StyleHidden
+                          && !r.Paint && !r.WarnUnloaded && r.WarnMissingLink, "записано — прочитано так же");
+                    System.IO.File.WriteAllText(path, "{\"kind\":\"plan\"}");
+                    r = ViewSettings.Load(path);
+                    Check(r.Kind == ViewSettings.KindPlan && r.Paint && r.MarginBySize && r.WarnUnloaded, "старый файл без новых полей — новые по умолчанию");
+                    System.IO.File.WriteAllText(path, "{\"kind\":\"cube\",\"style\":\"neon\",\"marginMeters\":500}");
+                    r = ViewSettings.Load(path);
+                    Check(r.Kind == ViewSettings.Kind3D && r.Style == ViewSettings.StyleShaded && r.MarginMeters == ViewSettings.MaxMargin, "незнакомое — по умолчанию, запас — в пределах");
+                    System.IO.File.WriteAllText(path, "не JSON");
+                    Check(ViewSettings.Load(path).Kind == ViewSettings.Kind3D, "испорченный файл — по умолчанию");
+                }
+                finally
+                {
+                    if (System.IO.Directory.Exists(dir)) System.IO.Directory.Delete(dir, true);
+                }
+            });
+            yield return Case("«Авто»: плита — план, стена — разрез, остальное — 3D", () =>
+            {
+                Check(ViewRules.KindFor(ViewSettings.KindAuto, new[] { "OST_Floors", "OST_DuctCurves" }) == ViewSettings.KindPlan, "перекрытие × воздуховод — план");
+                Check(ViewRules.KindFor(ViewSettings.KindAuto, new[] { "OST_StructuralFoundation", "OST_PipeCurves" }) == ViewSettings.KindPlan, "фундаментная плита — план");
+                Check(ViewRules.KindFor(ViewSettings.KindAuto, new[] { "OST_Walls", "OST_DuctCurves" }) == ViewSettings.KindSection, "стена — разрез");
+                Check(ViewRules.KindFor(ViewSettings.KindAuto, new[] { "OST_Walls", "OST_Floors" }) == ViewSettings.KindPlan, "стена × плита — план (плита первой)");
+                Check(ViewRules.KindFor(ViewSettings.KindAuto, new[] { "OST_Ceilings", "OST_Roofs" }) == ViewSettings.Kind3D, "потолки и крыши — 3D");
+                Check(ViewRules.KindFor(ViewSettings.KindSection, new[] { "OST_Floors" }) == ViewSettings.KindSection, "не «Авто» — как выбрано");
+            });
+            yield return Case("запас обрезки: по размеру — половина пары, не меньше 0,5 м; иначе — заданный", () =>
+            {
+                var s = new ViewSettings();
+                Check(ViewRules.MarginMeters(s, 0.4) == 0.5 && ViewRules.MarginMeters(s, 6) == 3, "по размеру");
+                s.MarginBySize = false;
+                s.MarginMeters = 1.5;
+                Check(ViewRules.MarginMeters(s, 6) == 1.5, "заданный");
+            });
             yield return Case("открыта отсоединённая копия — тоже находится", () =>
             {
                 var open = new[] { "Дом_AR01_отсоединено" };
