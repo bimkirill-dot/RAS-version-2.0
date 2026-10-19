@@ -918,7 +918,35 @@ public sealed class ClashStore
             while (r.Read()) h.Clashes.Add((r.GetInt64(0), r.GetInt64(1), (ClashState)r.GetInt32(2)));
         using (var r = Query(c, "SELECT o.ClashId, o.ReportId, o.NavisStatus FROM Occurrences o JOIN Clashes cl ON cl.Id = o.ClashId WHERE cl.ProjectId = $p", ("$p", projectId)))
             while (r.Read()) h.Occurrences.Add((r.GetInt64(0), r.GetInt64(1), r.GetInt32(2) != (int)NavisworksStatus.Resolved));
+        // статусы, поставленные на сайте, — с временем: состояние на прошлые даты не задним числом (20.10.2026)
+        using (var r = Query(c, $"""
+            SELECT ev.ClashId, ev.Time, ev.NewState FROM Events ev JOIN Clashes cl ON cl.Id = ev.ClashId
+            WHERE cl.ProjectId = $p AND ev.Kind = 'status' AND ev.NewState IS NOT NULL AND {NotSystemEvent}
+            """, ("$p", projectId)))
+            while (r.Read()) h.ManualStates.Add((r.GetInt64(0), Database.Time(r.GetString(1)), (ClashState)r.GetInt32(2)));
         return h;
+    }
+
+    /// <summary>
+    /// Записи «смена статуса», которые сделал не человек, а сам сайт при обновлении базы: склейка результатов одной пары, склейка
+    /// переименованных моделей, «Ждёт проверки» → «Исправлена». В истории статусов и «Решениях» сводки не считаются (20.10.2026).
+    /// </summary>
+    private const string NotSystemEvent = """
+        (ev.Text IS NULL OR (ev.Text NOT LIKE 'Одна пара элементов — одна коллизия%' AND ev.Text NOT LIKE 'Та же коллизия под другим именем файла модели%'
+                             AND ev.Text NOT LIKE 'Статуса «Ждёт проверки» больше нет%'))
+        """;
+
+    /// <summary>Коллизии проекта с пояснением: комментарий или текст к смене статуса на сайте (сводка: «допущены без пояснения»).</summary>
+    public HashSet<long> ExplainedClashes(long projectId)
+    {
+        using var c = _db.Open();
+        var set = new HashSet<long>();
+        using var r = Query(c, $"""
+            SELECT DISTINCT ev.ClashId FROM Events ev JOIN Clashes cl ON cl.Id = ev.ClashId
+            WHERE cl.ProjectId = $p AND ev.Kind IN ('comment', 'status') AND ev.Text IS NOT NULL AND trim(ev.Text) <> '' AND {NotSystemEvent}
+            """, ("$p", projectId));
+        while (r.Read()) set.Add(r.GetInt64(0));
+        return set;
     }
 
     /// <summary>История сайта: всё или по проекту, новые сверху; limit — сколько последних.</summary>

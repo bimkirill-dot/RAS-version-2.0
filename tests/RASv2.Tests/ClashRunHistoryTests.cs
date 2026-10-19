@@ -40,6 +40,36 @@ namespace RASv2.Tests
 
         private static int Count(Dictionary<long, ClashState> s, ClashState state) => s.Values.Count(v => v == state);
 
+        /// <summary>
+        /// Статусы сайта по журналу (одна проверка, отчёты 01, 08, 14): 1 — есть везде, допущена 09.10; 2 — есть везде, отмечена
+        /// исправленной 15.10 (ещё в отчёте 14); 3 — новая 14, допущена 15.10; 4 — есть 01 и 08, отмечена исправленной 03.10,
+        /// а в 08 снова есть (вернулась), сейчас активная; 5 — есть 01, нет в 08 (исправлена отчётом).
+        /// </summary>
+        private static RunHistory Marked()
+        {
+            var h = new RunHistory();
+            h.Reports.AddRange(new[] { (11L, D1), (12L, D2), (13L, D3) });
+            h.ReportTests.AddRange(new[] { (11L, 1L), (12L, 1L), (13L, 1L) });
+            h.Clashes.AddRange(new[] { (1L, 1L, ClashState.Accepted), (2L, 1L, ClashState.Fixed), (3L, 1L, ClashState.Accepted),
+                                       (4L, 1L, ClashState.Active), (5L, 1L, ClashState.Fixed) });
+            h.Occurrences.AddRange(new[]
+            {
+                (1L, 11L, true), (1L, 12L, true), (1L, 13L, true),
+                (2L, 11L, true), (2L, 12L, true), (2L, 13L, true),
+                (3L, 13L, true),
+                (4L, 11L, true), (4L, 12L, true), (4L, 13L, true),
+                (5L, 11L, true),
+            });
+            h.ManualStates.AddRange(new[]
+            {
+                (1L, new DateTime(2026, 10, 9, 10, 0, 0), ClashState.Accepted),
+                (2L, new DateTime(2026, 10, 15, 10, 0, 0), ClashState.Fixed),
+                (3L, new DateTime(2026, 10, 15, 11, 0, 0), ClashState.Accepted),
+                (4L, new DateTime(2026, 10, 3, 9, 0, 0), ClashState.Fixed),
+            });
+            return h;
+        }
+
         public static IEnumerable<KeyValuePair<string, Action>> All()
         {
             yield return Case("дни прогонов — по отчётам проверок", () =>
@@ -79,6 +109,27 @@ namespace RASv2.Tests
                       $"08→14: было {b.Was}, вернулись {b.Returned}, в новых проверках {b.NewTests}, стало {b.Now}");
                 foreach (var c in h.Changes())
                     Check(c.Was + c.Appeared - c.Fixed - c.Accepted - c.Gone == c.Now, "сходится " + c.Day.Day);
+            });
+            yield return Case("статусы сайта — с того дня, когда поставлены, а не задним числом", () =>
+            {
+                var h = Marked();
+                var s2 = h.StatesAt(D2);
+                Check(s2[1] == ClashState.Active, "1: допущена 09.10 — на 08.10 ещё активная");
+                Check(h.StatesAt(new DateTime(2026, 10, 5))[4] == ClashState.Fixed, "4: отмечена исправленной 03.10 — на 05.10 исправлена");
+                Check(s2[4] == ClashState.Active, "4: в отчёте 08.10 снова есть — вернулась");
+                Check(s2[5] == ClashState.Fixed && !h.PresentAt(D2).Contains(5), "5: нет в отчёте 08.10 — исправлена отчётом");
+                var s3 = h.StatesAt(D3);
+                Check(s3[1] == ClashState.Accepted && s3[2] == ClashState.Fixed && h.PresentAt(D3).Contains(2), "14 (сейчас): 1 допущена, 2 отмечена, ещё в отчёте");
+            });
+            yield return Case("мост: новая и сразу допущенная — пришла и ушла; отмеченная на сайте — отдельно", () =>
+            {
+                var c = Marked().Change(D2, D3);
+                Check(c.Was == 3 && c.New == 1 && c.Accepted == 2 && c.FixedManual == 1 && c.Fixed == 0 && c.Now == 1,
+                      $"08→14: было {c.Was} (1, 2, 4), новые {c.New} (3), допущены {c.Accepted} (1, 3), отмечены {c.FixedManual} (2), стало {c.Now} (4)");
+                Check(c.Was + c.Appeared - c.Went == c.Now, "сходится");
+                Check(c.Entered[3] == RunChange.NewKind && c.Left[3] == RunChange.AcceptedKind && c.Left[2] == RunChange.FixedManualKind, "виды по коллизиям");
+                var a = Marked().Change(D1, D2);
+                Check(a.Was == 4 && a.Fixed == 1 && a.Now == 3 && a.Returned == 0, $"01→08: 5 исправлена отчётом, 4 активна в обе даты: {a.Was}→{a.Now}");
             });
             yield return Case("мост через прогон: появившаяся в промежуточном — новая, а не «в новых проверках»", () =>
             {

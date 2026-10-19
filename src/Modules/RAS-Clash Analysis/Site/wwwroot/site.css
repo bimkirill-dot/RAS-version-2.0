@@ -175,6 +175,26 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .grid.recur-table th { white-space: normal; vertical-align: bottom; }
 .grid.recur-table td .badge { white-space: nowrap; }
 .recur-table td.cut { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* сводка: «Главное», период, плитки с пояснением, решения, «Как считается» (20.10.2026) */
+.period-note { margin: -6px 0 0; font-size: 13px; }
+.sum-block.lead { border-left: 4px solid var(--accent); }
+.lead-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; font-size: 14.5px; line-height: 1.45; }
+.lead-list li.good { color: var(--fixed); font-weight: 600; }
+.lead-list li.bad { color: var(--active); font-weight: 600; }
+.lead-list li.warn { color: var(--pending); }
+.st-note { font-size: 12px; margin-top: 4px; line-height: 1.3; }
+.decisions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.decisions li { padding: 8px 10px; border-radius: 8px; background: var(--bg); font-size: 13.5px; }
+.decisions li.clickable { cursor: pointer; }
+.decisions li.clickable:hover { outline: 1px solid var(--accent); }
+.warn-text { color: var(--pending); font-weight: 600; }
+.sum-help { font-size: 13px; color: var(--muted); padding: 0 4px; }
+.sum-help summary { cursor: pointer; color: var(--accent); }
+.sum-help ul { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.changed-table { table-layout: fixed; width: 100%; }
+.changed-table td.cut { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.changed-table .tag { white-space: nowrap; margin-left: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+.models-table td.cut { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recur-dist { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .recur-dist .chip { padding: 3px 10px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
 .recur-dist .chip b { color: var(--text); margin-left: 4px; font-variant-numeric: tabular-nums; }
@@ -210,8 +230,11 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .delta-total.up, .delta-cell.up { color: var(--active); }
 /* печать сводки — на A4: без шапки, боковой панели и отборов */
 @media print {
-    header.top, aside.side, .ribbon, .project-head .kpis, .blocks-warn { display: none !important; }
+    header.top, aside.side, aside.panel, .ribbon, .project-head .kpis, .blocks-warn, .no-print, .sum-help { display: none !important; }
     .body { display: block !important; }
+    /* вся сводка, а не только видимое на экране: без своей прокрутки и высоты окна */
+    .project-page { height: auto !important; }
+    .content.scroll { overflow: visible !important; }
     .sum-block, .sum-tile { break-inside: avoid; box-shadow: none; }
     .summary { gap: 10px; }
 }

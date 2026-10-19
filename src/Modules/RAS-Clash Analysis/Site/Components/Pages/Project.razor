@@ -493,7 +493,12 @@
             {
                 @* сводка проекта (DECISIONS.md, «Сводка проекта»): в отборах боковой панели *@
                 <section class="content scroll">
-                    <div class="list-title"><h2>@SummaryPageTitle(_view.SummaryPage)</h2><span class="muted small">@ScopeTitle</span></div>
+                    <div class="list-title">
+                        <h2>@SummaryPageTitle(_view.SummaryPage)</h2><span class="muted small">@ScopeTitle</span>
+                        <span class="spacer"></span>
+                        @* отчёт для совещания: печать или PDF этой страницы (на печати — без шапки, боковой панели и отборов) *@
+                        <button class="btn small no-print" onclick="window.print()" title="Распечатать или сохранить в PDF (в окне печати — «Сохранить как PDF»)">Печать / PDF</button>
+                    </div>
                     <ProjectSummary ProjectId="Id" Page="@_view.SummaryPage" Rows="_base" Tests="ScopeTests.ToList()" Reports="ScopeReports.ToList()"
                                     Missing="_missing.Count(m => InCriticality(m.Test) && (_filter.Block == null || m.Test.Block == _filter.Block))"
                                     Outside="_outside" CategoryOf="CategoryOf" SubOf="SubOf" Categories="_categoryOrder" SubOrder="_subOrder"
@@ -1554,7 +1559,7 @@
             _view.RunDate = d.RunDay;
             _view.RunFilter = d.RunKind;
         }
-        else states.Add(((int)ClashState.Active).ToString());
+        else states.Add(((int)(d.State ?? ClashState.Active)).ToString());
         SetScope(_filter.Criticality, block, type);
         Go(0);
     }
