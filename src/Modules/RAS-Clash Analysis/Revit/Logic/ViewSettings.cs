@@ -104,7 +104,7 @@ namespace RASv2.ClashAnalysis.Logic
             return ViewSettings.Kind3D;
         }
 
-        /// <summary>Запас вокруг пары, м: «по размеру элементов» — половина наибольшего размера пары, не меньше 0,5 м; иначе — заданный.</summary>
+        /// <summary>Запас вокруг места коллизии, м: «по размеру» — половина наибольшего размера места коллизии, не меньше 0,5 м; иначе — заданный.</summary>
         public static double MarginMeters(ViewSettings settings, double pairSizeMeters) =>
             settings.MarginBySize ? Math.Max(0.5, 0.5 * pairSizeMeters) : settings.MarginMeters;
     }

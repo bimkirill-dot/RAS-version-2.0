@@ -92,7 +92,8 @@ namespace RASv2.ClashAnalysis.Showing
                 return new ShowReply { Error = "Показать нечего — элементов коллизии нет в открытой модели.", Warnings = warnings };
             }
 
-            if (!Bounds(found, out var min, out var max)) return ShowReply.Fail("У элементов коллизии нет видимой формы — показать нечего.");
+            // рамка, план и разрез — вокруг места коллизии, а не вокруг элементов целиком
+            if (!Zone(found, out var min, out var max)) return ShowReply.Fail("У элементов коллизии нет видимой формы — показать нечего.");
             var size = max - min;
             var margin = ViewRules.MarginMeters(settings, Math.Max(size.X, Math.Max(size.Y, size.Z)) / Metre) * Metre;
             var kind = ViewRules.KindFor(settings.Kind, found.Select(f => f.Element.Category?.BuiltInCategory.ToString()));
@@ -234,23 +235,96 @@ namespace RASv2.ClashAnalysis.Showing
             return string.IsNullOrEmpty(doc.PathName) ? doc.Title : doc.PathName;
         }
 
-        /// <summary>Габарит пары в координатах открытой модели (у элемента связи — с положением связи).</summary>
-        private static bool Bounds(List<Found> found, out XYZ min, out XYZ max)
+        /// <summary>
+        /// Место коллизии в координатах открытой модели — вокруг него рамка, план и разрез (разработчик, 19.10.2026: элемент связи
+        /// большой — рамка по его габариту захватывала его целиком). Точно — пересечение тел двух элементов (у связи — с её
+        /// положением); пересечения нет (проверка «ближе допуска») или Revit его не посчитал — по габаритам: общая часть, иначе
+        /// промежуток (ClashZone). Найден один элемент — его габарит.
+        /// </summary>
+        private static bool Zone(List<Found> found, out XYZ min, out XYZ max)
         {
             min = max = null;
-            foreach (var f in found)
+            var boxes = found.Select(Box).ToList();
+            var pair = Enumerable.Range(0, found.Count).Where(i => boxes[i] != null).Take(2).ToList();
+            if (pair.Count == 0) return false;
+            if (pair.Count == 1)
             {
-                var bb = f.Element.get_BoundingBox(null);
-                if (bb == null) continue;
-                for (var i = 0; i < 8; i++)
-                {
-                    var corner = new XYZ((i & 1) == 0 ? bb.Min.X : bb.Max.X, (i & 2) == 0 ? bb.Min.Y : bb.Max.Y, (i & 4) == 0 ? bb.Min.Z : bb.Max.Z);
-                    var p = f.Transform.OfPoint(corner);
-                    min = min == null ? p : new XYZ(Math.Min(min.X, p.X), Math.Min(min.Y, p.Y), Math.Min(min.Z, p.Z));
-                    max = max == null ? p : new XYZ(Math.Max(max.X, p.X), Math.Max(max.Y, p.Y), Math.Max(max.Z, p.Z));
-                }
+                (min, max) = boxes[pair[0]].Value;
+                return true;
             }
+            var a = boxes[pair[0]].Value;
+            var b = boxes[pair[1]].Value;
+            if (Intersection(found[pair[0]], found[pair[1]], out min, out max)) return true;
+            var x = ClashZone.Axis(a.Min.X, a.Max.X, b.Min.X, b.Max.X);
+            var y = ClashZone.Axis(a.Min.Y, a.Max.Y, b.Min.Y, b.Max.Y);
+            var z = ClashZone.Axis(a.Min.Z, a.Max.Z, b.Min.Z, b.Max.Z);
+            min = new XYZ(x.Min, y.Min, z.Min);
+            max = new XYZ(x.Max, y.Max, z.Max);
+            return true;
+        }
+
+        /// <summary>Габарит элемента в координатах открытой модели (у элемента связи — с положением связи).</summary>
+        private static (XYZ Min, XYZ Max)? Box(Found f)
+        {
+            var bb = f.Element.get_BoundingBox(null);
+            if (bb == null) return null;
+            XYZ min = null, max = null;
+            for (var i = 0; i < 8; i++)
+                Grow(ref min, ref max, f.Transform.OfPoint(Corner(bb, i)));
+            return (min, max);
+        }
+
+        /// <summary>Пересечение тел двух элементов — его габарит; нет пересечения или Revit не посчитал — false.</summary>
+        private static bool Intersection(Found a, Found b, out XYZ min, out XYZ max)
+        {
+            min = max = null;
+            var solidsA = Solids(a);
+            var solidsB = Solids(b);
+            var tries = 0;
+            foreach (var sa in solidsA)
+                foreach (var sb in solidsB)
+                {
+                    // сложные семейства — много тел: ограничение, чтобы Revit не задумался
+                    if (++tries > 200) return min != null;
+                    try
+                    {
+                        var common = BooleanOperationsUtils.ExecuteBooleanOperation(sa, sb, BooleanOperationsType.Intersect);
+                        if (common == null || common.Volume < 1e-9) continue;
+                        var bb = common.GetBoundingBox();
+                        for (var i = 0; i < 8; i++) Grow(ref min, ref max, bb.Transform.OfPoint(Corner(bb, i)));
+                    }
+                    catch (Autodesk.Revit.Exceptions.ApplicationException)
+                    {
+                        // Revit не смог пересечь эти тела — место найдётся по габаритам
+                    }
+                }
             return min != null;
+        }
+
+        private static List<Solid> Solids(Found f)
+        {
+            var list = new List<Solid>();
+            Collect(f.Element.get_Geometry(new Options { DetailLevel = ViewDetailLevel.Fine }), list);
+            return f.Link == null ? list : list.Select(s => SolidUtils.CreateTransformed(s, f.Transform)).ToList();
+        }
+
+        private static void Collect(GeometryElement geometry, List<Solid> list)
+        {
+            if (geometry == null) return;
+            foreach (var obj in geometry)
+            {
+                if (obj is Solid solid && solid.Volume > 1e-9) list.Add(solid);
+                else if (obj is GeometryInstance instance) Collect(instance.GetInstanceGeometry(), list);
+            }
+        }
+
+        private static XYZ Corner(BoundingBoxXYZ bb, int i) =>
+            new XYZ((i & 1) == 0 ? bb.Min.X : bb.Max.X, (i & 2) == 0 ? bb.Min.Y : bb.Max.Y, (i & 4) == 0 ? bb.Min.Z : bb.Max.Z);
+
+        private static void Grow(ref XYZ min, ref XYZ max, XYZ p)
+        {
+            min = min == null ? p : new XYZ(Math.Min(min.X, p.X), Math.Min(min.Y, p.Y), Math.Min(min.Z, p.Z));
+            max = max == null ? p : new XYZ(Math.Max(max.X, p.X), Math.Max(max.Y, p.Y), Math.Max(max.Z, p.Z));
         }
 
         /// <summary>В нашем виде — только связи коллизии (встречное предложение принято 19.10.2026: вместо «скройте связь»).</summary>
