@@ -134,6 +134,8 @@ public sealed class SummaryDrill
     public string Search { get; set; }
     /// <summary>Статус в отборе списка (по умолчанию — «Активная»).</summary>
     public ClashState? State { get; set; }
+    /// <summary>Тип элемента (ClashFacets.ElementTypeKey).</summary>
+    public string ElementType { get; set; }
     public long? ClashId { get; set; }
     public bool ToReports { get; set; }
 }

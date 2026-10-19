@@ -44,8 +44,10 @@ public sealed class ProjectView
     public bool CategoriesOpen { get; set; }
     /// <summary>«Тип проверки» на боковой панели раскрыт — типы видны подразделами.</summary>
     public bool TypesOpen { get; set; }
-    /// <summary>Страница сводки (last / overall / compare) — помнится, пока открыта вкладка браузера.</summary>
-    public string SummaryPage { get; set; } = "last";
+    /// <summary>Страница сводки (dash / analytics / compare) — помнится, пока открыта вкладка браузера.</summary>
+    public string SummaryPage { get; set; } = "dash";
+    /// <summary>Вкладка «Аналитики» (overview / blocks / models / types / levels / recur / quality / progress).</summary>
+    public string SummaryTab { get; set; } = "overview";
     /// <summary>Страницы сводки на боковой панели раскрыты.</summary>
     public bool SummaryOpen { get; set; }
     /// <summary>Развёрнутые категории в «Типе проверки» (при открытии свёрнуты; выбранная — разворачивается).</summary>
