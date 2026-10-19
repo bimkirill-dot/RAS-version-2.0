@@ -171,11 +171,6 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .chart .dot { fill: var(--panel); stroke-width: 2; }
 .chart-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: center; font-size: 12.5px; color: var(--muted); margin-top: 4px; }
 .chart-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
-.sum-table .fold-btn { border: 0; background: none; color: var(--muted); cursor: pointer; width: 18px; padding: 0; margin-right: 4px; font-size: 12px; }
-.sum-table .fold-btn:hover { color: var(--accent); }
-.sum-table .fold-gap { display: inline-block; width: 22px; }
-.sum-table tr.sub-row td:first-child { padding-left: 40px; }
-.sum-table tr.sub-row td { font-size: 13px; }
 .recur-table { table-layout: fixed; width: 100%; }
 .grid.recur-table th { white-space: normal; vertical-align: bottom; }
 .grid.recur-table td .badge { white-space: nowrap; }

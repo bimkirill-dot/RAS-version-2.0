@@ -3,8 +3,8 @@
 @* Сводка проекта (DECISIONS.md модуля, «Сводка проекта»): лучшее из образца автора статьи и нашего наброска — плитки с изменением
    к прошлому прогону, изменение активных между двумя датами, тренд стопкой, блоки × категории, прогресс категорий, проверки,
    повторяющиеся, качество данных, сравнение прогонов. Действуют отборы боковой панели (блок, тип проверки / категория).
-   Нажатие — к коллизиям; в «Прогрессе» — отбор категории / подкатегории здесь же (19.10.2026).
-   Деление — уровнем ниже выбранного: весь проект — по категориям (в прогрессе ▸ раскрывает подкатегории), выбрана категория —
+   Нажатие — к коллизиям; «Прогресс» — только цифры (19.10.2026).
+   Деление — уровнем ниже выбранного: весь проект — по категориям, выбрана категория —
    по её подкатегориям, выбрана подкатегория (или у категории их нет) — по типам проверок; категорий нет — по блокам. *@
 <div class="summary">
     @if (_days.Count == 0)
@@ -96,45 +96,21 @@
 
         @* 4. прогресс по категориям (или по блокам, если категорий нет) *@
         <section class="sum-block">
-            <h3>Прогресс по @LevelDative <span class="muted small">— сколько исправлено@(_by == By.Category && _subs.Count > 0 ? "; ▸ — подкатегории" : ""); линии — как менялся % по прогонам</span></h3>
+            <h3>Прогресс по @LevelDative <span class="muted small">— сколько исправлено; линии — как менялся % по прогонам</span></h3>
+            @* только цифры — без выбора категории и раскрытия подкатегорий (разработчик, 19.10.2026) *@
             <table class="grid sum-table">
                 <thead><tr><th>@LevelHead</th><th class="num">Всего</th><th class="num">Активные</th><th class="num">Исправлены</th><th class="num">Допущены</th><th class="sum-progress-head">Исправлено</th></tr></thead>
                 <tbody>
-                    @foreach (var g in _groups)
+                    @foreach (var group in _groups)
                     {
-                        var group = g;
-                        var subs = _subs.TryGetValue(group.Key, out var s) ? s : null;
-                        var open = subs != null && _expanded.Contains(group.Key);
-                        <tr class="clickable" @onclick="() => DrillGroup(group.Key)">
-                            <td>
-                                @if (subs != null)
-                                {
-                                    <button class="fold-btn" title="@(open ? "Свернуть подкатегории" : "Показать подкатегории")" @onclick="() => ToggleSubs(group.Key)" @onclick:stopPropagation="true">@(open ? "▾" : "▸")</button>
-                                }
-                                else if (_subs.Count > 0) { <span class="fold-gap"></span> }
-                                @Dot(GroupColor(group.Key))@group.Title
-                            </td>
+                        <tr>
+                            <td>@Dot(GroupColor(group.Key))@group.Title</td>
                             <td class="num">@group.Total</td>
                             <td class="num k-active">@group.Active</td>
                             <td class="num k-fixed">@group.Fixed</td>
                             <td class="num">@group.Accepted</td>
                             <td class="sum-progress"><div class="kpi-bar"><i style="width:@group.Percent%"></i></div><span>@group.Percent %</span></td>
                         </tr>
-                        @if (open)
-                        {
-                            @foreach (var x in subs)
-                            {
-                                var sub = x;
-                                <tr class="clickable sub-row" @onclick="() => DrillSub(group.Key, sub.Key)">
-                                    <td>@Dot(SubColor(group.Key, sub.Key))@sub.Title</td>
-                                    <td class="num">@sub.Total</td>
-                                    <td class="num k-active">@sub.Active</td>
-                                    <td class="num k-fixed">@sub.Fixed</td>
-                                    <td class="num">@sub.Accepted</td>
-                                    <td class="sum-progress"><div class="kpi-bar"><i style="width:@sub.Percent%"></i></div><span>@sub.Percent %</span></td>
-                                </tr>
-                            }
-                        }
                     }
                 </tbody>
             </table>
@@ -296,9 +272,6 @@
     /// <summary>По чему делится сводка: на уровень ниже выбранного на боковой панели.</summary>
     private enum By { Block, Category, Sub, Type }
     private By _by;
-    /// <summary>Подкатегории категорий для раскрытия в «Прогрессе» (только при делении по категориям).</summary>
-    private Dictionary<string, List<Group>> _subs = new();
-    private readonly HashSet<string> _expanded = new();
     [Parameter] public EventCallback<SummaryDrill> Drill { get; set; }
 
     private const int RecurMin = 2;
@@ -388,15 +361,6 @@
         Func<ClashRow, string> groupOf = _by == By.Block ? r => r.Block : r => KeyOf(r.TestName, r.Type);
         var order = _by == By.Block ? _matrixRows : _matrixCols;
         _groups = _rows.GroupBy(groupOf).Select(g => GroupOf(g.Key, GroupTitle(g.Key), g)).OrderBy(g => order.IndexOf(g.Key)).ToList();
-        _subs = new();
-        if (_by == By.Category)
-            foreach (var g in _rows.GroupBy(r => CategoryOf(r.TestName)).Where(g => g.Key != "" && g.Any(r => SubOf(r.TestName) != "")))
-            {
-                var subOrder = SubOrder.TryGetValue(g.Key, out var so) ? so : new List<string>();
-                _subs[g.Key] = g.GroupBy(r => SubOf(r.TestName))
-                    .Select(x => GroupOf(x.Key, x.Key == "" ? "Без подкатегории" : x.Key, x))
-                    .OrderBy(x => x.Key == "" ? int.MaxValue : subOrder.IndexOf(x.Key)).ToList();
-            }
         var testGroup = (Tests ?? new()).ToDictionary(t => t.Id, t => _by == By.Block ? t.Block : KeyOf(t.Name, t.Type));
         var palette = new[] { "--cat-violet", "--cat-teal", "--cat-orange", "--cat-blue", "--cat-green", "--cat-red", "--cat-yellow", "--cat-gray" };
         _progressLines = _groups.Select((g, i) =>
@@ -561,11 +525,6 @@
     };
     private string LevelHead => _by switch { By.Category => "Категория", By.Sub => "Подкатегория", By.Type => "Тип проверки", _ => "Блок" };
 
-    private void ToggleSubs(string category)
-    {
-        if (!_expanded.Remove(category)) _expanded.Add(category);
-    }
-
     /// <summary>Заголовок столбца: тип проверки — двумя строками, до «/» и после (различаются обычно концом названия).</summary>
     private RenderFragment ColHead(string key) => __builder =>
     {
@@ -640,16 +599,6 @@
         return Drill.InvokeAsync(d);
     }
 
-    /// <summary>«Прогресс»: строка — отбор этой категории / подкатегории / типа / блока здесь же, в сводке (19.10.2026), без перехода к списку.</summary>
-    private Task DrillGroup(string key)
-    {
-        var d = DrillTo(key);
-        d.Stay = true;
-        return Drill.InvokeAsync(d);
-    }
-
-    private Task DrillSub(string category, string sub) =>
-        Drill.InvokeAsync(new SummaryDrill { SetCategory = true, Category = category, Subcategory = sub, Stay = true });
     private Task DrillTest(string type) => Drill.InvokeAsync(new SummaryDrill { TestType = type });
     private static string Pct(int value, int top) =>
         (top <= 0 ? 0 : Math.Max(100.0 * value / top, value > 0 ? 1 : 0)).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + "%";

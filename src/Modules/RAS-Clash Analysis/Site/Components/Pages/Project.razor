@@ -1495,15 +1495,6 @@
     {
         if (d.ToReports) { Go(2); return; }
         if (d.ClashId.HasValue) { Nav.NavigateTo("clash/" + d.ClashId.Value); return; }
-        if (d.Stay)
-        {
-            // «Прогресс» сводки: отбор на боковой панели, сводка пересчитывается здесь же (просьба разработчика 19.10.2026)
-            if (d.SetCategory) { _filter.Category = d.Category; _filter.Subcategory = d.Category == null ? null : d.Subcategory; }
-            if (d.TestType != null) { _filter.Category = null; _filter.Subcategory = null; }
-            if (_filter.Category != null) _view.CategoriesExpanded.Add(_filter.Category);
-            SetScope(_filter.Criticality, d.SetBlock ? d.Block : _filter.Block, d.TestType ?? (d.SetCategory ? null : _filter.TestType));
-            return;
-        }
         Freeze();
         if (d.SetCategory) { _filter.Category = d.Category; _filter.Subcategory = d.Category == null ? null : d.Subcategory; }
         var block = d.SetBlock ? d.Block : _filter.Block;
