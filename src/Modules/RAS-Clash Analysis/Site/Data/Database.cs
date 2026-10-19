@@ -309,6 +309,12 @@ public sealed class Database
         ALTER TABLE Categories ADD COLUMN Color TEXT;
         ALTER TABLE Subcategories ADD COLUMN Color TEXT;
         """,
+
+        // 14 — 19.10.2026 (DECISIONS.md, «История сайта»): загрузки отчётов до появления истории — записями «Загрузка
+        // отчётов» с их временем (RestoreImports); лента — по времени, а не по порядку записи
+        """
+        CREATE INDEX SiteLogTime ON SiteLog(Time);
+        """,
     };
 
     /// <summary>
@@ -454,7 +460,40 @@ public sealed class Database
         [5] = MergePairs,
         [6] = RetimeAllFixes,
         [7] = MergeRenamed,
+        [14] = RestoreImports,
     };
+
+    /// <summary>
+    /// Шаг 14: отчёты, загруженные до появления истории сайта (до её первой записи; истории нет — все), — в историю, как пишет
+    /// загрузка: одной записью на прогон блока («S1 · 01.10.2026: загружено 17 отчётов»), время — когда загружены, с пометкой
+    /// «восстановлено по базе». Что изменилось в каждой загрузке, по базе уже не восстановить — без этого.
+    /// </summary>
+    private static void RestoreImports(SqliteConnection c, SqliteTransaction tx)
+    {
+        string start;
+        using (var cmd = Cmd(c, tx, "SELECT MIN(Time) FROM SiteLog"))
+            start = cmd.ExecuteScalar() as string;
+        var runs = new List<(long Project, string Name, string Block, string Day, string Time, int Count)>();
+        using (var cmd = Cmd(c, tx, """
+            SELECT r.ProjectId, p.Name, r.Block, substr(r.ReportDate, 1, 10), MIN(r.Imported), COUNT(*)
+            FROM Reports r JOIN Projects p ON p.Id = r.ProjectId
+            WHERE $start IS NULL OR r.Imported < $start
+            GROUP BY r.ProjectId, r.Block, substr(r.ReportDate, 1, 10)
+            ORDER BY MIN(r.Imported)
+            """, ("$start", start)))
+        using (var r = cmd.ExecuteReader())
+            while (r.Read()) runs.Add((r.GetInt64(0), r.GetString(1), r.GetString(2), r.GetString(3), r.GetString(4), r.GetInt32(5)));
+        foreach (var run in runs)
+        {
+            var day = DateTime.ParseExact(run.Day, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+            Run(c, tx, """
+                INSERT INTO SiteLog(Time, ProjectId, ProjectName, Kind, Text, ClashId, Author)
+                VALUES($t, $p, $pn, $k, $x, NULL, NULL)
+                """, ("$t", run.Time), ("$p", run.Project), ("$pn", run.Name), ("$k", SiteHistory.Import),
+                ("$x", $"{SiteHistory.Run(run.Block, day)}: загружено {Services.Fmt.Plural(run.Count, "отчёт", "отчёта", "отчётов")}"
+                       + " — до появления истории сайта, восстановлено по базе"));
+        }
+    }
 
     /// <summary>
     /// Шаг 7: имя файла модели больше не входит в «личность» коллизии (ClashRules.IdentityKey). Коллизии одной проверки с

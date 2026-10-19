@@ -1420,7 +1420,20 @@
     }
 
     /// <summary>Выбранное в «Типе проверки»: проверка, категория или null («все»).</summary>
-    private string TypeChosen => _filter.TestType ?? _filter.Subcategory ?? (_filter.Category == null ? null : _filter.Category == "" ? "Без категории" : _filter.Category);
+    /// <summary>
+    /// Что выбрано в «Типе проверки»: тип, «категория › подкатегория» (разработчик, 19.10.2026: у подкатегории — и её
+    /// категория), категория; ничего — null.
+    /// </summary>
+    private string TypeChosen
+    {
+        get
+        {
+            if (_filter.TestType != null) return _filter.TestType;
+            if (_filter.Category == null) return null;
+            var category = _filter.Category == "" ? "Без категории" : _filter.Category;
+            return _filter.Subcategory == null ? category : category + " › " + (_filter.Subcategory == "" ? "Без подкатегории" : _filter.Subcategory);
+        }
+    }
 
     /// <summary>Активные в категории (null — во всех) и подкатегории (null — во всей категории) — в выбранном блоке.</summary>
     private int ActiveInCategory(string category, string sub = null) =>

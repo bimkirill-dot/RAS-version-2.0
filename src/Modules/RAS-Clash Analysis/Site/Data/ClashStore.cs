@@ -949,7 +949,7 @@ public sealed class ClashStore
         return set;
     }
 
-    /// <summary>История сайта: всё или по проекту, новые сверху; limit — сколько последних.</summary>
+    /// <summary>История сайта: всё или по проекту, новые сверху (по времени: записи, восстановленные шагом 14 базы, — на своём месте); limit — сколько последних.</summary>
     public List<HistoryRow> History(long? projectId, int limit)
     {
         using var c = _db.Open();
@@ -960,7 +960,7 @@ public sealed class ClashStore
             LEFT JOIN Projects p ON p.Id = s.ProjectId
             LEFT JOIN Clashes cl ON cl.Id = s.ClashId
             WHERE $p IS NULL OR s.ProjectId = $p
-            ORDER BY s.Id DESC LIMIT $n
+            ORDER BY s.Time DESC, s.Id DESC LIMIT $n
             """, ("$p", projectId), ("$n", limit));
         while (r.Read())
             list.Add(new HistoryRow

@@ -22,6 +22,8 @@
     --pending-bg: #fdf3dc;
     --error: #d92d20;
     --row-hover: #f6f4ff;
+    --scroll: #c9cdd6;
+    --scroll-hover: #a9afbc;
     --row-selected: #ebe6fe;
     --bar: #f6b8ba;
     --d-ar: #d63384;
@@ -58,6 +60,8 @@ html[data-theme="dark"] {
     --pending-bg: #3b3218;
     --error: #ff7b72;
     --row-hover: #232836;
+    --scroll: #3a404c;
+    --scroll-hover: #545c6b;
     --row-selected: #2d2752;
     --bar: #6b2f33;
     --d-ar: #e8679f;
@@ -265,7 +269,7 @@ a.head-btn + .head-btn { margin-left: 8px; }
     .body { display: block !important; }
     /* вся сводка, а не только видимое на экране: без своей прокрутки и высоты окна */
     .project-page { height: auto !important; }
-    .content.scroll { overflow: visible !important; }
+    .content.scroll { overflow: visible !important; margin-right: 0; padding-right: 0; }
     .sum-block, .sum-tile { break-inside: avoid; box-shadow: none; }
     .summary { gap: 10px; }
     .checks-scroll { overflow: visible; }
@@ -440,8 +444,9 @@ textarea { width: 100%; resize: vertical; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
 .check { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); cursor: pointer; }
 
-/* страница проекта — на всю высоту окна: дерево | список | карточка, прокрутка у каждого своя */
-.project-page { display: flex; flex-direction: column; height: calc(100vh - 75px); min-height: 480px; }
+/* страница проекта — на всю высоту окна: дерево | список | карточка, прокрутка у каждого своя; 92 = шапка сайта и поля
+   страницы сверху и снизу — окно целиком не прокручивается (было 75: окно прокручивалось на 17 точек — вторая полоса справа) */
+.project-page { display: flex; flex-direction: column; height: calc(100vh - 92px); min-height: 480px; }
 .project-head { flex: none; }
 .project-head .tabs { margin-bottom: 8px; }
 /* боковая панель: 300 на широких экранах, на узких — уже (просьба разработчика 15.10.2026: шире, чтобы названия проверок читались) */
@@ -449,6 +454,10 @@ textarea { width: 100%; resize: vertical; }
 .body { flex: 1; min-height: 0; display: grid; grid-template-columns: var(--side-w) minmax(0, 1fr); gap: 12px; position: relative; }
 .content { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .content.scroll { overflow: auto; display: block; }
+/* полоса прокрутки раздела — справа за краем карточек, в поле страницы: рамки и кнопки раздела кончаются там же, где
+   плитки и отборы сверху (разработчик, 19.10.2026: «рамка ниже заканчивается раньше, чем верхняя»).
+   Сдвиг 14 = полоса 10 + зазор 4 */
+.content.scroll { margin-right: -14px; padding-right: 4px; }
 
 .ribbon { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: none; }
 
@@ -604,6 +613,15 @@ td .tag:first-child { margin: 0 6px 0 0; }
 /* место под полосу прокрутки — всегда: появляется она или нет (много строк / мало), ширина не меняется и столбцы не прыгают вбок
    (просьба разработчика 13.10.2026: при смене типа проверки страница прыгала в сторону) */
 html, .list, .side, .content.scroll { scrollbar-gutter: stable; }
+/* полосы прокрутки — тонкие, без стрелок, в тон теме: Edge и Chrome — ширина ровно 10 (на ней держится сдвиг раздела выше),
+   Firefox — «тонкая» */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--scroll); background-clip: padding-box; border: 2px solid transparent; border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background-color: var(--scroll-hover); }
+@supports not selector(::-webkit-scrollbar) {
+    * { scrollbar-width: thin; scrollbar-color: var(--scroll) transparent; }
+}
 .panel { overflow: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 0 14px 14px; }
 .panel-nav {
     position: sticky; top: 0; z-index: 2; background: var(--panel);
@@ -897,6 +915,7 @@ table.facts2 { border-radius: 8px; overflow: hidden; }
 
 @media (max-width: 1100px) {
     .project-page { height: auto; }
+    .content.scroll { margin-right: 0; padding-right: 0; }
     .body, .body.with-panel { grid-template-columns: 1fr; }
     .side { max-height: 20vh; }
     .list { max-height: 60vh; }
