@@ -719,9 +719,10 @@ th.sorted .sort-mark { opacity: 1; color: var(--accent); }
 .revit-show { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
 .revit-show .aim-icon { color: var(--accent); }
 /* прицел в строке списка — «Показать в Revit» */
-th.c-aim { width: 40px; text-align: center; color: var(--muted); }
-th.c-aim .aim-icon { vertical-align: -2px; }
-td.aim-cell { text-align: center; padding-left: 0; padding-right: 0; }
+th.c-aim { width: 40px; color: var(--muted); }
+/* значок в шапке и кнопка в строке — по центру одного столбца (общее правило таблиц выравнивает влево) */
+table.grid th.c-aim, table.grid td.aim-cell { text-align: center; padding-left: 0; padding-right: 0; }
+th.c-aim .aim-icon { vertical-align: -3px; }
 .aim-btn { display: inline-grid; place-items: center; width: 28px; height: 26px; padding: 0; border: 1px solid transparent; border-radius: 6px;
            background: none; color: var(--muted); cursor: pointer; }
 .aim-btn:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-bg); }
