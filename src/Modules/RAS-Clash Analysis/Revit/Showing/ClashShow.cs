@@ -13,7 +13,8 @@ namespace RASv2.ClashAnalysis.Showing
     /// «Показать в Revit» (DECISIONS.md, «Мост в Revit…»): в открытой модели найти модели коллизии (саму модель или связи) и
     /// оба элемента, открыть личный вид по настройкам («Настройки вида» на ленте): 3D с рамкой, план на уровне коллизии, разрез
     /// через неё или «Авто» по элементам; с обрезкой или изолировать; скрыть в виде связи, которые в коллизии не участвуют;
-    /// выделить элементы (и в связях) и покрасить цветами Navisworks. Только в контексте Revit API.
+    /// выделить элементы (и в связях) и покрасить цветами Navisworks: элемент модели — сам, элемент связи — фильтром вида.
+    /// Только в контексте Revit API.
     /// </summary>
     internal static class ClashShow
     {
@@ -28,9 +29,11 @@ namespace RASv2.ClashAnalysis.Showing
             public RevitLinkInstance Link;
             public Transform Transform = Transform.Identity;
             public Color Color;
+            /// <summary>Какой по счёту в коллизии: 0 — первый (красный), 1 — второй (зелёный).</summary>
+            public int Index;
         }
 
-        public static ShowReply Run(UIApplication app, ShowRequest request, ClashViews views, ClashPaint paint, ViewSettings settings)
+        public static ShowReply Run(UIApplication app, ShowRequest request, ClashViews views, ViewSettings settings)
         {
             var uidoc = app.ActiveUIDocument;
             if (uidoc == null) return ShowReply.Fail("В Revit не открыта модель — откройте модель, где есть эта коллизия.");
@@ -64,7 +67,7 @@ namespace RASv2.ClashAnalysis.Showing
                 {
                     var element = doc.GetElement(RevitCompat.Id(item.Id));
                     if (element == null) warnings.Add($"В модели «{hostTitle}» нет элемента {item.Id} — его удалили или модель не та.");
-                    else found.Add(new Found { Element = element, Color = color });
+                    else found.Add(new Found { Element = element, Color = color, Index = i });
                     continue;
                 }
                 var type = linkTypes[k - 2];
@@ -81,7 +84,7 @@ namespace RASv2.ClashAnalysis.Showing
                     warnings.Add($"В связи «{linkName}» нет элемента {item.Id} — его удалили или связь не та.");
                     continue;
                 }
-                found.Add(new Found { Element = linked, Link = instance, Transform = instance.GetTotalTransform(), Color = color });
+                found.Add(new Found { Element = linked, Link = instance, Transform = instance.GetTotalTransform(), Color = color, Index = i });
             }
 
             if (found.Count == 0)
@@ -110,6 +113,7 @@ namespace RASv2.ClashAnalysis.Showing
                 view.DetailLevel = ViewDetailLevel.Fine;
                 ShowOnlyUsedLinks(view, instances, found);
                 PaintOwn(doc, view, views, settings.Paint ? found : new List<Found>());
+                PaintLinked(doc, view, views, settings.Paint ? found : new List<Found>());
                 Isolate(view, found, settings.Isolate);
                 t.Commit();
             }
@@ -118,8 +122,6 @@ namespace RASv2.ClashAnalysis.Showing
             views.CloseOthers(uidoc, view.Id);
             uidoc.GetOpenUIViews().FirstOrDefault(v => v.ViewId == view.Id)?.ZoomAndCenterRectangle(min - Pad(margin), max + Pad(margin));
             uidoc.Selection.SetReferences(found.Select(f => f.Link == null ? new Reference(f.Element) : new Reference(f.Element).CreateLinkReference(f.Link)).ToList());
-            if (settings.Paint) paint.Show(doc, view.Id, found.Where(f => f.Link != null).Select(f => (f.Element, f.Transform, f.Color)));
-            else paint.Clear();
             uidoc.RefreshActiveView();
             return new ShowReply { Ok = true, Warnings = warnings };
         }
@@ -342,21 +344,63 @@ namespace RASv2.ClashAnalysis.Showing
         {
             foreach (var id in views.Painted(doc, view.Id))
                 if (doc.GetElement(id) != null) view.SetElementOverrides(id, new OverrideGraphicSettings());
-            var solid = new FilteredElementCollector(doc).OfClass(typeof(FillPatternElement)).Cast<FillPatternElement>()
-                .FirstOrDefault(p => p.GetFillPattern().IsSolidFill);
+            var solid = SolidFill(doc);
             var painted = new List<ElementId>();
             foreach (var f in found.Where(x => x.Link == null))
             {
-                var o = new OverrideGraphicSettings()
-                    .SetProjectionLineColor(Darker(f.Color))
-                    .SetSurfaceForegroundPatternColor(f.Color)
-                    .SetCutForegroundPatternColor(f.Color)
-                    .SetCutLineColor(Darker(f.Color));
-                if (solid != null) o.SetSurfaceForegroundPatternId(solid.Id).SetCutForegroundPatternId(solid.Id);
-                view.SetElementOverrides(f.Element.Id, o);
+                view.SetElementOverrides(f.Element.Id, Paint(f.Color, solid));
                 painted.Add(f.Element.Id);
             }
             views.SetPainted(doc, view.Id, painted);
+        }
+
+        /// <summary>
+        /// Элементы связи — фильтром нашего вида (разработчик, 19.10.2026: «через видимость графики можно перекрасить категорию
+        /// связанной модели»): Revit API не перекрашивает элемент внутри связи и не даёт перекрасить категорию в «своих» настройках
+        /// связи, а фильтр вида на элементы связи действует. Фильтр — категория элемента и, где Revit позволяет, его тип: красятся
+        /// не все воздуховоды связи, а этого типоразмера, и только в рамке вокруг места коллизии. Прежние свои фильтры — сняты.
+        /// </summary>
+        private static void PaintLinked(Document doc, View view, ClashViews views, List<Found> found)
+        {
+            var old = views.Filters(doc);
+            if (old.Count > 0) doc.Delete(old);
+            var solid = SolidFill(doc);
+            var typeName = new ElementId(BuiltInParameter.ALL_MODEL_TYPE_NAME);
+            foreach (var f in found.Where(x => x.Link != null))
+            {
+                var category = f.Element.Category?.Parent ?? f.Element.Category;
+                if (category == null) continue;
+                var categories = new List<ElementId> { category.Id };
+                ElementFilter rule = null;
+                var type = f.Element.Document.GetElement(f.Element.GetTypeId())?.Name;
+                try
+                {
+                    if (!string.IsNullOrEmpty(type) && ParameterFilterUtilities.GetFilterableParametersInCommon(doc, categories).Contains(typeName))
+                        rule = new ElementParameterFilter(ParameterFilterRuleFactory.CreateEqualsRule(typeName, type));
+                    var filter = views.NewFilter(doc, f.Index, categories, rule);
+                    view.AddFilter(filter.Id);
+                    view.SetFilterOverrides(filter.Id, Paint(f.Color, solid));
+                    view.SetFilterVisibility(filter.Id, true);
+                }
+                catch (Autodesk.Revit.Exceptions.ApplicationException)
+                {
+                    // категория, для которой Revit не даёт фильтр, — элемент только выделен, без покраски
+                }
+            }
+        }
+
+        private static FillPatternElement SolidFill(Document doc) =>
+            new FilteredElementCollector(doc).OfClass(typeof(FillPatternElement)).Cast<FillPatternElement>().FirstOrDefault(p => p.GetFillPattern().IsSolidFill);
+
+        private static OverrideGraphicSettings Paint(Color color, FillPatternElement solid)
+        {
+            var o = new OverrideGraphicSettings()
+                .SetProjectionLineColor(Darker(color))
+                .SetSurfaceForegroundPatternColor(color)
+                .SetCutForegroundPatternColor(color)
+                .SetCutLineColor(Darker(color));
+            if (solid != null) o.SetSurfaceForegroundPatternId(solid.Id).SetCutForegroundPatternId(solid.Id);
+            return o;
         }
 
         private static Color Darker(Color c) => new Color((byte)(c.Red * 0.55), (byte)(c.Green * 0.55), (byte)(c.Blue * 0.55));

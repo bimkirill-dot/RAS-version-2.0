@@ -13,7 +13,9 @@ namespace RASv2.ClashAnalysis.Showing
     /// коллизию в другом виде — вкладка прежнего закрывается. 3D-вид перестраивается для следующей коллизии; план и разрез
     /// создаются заново (уровень плана и направление разреза у вида не меняются), прежний — переименовывается и закрывается.
     /// Закрыли вкладку — вид удаляется из модели; оставшийся (Revit закрыли с открытым видом, сбой) — при следующем открытии
-    /// модели. Поведение — как у вида изменений RAS-Model History, код — свой (разработчик, 19.10.2026). Только в контексте Revit API.
+    /// модели. Поведение — как у вида изменений RAS-Model History, код — свой (разработчик, 19.10.2026). Фильтры покраски элементов
+    /// связи («…, первый (логин)», «…, второй (логин)») — служебные, как и вид: уходят вместе с последним своим видом модели.
+    /// Только в контексте Revit API.
     /// </summary>
     internal sealed class ClashViews
     {
@@ -31,16 +33,14 @@ namespace RASv2.ClashAnalysis.Showing
         }
 
         private readonly string _user;
-        private readonly ClashPaint _paint;
         private readonly ModuleLog _log;
         private readonly List<Tracked> _views = new List<Tracked>();
         private readonly List<Document> _opened = new List<Document>();
 
-        public ClashViews(string user, ClashPaint paint, ModuleLog log)
+        public ClashViews(string user, ModuleLog log)
         {
             _user = new string((user ?? "").Select(ch => "\\:{}[]|;<>?`~".IndexOf(ch) >= 0 ? '_' : ch).ToArray()).Trim();
             if (_user.Length == 0) _user = "пользователь";
-            _paint = paint;
             _log = log;
         }
 
@@ -138,7 +138,6 @@ namespace RASv2.ClashAnalysis.Showing
         {
             _views.RemoveAll(t => !t.Document.IsValidObject || t.Document.Equals(doc));
             _opened.RemoveAll(d => !d.IsValidObject || d.Equals(doc));
-            _paint.Clear(doc);
         }
 
         /// <summary>В простой: закрытые вкладки видов — удалить виды; в только что открытых моделях — оставшиеся.</summary>
@@ -159,9 +158,10 @@ namespace RASv2.ClashAnalysis.Showing
             {
                 var mine = gone.Where(t => t.Document.IsValidObject && t.Document.Equals(doc)).ToList();
                 var ids = mine.Where(t => doc.GetElement(t.View) != null).Select(t => t.View).ToList();
+                // своих видов в модели больше нет — и фильтры покраски не нужны
+                if (!_views.Any(t => !gone.Contains(t) && t.Document.IsValidObject && t.Document.Equals(doc))) ids.AddRange(Filters(doc));
                 // не удалился — больше не пытаемся (иначе ошибка в каждый простой): уберётся при следующем открытии модели
                 if (ids.Count > 0) Delete(doc, ids);
-                foreach (var t in mine) _paint.Clear(doc, t.View);
             }
             _views.RemoveAll(gone.Contains);
 
@@ -176,9 +176,29 @@ namespace RASv2.ClashAnalysis.Showing
                 var open = leftovers.Where(id => IsOpen(doc, id)).ToList();
                 foreach (var id in open) _views.Add(new Tracked { Document = doc, View = id, SeenOpen = true });
                 var closed = leftovers.Except(open).ToList();
+                if (open.Count == 0) closed.AddRange(Filters(doc));
                 if (closed.Count > 0 && CanChange(doc)) Delete(doc, closed);
             }
         }
+
+        /// <summary>
+        /// Фильтр покраски элемента связи (внутри транзакции; index 0 — первый элемент, 1 — второй): Revit API не перекрашивает
+        /// элемент внутри связи, а фильтр вида действует и на элементы связи (связь — «по основному виду», как по умолчанию).
+        /// Прежний такой фильтр удаляется (и с вида) — правила у нового свои.
+        /// </summary>
+        public ParameterFilterElement NewFilter(Document doc, int index, ICollection<ElementId> categories, ElementFilter rule)
+        {
+            var name = NamePrefix + (index == 0 ? ", первый" : ", второй") + " (" + _user + ")";
+            var old = new FilteredElementCollector(doc).OfClass(typeof(ParameterFilterElement)).Where(f => f.Name == name).Select(f => f.Id).ToList();
+            if (old.Count > 0) doc.Delete(old);
+            return rule == null ? ParameterFilterElement.Create(doc, name, categories) : ParameterFilterElement.Create(doc, name, categories, rule);
+        }
+
+        /// <summary>Свои фильтры покраски в модели.</summary>
+        public List<ElementId> Filters(Document doc) =>
+            new FilteredElementCollector(doc).OfClass(typeof(ParameterFilterElement))
+                .Where(f => f.Name.StartsWith(NamePrefix, StringComparison.Ordinal) && f.Name.EndsWith("(" + _user + ")", StringComparison.Ordinal))
+                .Select(f => f.Id).ToList();
 
         private static bool IsOpen(Document doc, ElementId view)
         {

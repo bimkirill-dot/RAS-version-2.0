@@ -14,7 +14,7 @@ using RASv2.Core;
 namespace RASv2.ClashAnalysis
 {
     /// <summary>
-    /// Работа модуля: мост (просьбы сайта), очередь в Revit, личный вид и покраска, «Настройки вида» на ленте. События Revit —
+    /// Работа модуля: мост (просьбы сайта), очередь в Revit, личный вид, «Настройки вида» на ленте. События Revit —
     /// через ядро (PRINCIPLES.md, раздел 4).
     /// </summary>
     internal sealed class BridgeApp
@@ -35,7 +35,6 @@ namespace RASv2.ClashAnalysis
         private BridgeServer _server;
         private ShowQueue _queue;
         private ClashViews _views;
-        private ClashPaint _paint;
         private volatile byte[] _status;
         private DateTime _statusAt;
 
@@ -49,9 +48,8 @@ namespace RASv2.ClashAnalysis
             var window = IntPtr.Zero;
             try { window = context.Application.MainWindowHandle; }
             catch (Exception) { /* окна ещё нет — Revit вперёд выходить не будет, остальное работает */ }
-            _paint = new ClashPaint();
-            _views = new ClashViews(Environment.UserName, _paint, _log);
-            _queue = new ShowQueue((app, request) => ClashShow.Run(app, request, _views, _paint, _settings), window, _log);
+            _views = new ClashViews(Environment.UserName, _log);
+            _queue = new ShowQueue((app, request) => ClashShow.Run(app, request, _views, _settings), window, _log);
             _status = BridgeProtocol.Write(new StatusReply { Revit = _year });
 
             var settings = context.AddButton("ViewSettings", "Настройки\nвида", typeof(ViewSettingsCommand),
@@ -93,7 +91,6 @@ namespace RASv2.ClashAnalysis
         {
             if (!(sender is UIApplication app)) return;
             _queue.EnsureEvent();
-            _paint.Register();
             _views.OnIdling();
             if (DateTime.UtcNow - _statusAt < StatusEvery) return;
             _statusAt = DateTime.UtcNow;
