@@ -115,7 +115,7 @@ public static class LoginPage
     private static string Setup(AntiforgeryTokenSet t, string error, string login, string name) => $"""
         <form class="login-box" method="post" action="/setup">
           <h1>Первый вход</h1>
-          <p class="muted">Учётных записей ещё нет. Создайте свою — администратора: вы будете заводить учётные записи коллегам («Настройки» → «Люди»).</p>
+          <p class="muted">Учётных записей ещё нет. Создайте свою — администратора: вы будете заводить учётные записи коллегам («Настройки» → «Сотрудники»).</p>
           {Error(error)}
           {Token(t)}
           <label>Логин<input name="login" value="{E(login)}" autocomplete="username" autofocus required /></label>
