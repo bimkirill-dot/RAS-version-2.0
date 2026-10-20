@@ -62,6 +62,7 @@ namespace RASv2.ModelHistory.UI
         {
             App.Instance?.Actions?.Run(app =>
             {
+                if (!Autodesk.Revit.UI.DockablePane.PaneExists(App.PaneId)) return; // модели ещё нет — панели тоже (Revit создаёт её с первой моделью)
                 var pane = app.GetDockablePane(App.PaneId);
                 if (show) pane.Show();
                 else pane.Hide();

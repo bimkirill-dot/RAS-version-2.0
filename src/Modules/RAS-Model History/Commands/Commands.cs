@@ -24,6 +24,13 @@ namespace RASv2.ModelHistory.Commands
                     journal.OpenWindow();
                     return Result.Succeeded;
                 }
+                // закреплённую панель Revit создаёт вместе с первой открытой моделью: на стартовой странице её ещё нет
+                // (было — окно «Сбой при выполнении внешней команды», 20.10.2026)
+                if (!DockablePane.PaneExists(App.PaneId))
+                {
+                    TaskDialog.Show("Журнал изменений", "Откройте модель — панель журнала появится вместе с ней.");
+                    return Result.Succeeded;
+                }
                 var pane = uiapp.GetDockablePane(App.PaneId);
                 if (pane.IsShown()) pane.Hide();
                 else pane.Show();

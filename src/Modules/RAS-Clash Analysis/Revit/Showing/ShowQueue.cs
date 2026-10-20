@@ -84,7 +84,7 @@ namespace RASv2.ClashAnalysis.Showing
             catch (Exception ex)
             {
                 _log.Error("Показать в Revit: " + pending.Request?.Clash, ex);
-                reply = ShowReply.Fail("Не удалось показать коллизию — подробности в журнале плагина («О плагине» → «Журнал»).");
+                reply = ShowReply.Fail("Не удалось показать коллизию — подробности в журнале плагина («О плагине» → «Показать журнал ошибок»).");
             }
             pending.Finish(reply);
         }

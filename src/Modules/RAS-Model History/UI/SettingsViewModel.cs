@@ -62,10 +62,6 @@ namespace RASv2.ModelHistory.UI
         public string DefaultPeriodDays { get => Str(_edit.DefaultPeriodDays); set => _edit.DefaultPeriodDays = Int(value, _edit.DefaultPeriodDays); }
         public string MaxDisplayedRows { get => Str(_edit.MaxDisplayedRows); set => _edit.MaxDisplayedRows = Int(value, _edit.MaxDisplayedRows); }
 
-        public string SettingsPathText => "Личные настройки (тема, период): " + SpySettings.UserSettingsPath +
-                                          Environment.NewLine + "Общие настройки команды: " + SpySettings.CompanySettingsPath +
-                                          Environment.NewLine + "Журнал ошибок плагина: " + Diag.LogPath;
-
         public RelayCommand SaveCommand { get; }
         public RelayCommand CancelCommand { get; }
 

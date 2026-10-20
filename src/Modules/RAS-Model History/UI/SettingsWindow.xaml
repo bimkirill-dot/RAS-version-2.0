@@ -132,8 +132,10 @@
                     </Grid>
                 </GroupBox>
 
-                <TextBox Text="{Binding SettingsPathText, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
-                         Foreground="{DynamicResource Spy.Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10" />
+                <!-- вместо путей к файлам — что делать простыми словами (разработчик, 20.10.2026); подробно — README.md модуля,
+                     «Настройки: где лежат и как поменять» -->
+                <TextBlock Foreground="{DynamicResource Spy.Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"
+                           Text="«Оформление» и «Панель» — ваши личные настройки. Остальное одинаково у всей команды: чтобы поменять, обратитесь к BIM-менеджеру. Если что-то не работает — «О плагине» → «Показать журнал ошибок», отправьте файл разработчику." />
 
             </StackPanel>
         </ScrollViewer>
