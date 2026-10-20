@@ -16,13 +16,13 @@ namespace RASv2.Core
         public IModule Module;
         /// <summary>Модуль запущен: при закрытии Revit ему вызывается Stop (и после предохранителя — тоже).</summary>
         public bool Running;
-        /// <summary>«работает», «выключен в общих настройках», «отключён: …».</summary>
+        /// <summary>«работает», «выключен (modules.txt)», «отключён: …».</summary>
         public string State;
     }
 
     /// <summary>
     /// Ядро: его запускает загрузчик (по имени типа и метода, без ссылки на ядро). Создаёт вкладку,
-    /// находит и запускает модули (кроме выключенных в общих настройках — ModuleSwitches), раскладывает их кнопки
+    /// находит и запускает модули (кроме выключенных в modules.txt — ModuleSwitches), раскладывает их кнопки
     /// по панелям (RibbonLayout). Ошибка модуля отключает только этот модуль (PRINCIPLES.md, раздел 7).
     /// </summary>
     public static class Host
@@ -40,8 +40,6 @@ namespace RASv2.Core
         /// <summary>Почему загрузчик взял не сборку канала; null — всё штатно.</summary>
         public static string LoaderNote { get; private set; }
         public static int RevitYear { get; private set; }
-        /// <summary>Общие настройки модулей взяты не с сервера, а из копии — почему; null — всё штатно.</summary>
-        public static string ConfigNote { get; private set; }
 
         private static readonly List<ModuleSlot> ModuleList = new List<ModuleSlot>();
         private static RevitEventHub _events;
@@ -73,7 +71,7 @@ namespace RASv2.Core
             try { app.CreateRibbonTab(TabName); }
             catch (Autodesk.Revit.Exceptions.ArgumentException) { /* вкладка уже есть */ }
 
-            var switches = LoadSwitches();
+            var switches = LoadSwitches(buildDir);
             foreach (var slot in ModuleCatalog.Discover(buildDir, switches))
             {
                 ModuleList.Add(slot);
@@ -101,15 +99,25 @@ namespace RASv2.Core
             _events?.DetachAll();
         }
 
-        /// <summary>Общие настройки модулей (Config\modules.txt на сервере или его копия). Нет файла — все работают.</summary>
-        private static Dictionary<string, ModuleMode> LoadSwitches()
+        /// <summary>
+        /// Режимы модулей у всех — modules.txt в сборке, как раскладка ленты (разработчик, 20.10.2026: «как ribbon.txt — и только
+        /// я могу менять»; раньше — Config\modules.txt на сервере). Нет файла или он не читается — все работают.
+        /// </summary>
+        private static Dictionary<string, ModuleMode> LoadSwitches(string buildDir)
         {
-            var lines = ServerConfig.ReadLines(ModuleSwitches.FileName, out var note);
-            ConfigNote = note;
-            if (note != null) Log.Write(Tag, "Общие настройки модулей: " + note);
-            var switches = ModuleSwitches.Parse(lines ?? new string[0], w => Log.Write(Tag, w));
+            var lines = new string[0];
+            var file = Path.Combine(buildDir, ModuleSwitches.FileName);
+            try
+            {
+                if (File.Exists(file)) lines = File.ReadAllLines(file);
+            }
+            catch (Exception ex)
+            {
+                Log.Write(Tag, "Не удалось прочитать режимы модулей (" + ModuleSwitches.FileName + ") — все модули работают", ex);
+            }
+            var switches = ModuleSwitches.Parse(lines, w => Log.Write(Tag, w));
             foreach (var s in switches.Where(s => s.Value != ModuleMode.Works))
-                Log.Write(Tag, "Общие настройки: " + s.Key + " — " + s.Value);
+                Log.Write(Tag, "Режим модуля: " + s.Key + " — " + s.Value);
             return switches;
         }
 
@@ -123,7 +131,7 @@ namespace RASv2.Core
             }
             if (mode == ModuleMode.Off)
             {
-                slot.State = "выключен в общих настройках";
+                slot.State = "выключен (modules.txt)";
                 return;
             }
             var testOnly = mode == ModuleMode.TestOnly;
@@ -137,7 +145,7 @@ namespace RASv2.Core
                 var context = new ModuleContext(module, app, _events);
                 module.Start(context);
                 slot.Running = true;
-                slot.State = mode == ModuleMode.NoButtons ? ModuleCatalog.Running + " без кнопок (общие настройки)"
+                slot.State = mode == ModuleMode.NoButtons ? ModuleCatalog.Running + " без кнопок (modules.txt)"
                     : testOnly ? ModuleCatalog.Running + " (только для тестовой группы)"
                     : ModuleCatalog.Running;
                 // кнопки — только у запустившегося модуля: у отключённого их на ленте нет; «без кнопок» — тоже нет
@@ -218,7 +226,7 @@ namespace RASv2.Core
     {
         public const string Running = "работает";
 
-        /// <param name="switches">Общие настройки: сборки модулей с «не загружать» не загружаются совсем.</param>
+        /// <param name="switches">Режимы модулей (modules.txt): сборки модулей с «не загружать» не загружаются совсем.</param>
         public static List<ModuleSlot> Discover(string buildDir, IReadOnlyDictionary<string, ModuleMode> switches)
         {
             var result = new List<ModuleSlot>();
@@ -231,7 +239,7 @@ namespace RASv2.Core
                 var code = name.Substring("RASv2.".Length);
                 if (ModuleSwitches.ModeOf(switches, code) == ModuleMode.NoLoad)
                 {
-                    result.Add(new ModuleSlot { Id = code, Title = code, State = "не загружается: выключен в общих настройках" });
+                    result.Add(new ModuleSlot { Id = code, Title = code, State = "не загружается (modules.txt)" });
                     continue;
                 }
                 try

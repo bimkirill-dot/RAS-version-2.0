@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace RASv2.Core
 {
-    /// <summary>Как модуль работает у всех — по общим настройкам на сервере (Config\modules.txt).</summary>
+    /// <summary>Как модуль работает у всех — по файлу modules.txt в сборке (src\Core\modules.txt).</summary>
     internal enum ModuleMode
     {
         /// <summary>Как обычно (и если модуля в файле нет).</summary>
@@ -19,7 +19,8 @@ namespace RASv2.Core
     }
 
     /// <summary>
-    /// Выключение модулей у всех (src\Core\DECISIONS.md): файл Config\modules.txt на сервере, строка на модуль —
+    /// Выключение модулей у всех (src\Core\DECISIONS.md): файл modules.txt в сборке рядом с ядром (как ribbon.txt; правит
+    /// и выпускает только разработчик — 20.10.2026; раньше — Config\modules.txt на сервере), строка на модуль —
     /// «&lt;код модуля&gt; = работает | без кнопок | только тест | выключен | не загружать». Код модуля — IModule.Id,
     /// он же окончание имени сборки (RASv2.&lt;код&gt;.dll): по нему «не загружать» работает до загрузки сборки.
     /// Действует после перезапуска Revit. Без Revit API: проверяется тестами.
@@ -55,7 +56,7 @@ namespace RASv2.Core
                 var word = eq > 0 ? Normalize(line.Substring(eq + 1)) : "";
                 if (code.Length == 0 || !Words.TryGetValue(word, out var mode))
                 {
-                    warn("общие настройки модулей, строка " + number + ": «" + raw.Trim() + "» не понята — пропущена");
+                    warn("режимы модулей (modules.txt), строка " + number + ": «" + raw.Trim() + "» не понята — пропущена");
                     continue;
                 }
                 result[code] = mode; // модуль указан дважды — действует последняя строка

@@ -20,6 +20,8 @@
     </Reference>
     <!-- раскладка кнопок по панелям вкладки (RibbonLayout) — едет в сборку рядом с ядром -->
     <None Update="ribbon.txt" CopyToOutputDirectory="PreserveNewest" />
+    <!-- режимы модулей у всех (ModuleSwitches) — тоже в сборке, как раскладка (разработчик, 20.10.2026) -->
+    <None Update="modules.txt" CopyToOutputDirectory="PreserveNewest" />
     <!-- иконки кнопок: Icons\<имя>32.png и Icons\<имя>16.png, вшиты в сборку (RibbonIcons в ядре) -->
     <None Remove="Icons\*.png" />
     <EmbeddedResource Include="Icons\*.png" LogicalName="Icons.%(Filename)%(Extension)" />
