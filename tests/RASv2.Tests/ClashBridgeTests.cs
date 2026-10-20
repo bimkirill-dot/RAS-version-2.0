@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using RASv2.ClashAnalysis.Bridge;
 using RASv2.ClashAnalysis.Logic;
+using RASv2.ClashAnalysis.Reports;
+using RASv2.ClashAnalysis.Site.Data;
+using RASv2.ClashAnalysis.Site.Logic;
 
 namespace RASv2.Tests
 {
@@ -111,6 +115,28 @@ namespace RASv2.Tests
                 Check(ClashZone.Axis(0, 1, 1.05, 3) == (1, 1.05), "не касаются (ближе допуска) — промежуток между ними");
                 Check(ClashZone.Axis(5, 6, 0, 10) == (5, 6), "один внутри другого — меньший");
                 Check(ClashZone.Axis(0, 1, 1, 2) == (1, 1), "касаются — точка");
+            });
+            yield return Case("«Коллизии элемента»: точно номер и модель, а не часть номера", () =>
+            {
+                ClashRow Row(long id, string modelA, long idA, string modelB, long idB) => new ClashRow
+                {
+                    Id = id,
+                    A = new ElementView { ModelFile = modelA, ElementId = idA, Family = "Базовая стена", Type = "Бетон_200" },
+                    B = new ElementView { ModelFile = modelB, ElementId = idB, Category = "Воздуховоды" },
+                };
+                var rows = new[]
+                {
+                    Row(1, "Дом_AR01_отсоединено.nwc", 100, "Дом_OV01.nwc", 7),
+                    Row(2, "Дом_AR01.nwc", 100, "Дом_VK01.nwc", 8),
+                    Row(3, "Дом_KJ01.nwc", 100, "Дом_OV01.nwc", 9),       // тот же номер — другая модель
+                    Row(4, "Дом_AR01.nwc", 1000, "Дом_OV01.nwc", 10),     // номер содержит «100» — не он
+                };
+                var keys = ClashFacets.ElementKeys(rows, new[] { ("Дом_AR01.rvt", 100L) });
+                var sel = new Dictionary<string, HashSet<string>> { [ClashFacets.Element] = keys };
+                var found = rows.Where(r => ClashFacets.Matches(r, sel)).Select(r => r.Id).ToList();
+                Check(string.Join(",", found) == "1,2", "коллизии 1 и 2 (в т. ч. отсоединённая копия), не 3 и 4: " + string.Join(",", found));
+                Check(ClashFacets.ElementTitle(rows[0].A) == "Базовая стена Бетон_200 (ID 100)", "метка элемента");
+                Check(ClashFacets.ElementKeys(rows, new[] { ("Дом_AR01.rvt", 555L) }).Count == 0, "нет такого — пусто");
             });
             yield return Case("открыта отсоединённая копия — тоже находится", () =>
             {

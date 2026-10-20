@@ -7,6 +7,7 @@ using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Events;
 using RASv2.ClashAnalysis.Bridge;
 using RASv2.ClashAnalysis.Logic;
+using RASv2.ClashAnalysis.Reports;
 using RASv2.ClashAnalysis.Showing;
 using RASv2.ClashAnalysis.UI;
 using RASv2.Core;
@@ -23,7 +24,7 @@ namespace RASv2.ClashAnalysis
         /// Свой сайт — откуда принимаются просьбы. Пока сайт только на компьютере разработчика (19.10.2026: «пока пусть локально»);
         /// перед выходом на коллег — в настройки модуля (PRINCIPLES.md, раздел 4: адреса — не в коде модуля).
         /// </summary>
-        private const string SiteOrigin = "http://localhost:5080";
+        internal const string SiteOrigin = "http://localhost:5080";
         private static readonly TimeSpan StatusEvery = TimeSpan.FromSeconds(2);
 
         public static BridgeApp Instance { get; private set; }
@@ -52,6 +53,12 @@ namespace RASv2.ClashAnalysis
             _queue = new ShowQueue((app, request) => ClashShow.Run(app, request, _views, _settings), window, _log);
             _status = BridgeProtocol.Write(new StatusReply { Revit = _year });
 
+            // ← прицел: из Revit на сайт (разработчик, 20.10.2026: «вот на ней уже можно и прицел»)
+            var clashes = context.AddButton("ElementClashes", "Коллизии\nэлемента", typeof(ElementClashesCommand),
+                "Открыть на сайте коллизий все коллизии выделенного элемента (в связи — выделите клавишей Tab)", icon: "ElementClashes");
+            clashes.LongDescription = "Выделите элемент — в модели или в связи (Tab) — и нажмите: браузер откроет его коллизии во всех статусах. " +
+                                      "Коллизий нет — сайт так и напишет.";
+
             var settings = context.AddButton("ViewSettings", "Настройки\nвида", typeof(ViewSettingsCommand),
                 "Как открывать коллизию по «Показать в Revit»: тип вида, обрезка, стиль, покраска, предупреждения", icon: "ViewSettings");
             settings.AvailabilityClassName = typeof(AlwaysAvailable).FullName;
@@ -68,6 +75,26 @@ namespace RASv2.ClashAnalysis
         }
 
         internal void Stop() => _server?.Dispose();
+
+        /// <summary>«Коллизии элемента»: выделенное — на сайт; ничего не выделено — подсказка.</summary>
+        internal void OpenElementClashes(UIDocument uidoc)
+        {
+            try
+            {
+                if (uidoc == null)
+                {
+                    TaskDialog.Show("Коллизии элемента", "Откройте модель и выделите элемент.");
+                    return;
+                }
+                var hint = ElementClashes.Open(uidoc, SiteOrigin);
+                if (hint != null) TaskDialog.Show("Коллизии элемента", hint);
+            }
+            catch (Exception ex)
+            {
+                _log.Error("Коллизии элемента: сайт не открыт", ex);
+                TaskDialog.Show("Коллизии элемента", "Не удалось открыть сайт коллизий — подробности в журнале плагина («О плагине» → «Журнал»).");
+            }
+        }
 
         /// <summary>Окно «Настройки вида»; сохранённое действует со следующего «Показать в Revit».</summary>
         internal void ShowSettings(IntPtr owner)

@@ -36,6 +36,8 @@ public sealed class ProjectView
     public int PageSize { get; set; } = 50;
     /// <summary>Отбор по умолчанию (статус — открытые) уже поставлен.</summary>
     public bool Initialized { get; set; }
+    /// <summary>«Коллизии элемента» из Revit (?e=…), уже применённые: тот же адрес (карточка, шаги) не сбрасывает отборы снова.</summary>
+    public string ElementQuery { get; set; }
     /// <summary>Показан отбор «Категория» (спрятан под «Ещё»).</summary>
     public bool MoreFilters { get; set; }
     /// <summary>«Блок» на боковой панели раскрыт — блоки видны подразделами.</summary>

@@ -16,6 +16,8 @@
   <ItemGroup>
     <!-- ядро лежит в той же папке сборки — отдельная копия рядом с модулем не нужна -->
     <ProjectReference Include="..\..\..\Core\RASv2.Core.csproj" Private="false" />
+    <!-- какая модель — модель элемента из отчёта: общее с сайтом (..\Reports), исходником, без копии -->
+    <Compile Include="..\Reports\ModelNames.cs" Link="Reports\ModelNames.cs" />
     <!-- иконки кнопок: Icons\<имя>32.png и Icons\<имя>16.png, вшиты в сборку (RibbonIcons в ядре) -->
     <None Remove="Icons\*.png" />
     <EmbeddedResource Include="Icons\*.png" LogicalName="Icons.%(Filename)%(Extension)" />

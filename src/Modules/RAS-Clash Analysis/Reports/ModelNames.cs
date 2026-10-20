@@ -2,12 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace RASv2.ClashAnalysis.Logic
+namespace RASv2.ClashAnalysis.Reports
 {
     /// <summary>
     /// Какая открытая модель или связь — модель элемента коллизии. В отчёте Navisworks — файл NWC («…_AR01_01_M3.nwc»), в Revit —
     /// модель и её связи («…_AR01_01_M3.rvt»). NWC часто выгружают из отсоединённой копии или с припиской: «…_M3_отсоединено.nwc»,
-    /// «…_M3_с лестницей_BIM_Alma.nwc» (MODULE.md, «Имена файлов .nwc — не всегда имена хранилищ»). Без Revit API — проверяется тестами.
+    /// «…_M3_с лестницей_BIM_Alma.nwc» (MODULE.md, «Имена файлов .nwc — не всегда имена хранилищ»). Общее для моста в Revit и сайта
+    /// («Коллизии элемента»: элемент из Revit — его коллизии на сайте) — один код. Без Revit API — проверяется тестами.
     /// </summary>
     public static class ModelNames
     {

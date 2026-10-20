@@ -1,0 +1,60 @@
+@page "/element"
+@inject ClashStore Store
+@inject NavigationManager Nav
+
+<PageTitle>Коллизии элемента · Clash Analysis</PageTitle>
+
+@* «Коллизии элемента» из Revit (DECISIONS.md модуля, «Мост в Revit…»): Revit открывает этот адрес с файлом модели и номером
+   выделенных элементов (?e=модель|номер). Коллизии в одном проекте — сразу его список с отбором «Элемент»; в нескольких —
+   выбрать проект; нет — «Коллизий нет». *@
+<div class="settings-page element-page">
+    <nav class="crumbs"><a href="/">Проекты</a> <span class="sep">/</span></nav>
+    <h1>Коллизии элемента</h1>
+    @if (_wanted.Count == 0)
+    {
+        <p class="muted">Элемент не указан. В Revit выделите элемент (в связи — клавишей Tab) и нажмите «Коллизии элемента» на ленте.</p>
+    }
+    else if (_projects.Count == 0)
+    {
+        <div class="element-none">
+            <h2>Коллизий нет</h2>
+            <p>С @(_wanted.Count == 1 ? "этим элементом" : "этими элементами") на сайте коллизий нет:</p>
+            <ul>
+                @foreach (var (model, id) in _wanted)
+                {
+                    <li>ID <b>@id</b> — модель «@ModelNames.Bare(model)»</li>
+                }
+            </ul>
+            <p class="muted">Если коллизия должна быть — проверьте, что отчёты по этой модели загружены в проект на сайте.</p>
+        </div>
+    }
+    else
+    {
+        <p>Коллизии @(_wanted.Count == 1 ? "элемента" : "элементов") есть в нескольких проектах — выберите проект:</p>
+        <ul class="element-projects">
+            @foreach (var (projectId, name, clashes) in _projects)
+            {
+                <li><a href="@Link(projectId)">@name</a> <span class="muted">— @Fmt.Plural(clashes, "коллизия", "коллизии", "коллизий")</span></li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    /// <summary>Элементы из Revit: «файл модели|номер», по одному на элемент.</summary>
+    [SupplyParameterFromQuery(Name = "e")] public string[] Items { get; set; }
+
+    private List<(string Model, long Id)> _wanted = new();
+    private List<(long ProjectId, string Project, int Clashes)> _projects = new();
+
+    protected override void OnParametersSet()
+    {
+        _wanted = ClashFacets.ParseElements(Items);
+        _projects = _wanted.Count == 0 ? new() : Store.ElementProjects(_wanted);
+        // один проект — сразу его список, без лишнего шага (замена адреса: «назад» вернёт в Revit-вкладку, а не сюда)
+        if (_projects.Count == 1) Nav.NavigateTo(Link(_projects[0].ProjectId), replace: true);
+    }
+
+    private string Link(long projectId) =>
+        $"project/{projectId}?" + string.Join("&", (Items ?? Array.Empty<string>()).Select(i => "e=" + Uri.EscapeDataString(i)));
+}

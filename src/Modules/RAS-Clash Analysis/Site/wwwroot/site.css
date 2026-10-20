@@ -122,6 +122,16 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .ras-modal ul { margin: 0 0 18px; padding: 0; list-style: none; text-align: left; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.45; }
 .ras-modal ul li { padding: 8px 12px; border-radius: 8px; background: var(--row-hover); }
 .ras-modal .btn { min-width: 140px; padding: 7px 18px; }
+/* отбор «Элемент» (из Revit — «Коллизии элемента»): метка с ✕ над списком */
+.filter-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 10px; border: 1px solid var(--accent); border-radius: 8px;
+               background: var(--accent-bg); font-size: 13px; max-width: 380px; }
+.filter-chip b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filter-chip .chip-x { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 4px; }
+.filter-chip .chip-x:hover { color: var(--accent); }
+/* страница «Коллизии элемента» */
+.element-none { padding: 18px 22px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); max-width: 640px; }
+.element-none h2 { margin: 0 0 8px; }
+.element-projects li { margin: 6px 0; }
 /* страница «Настройки» */
 .settings-page { max-width: 860px; }
 /* блоки вручную: предупреждение, форма, таблица */

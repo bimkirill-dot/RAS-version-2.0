@@ -25,6 +25,11 @@ namespace RASv2.ClashAnalysis.Site.Logic
         public const string Category = "category";
         public const string Report = "report";
         public const string State = "state";
+        /// <summary>
+        /// Элемент — точно (файл модели и номер), а не поиском по части номера: из Revit — «Коллизии элемента» (DECISIONS.md,
+        /// «Мост в Revit…»). На странице — меткой над списком, не меню. Ключ — «файл модели␟номер».
+        /// </summary>
+        public const string Element = "element";
 
         public const string InLastReport = "in";
         public const string NotInLastReport = "out";
@@ -38,6 +43,7 @@ namespace RASv2.ClashAnalysis.Site.Logic
             Category => "Категория",
             Report => "Отчёт",
             State => "Статус",
+            Element => "Элемент",
             _ => facet,
         };
 
@@ -59,6 +65,10 @@ namespace RASv2.ClashAnalysis.Site.Logic
                     break;
                 case State:
                     yield return (((int)c.State).ToString(), ClashRules.Title(c.State));
+                    break;
+                case Element:
+                    foreach (var e in Elements(c))
+                        if (e.ElementId.HasValue) yield return (ElementKey(e), ElementTitle(e));
                     break;
 
 
@@ -123,6 +133,46 @@ namespace RASv2.ClashAnalysis.Site.Logic
             var missing = selectedKeys.Count - titles.Count;
             titles.AddRange(Enumerable.Repeat("…", Math.Max(missing, 0)));
             return titles.Count <= 2 ? string.Join(", ", titles) : string.Join(", ", titles.Take(2)) + " +" + (titles.Count - 2);
+        }
+
+        /// <summary>Ключ элемента для отбора «Элемент»: «файл модели␟номер».</summary>
+        public static string ElementKey(ElementView e) => (e.ModelFile ?? "") + "\u001f" + e.ElementId;
+
+        /// <summary>Как показать элемент в метке отбора: «Базовая стена Бетон_200 (ID 11634563)».</summary>
+        public static string ElementTitle(ElementView e)
+        {
+            var what = string.Join(" ", new[] { e.Family, e.Type }.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct());
+            if (what.Length == 0) what = e.Name ?? e.Category ?? "Элемент";
+            return what + " (ID " + e.ElementId + ")";
+        }
+
+        /// <summary>
+        /// Ключи элементов коллизий, которые — элементы из Revit (файл модели или связи в Revit и номер): номер — тот же, файл
+        /// модели из отчёта — та же модель (ModelNames.Match: без расширения, «_отсоединено» и т. п.). Одинаковые номера в
+        /// разных моделях — разные элементы.
+        /// </summary>
+        public static HashSet<string> ElementKeys(IEnumerable<ClashRow> rows, IEnumerable<(string Model, long Id)> wanted)
+        {
+            var list = wanted.ToList();
+            var keys = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var c in rows)
+                foreach (var e in Elements(c))
+                    if (e.ElementId.HasValue && list.Any(w => w.Id == e.ElementId.Value && ModelNames.Match(e.ModelFile, new[] { w.Model }) == 0))
+                        keys.Add(ElementKey(e));
+            return keys;
+        }
+
+        /// <summary>Элементы из адреса «Коллизий элемента»: «файл модели|номер» (номер — после последней «|»); негодное пропускается.</summary>
+        public static List<(string Model, long Id)> ParseElements(IEnumerable<string> items)
+        {
+            var list = new List<(string, long)>();
+            foreach (var item in items ?? Enumerable.Empty<string>())
+            {
+                var bar = (item ?? "").LastIndexOf('|');
+                if (bar <= 0 || !long.TryParse(item.Substring(bar + 1), out var id)) continue;
+                list.Add((item.Substring(0, bar), id));
+            }
+            return list;
         }
 
         private static IEnumerable<ElementView> Elements(ClashRow c)

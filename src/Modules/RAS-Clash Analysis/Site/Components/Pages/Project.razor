@@ -71,6 +71,14 @@
             </label>
             <FacetMenu Title="Уровень" Values="_facetValues[ClashFacets.Level]" Selected="FacetSet(ClashFacets.Level)" Changed="Recompute" />
             <FacetMenu Title="Статус" Values="_facetValues[ClashFacets.State]" Selected="FacetSet(ClashFacets.State)" Changed="Recompute" />
+            @* «Коллизии элемента» из Revit — меткой, ✕ — снять *@
+            @foreach (var key in FacetSet(ClashFacets.Element).ToList())
+            {
+                var chosen = key;
+                <span class="filter-chip" title="Коллизии этого элемента (из Revit — «Коллизии элемента»)">Элемент: <b>@ElementChipTitle(chosen)</b>
+                    <button class="chip-x" aria-label="Снять отбор" title="Снять отбор" @onclick="() => { FacetSet(ClashFacets.Element).Remove(chosen); _page = 0; Recompute(); }">✕</button>
+                </span>
+            }
             @if (FilterIsSet)
             {
                 <button class="btn link small" @onclick="ResetFilter">Сбросить</button>
@@ -627,6 +635,8 @@
     [SupplyParameterFromQuery(Name = "n")] public int? StepNo { get; set; }
     /// <summary>Карточка справа открыта (…&amp;card=1) — «назад» браузера и боковая кнопка мыши её закрывают.</summary>
     [SupplyParameterFromQuery(Name = "card")] public int? CardParam { get; set; }
+    /// <summary>«Коллизии элемента» из Revit: «файл модели|номер» (страница «/element»).</summary>
+    [SupplyParameterFromQuery(Name = "e")] public string[] ElementParam { get; set; }
 
     private static readonly string[] TabKeys = { "clashes", "", "reports", "project", "history", "summary" };
 
@@ -747,6 +757,28 @@
         else if (!card && _view.CardInUrl) _view.SelectedId = null;
         _view.CardInUrl = card;
         LoadAll();
+        ApplyElementParam();
+    }
+
+    /// <summary>
+    /// «Коллизии элемента» из Revit (DECISIONS.md, «Мост в Revit…»): весь проект, все статусы, отбор «Элемент» — точно эти
+    /// элементы (файл модели и номер). Один раз на адрес: открытая карточка и шаги истории отборы снова не сбрасывают.
+    /// </summary>
+    private void ApplyElementParam()
+    {
+        var wanted = ClashFacets.ParseElements(ElementParam);
+        var query = string.Join("&", ElementParam ?? Array.Empty<string>());
+        if (wanted.Count == 0 || query == _view.ElementQuery) return;
+        _view.ElementQuery = query;
+        _filter.Search = null;
+        foreach (var set in _filter.Facets.Values) set.Clear();
+        _view.RunFilter = null;
+        _view.Tab = 0;
+        _filter.Category = null;
+        _filter.Subcategory = null;
+        SetScope(_filter.Criticality, null, null);
+        FacetSet(ClashFacets.Element).UnionWith(ClashFacets.ElementKeys(_base, wanted));
+        Recompute();
     }
 
     /// <summary>Карточку закрыли иначе (смена отборов, прогона) — убрать card=1 из адреса, не добавляя шага.</summary>
@@ -1284,6 +1316,15 @@
     {
         var all = k.Active + k.Fixed;
         return all == 0 ? 0 : (int)Math.Round(100.0 * k.Fixed / all);
+    }
+
+    /// <summary>Метка элемента в отборе: семейство и тип с номером (по любой коллизии с ним).</summary>
+    private string ElementChipTitle(string key)
+    {
+        foreach (var c in _base)
+            foreach (var e in new[] { c.A, c.B })
+                if (e?.ElementId != null && ClashFacets.ElementKey(e) == key) return ClashFacets.ElementTitle(e);
+        return "ID " + key[(key.LastIndexOf('\u001f') + 1)..];
     }
 
     private HashSet<string> FacetSet(string facet)

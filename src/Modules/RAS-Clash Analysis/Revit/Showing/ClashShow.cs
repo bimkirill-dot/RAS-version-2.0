@@ -5,6 +5,7 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using RASv2.ClashAnalysis.Bridge;
 using RASv2.ClashAnalysis.Logic;
+using RASv2.ClashAnalysis.Reports;
 using RASv2.Core;
 
 namespace RASv2.ClashAnalysis.Showing
@@ -43,7 +44,7 @@ namespace RASv2.ClashAnalysis.Showing
 
             // модели, где искать: сама модель (имя файла хранилища и название) и её связи
             var hostTitle = doc.Title;
-            var names = new List<string> { HostFile(doc), hostTitle };
+            var names = new List<string> { ModelFiles.Host(doc), hostTitle };
             var linkTypes = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkType)).Cast<RevitLinkType>().ToList();
             names.AddRange(linkTypes.Select(t => t.Name));
             var instances = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkInstance)).Cast<RevitLinkInstance>().ToList();
@@ -239,24 +240,6 @@ namespace RASv2.ClashAnalysis.Showing
             ViewSettings.StyleRealistic => DisplayStyle.Realistic,
             _ => DisplayStyle.Shading,
         };
-
-        /// <summary>Файл хранилища (у совместной модели — без приписки локальной копии), иначе — файл модели.</summary>
-        private static string HostFile(Document doc)
-        {
-            try
-            {
-                if (doc.IsWorkshared)
-                {
-                    var central = doc.GetWorksharingCentralModelPath();
-                    if (central != null) return ModelPathUtils.ConvertModelPathToUserVisiblePath(central);
-                }
-            }
-            catch (Autodesk.Revit.Exceptions.ApplicationException)
-            {
-                // хранилище недоступно — по имени файла
-            }
-            return string.IsNullOrEmpty(doc.PathName) ? doc.Title : doc.PathName;
-        }
 
         /// <summary>
         /// Место коллизии в координатах открытой модели — вокруг него рамка, план и разрез (разработчик, 19.10.2026: элемент связи

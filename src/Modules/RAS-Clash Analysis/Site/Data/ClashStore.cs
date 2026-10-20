@@ -949,6 +949,36 @@ public sealed class ClashStore
         return set;
     }
 
+    /// <summary>
+    /// «Коллизии элемента»: проекты, где элементы из Revit (файл модели и номер) — в коллизиях, и сколько коллизий. Как список
+    /// проекта — по последнему появлению коллизии; модель — тем же правилом, что мост в Revit (ModelNames.Match).
+    /// </summary>
+    public List<(long ProjectId, string Project, int Clashes)> ElementProjects(IReadOnlyList<(string Model, long Id)> wanted)
+    {
+        var found = new Dictionary<long, (string Name, HashSet<long> Clashes)>();
+        if (wanted.Count == 0) return new List<(long, string, int)>();
+        using var c = _db.Open();
+        // номера — числа: в запрос подставляются как есть
+        var ids = string.Join(",", wanted.Select(w => w.Id).Distinct());
+        using (var r = Query(c, $"""
+            SELECT p.Id, p.Name, cl.Id, e.ModelFile, e.ElementId
+            FROM Clashes cl
+            JOIN Projects p ON p.Id = cl.ProjectId
+            JOIN Elements e ON e.OccurrenceId = cl.LastOccurrenceId
+            WHERE e.ElementId IN ({ids})
+            """))
+            while (r.Read())
+            {
+                var model = r.IsDBNull(3) ? "" : r.GetString(3);
+                var id = r.GetInt64(4);
+                if (!wanted.Any(w => w.Id == id && ModelNames.Match(model, new[] { w.Model }) == 0)) continue;
+                var pid = r.GetInt64(0);
+                if (!found.TryGetValue(pid, out var p)) found[pid] = p = (r.GetString(1), new HashSet<long>());
+                p.Clashes.Add(r.GetInt64(2));
+            }
+        return found.Select(x => (x.Key, x.Value.Name, x.Value.Clashes.Count)).OrderByDescending(x => x.Count).ToList();
+    }
+
     /// <summary>История сайта: всё или по проекту, новые сверху (по времени: записи, восстановленные шагом 14 базы, — на своём месте); limit — сколько последних.</summary>
     public List<HistoryRow> History(long? projectId, int limit)
     {
