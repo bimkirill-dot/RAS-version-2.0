@@ -6,5 +6,6 @@ rem   site.cmd start      — запустить и открыть в брауз
 rem   site.cmd stop       — остановить
 rem   site.cmd rollback   — вернуть прежнюю версию программы
 rem   site.cmd autostart  — запускать при входе в Windows
+rem   site.cmd firewall   — открыть порт сайта коллегам (один раз, спросит права администратора)
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\Site.ps1" %*
 pause

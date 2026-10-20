@@ -30,6 +30,7 @@ namespace RASv2.Tests
             Run("RAS-Clash Analysis: категории проверок", ClashCategoryTests.All);
             Run("RAS-Clash Analysis: состояние на прогоны", ClashRunHistoryTests.All);
             Run("RAS-Clash Analysis: мост в Revit — модель элемента", ClashBridgeTests.All);
+            Run("RAS-Clash Analysis: сайт — вход, пароли", SiteAuthTests.All);
 #if REVIT2026
             Run("RAS-Model History: фильтр", ModelHistoryTests.Filter);
             Run("RAS-Model History: пары «правка + отмена»", ModelHistoryTests.Undo);

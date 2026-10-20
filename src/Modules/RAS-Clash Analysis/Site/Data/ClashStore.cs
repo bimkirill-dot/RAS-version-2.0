@@ -506,6 +506,7 @@ public sealed class ClashStore
     /// <summary>Сменить статус у одной или многих коллизий; у каждой — событие в истории. Сколько изменено.</summary>
     public int SetState(IEnumerable<long> ids, ClashState state, string comment, string author)
     {
+        author ??= Services.SiteUser.Name; // кто сделал — вошедший на сайт
         using var c = _db.Open();
         using var tx = c.BeginTransaction();
         var now = Database.Time(DateTime.Now);
@@ -1004,6 +1005,7 @@ public sealed class ClashStore
 
     public void AddComment(long id, string text, string author)
     {
+        author ??= Services.SiteUser.Name; // кто сделал — вошедший на сайт
         if (string.IsNullOrWhiteSpace(text)) return;
         using var c = _db.Open();
         using var tx = c.BeginTransaction();

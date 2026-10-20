@@ -21,10 +21,10 @@ namespace RASv2.ClashAnalysis
     internal sealed class BridgeApp
     {
         /// <summary>
-        /// Свой сайт — откуда принимаются просьбы. Пока сайт только на компьютере разработчика (19.10.2026: «пока пусть локально»);
-        /// перед выходом на коллег — в настройки модуля (PRINCIPLES.md, раздел 4: адреса — не в коде модуля).
+        /// Свой сайт — адрес от ядра (RasPaths.SiteOf; PRINCIPLES.md, раздел 4: адреса — не в коде модуля); просьбы моста — только
+        /// с него (и с этого компьютера), «Коллизии элемента» открывают его. Нет адреса — сайт на этом компьютере.
         /// </summary>
-        internal const string SiteOrigin = "http://localhost:5080";
+        private string _site = "http://localhost:5080";
         private static readonly TimeSpan StatusEvery = TimeSpan.FromSeconds(2);
 
         public static BridgeApp Instance { get; private set; }
@@ -43,6 +43,7 @@ namespace RASv2.ClashAnalysis
         {
             Instance = this;
             _log = context.Log;
+            if (!string.IsNullOrEmpty(context.SiteAddress)) _site = context.SiteAddress;
             _year = context.RevitYear;
             _settingsPath = Path.Combine(context.UserDataDir, "view-settings.json");
             _settings = ViewSettings.Load(_settingsPath);
@@ -70,8 +71,8 @@ namespace RASv2.ClashAnalysis
             events.DocumentOpened((s, e) => _views.Opened(e.Document));
             events.DocumentClosing((s, e) => _views.Closing(e.Document));
 
-            _server = BridgeServer.Start(SiteOrigin, () => _status, _queue.Ask, _log);
-            if (_server != null) _log.Info("Мост запущен: 127.0.0.1:" + _server.Port + ", сайт — " + SiteOrigin);
+            _server = BridgeServer.Start(_site, () => _status, _queue.Ask, _log);
+            if (_server != null) _log.Info("Мост запущен: 127.0.0.1:" + _server.Port + ", сайт — " + _site);
         }
 
         internal void Stop() => _server?.Dispose();
@@ -86,7 +87,7 @@ namespace RASv2.ClashAnalysis
                     TaskDialog.Show("Коллизии элемента", "Откройте модель и выделите элемент.");
                     return;
                 }
-                var hint = ElementClashes.Open(uidoc, SiteOrigin);
+                var hint = ElementClashes.Open(uidoc, _site);
                 if (hint != null) TaskDialog.Show("Коллизии элемента", hint);
             }
             catch (Exception ex)

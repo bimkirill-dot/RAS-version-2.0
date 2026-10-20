@@ -1,0 +1,102 @@
+@inject UserStore Users
+
+@* «Настройки» → «Учётные записи» (только администратор): завести, роль, новый пароль, выключить (DECISIONS.md модуля, «Вход на сайт») *@
+<section class="set-block users-block">
+    <h2>Учётные записи</h2>
+    <p class="muted small">Без входа сайт не открывается. Администратор — проекты, настройки и учётные записи; сотрудник — статусы и комментарии.
+        Пароль коллеге — временный: сменить его можно на странице своей учётной записи (имя в шапке сайта).</p>
+
+    <table class="grid users-table">
+        <thead><tr><th>Имя</th><th>Логин</th><th>Роль</th><th>Последний вход</th><th></th></tr></thead>
+        <tbody>
+            @foreach (var u in _list)
+            {
+                var user = u;
+                <tr class="@(user.Active ? "" : "off")">
+                    <td>@user.Name @if (user.Id == _myId) { <span class="muted small">(вы)</span> } @if (!user.Active) { <span class="muted small">— выключена</span> }</td>
+                    <td class="mono">@user.Login</td>
+                    <td>
+                        @* роль — отметкой у варианта: значение у самого списка Blazor ставит раньше вариантов, и оно теряется *@
+                        <select @onchange="e => SetRole(user, e.Value?.ToString())" disabled="@(user.Id == _myId || !user.Active)">
+                            <option value="@UserStore.Employee" selected="@(!user.IsAdmin)">сотрудник</option>
+                            <option value="@UserStore.Admin" selected="@user.IsAdmin">администратор</option>
+                        </select>
+                    </td>
+                    <td>@(user.LastLogin.HasValue ? Fmt.Date(user.LastLogin) : "—")</td>
+                    <td class="users-actions">
+                        @if (_passwordFor == user.Id)
+                        {
+                            <input type="text" placeholder="новый пароль" @bind="_password" />
+                            <button class="btn small primary" @onclick="() => SetPassword(user)">Задать</button>
+                            <button class="btn small" @onclick="() => _passwordFor = null">Отмена</button>
+                        }
+                        else
+                        {
+                            <button class="btn small" @onclick="() => { _passwordFor = user.Id; _password = null; _error = null; }">Новый пароль</button>
+                            @if (user.Id != _myId)
+                            {
+                                <button class="btn small" @onclick="() => SetActive(user, !user.Active)">@(user.Active ? "Выключить" : "Включить")</button>
+                            }
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <h3>Новая учётная запись</h3>
+    <div class="users-new">
+        <input placeholder="Логин (например, Ivanov_A)" @bind="_login" />
+        <input placeholder="Имя для истории (Иванов А.)" @bind="_name" />
+        <select @bind="_role">
+            <option value="@UserStore.Employee">сотрудник</option>
+            <option value="@UserStore.Admin">администратор</option>
+        </select>
+        <input type="text" placeholder="Временный пароль" @bind="_newPassword" />
+        <button class="btn primary" @onclick="Add">Добавить</button>
+    </div>
+    @if (_error != null) { <p class="error">@_error</p> }
+    @if (_saved != null) { <p class="notice">@_saved</p> }
+</section>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> Auth { get; set; }
+
+    private List<SiteUserRow> _list = new();
+    private long _myId;
+    private long? _passwordFor;
+    private string _password, _login, _name, _role = UserStore.Employee, _newPassword, _error, _saved;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _myId = SiteUser.IdOf((await Auth).User) ?? 0;
+        _list = Users.List();
+    }
+
+    private void Done(string error, string saved)
+    {
+        _error = error;
+        _saved = error == null ? saved : null;
+        _list = Users.List();
+    }
+
+    private void Add()
+    {
+        var error = Users.Create(_login, _name, _role, _newPassword);
+        Done(error, $"Учётная запись «{_name?.Trim()}» добавлена — сообщите коллеге логин и временный пароль.");
+        if (error == null) _login = _name = _newPassword = null;
+    }
+
+    private void SetPassword(SiteUserRow user)
+    {
+        var error = Users.SetPassword(user.Id, _password);
+        Done(error, $"Новый пароль для «{user.Name}» задан.");
+        if (error == null) _passwordFor = null;
+    }
+
+    private void SetActive(SiteUserRow user, bool active) =>
+        Done(Users.SetActive(user.Id, active, _myId), $"«{user.Name}» — {(active ? "включена" : "выключена")}.");
+
+    private void SetRole(SiteUserRow user, string role) =>
+        Done(Users.SetRole(user.Id, role, _myId), $"«{user.Name}» — {UserStore.RoleTitle(role)}.");
+}

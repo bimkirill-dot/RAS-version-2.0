@@ -1,6 +1,11 @@
 <Router AppAssembly="typeof(Program).Assembly">
     <Found Context="routeData">
-        <RouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)" />
+        @* страницы только для администратора ([Authorize(Roles = "admin")]) — сотруднику: что это и к кому идти *@
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)">
+            <NotAuthorized>
+                <div class="settings-page"><h1>Только для администратора</h1><p class="muted">Эту страницу видит администратор сайта.</p></div>
+            </NotAuthorized>
+        </AuthorizeRouteView>
         <FocusOnNavigate RouteData="routeData" Selector="h1" />
     </Found>
 </Router>

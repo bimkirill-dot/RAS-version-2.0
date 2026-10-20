@@ -315,6 +315,20 @@ public sealed class Database
         """
         CREATE INDEX SiteLogTime ON SiteLog(Time);
         """,
+
+        // 15 — 20.10.2026 (DECISIONS.md, «Вход на сайт»): учётные записи сайта — логин (без учёта регистра), имя для истории,
+        // роль (admin / user), отпечаток пароля (Logic.Passwords), включена ли, когда создана и когда входили
+        """
+        CREATE TABLE Users(
+            Id INTEGER PRIMARY KEY,
+            Login TEXT NOT NULL UNIQUE COLLATE NOCASE,
+            Name TEXT NOT NULL,
+            Role TEXT NOT NULL,
+            PasswordHash TEXT NOT NULL,
+            Active INTEGER NOT NULL DEFAULT 1,
+            Created TEXT NOT NULL,
+            LastLogin TEXT);
+        """,
     };
 
     /// <summary>

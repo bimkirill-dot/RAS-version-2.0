@@ -3,11 +3,12 @@
 #   start     — запустить, если не запущен, и открыть в браузере
 #   stop      — остановить
 #   rollback  — вернуть прежнюю версию программы (база не меняется)
+#   firewall  — открыть порт сайта коллегам в брандмауэре Windows (один раз; спросит права администратора)
 #   autostart — запускать сайт при входе в Windows (ярлык в «Автозагрузке»; без прав администратора)
 # Сайт работает на этом компьютере: программа и данные — %LocalAppData%\RAS_v_2.0\RAS-Clash Analysis\Site.
 # Файл в UTF-8 с BOM: иначе Windows PowerShell 5.1 искажает русский текст.
 param(
-    [ValidateSet('update', 'start', 'stop', 'rollback', 'autostart')]
+    [ValidateSet('update', 'start', 'stop', 'rollback', 'autostart', 'firewall')]
     [string]$Action = 'update',
     # не открывать браузер после запуска
     [switch]$NoBrowser
@@ -140,6 +141,19 @@ switch ($Action) {
         Rename-Item $Prev (Split-Path -Leaf $App)
         Write-Host 'Возвращена прежняя версия программы. База не менялась.'
         Start-Site
+    }
+    'firewall' {
+        # коллегам по сети сайт открывается, только если брандмауэр пропускает его порт: правило — один раз, с правами
+        # администратора (Windows спросит подтверждение); профили «Домен» и «Частная» — не «Публичная» (чужие сети)
+        $port = ([Uri](Get-SiteUrl)).Port
+        $name = "RAS — сайт коллизий ($port)"
+        $command = "if (-not (Get-NetFirewallRule -DisplayName '$name' -ErrorAction SilentlyContinue)) { New-NetFirewallRule -DisplayName '$name' -Direction Inbound -Protocol TCP -LocalPort $port -Action Allow -Profile Domain,Private | Out-Null }"
+        try {
+            $p = Start-Process powershell -Verb RunAs -Wait -PassThru -ArgumentList '-NoProfile', '-Command', $command
+            if ($p.ExitCode -eq 0) { Write-Host "Порт $port открыт для коллег (правило «$name» в брандмауэре Windows)." }
+            else { Write-Warning "Правило не добавлено (код $($p.ExitCode))." }
+        }
+        catch { Write-Warning 'Правило не добавлено: нужны права администратора (подтверждение Windows отменено).' }
     }
     'autostart' {
         $startup = [Environment]::GetFolderPath('Startup')

@@ -26,6 +26,7 @@ namespace RASv2.Core
         public string LocalDataDir => Path.Combine(RasPaths.Local, _module.Title);
         public string UserDataDir => Path.Combine(RasPaths.User, _module.Title);
         public string SharedDataDir => Path.Combine(RasPaths.SharedData, _module.Title);
+        public string SiteAddress => ModuleSites.Of(_module.Id);
 
         /// <summary>Объявленные кнопки — ядро ставит их на ленту, когда модуль запустился.</summary>
         public List<PushButtonData> Buttons { get; } = new List<PushButtonData>();

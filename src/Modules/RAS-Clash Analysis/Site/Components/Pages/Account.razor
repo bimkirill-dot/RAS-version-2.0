@@ -1,0 +1,56 @@
+@page "/account"
+@inject UserStore Users
+
+<PageTitle>Учётная запись · Clash Analysis</PageTitle>
+
+@* Своя учётная запись: кто вошёл, смена пароля (DECISIONS.md модуля, «Вход на сайт») *@
+<div class="settings-page">
+    <nav class="crumbs"><a href="/">Проекты</a> <span class="sep">/</span></nav>
+    <h1>Учётная запись</h1>
+
+    @if (_me != null)
+    {
+        <section class="set-block">
+            <dl class="facts">
+                <dt>Имя</dt><dd>@_me.Name</dd>
+                <dt>Логин</dt><dd>@_me.Login</dd>
+                <dt>Роль</dt><dd>@UserStore.RoleTitle(_me.Role)</dd>
+            </dl>
+        </section>
+
+        <section class="set-block">
+            <h2>Сменить пароль</h2>
+            <label class="set-row"><span class="set-label">Нынешний пароль</span><span class="set-field"><input type="password" autocomplete="current-password" @bind="_current" /></span></label>
+            <label class="set-row"><span class="set-label">Новый пароль</span><span class="set-field"><input type="password" autocomplete="new-password" @bind="_new" /></span></label>
+            <label class="set-row"><span class="set-label">Новый ещё раз</span><span class="set-field"><input type="password" autocomplete="new-password" @bind="_repeat" /></span></label>
+            <div class="actions">
+                @if (_error != null) { <span class="error">@_error</span> }
+                @if (_saved != null) { <span class="notice">@_saved</span> }
+                <span class="spacer"></span>
+                <button class="btn primary" @onclick="Change">Сменить пароль</button>
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> Auth { get; set; }
+
+    private SiteUserRow _me;
+    private string _current, _new, _repeat, _error, _saved;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var id = SiteUser.IdOf((await Auth).User);
+        _me = id == null ? null : Users.Find(id.Value);
+    }
+
+    private void Change()
+    {
+        _saved = null;
+        _error = _new != _repeat ? "Новые пароли не совпадают." : Users.ChangeOwnPassword(_me.Id, _current, _new);
+        if (_error != null) return;
+        _current = _new = _repeat = null;
+        _saved = "Пароль сменён.";
+    }
+}

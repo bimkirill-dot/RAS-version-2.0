@@ -59,6 +59,7 @@ public static class SiteHistory
     public static void Write(SqliteConnection c, SqliteTransaction tx, long? projectId, string kind, string text,
         long? clashId = null, string author = null, string projectName = null)
     {
+        author ??= SiteUser.Name; // кто сделал — вошедший на сайт; загрузка по расписанию — сам сайт (пусто)
         using var cmd = ClashStore.Command(c, """
             INSERT INTO SiteLog(Time, ProjectId, ProjectName, Kind, Text, ClashId, Author)
             VALUES($t, $p, COALESCE($pn, (SELECT Name FROM Projects WHERE Id = $p)), $k, $x, $c, $a)

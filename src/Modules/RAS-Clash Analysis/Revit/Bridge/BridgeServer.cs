@@ -21,7 +21,7 @@ namespace RASv2.ClashAnalysis.Bridge
         private const int MaxHead = 16 * 1024, MaxBody = 1024 * 1024;
 
         private readonly TcpListener _listener;
-        private readonly string _origin;
+        private readonly string _site;
         private readonly Func<byte[]> _status;
         private readonly Func<ShowRequest, ShowReply> _show;
         private readonly ModuleLog _log;
@@ -29,11 +29,11 @@ namespace RASv2.ClashAnalysis.Bridge
 
         public int Port { get; }
 
-        private BridgeServer(TcpListener listener, int port, string origin, Func<byte[]> status, Func<ShowRequest, ShowReply> show, ModuleLog log)
+        private BridgeServer(TcpListener listener, int port, string site, Func<byte[]> status, Func<ShowRequest, ShowReply> show, ModuleLog log)
         {
             _listener = listener;
             Port = port;
-            _origin = origin;
+            _site = site;
             _status = status;
             _show = show;
             _log = log;
@@ -41,7 +41,8 @@ namespace RASv2.ClashAnalysis.Bridge
         }
 
         /// <summary>Занять первый свободный порт; все заняты — null (в журнал).</summary>
-        public static BridgeServer Start(string origin, Func<byte[]> status, Func<ShowRequest, ShowReply> show, ModuleLog log)
+        /// <param name="site">Адрес сайта коллизий: просьбы — только с него (Logic.SiteOrigins).</param>
+        public static BridgeServer Start(string site, Func<byte[]> status, Func<ShowRequest, ShowReply> show, ModuleLog log)
         {
             foreach (var port in Ports)
             {
@@ -49,7 +50,7 @@ namespace RASv2.ClashAnalysis.Bridge
                 try
                 {
                     listener.Start();
-                    return new BridgeServer(listener, port, origin, status, show, log);
+                    return new BridgeServer(listener, port, site, status, show, log);
                 }
                 catch (SocketException)
                 {
@@ -149,7 +150,7 @@ namespace RASv2.ClashAnalysis.Bridge
         private void Reply(NetworkStream stream, Request request)
         {
             // только свой сайт: у браузера Origin есть всегда, когда страница обращается к другому адресу
-            if (!string.Equals(request.Origin, _origin, StringComparison.OrdinalIgnoreCase))
+            if (!Logic.SiteOrigins.Allowed(request.Origin, _site))
             {
                 Send(stream, 403, "Forbidden", null, null);
                 return;

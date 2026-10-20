@@ -52,6 +52,12 @@ namespace RASv2.Core
         string SharedDataDir { get; }
 
         /// <summary>
+        /// Адрес сайта модуля во внутренней сети («http://имя:порт»), если у модуля есть сайт (PRINCIPLES.md, «Сайт модуля»);
+        /// нет — null. Адреса задаёт ядро, не модуль.
+        /// </summary>
+        string SiteAddress { get; }
+
+        /// <summary>
         /// Кнопка модуля; команда — класс модуля с IExternalCommand. Код кнопки — «&lt;Id модуля&gt;.&lt;name&gt;»: по нему
         /// раскладка ленты (ribbon.txt) ставит кнопку на панель, а без раскладки она стоит на панели с названием модуля.
         /// icon — имя иконки: картинки Icons\&lt;icon&gt;32.png, Icons\&lt;icon&gt;16.png и тёмные …32.dark.png, …16.dark.png,

@@ -1,3 +1,6 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Components.Server.Circuits;
 using RASv2.ClashAnalysis.Site;
 using RASv2.ClashAnalysis.Site.Components;
 using RASv2.ClashAnalysis.Site.Data;
@@ -30,6 +33,32 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<BackupService>());
 builder.Services.AddHostedService<ImportScheduler>();
 builder.Services.AddScoped<ProjectViewState>();
 
+// вход на сайт (DECISIONS.md модуля, «Вход на сайт»): логин и пароль сайта, без входа не открывается ничего
+builder.Services.AddSingleton<UserStore>();
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(o =>
+{
+    o.LoginPath = "/login";
+    o.LogoutPath = "/logout";
+    o.AccessDeniedPath = "/";
+    o.Cookie.Name = "ras-clash-analysis";
+    o.ExpireTimeSpan = TimeSpan.FromDays(30);
+    o.SlidingExpiration = true;
+    // учётную запись выключили или сменили роль — вход больше не действует (проверка — при каждом запросе к сайту)
+    o.Events.OnValidatePrincipal = async ctx =>
+    {
+        var id = SiteUser.IdOf(ctx.Principal);
+        var user = id == null ? null : ctx.HttpContext.RequestServices.GetRequiredService<UserStore>().Find(id.Value);
+        if (user == null || !user.Active || !ctx.Principal.IsInRole(user.Role))
+        {
+            ctx.RejectPrincipal();
+            await ctx.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        }
+    };
+});
+builder.Services.AddAuthorization();
+builder.Services.AddCascadingAuthenticationState();
+builder.Services.AddScoped<CircuitHandler, SiteUserCircuitHandler>();
+
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
 var app = builder.Build();
@@ -44,7 +73,10 @@ SiteHistory.NoteStart(database, baseBefore);
 
 app.UseExceptionHandler("/Error", createScopeForErrors: true);
 app.UseStaticFiles();
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseAntiforgery();
+LoginPage.Map(app);
 
 // снимок коллизии: только из папки снимков сайта
 app.MapGet("/snimok/{id:long}", (long id, ClashStore store) =>
@@ -55,8 +87,8 @@ app.MapGet("/snimok/{id:long}", (long id, ClashStore store) =>
     var file = Path.GetFullPath(Path.Combine(root, relative));
     if (!file.StartsWith(root, StringComparison.OrdinalIgnoreCase) || !File.Exists(file)) return Results.NotFound();
     return Results.File(file, "image/jpeg");
-});
+}).RequireAuthorization();
 
-app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
+app.MapRazorComponents<App>().AddInteractiveServerRenderMode().RequireAuthorization();
 
 app.Run();

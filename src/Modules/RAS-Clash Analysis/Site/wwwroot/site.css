@@ -977,3 +977,27 @@ table.facts2 { border-radius: 8px; overflow: hidden; }
 #components-reconnect-modal.components-reconnect-show .reconnect-show,
 #components-reconnect-modal.components-reconnect-failed .reconnect-failed,
 #components-reconnect-modal.components-reconnect-rejected .reconnect-rejected { display: block; }
+
+/* вход на сайт (DECISIONS.md модуля, «Вход на сайт») */
+body.login-page { display: grid; place-items: center; min-height: 100vh; margin: 0; background: var(--bg); padding: 16px; }
+.login-box { width: min(380px, 100%); display: flex; flex-direction: column; gap: 12px; padding: 28px 30px; border-radius: 14px;
+             background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.login-box h1 { margin: 0; font-size: 22px; }
+.login-box p { margin: 0; }
+.login-box label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.login-box input:not([type=checkbox]) { font: inherit; font-size: 14px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); }
+.login-box .login-check { flex-direction: row; align-items: center; gap: 6px; }
+.login-box .btn { padding: 8px 14px; }
+.login-error { color: var(--active); background: var(--active-bg); padding: 8px 10px; border-radius: 6px; font-size: 13px; }
+/* шапка: кто вошёл и «Выйти» */
+.head-user { margin-left: 12px; font-size: 13px; color: var(--text); text-decoration: none; white-space: nowrap; }
+.head-user:hover { color: var(--accent); }
+.head-logout { margin-left: 10px; font-size: 13px; color: var(--muted); text-decoration: none; }
+.head-logout:hover { color: var(--accent); }
+/* «Настройки» → «Учётные записи» */
+.users-table tr.off td { opacity: .55; }
+.users-table .users-actions { white-space: nowrap; display: flex; gap: 6px; align-items: center; }
+.users-table .users-actions input { width: 140px; }
+.users-new { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.users-new input { min-width: 170px; }
+.users-block h3 { margin: 16px 0 8px; font-size: 14px; }

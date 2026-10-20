@@ -97,14 +97,14 @@
     @if (_project.ManualBlocks && _blocks.Count == 0)
     {
         <div class="blocks-warn">⚠ В проекте нет блоков — отчёты не загружаются. Добавьте блоки в разделе «Проект», даже если блок один.
-            @if (_view.Tab != 3) { <button class="btn small" @onclick="() => Go(3)">Добавить блоки</button> }
+            <AuthorizeView Roles="admin" Context="auth">@if (_view.Tab != 3) { <button class="btn small" @onclick="() => Go(3)">Добавить блоки</button> }</AuthorizeView>
         </div>
     }
     else if (_project.ManualBlocks && _outside.Count > 0)
     {
         <div class="blocks-warn">⚠ В папке проекта есть @(_outside.Count == 1 ? "папка" : "папки") вне блоков — отчёты из них не загружены:
             <b>@string.Join(", ", _outside.Select(f => f == "" ? "(сама папка проекта)" : f))</b>. Добавьте блоки в разделе «Проект».
-            @if (_view.Tab != 3) { <button class="btn small" @onclick="() => Go(3)">Добавить блоки</button> }
+            <AuthorizeView Roles="admin" Context="auth">@if (_view.Tab != 3) { <button class="btn small" @onclick="() => Go(3)">Добавить блоки</button> }</AuthorizeView>
         </div>
     }
 
@@ -234,9 +234,11 @@
                 <button class="side-btn @(_view.Tab == 4 ? "on" : "")" @onclick="() => Go(4)" title="Что и когда сделано в этом проекте">
                     <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M10 6v4l2.8 1.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg><span>История</span>
                 </button>
-                <button class="side-btn @(_view.Tab == 3 ? "on" : "")" @onclick="() => Go(3)" title="Название и папка проекта">
-                    <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="2.6" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M10 2.5v2.2M10 15.3v2.2M2.5 10h2.2M15.3 10h2.2M4.7 4.7l1.6 1.6M13.7 13.7l1.6 1.6M4.7 15.3l1.6-1.6M13.7 6.3l1.6-1.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Проект</span>
-                </button>
+                <AuthorizeView Roles="admin" Context="auth">
+                    <button class="side-btn @(_view.Tab == 3 ? "on" : "")" @onclick="() => Go(3)" title="Название и папка проекта">
+                        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="2.6" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M10 2.5v2.2M10 15.3v2.2M2.5 10h2.2M15.3 10h2.2M4.7 4.7l1.6 1.6M13.7 13.7l1.6 1.6M4.7 15.3l1.6-1.6M13.7 6.3l1.6-1.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Проект</span>
+                    </button>
+                </AuthorizeView>
             </aside>
 
             @if (_view.Tab == 0)
@@ -524,6 +526,9 @@
             }
             else
             {
+                @* «Проект» (название, папка, блоки, удаление) — только администратор (DECISIONS.md, «Вход на сайт») *@
+                <AuthorizeView Roles="admin" Context="auth">
+                    <Authorized>
                 <section class="content scroll">
                     <div class="list-title"><h2>Проект</h2></div>
                     <div class="form">
@@ -595,6 +600,11 @@
                         <button class="btn danger" @onclick="AskDelete">Удалить проект с сайта</button>
                     </div>
                 </section>
+                    </Authorized>
+                    <NotAuthorized>
+                        <section class="content scroll"><div class="list-title"><h2>Проект</h2></div><p class="muted">Название, папку и блоки проекта меняет администратор сайта.</p></section>
+                    </NotAuthorized>
+                </AuthorizeView>
             }
     </div>
 </div>
@@ -1688,7 +1698,9 @@
                 @if (r.Warning != null) { <div class="warn small report-warning" title="@r.Warning">⚠ @r.Warning</div> }
                 @if (r.Suspicious)
                 {
-                    <button class="btn small" title="Коллизии, которые этот отчёт отметил «Исправлена», — снова «Активная»" @onclick="() => UndoFixes(r)">Вернуть активными</button>
+                    <AuthorizeView Roles="admin" Context="auth">
+                        <button class="btn small" title="Коллизии, которые этот отчёт отметил «Исправлена», — снова «Активная»" @onclick="() => UndoFixes(r)">Вернуть активными</button>
+                    </AuthorizeView>
                 }
             </td>
             <td class="num">@r.Results</td>

@@ -138,6 +138,16 @@ namespace RASv2.Tests
                 Check(ClashFacets.ElementTitle(rows[0].A) == "Базовая стена Бетон_200 (ID 100)", "метка элемента");
                 Check(ClashFacets.ElementKeys(rows, new[] { ("Дом_AR01.rvt", 555L) }).Count == 0, "нет такого — пусто");
             });
+            yield return Case("мост: просьбы — только со своего сайта (имя, полное имя в домене, этот компьютер)", () =>
+            {
+                const string site = "http://WIN-QJI8IV2IK11:5080";
+                Check(SiteOrigins.Allowed("http://win-qji8iv2ik11:5080", site), "имя компьютера (браузер пишет строчными)");
+                Check(SiteOrigins.Allowed("http://win-qji8iv2ik11.ras.kz:5080", site), "полное имя в домене");
+                Check(SiteOrigins.Allowed("http://localhost:5080", site) && SiteOrigins.Allowed("http://127.0.0.1:5080", site), "разработчик у себя");
+                Check(!SiteOrigins.Allowed("http://evil.example:5080", site) && !SiteOrigins.Allowed("http://win-qji8iv2ik11:5081", site)
+                      && !SiteOrigins.Allowed("https://win-qji8iv2ik11:5080", site) && !SiteOrigins.Allowed("http://win-qji8iv2ik11x:5080", site)
+                      && !SiteOrigins.Allowed(null, site) && !SiteOrigins.Allowed("null", site), "чужие — нет");
+            });
             yield return Case("открыта отсоединённая копия — тоже находится", () =>
             {
                 var open = new[] { "Дом_AR01_отсоединено" };

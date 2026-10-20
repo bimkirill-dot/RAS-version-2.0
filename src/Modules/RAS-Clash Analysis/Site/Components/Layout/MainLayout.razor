@@ -14,9 +14,16 @@
     <a class="theme-toggle head-btn" href="history" title="История сайта — что и когда сделано">
         <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.6V8l2.4 1.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
     </a>
-    <a class="theme-toggle head-btn @(Backup.LastError != null ? "alert" : "")" href="settings"
-       title="@(Backup.LastError != null ? "Копия базы не сделана — подробности в «Настройках» → «Копии базы»" : "Настройки сайта")">⚙</a>
+    <AuthorizeView Roles="admin" Context="auth">
+        <a class="theme-toggle head-btn @(Backup.LastError != null ? "alert" : "")" href="settings"
+           title="@(Backup.LastError != null ? "Копия базы не сделана — подробности в «Настройках» → «Копии базы»" : "Настройки сайта")">⚙</a>
+    </AuthorizeView>
     <button class="theme-toggle head-btn" onclick="ras.toggleTheme()" title="Светлая / тёмная тема">◐</button>
+    @* кто вошёл — к своей учётной записи (смена пароля); «Выйти» — обычным переходом: выход делает сервер, не страница *@
+    <AuthorizeView Context="auth">
+        <a class="head-user" href="account" title="Учётная запись: смена пароля">@auth.User.Identity?.Name</a>
+        <a class="head-logout" href="logout" data-enhance-nav="false" onclick="location.href='/logout'; return false;" title="Выйти с сайта">Выйти</a>
+    </AuthorizeView>
 </header>
 
 <main>
