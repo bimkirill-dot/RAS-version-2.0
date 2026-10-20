@@ -36,12 +36,20 @@ ModelHistory = работает
 ClashAnalysis = работает
 
 {Люди}
-# руководители = Ivanov_A, Petrov_B
+BIM = Poletayev_BIM
 
 [Плагин]
 Core.About
 
+[[BIM]]
 [История модели]
-ModelHistory.Journal
-ModelHistory.History
-ModelHistory.Settings
+(
+ModelHistory.Journal подпись="Журнал"
+ModelHistory.History подпись="История выделенного"
+ModelHistory.Settings подпись="Настройки"
+)
+[Менеджер коллизий]
+(
+ClashAnalysis.ViewSettings подпись="Настройки вида"
+ClashAnalysis.ElementClashes подпись="Коллизии элемента"
+)
