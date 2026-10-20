@@ -54,8 +54,8 @@
 
     <h3>Новая учётная запись</h3>
     <div class="users-new">
-        <input placeholder="Логин (Ivanov_A)" @bind="_login" />
-        <input placeholder="Имя (Иванов А.)" @bind="_name" />
+        <input placeholder="Логин" @bind="_login" />
+        <input placeholder="Имя" @bind="_name" />
         <select @bind="_department" title="Отдел">
             <option value="">без отдела</option>
             @foreach (var d in _departments)
