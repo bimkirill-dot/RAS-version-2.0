@@ -14,6 +14,7 @@
             <dl class="facts">
                 <dt>Имя</dt><dd>@_me.Name</dd>
                 <dt>Логин</dt><dd>@_me.Login</dd>
+                <dt>Отдел</dt><dd>@(_me.Department ?? "—")</dd>
                 <dt>Роль</dt><dd>@UserStore.RoleTitle(_me.Role)</dd>
             </dl>
         </section>

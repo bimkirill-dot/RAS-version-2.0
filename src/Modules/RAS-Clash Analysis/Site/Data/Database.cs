@@ -329,6 +329,16 @@ public sealed class Database
             Created TEXT NOT NULL,
             LastLogin TEXT);
         """,
+
+        // 16 — 20.10.2026 (DECISIONS.md, «Отделы»): список отделов (ведёт администратор) и отдел у учётной записи; null — без отдела.
+        // Повтор названия без учёта регистра проверяет UserStore: NOCASE у SQLite — только латиница
+        """
+        CREATE TABLE Departments(
+            Id INTEGER PRIMARY KEY,
+            Name TEXT NOT NULL,
+            Created TEXT NOT NULL);
+        ALTER TABLE Users ADD COLUMN DepartmentId INTEGER REFERENCES Departments(Id);
+        """,
     };
 
     /// <summary>

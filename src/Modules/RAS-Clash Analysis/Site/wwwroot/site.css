@@ -380,6 +380,14 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .h-kind.h-site { background: transparent; color: var(--muted); border: 1px solid var(--line); }
 .h-kind.h-problem { background: var(--active-bg); color: var(--active); }
 .h-open { margin-left: 8px; font-size: 12px; }
+/* настройки — разделы боковой панелью, как у проекта */
+.settings-page:has(.settings-body) { max-width: 1180px; }
+.settings-body { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 14px; align-items: start; }
+.settings-body > .side { position: sticky; top: 10px; }
+.settings-content { min-width: 0; }
+@media (max-width: 720px) { .settings-body { grid-template-columns: minmax(0, 1fr); } .settings-body > .side { position: static; } }
+.dept-table { margin-bottom: 12px; }
+.dept-table input { width: 100%; max-width: 320px; }
 .set-block { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px 18px 14px; margin: 0 0 14px; }
 .set-block h2 { font-size: 16px; }
 .set-row { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 12px; align-items: center; margin: 8px 0; color: var(--text); font-size: 14px; }

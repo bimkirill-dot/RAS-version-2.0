@@ -1,5 +1,6 @@
 @page "/settings"
 @attribute [Authorize(Roles = "admin")]
+@inject NavigationManager Nav
 @inject SiteSettings Cfg
 @inject SiteOptions Options
 @inject BackupService Backup
@@ -8,11 +9,67 @@
 
 @* Настройки окружения — то, что у компании своё: куда копировать базу, как часто проверять папки, адрес сайта
    (DECISIONS.md модуля, «Настройки сайта»). Хранятся в своём settings.json сайта; обновление сайта их не трогает. *@
+@* разделы — боковой панелью, как у проекта (разработчик, 20.10.2026: «всё на одной странице»): Люди · Проекты · Сайт;
+   раздел — в адресе (?r=), чтобы обновление страницы оставляло на нём *@
 <div class="settings-page">
     <nav class="crumbs"><a href="/">Проекты</a> <span class="sep">/</span></nav>
     <h1>Настройки</h1>
 
-    <UsersEditor />
+    <div class="settings-body">
+        <aside class="side" aria-label="Разделы настроек">
+            <div class="side-title">Настройки</div>
+            <button class="side-btn @(Part == "people" ? "on" : "")" @onclick="@(() => Go("people"))" title="Учётные записи и отделы">
+                <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8" cy="7" r="3" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M2.5 16.5c.6-3 2.8-4.5 5.5-4.5s4.9 1.5 5.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/><path d="M13 4.3a3 3 0 0 1 0 5.4M15 12.3c1.3.7 2.1 2.1 2.5 4.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg><span>Люди</span>
+            </button>
+            <button class="side-btn @(Part == "projects" ? "on" : "")" @onclick="@(() => Go("projects"))" title="Проверка папок проектов, категории проверок">
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 5.5v10h15v-8h-7.5l-2-2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none"/></svg><span>Проекты</span>
+            </button>
+            <button class="side-btn @(Part == "site" ? "on" : "")" @onclick="@(() => Go("site"))" title="Адрес сайта, копии базы, о сайте">
+                <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="10" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M7 17h6M10 13.5V17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Сайт</span>
+            </button>
+        </aside>
+
+        <div class="settings-content">
+    @if (Part == "people")
+    {
+        <UsersEditor @ref="_users" Changed="() => _departments?.Refresh()" />
+        <DepartmentsEditor @ref="_departments" Changed="() => _users?.Refresh()" />
+    }
+    else if (Part == "projects")
+    {
+    <section class="set-block">
+        <h2>Папки проектов</h2>
+        <label class="set-row">
+            <span class="set-label">Проверять новые отчёты</span>
+            <span class="set-field set-inline">
+                каждые <input class="num" type="number" min="0" max="1440" @bind="_v.ScanMinutes" /> мин
+                <small class="muted">0 — только кнопкой «Проверить папки сейчас»</small>
+            </span>
+        </label>
+    </section>
+
+    <TestCategoriesEditor />
+    }
+    else
+    {
+    <section class="set-block">
+        <h2>Адрес сайта</h2>
+        <label class="set-row">
+            <span class="set-label">Порт</span>
+            <span class="set-field set-inline"><input class="num" type="number" min="1024" max="65535" @bind="_v.Port" /></span>
+        </label>
+        <label class="set-row">
+            <span class="set-label"></span>
+            <span class="set-field set-inline">
+                <input type="checkbox" @bind="_v.Network" /> Доступен коллегам по сети
+                <small class="muted">— по адресу <span class="path">http://@Environment.MachineName.ToLowerInvariant():@_v.Port</span>; может понадобиться разрешение в брандмауэре Windows</small>
+            </span>
+        </label>
+        @if (_v.Port != Cfg.RunningPort || _v.Network != Cfg.RunningNetwork)
+        {
+            <p class="warn small">Порт и доступ по сети вступят в силу после перезапуска сайта (site.cmd stop, затем site.cmd start).</p>
+        }
+    </section>
 
     <section class="set-block">
         <h2>Копии базы</h2>
@@ -43,38 +100,6 @@
     </section>
 
     <section class="set-block">
-        <h2>Папки проектов</h2>
-        <label class="set-row">
-            <span class="set-label">Проверять новые отчёты</span>
-            <span class="set-field set-inline">
-                каждые <input class="num" type="number" min="0" max="1440" @bind="_v.ScanMinutes" /> мин
-                <small class="muted">0 — только кнопкой «Проверить папки сейчас»</small>
-            </span>
-        </label>
-    </section>
-
-    <TestCategoriesEditor />
-
-    <section class="set-block">
-        <h2>Адрес сайта</h2>
-        <label class="set-row">
-            <span class="set-label">Порт</span>
-            <span class="set-field set-inline"><input class="num" type="number" min="1024" max="65535" @bind="_v.Port" /></span>
-        </label>
-        <label class="set-row">
-            <span class="set-label"></span>
-            <span class="set-field set-inline">
-                <input type="checkbox" @bind="_v.Network" /> Доступен коллегам по сети
-                <small class="muted">— по адресу <span class="path">http://@Environment.MachineName.ToLowerInvariant():@_v.Port</span>; может понадобиться разрешение в брандмауэре Windows</small>
-            </span>
-        </label>
-        @if (_v.Port != Cfg.RunningPort || _v.Network != Cfg.RunningNetwork)
-        {
-            <p class="warn small">Порт и доступ по сети вступят в силу после перезапуска сайта (site.cmd stop, затем site.cmd start).</p>
-        }
-    </section>
-
-    <section class="set-block">
         <h2>О сайте</h2>
         <dl class="facts">
             <dt>База</dt><dd class="path">@Options.DatabaseFile</dd>
@@ -83,22 +108,39 @@
             <dt>Версия программы</dt><dd>@AppVersion.Tag</dd>
         </dl>
     </section>
+    }
 
-    <div class="actions set-actions">
-        @if (_error != null) { <span class="error">@_error</span> }
-        @if (_saved != null) { <span class="notice">@_saved</span> }
-        <span class="spacer"></span>
-        <button class="btn" @onclick="Reset">Отменить изменения</button>
-        <button class="btn primary" @onclick="Save">Сохранить</button>
+    @* «Сохранить» — у полей из settings.json (проверка папок, адрес, копии); учётные записи, отделы и категории сохраняются сразу *@
+    @if (Part != "people")
+    {
+        <div class="actions set-actions">
+            @if (_error != null) { <span class="error">@_error</span> }
+            @if (_saved != null) { <span class="notice">@_saved</span> }
+            <span class="spacer"></span>
+            <button class="btn" @onclick="Reset">Отменить изменения</button>
+            <button class="btn primary" @onclick="Save">Сохранить</button>
+        </div>
+    }
+        </div>
     </div>
 </div>
 
 @code {
+    [SupplyParameterFromQuery(Name = "r")] public string Section { get; set; }
+
+    private static readonly string[] Parts = { "people", "projects", "site" };
+    private string Part => Parts.Contains(Section) ? Section : "people";
+
+    private UsersEditor _users;
+    private DepartmentsEditor _departments;
     private SiteSettingsValues _v = new();
     private string _error, _saved, _check;
     private bool _checkOk;
 
     protected override void OnInitialized() => Reset();
+
+    // несохранённое в полях переживает переход между разделами: страница та же, меняется только адрес
+    private void Go(string part) => Nav.NavigateTo("settings?r=" + part);
 
     private void Reset()
     {

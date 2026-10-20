@@ -1,0 +1,110 @@
+@inject UserStore Users
+
+@* «Настройки» → «Люди» → «Отделы» (DECISIONS.md модуля, «Отделы»): список ведёт администратор, у учётной записи — выбор из него
+   (одинаковое написание у всех). Сохраняется сразу. Удалить — только пустой отдел. *@
+<section class="set-block dept-block">
+    <h2>Отделы</h2>
+    <p class="muted small">Отдел учётной записи выбирается из этого списка. Удалить можно только отдел без учётных записей.</p>
+
+    @if (_list.Count > 0)
+    {
+        <table class="grid users-table dept-table">
+            <thead><tr><th>Отдел</th><th class="num">Учётных записей</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var d in _list)
+                {
+                    var dept = d;
+                    <tr>
+                        <td>
+                            @if (_editing == dept.Id)
+                            {
+                                <input @bind="_editName" @bind:event="oninput" @onkeydown="e => EditKey(e, dept)" />
+                            }
+                            else { @dept.Name }
+                        </td>
+                        <td class="num">@dept.Users</td>
+                        <td><div class="users-actions">
+                            @if (_editing == dept.Id)
+                            {
+                                <button class="btn small primary" @onclick="() => Rename(dept)">Сохранить</button>
+                                <button class="btn small" @onclick="() => _editing = null">Отмена</button>
+                            }
+                            else
+                            {
+                                <button class="btn small" @onclick="() => { _editing = dept.Id; _editName = dept.Name; _error = _saved = null; }">Переименовать</button>
+                                <button class="btn small" disabled="@(dept.Users > 0)" title="@(dept.Users > 0 ? "Сначала переведите учётные записи в другой отдел" : null)"
+                                        @onclick="() => Delete(dept)">Удалить</button>
+                            }
+                        </div></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <p class="muted">Отделов пока нет.</p>
+    }
+
+    <div class="users-new">
+        <input placeholder="Новый отдел" @bind="_newName" @bind:event="oninput" @onkeydown="NewKey" />
+        <button class="btn primary" @onclick="Add">Добавить</button>
+    </div>
+    @if (_error != null) { <p class="error">@_error</p> }
+    @if (_saved != null) { <p class="notice">@_saved</p> }
+</section>
+
+@code {
+    /// <summary>Список поменялся — учётным записям рядом перечитать отделы.</summary>
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private List<DepartmentRow> _list = new();
+    private long? _editing;
+    private string _editName, _newName, _error, _saved;
+
+    protected override void OnInitialized() => _list = Users.Departments();
+
+    /// <summary>Учётные записи рядом поменялись — пересчитать.</summary>
+    public void Refresh()
+    {
+        _list = Users.Departments();
+        StateHasChanged();
+    }
+
+    private async Task Done(string error, string saved)
+    {
+        _error = error;
+        _saved = error == null ? saved : null;
+        _list = Users.Departments();
+        if (error == null) await Changed.InvokeAsync();
+    }
+
+    private async Task Add()
+    {
+        var name = _newName?.Trim();
+        var error = Users.AddDepartment(name);
+        await Done(error, $"Отдел «{name}» добавлен.");
+        if (error == null) _newName = null;
+    }
+
+    private async Task Rename(DepartmentRow dept)
+    {
+        var name = _editName?.Trim();
+        var error = Users.RenameDepartment(dept.Id, name);
+        await Done(error, $"Отдел «{dept.Name}» теперь «{name}».");
+        if (error == null) _editing = null;
+    }
+
+    private Task Delete(DepartmentRow dept) => Done(Users.DeleteDepartment(dept.Id), $"Отдел «{dept.Name}» удалён.");
+
+    private async Task NewKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await Add();
+    }
+
+    private async Task EditKey(KeyboardEventArgs e, DepartmentRow dept)
+    {
+        if (e.Key == "Enter") await Rename(dept);
+        else if (e.Key == "Escape") _editing = null;
+    }
+}

@@ -1,13 +1,14 @@
 @inject UserStore Users
 
-@* «Настройки» → «Учётные записи» (только администратор): завести, роль, новый пароль, выключить (DECISIONS.md модуля, «Вход на сайт») *@
+@* «Настройки» → «Люди» → «Учётные записи» (только администратор): завести, отдел, роль, новый пароль, выключить
+   (DECISIONS.md модуля, «Вход на сайт», «Отделы») *@
 <section class="set-block users-block">
     <h2>Учётные записи</h2>
     <p class="muted small">Без входа сайт не открывается. Администратор — проекты, настройки и учётные записи; сотрудник — статусы и комментарии.
         Пароль коллеге — временный: сменить его можно на странице своей учётной записи (имя в шапке сайта).</p>
 
     <table class="grid users-table">
-        <thead><tr><th>Имя</th><th>Логин</th><th>Роль</th><th>Последний вход</th><th></th></tr></thead>
+        <thead><tr><th>Имя</th><th>Логин</th><th>Отдел</th><th>Роль</th><th>Последний вход</th><th></th></tr></thead>
         <tbody>
             @foreach (var u in _list)
             {
@@ -15,6 +16,15 @@
                 <tr class="@(user.Active ? "" : "off")">
                     <td>@user.Name@if (user.Id == _myId) { <span class="muted small">&nbsp;(вы)</span> }@if (!user.Active) { <span class="muted small">&nbsp;— выключена</span> }</td>
                     <td class="mono">@user.Login</td>
+                    <td>
+                        <select @onchange="e => SetDepartment(user, e.Value?.ToString())" disabled="@(!user.Active)">
+                            <option value="" selected="@(user.DepartmentId == null)">без отдела</option>
+                            @foreach (var d in _departments)
+                            {
+                                <option value="@d.Id" selected="@(user.DepartmentId == d.Id)">@d.Name</option>
+                            }
+                        </select>
+                    </td>
                     <td>
                         @* роль — отметкой у варианта: значение у самого списка Blazor ставит раньше вариантов, и оно теряется *@
                         <select @onchange="e => SetRole(user, e.Value?.ToString())" disabled="@(user.Id == _myId || !user.Active)">
@@ -48,7 +58,14 @@
     <div class="users-new">
         <input placeholder="Логин (Ivanov_A)" @bind="_login" />
         <input placeholder="Имя (Иванов А.)" @bind="_name" />
-        <select @bind="_role">
+        <select @bind="_department" title="Отдел">
+            <option value="">без отдела</option>
+            @foreach (var d in _departments)
+            {
+                <option value="@d.Id">@d.Name</option>
+            }
+        </select>
+        <select @bind="_role" title="Роль">
             <option value="@UserStore.Employee">сотрудник</option>
             <option value="@UserStore.Admin">администратор</option>
         </select>
@@ -61,16 +78,30 @@
 
 @code {
     [CascadingParameter] private Task<AuthenticationState> Auth { get; set; }
+    /// <summary>Учётные записи поменялись — «Отделам» рядом пересчитать, сколько в каком отделе.</summary>
+    [Parameter] public EventCallback Changed { get; set; }
 
     private List<SiteUserRow> _list = new();
     private long _myId;
     private long? _passwordFor;
-    private string _password, _login, _name, _role = UserStore.Employee, _newPassword, _error, _saved;
+    private string _password, _login, _name, _role = UserStore.Employee, _department = "", _newPassword, _error, _saved;
+    private List<DepartmentRow> _departments = new();
+
+    /// <summary>Список отделов поменялся («Отделы» рядом) — перечитать.</summary>
+    public void Refresh()
+    {
+        _departments = Users.Departments();
+        _list = Users.List();
+        StateHasChanged();
+    }
+
+    private static long? DepartmentOf(string value) => long.TryParse(value, out var id) ? id : null;
 
     protected override async Task OnInitializedAsync()
     {
         _myId = SiteUser.IdOf((await Auth).User) ?? 0;
         _list = Users.List();
+        _departments = Users.Departments();
     }
 
     private void Done(string error, string saved)
@@ -78,11 +109,12 @@
         _error = error;
         _saved = error == null ? saved : null;
         _list = Users.List();
+        if (error == null) _ = Changed.InvokeAsync();
     }
 
     private void Add()
     {
-        var error = Users.Create(_login, _name, _role, _newPassword);
+        var error = Users.Create(_login, _name, _role, _newPassword, DepartmentOf(_department));
         Done(error, $"Учётная запись «{_name?.Trim()}» добавлена — сообщите коллеге логин и временный пароль.");
         if (error == null) _login = _name = _newPassword = null;
     }
@@ -96,6 +128,12 @@
 
     private void SetActive(SiteUserRow user, bool active) =>
         Done(Users.SetActive(user.Id, active, _myId), $"«{user.Name}» — {(active ? "включена" : "выключена")}.");
+
+    private void SetDepartment(SiteUserRow user, string value)
+    {
+        var id = DepartmentOf(value);
+        Done(Users.SetDepartment(user.Id, id), $"«{user.Name}» — " + (id == null ? "без отдела." : $"отдел «{_departments.FirstOrDefault(d => d.Id == id)?.Name}»."));
+    }
 
     private void SetRole(SiteUserRow user, string role) =>
         Done(Users.SetRole(user.Id, role, _myId), $"«{user.Name}» — {UserStore.RoleTitle(role)}.");
