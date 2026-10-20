@@ -13,7 +13,7 @@
             {
                 var user = u;
                 <tr class="@(user.Active ? "" : "off")">
-                    <td>@user.Name @if (user.Id == _myId) { <span class="muted small">(вы)</span> } @if (!user.Active) { <span class="muted small">— выключена</span> }</td>
+                    <td>@user.Name@if (user.Id == _myId) { <span class="muted small">&nbsp;(вы)</span> }@if (!user.Active) { <span class="muted small">&nbsp;— выключена</span> }</td>
                     <td class="mono">@user.Login</td>
                     <td>
                         @* роль — отметкой у варианта: значение у самого списка Blazor ставит раньше вариантов, и оно теряется *@
@@ -23,7 +23,7 @@
                         </select>
                     </td>
                     <td>@(user.LastLogin.HasValue ? Fmt.Date(user.LastLogin) : "—")</td>
-                    <td class="users-actions">
+                    <td><div class="users-actions">
                         @if (_passwordFor == user.Id)
                         {
                             <input type="text" placeholder="новый пароль" @bind="_password" />
@@ -38,7 +38,7 @@
                                 <button class="btn small" @onclick="() => SetActive(user, !user.Active)">@(user.Active ? "Выключить" : "Включить")</button>
                             }
                         }
-                    </td>
+                    </div></td>
                 </tr>
             }
         </tbody>
@@ -46,8 +46,8 @@
 
     <h3>Новая учётная запись</h3>
     <div class="users-new">
-        <input placeholder="Логин (например, Ivanov_A)" @bind="_login" />
-        <input placeholder="Имя для истории (Иванов А.)" @bind="_name" />
+        <input placeholder="Логин (Ivanov_A)" @bind="_login" />
+        <input placeholder="Имя (Иванов А.)" @bind="_name" />
         <select @bind="_role">
             <option value="@UserStore.Employee">сотрудник</option>
             <option value="@UserStore.Admin">администратор</option>

@@ -996,6 +996,7 @@ body.login-page { display: grid; place-items: center; min-height: 100vh; margin:
 .head-logout:hover { color: var(--accent); }
 /* «Настройки» → «Учётные записи» */
 .users-table tr.off td { opacity: .55; }
+.users-table td { vertical-align: middle; }
 .users-table .users-actions { white-space: nowrap; display: flex; gap: 6px; align-items: center; }
 .users-table .users-actions input { width: 140px; }
 .users-new { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
