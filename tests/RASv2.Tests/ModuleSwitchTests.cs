@@ -4,7 +4,7 @@ using RASv2.Core;
 
 namespace RASv2.Tests
 {
-    /// <summary>Выключение модулей в общих настройках (ModuleSwitches) и предохранитель (ErrorFuse).</summary>
+    /// <summary>Режимы модулей ({Модули} в ribbon.txt — ModuleSwitches) и предохранитель (ErrorFuse).</summary>
     internal static class ModuleSwitchTests
     {
         private static KeyValuePair<string, Action> Case(string name, Action body) => new KeyValuePair<string, Action>(name, body);
@@ -18,10 +18,10 @@ namespace RASv2.Tests
         {
             yield return Case("режимы модулей по-русски, без учёта регистра и лишних пробелов", () =>
             {
-                var s = Parse("# комментарий\nModelHistory = Работает\nKj=выключен\r\nOv =  без   кнопок  # фоном\nSleeves = только тест\nBroken = не загружать");
+                var s = Parse("# комментарий\nModelHistory = Работает\nKj=выключен\r\nOv =  только   тест  # пробелы\nSleeves = только тест\nBroken = не загружать");
                 Check(ModuleSwitches.ModeOf(s, "ModelHistory") == ModuleMode.Works, "работает");
                 Check(ModuleSwitches.ModeOf(s, "kj") == ModuleMode.Off, "выключен");
-                Check(ModuleSwitches.ModeOf(s, "Ov") == ModuleMode.NoButtons, "без кнопок");
+                Check(ModuleSwitches.ModeOf(s, "Ov") == ModuleMode.TestOnly, "лишние пробелы между словами");
                 Check(ModuleSwitches.ModeOf(s, "Sleeves") == ModuleMode.TestOnly, "только тест");
                 Check(ModuleSwitches.ModeOf(s, "Broken") == ModuleMode.NoLoad, "не загружать");
             });

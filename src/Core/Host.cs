@@ -16,13 +16,13 @@ namespace RASv2.Core
         public IModule Module;
         /// <summary>Модуль запущен: при закрытии Revit ему вызывается Stop (и после предохранителя — тоже).</summary>
         public bool Running;
-        /// <summary>«работает», «выключен (modules.txt)», «отключён: …».</summary>
+        /// <summary>«работает», «выключен (ribbon.txt, {Модули})», «отключён: …».</summary>
         public string State;
     }
 
     /// <summary>
     /// Ядро: его запускает загрузчик (по имени типа и метода, без ссылки на ядро). Создаёт вкладку,
-    /// находит и запускает модули (кроме выключенных в modules.txt — ModuleSwitches), раскладывает их кнопки
+    /// находит и запускает модули (кроме выключенных в блоке {Модули} файла ribbon.txt — ModuleSwitches), раскладывает их кнопки
     /// по панелям (RibbonLayout). Ошибка модуля отключает только этот модуль (PRINCIPLES.md, раздел 7).
     /// </summary>
     public static class Host
@@ -71,7 +71,11 @@ namespace RASv2.Core
             try { app.CreateRibbonTab(TabName); }
             catch (Autodesk.Revit.Exceptions.ArgumentException) { /* вкладка уже есть */ }
 
-            var switches = LoadSwitches(buildDir);
+            var file = ReadPluginFile(buildDir);
+            var switches = ModuleSwitches.Parse(file.Modules, w => Log.Write(Tag, w));
+            foreach (var s in switches.Where(s => s.Value != ModuleMode.Works))
+                Log.Write(Tag, "Режим модуля: " + s.Key + " — " + s.Value);
+            _people = ButtonAccess.People(file.People, w => Log.Write(Tag, w));
             foreach (var slot in ModuleCatalog.Discover(buildDir, switches))
             {
                 ModuleList.Add(slot);
@@ -85,7 +89,7 @@ namespace RASv2.Core
             };
             RibbonIcons.Set(aboutData, about, "About");
             AddButton(aboutData, ServicePanel);
-            CreateRibbon(app, buildDir);
+            CreateRibbon(app, file.Layout);
             IsStarted = true;
         }
 
@@ -99,26 +103,28 @@ namespace RASv2.Core
             _events?.DetachAll();
         }
 
+        /// <summary>Группы людей из блока {Люди} — кому доступны кнопки.</summary>
+        private static Dictionary<string, List<string>> _people = new Dictionary<string, List<string>>();
+
         /// <summary>
-        /// Режимы модулей у всех — modules.txt в сборке, как раскладка ленты (разработчик, 20.10.2026: «как ribbon.txt — и только
-        /// я могу менять»; раньше — Config\modules.txt на сервере). Нет файла или он не читается — все работают.
+        /// ribbon.txt в сборке — один файл на всё, что разработчик задаёт для всех (разработчик, 20.10.2026: модули, люди,
+        /// лента; раньше режимы модулей — Config\modules.txt на сервере, затем modules.txt в сборке). Нет файла или он не
+        /// читается — все модули работают, кнопки — на панелях модулей.
         /// </summary>
-        private static Dictionary<string, ModuleMode> LoadSwitches(string buildDir)
+        private static PluginFile ReadPluginFile(string buildDir)
         {
             var lines = new string[0];
-            var file = Path.Combine(buildDir, ModuleSwitches.FileName);
+            var path = Path.Combine(buildDir, RibbonLayout.FileName);
             try
             {
-                if (File.Exists(file)) lines = File.ReadAllLines(file);
+                if (File.Exists(path)) lines = File.ReadAllLines(path);
+                else Log.Write(Tag, "Нет " + RibbonLayout.FileName + " — все модули работают, кнопки на панелях модулей");
             }
             catch (Exception ex)
             {
-                Log.Write(Tag, "Не удалось прочитать режимы модулей (" + ModuleSwitches.FileName + ") — все модули работают", ex);
+                Log.Write(Tag, "Не удалось прочитать " + RibbonLayout.FileName + " — все модули работают, кнопки на панелях модулей", ex);
             }
-            var switches = ModuleSwitches.Parse(lines, w => Log.Write(Tag, w));
-            foreach (var s in switches.Where(s => s.Value != ModuleMode.Works))
-                Log.Write(Tag, "Режим модуля: " + s.Key + " — " + s.Value);
-            return switches;
+            return PluginFile.Split(lines, w => Log.Write(Tag, w));
         }
 
         private static void StartModule(UIControlledApplication app, ModuleSlot slot, ModuleMode mode)
@@ -131,7 +137,7 @@ namespace RASv2.Core
             }
             if (mode == ModuleMode.Off)
             {
-                slot.State = "выключен (modules.txt)";
+                slot.State = "выключен (ribbon.txt, {Модули})";
                 return;
             }
             var testOnly = mode == ModuleMode.TestOnly;
@@ -145,12 +151,10 @@ namespace RASv2.Core
                 var context = new ModuleContext(module, app, _events);
                 module.Start(context);
                 slot.Running = true;
-                slot.State = mode == ModuleMode.NoButtons ? ModuleCatalog.Running + " без кнопок (modules.txt)"
-                    : testOnly ? ModuleCatalog.Running + " (только для тестовой группы)"
+                slot.State = testOnly ? ModuleCatalog.Running + " (только для тестовой группы)"
                     : ModuleCatalog.Running;
-                // кнопки — только у запустившегося модуля: у отключённого их на ленте нет; «без кнопок» — тоже нет
-                if (mode != ModuleMode.NoButtons)
-                    foreach (var data in context.Buttons) AddButton(data, module.Title);
+                // кнопки — только у запустившегося модуля: у отключённого (и «только тест» не у тестовой группы) их на ленте нет
+                foreach (var data in context.Buttons) AddButton(data, module.Title);
             }
             catch (Exception ex)
             {
@@ -175,20 +179,21 @@ namespace RASv2.Core
         /// Лента: отделы, панели, кнопки и стопки по раскладке из сборки (ribbon.txt) — RibbonLayout, строит RibbonBuilder.
         /// Нет файла или он с ошибками — кнопки стоят на панелях по умолчанию.
         /// </summary>
-        private static void CreateRibbon(UIControlledApplication app, string buildDir)
+        private static void CreateRibbon(UIControlledApplication app, string[] layoutLines)
         {
             var layout = new List<RibbonPanelSpec>();
-            var file = Path.Combine(buildDir, RibbonLayout.FileName);
             try
             {
-                if (File.Exists(file)) layout = RibbonLayout.Parse(File.ReadAllLines(file), w => Log.Write(Tag, w));
-                else Log.Write(Tag, "Нет раскладки ленты (" + RibbonLayout.FileName + ") — кнопки на панелях модулей");
+                layout = RibbonLayout.Parse(layoutLines, w => Log.Write(Tag, w));
             }
             catch (Exception ex)
             {
-                Log.Write(Tag, "Не удалось прочитать раскладку ленты", ex);
+                Log.Write(Tag, "Не удалось разобрать раскладку ленты", ex);
             }
-            var plan = RibbonLayout.Arrange(layout, RibbonOrder, w => Log.Write(Tag, w), RibbonBuilder.SelectorId);
+            // кнопка видна всегда; кому недоступна по «доступна=» — серая (разработчик, 20.10.2026: «кнопку скрыть нельзя»)
+            var user = Environment.UserName;
+            var plan = RibbonLayout.Arrange(layout, RibbonOrder, w => Log.Write(Tag, w), RibbonBuilder.SelectorId,
+                access => ButtonAccess.Allowed(access, user, _people));
             RibbonBuilder.Build(app, TabName, plan, RibbonData);
         }
 
@@ -226,7 +231,7 @@ namespace RASv2.Core
     {
         public const string Running = "работает";
 
-        /// <param name="switches">Режимы модулей (modules.txt): сборки модулей с «не загружать» не загружаются совсем.</param>
+        /// <param name="switches">Режимы модулей ({Модули} в ribbon.txt): сборки модулей с «не загружать» не загружаются совсем.</param>
         public static List<ModuleSlot> Discover(string buildDir, IReadOnlyDictionary<string, ModuleMode> switches)
         {
             var result = new List<ModuleSlot>();
@@ -239,7 +244,7 @@ namespace RASv2.Core
                 var code = name.Substring("RASv2.".Length);
                 if (ModuleSwitches.ModeOf(switches, code) == ModuleMode.NoLoad)
                 {
-                    result.Add(new ModuleSlot { Id = code, Title = code, State = "не загружается (modules.txt)" });
+                    result.Add(new ModuleSlot { Id = code, Title = code, State = "не загружается (ribbon.txt, {Модули})" });
                     continue;
                 }
                 try

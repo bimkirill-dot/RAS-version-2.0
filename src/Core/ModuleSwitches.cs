@@ -3,13 +3,11 @@ using System.Collections.Generic;
 
 namespace RASv2.Core
 {
-    /// <summary>Как модуль работает у всех — по файлу modules.txt в сборке (src\Core\modules.txt).</summary>
+    /// <summary>Как модуль работает у всех — блок {Модули} файла ribbon.txt в сборке.</summary>
     internal enum ModuleMode
     {
         /// <summary>Как обычно (и если модуля в файле нет).</summary>
         Works,
-        /// <summary>Работает в фоне, кнопок на ленте нет.</summary>
-        NoButtons,
         /// <summary>Только у тестовой группы (канал «тест»; у разработчика — тоже).</summary>
         TestOnly,
         /// <summary>Сборка загружена, модуль не запускается: ни кнопок, ни событий.</summary>
@@ -19,20 +17,18 @@ namespace RASv2.Core
     }
 
     /// <summary>
-    /// Выключение модулей у всех (src\Core\DECISIONS.md): файл modules.txt в сборке рядом с ядром (как ribbon.txt; правит
-    /// и выпускает только разработчик — 20.10.2026; раньше — Config\modules.txt на сервере), строка на модуль —
-    /// «&lt;код модуля&gt; = работает | без кнопок | только тест | выключен | не загружать». Код модуля — IModule.Id,
+    /// Режимы модулей у всех (src\Core\DECISIONS.md, «Модули и кнопки — одним файлом»): блок {Модули} файла ribbon.txt в
+    /// сборке (правит и выпускает только разработчик; раньше — Config\modules.txt на сервере, затем modules.txt в сборке),
+    /// строка на модуль — «&lt;код модуля&gt; = работает | только тест | выключен | не загружать». «Без кнопок» больше нет:
+    /// кнопки видны всегда, кому недоступны — серые (ButtonAccess). Код модуля — IModule.Id,
     /// он же окончание имени сборки (RASv2.&lt;код&gt;.dll): по нему «не загружать» работает до загрузки сборки.
     /// Действует после перезапуска Revit. Без Revit API: проверяется тестами.
     /// </summary>
     internal static class ModuleSwitches
     {
-        public const string FileName = "modules.txt";
-
         private static readonly Dictionary<string, ModuleMode> Words = new Dictionary<string, ModuleMode>(StringComparer.OrdinalIgnoreCase)
         {
             ["работает"] = ModuleMode.Works,
-            ["без кнопок"] = ModuleMode.NoButtons,
             ["только тест"] = ModuleMode.TestOnly,
             ["выключен"] = ModuleMode.Off,
             ["не загружать"] = ModuleMode.NoLoad
@@ -56,7 +52,8 @@ namespace RASv2.Core
                 var word = eq > 0 ? Normalize(line.Substring(eq + 1)) : "";
                 if (code.Length == 0 || !Words.TryGetValue(word, out var mode))
                 {
-                    warn("режимы модулей (modules.txt), строка " + number + ": «" + raw.Trim() + "» не понята — пропущена");
+                    warn("ribbon.txt, {Модули}, строка " + number + ": «" + raw.Trim() + "» не понята — пропущена" +
+                         (word == "без кнопок" ? " (режима «без кнопок» больше нет: кнопка видна всегда, недоступная — серая, «доступна=» в раскладке)" : ""));
                     continue;
                 }
                 result[code] = mode; // модуль указан дважды — действует последняя строка
@@ -73,7 +70,7 @@ namespace RASv2.Core
             string.Equals(channel, "test", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(channel, "dev", StringComparison.OrdinalIgnoreCase);
 
-        /// <summary>«Без   кнопок» → «без кнопок»: лишние пробелы между словами не ошибка.</summary>
+        /// <summary>«Только   тест» → «только тест»: лишние пробелы между словами не ошибка.</summary>
         private static string Normalize(string s) => string.Join(" ", s.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries));
     }
 }

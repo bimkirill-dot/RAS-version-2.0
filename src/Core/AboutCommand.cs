@@ -38,7 +38,8 @@ namespace RASv2.Core
             text.AppendLine();
             text.AppendLine("Кнопки (код — подпись):");
             foreach (var button in Host.DeclaredButtons)
-                text.AppendLine("• " + button.Key + " — «" + button.Value.Replace("\n", " ") + "»");
+                text.AppendLine("• " + button.Key + " — «" + button.Value.Replace("\n", " ") + "»" +
+                                (RibbonBuilder.Disabled.Contains(button.Key) ? " — серая у вас (доступна= в ribbon.txt)" : ""));
 
             var dialog = new TaskDialog("RAS v. 2.0")
             {

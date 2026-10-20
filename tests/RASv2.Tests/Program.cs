@@ -19,6 +19,7 @@ namespace RASv2.Tests
             Run("Загрузчик: выбор сборки", LoaderTests.All);
             Run("Ядро: раскладка ленты", RibbonTests.All);
             Run("Ядро: выключение модулей и предохранитель", ModuleSwitchTests.All);
+            Run("Ядро: ribbon.txt — модули, люди, лента, серые кнопки", PluginFileTests.All);
             Run("RAS-Clash Analysis: отчёты Navisworks", ClashReportTests.All);
             Run("RAS-Clash Analysis: новый отчёт против известного", ClashMergeTests.All);
             Run("RAS-Clash Analysis: папки с отчётами", ClashPathTests.All);

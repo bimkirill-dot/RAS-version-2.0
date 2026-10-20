@@ -40,6 +40,12 @@ namespace RASv2.Core
 
         public static IEnumerable<KeyValuePair<string, List<RibbonItem>>> AllItems => Items;
 
+        /// <summary>Кнопки, серые у этого человека по «доступна=» раскладки (для «О плагине»).</summary>
+        public static HashSet<string> Disabled { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Пояснение в подсказке серой кнопки: это не поломка.</summary>
+        public const string DisabledNote = "Недоступна у вас — обратитесь к BIM-менеджеру.";
+
         public static void Build(UIControlledApplication app, string tab, RibbonPlan plan, IReadOnlyDictionary<string, PushButtonData> data)
         {
             _plan = plan;
@@ -95,6 +101,7 @@ namespace RASv2.Core
                     list.Add(item);
                     if (item is PulldownButton selector) FillSelector(selector, data[entry.Id], departments);
                     else if (entry.Label != null) SetLabel(panelName, item, entry.Label);
+                    if (!entry.Enabled) Disable(item, entry.Id);
                 }
             }
             catch (Exception ex)
@@ -102,6 +109,18 @@ namespace RASv2.Core
                 var ids = string.Join(", ", slot.Entries.Select(e => e.Id));
                 Log.Write(OwnerOf(slot.Entries[0].Id), "Не удалось поставить на ленту: " + ids, ex);
             }
+        }
+
+        /// <summary>Кнопка видна, но не нажимается («доступна=» в раскладке): серая, в подсказке — почему.</summary>
+        private static void Disable(RibbonItem item, string id)
+        {
+            try
+            {
+                item.Enabled = false;
+                item.ToolTip = string.IsNullOrEmpty(item.ToolTip) ? DisabledNote : item.ToolTip + "\n\n" + DisabledNote;
+                Disabled.Add(id);
+            }
+            catch (Exception ex) { Log.Write(Tag, "Не удалось сделать серой кнопку «" + id + "»", ex); }
         }
 
         /// <summary>

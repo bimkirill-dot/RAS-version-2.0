@@ -21,18 +21,27 @@ namespace RASv2.Core
         public string DefaultPanel { get; }
     }
 
-    /// <summary>Кнопка на ленте: код и подпись (null — как задал модуль, «» — без подписи, одна иконка).</summary>
+    /// <summary>
+    /// Кнопка на ленте: код, подпись (null — как задал модуль, «» — без подписи, одна иконка) и кому доступна («доступна="…"»;
+    /// null — всем). Enabled — доступна ли этому человеку (ButtonAccess, при построении плана): нет — кнопка серая.
+    /// </summary>
     internal sealed class RibbonEntry
     {
-        public RibbonEntry(string id, string label)
+        public RibbonEntry(string id, string label, string access = null, bool enabled = true)
         {
             Id = id;
             Label = label;
+            Access = access;
+            Enabled = enabled;
         }
 
         public string Id { get; }
 
         public string Label { get; }
+
+        public string Access { get; }
+
+        public bool Enabled { get; }
     }
 
     /// <summary>Место на панели: одна кнопка — большая; 2–3 — стопка маленьких в одну колонку.</summary>
@@ -177,12 +186,13 @@ namespace RASv2.Core
             var space = line.IndexOfAny(new[] { ' ', '\t' });
             var id = space < 0 ? line : line.Substring(0, space);
             var rest = space < 0 ? "" : line.Substring(space + 1).Trim();
-            string label = null;
+            string label = null, access = null;
             var consumed = new StringBuilder(rest);
             foreach (Match m in Attribute.Matches(rest))
             {
                 var key = m.Groups[1].Value;
                 if (string.Equals(key, "подпись", StringComparison.OrdinalIgnoreCase)) label = Unescape(m.Groups[2].Value);
+                else if (string.Equals(key, "доступна", StringComparison.OrdinalIgnoreCase)) access = Unescape(m.Groups[2].Value).Trim();
                 else if (string.Equals(key, "размер", StringComparison.OrdinalIgnoreCase))
                     warn("раскладка ленты, строка " + number + ": «размер» не нужен — маленькие кнопки задаются стопкой «( … )»");
                 else warn("раскладка ленты, строка " + number + ": непонятное «" + key + "» — пропущено");
@@ -190,7 +200,7 @@ namespace RASv2.Core
             }
             if (consumed.ToString().Trim().Length > 0)
                 warn("раскладка ленты, строка " + number + ": не понято «" + consumed.ToString().Trim() + "» (подпись — в кавычках: подпись=\"…\")");
-            return new RibbonEntry(id, label);
+            return new RibbonEntry(id, label, access);
         }
 
         private static string Unescape(string s)
@@ -212,8 +222,9 @@ namespace RASv2.Core
         /// на панелях модулей, во всех отделах. selectorId («Core.About») — где стоит переключатель отделов: если отделы
         /// есть, он обязан быть на панели, видной во всех отделах, иначе из чужого отдела не вернуться.
         /// </summary>
+        /// <param name="allowed">Доступна ли кнопка этому человеку по её «доступна=» (null — все доступны); недоступная — серая.</param>
         public static RibbonPlan Arrange(IEnumerable<RibbonPanelSpec> layout, IEnumerable<RibbonButton> buttons, Action<string> warn,
-            string selectorId = null)
+            string selectorId = null, Func<string, bool> allowed = null)
         {
             var available = buttons.ToList();
             var byId = available.GroupBy(b => b.Id, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
@@ -237,7 +248,11 @@ namespace RASv2.Core
                             continue;
                         }
                         placed.Add(button.Id);
-                        entries.Add(new RibbonEntry(button.Id, e.Label));
+                        // переключатель отделов («О плагине») серым не бывает: иначе из чужого отдела не вернуться
+                        var enabled = Same(button.Id, selectorId) || e.Access == null || allowed == null || allowed(e.Access);
+                        if (e.Access != null && Same(button.Id, selectorId))
+                            warn("раскладка ленты: «" + selectorId + "» доступна всем всегда — «доступна» у неё не действует");
+                        entries.Add(new RibbonEntry(button.Id, e.Label, e.Access, enabled));
                     }
                     if (slot.IsStack && entries.Count > MaxStack)
                         warn("раскладка ленты: в стопке больше " + MaxStack + " кнопок — «" + string.Join("», «", entries.Skip(MaxStack).Select(x => x.Id)) +
