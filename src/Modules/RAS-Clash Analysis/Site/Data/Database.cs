@@ -629,7 +629,7 @@ public sealed class Database
         foreach (var t in tests) ClashStore.RetimeFixes(c, tx, t);
     }
 
-    /// <summary>Создать базу или довести её до текущей версии. Перед переносом — копия рядом с базой. Возвращает: версия до переноса.</summary>
+    /// <summary>Создать базу или довести её до текущей версии. Перед переносом — копия («Копии базы\Перед изменениями»). Возвращает: версия до переноса.</summary>
     public int Migrate(ILogger log)
     {
         using var c = Open();
@@ -642,12 +642,7 @@ public sealed class Database
 
         if (version > 0)
         {
-            var copy = File + $".до-версии-{version + 1}-{DateTime.Now:yyyyMMdd-HHmmss}";
-            using (var target = new SqliteConnection($"Data Source={copy}"))
-            {
-                target.Open();
-                c.BackupDatabase(target);
-            }
+            var copy = DatabaseCopy.BeforeChange(c, File, $"перед переносом на версию {version + 1}");
             log.LogInformation("Копия базы перед переносом: {Copy}", copy);
         }
         // таблицы пересоздаются (SQLite не умеет менять ограничения) — проверка ссылок на время переноса выключается,

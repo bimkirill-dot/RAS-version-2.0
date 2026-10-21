@@ -87,14 +87,15 @@
                 @if (_check != null) { <span class="@(_checkOk ? "notice" : "error")">@_check</span> }
                 else if (Backup.LastError != null) { <span class="error">@Backup.LastError</span> }
                 else if (Backup.LastServerCopy.HasValue) { <span class="muted">Последняя копия на сервере — @Fmt.Date(Backup.LastServerCopy)</span> }
-                else { <span class="muted">Копия — через 2 минуты после запуска сайта, потом каждый час</span> }
+                else { <span class="muted">Копия — раз в день, если база изменилась</span> }
             </span>
         </div>
         <label class="set-row">
             <span class="set-label">Хранить</span>
             <span class="set-field set-inline">
-                <input class="num" type="number" min="1" max="1000" @bind="_v.HourlyBackups" /> часовых
-                <input class="num" type="number" min="1" max="1000" @bind="_v.NightlyBackups" /> ночных
+                <input class="num" type="number" min="1" max="1000" @bind="_v.DailyBackups" /> ежедневных
+                <input class="num" type="number" min="0" max="1000" @bind="_v.WeeklyBackups" /> еженедельных
+                <input class="num" type="number" min="0" max="1000" @bind="_v.MonthlyBackups" /> ежемесячных
             </span>
         </label>
     </section>

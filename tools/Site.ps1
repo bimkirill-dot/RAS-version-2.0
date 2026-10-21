@@ -89,18 +89,19 @@ function Start-Site {
     if (-not $NoBrowser) { Start-Process $url | Out-Null }
 }
 
-# Копия базы перед заменой программы: сайт остановлен, файлы базы (вместе с журналом WAL) копируются вместе
+# Копия базы перед заменой программы: сайт остановлен, база (вместе с журналом WAL) — архивом в «Копии базы\Перед
+# изменениями», туда же, где копии перед переносом базы и удалением проекта; хранятся последние 10 (DECISIONS.md модуля,
+# «Копии базы — раз в день, лесенкой»). Только сама база: до 21.10.2026 сюда попадали и все прежние копии рядом с ней
 function Backup-Database {
     $db = Join-Path $SiteHome 'clashes.db'
     if (-not (Test-Path $db)) { return }
-    $folder = Join-Path $SiteHome 'Копии базы'
-    $target = Join-Path $folder ('перед обновлением ' + (Get-Date -Format 'yyyy-MM-dd HHmmss'))
-    New-Item -ItemType Directory -Path $target -Force | Out-Null
-    Get-ChildItem $SiteHome -File -Filter 'clashes.db*' | Copy-Item -Destination $target
-    Write-Host "Копия базы: $target"
-    # 10 последних копий перед обновлением
-    Get-ChildItem $folder -Directory -Filter 'перед обновлением *' |
-        Sort-Object Name -Descending | Select-Object -Skip 10 | Remove-Item -Recurse -Force
+    $folder = Join-Path $SiteHome 'Копии базы\Перед изменениями'
+    New-Item -ItemType Directory -Path $folder -Force | Out-Null
+    $zip = Join-Path $folder ((Get-Date -Format 'yyyy-MM-dd HHmmss') + ' перед обновлением.zip')
+    $files = Get-ChildItem $SiteHome -File | Where-Object { @('clashes.db', 'clashes.db-wal', 'clashes.db-shm') -contains $_.Name }
+    Compress-Archive -Path ($files | ForEach-Object { $_.FullName }) -DestinationPath $zip -CompressionLevel Optimal
+    Write-Host "Копия базы: $zip"
+    Get-ChildItem $folder -File -Filter '*.zip' | Sort-Object Name -Descending | Select-Object -Skip 10 | Remove-Item -Force
 }
 
 switch ($Action) {

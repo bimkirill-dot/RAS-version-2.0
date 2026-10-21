@@ -963,6 +963,8 @@ table.facts2 { border-radius: 8px; overflow: hidden; }
     .content.scroll { margin-right: 0; padding-right: 0; }
     .body, .body.with-panel { grid-template-columns: 1fr; }
     .side { max-height: 20vh; }
+    /* «Настройки»: три раздела — панель целиком (20vh — для длинной панели проекта) */
+    .settings-body > .side { max-height: none; }
     .list { max-height: 60vh; }
     main { padding: 10px; }
     header.top { padding: 0 10px; }

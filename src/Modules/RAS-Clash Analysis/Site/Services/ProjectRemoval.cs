@@ -1,4 +1,3 @@
-using Microsoft.Data.Sqlite;
 using RASv2.ClashAnalysis.Site.Data;
 
 namespace RASv2.ClashAnalysis.Site.Services;
@@ -33,13 +32,8 @@ public sealed class ProjectRemoval
         var project = _store.Project(id) ?? throw new InvalidOperationException("Проект не найден — возможно, его уже удалили.");
         var contents = _store.ProjectContents(id);
 
-        var copy = _db.File + $".до-удаления-{SafeName(project.Name)}-{DateTime.Now:yyyyMMdd-HHmmss}";
-        using (var source = _db.Open())
-        using (var target = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = copy, Pooling = false }.ToString()))
-        {
-            target.Open();
-            source.BackupDatabase(target);
-        }
+        string copy;
+        using (var source = _db.Open()) copy = DatabaseCopy.BeforeChange(source, _db.File, $"перед удалением «{project.Name}»");
 
         var reports = _store.DeleteProject(id);
         SiteHistory.Write(_db, null, SiteHistory.ProjectDeleted,
@@ -68,13 +62,5 @@ public sealed class ProjectRemoval
             "папок снимков не удалено {Left}. Копия базы перед удалением: {Copy}",
             project.Name, project.Folder, contents.Reports, contents.Clashes, contents.Comments, contents.ManualStates, left, copy);
         return copy;
-    }
-
-    /// <summary>Название проекта для имени файла: без запрещённых знаков, не длиннее 60.</summary>
-    private static string SafeName(string name)
-    {
-        var bad = Path.GetInvalidFileNameChars();
-        var safe = new string(name.Select(ch => bad.Contains(ch) ? '_' : ch).ToArray()).Trim();
-        return safe.Length > 60 ? safe[..60] : safe;
     }
 }

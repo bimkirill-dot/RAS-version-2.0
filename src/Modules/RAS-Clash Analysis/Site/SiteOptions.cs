@@ -17,11 +17,15 @@ public sealed class SiteOptions
     /// <summary>Как часто проверять папки проектов на новые отчёты, минут; 0 — только по кнопке.</summary>
     public int ScanMinutes { get; set; } = 10;
 
-    /// <summary>Сколько хранить копий: часовых и ночных.</summary>
-    public int HourlyBackups { get; set; } = 48;
+    /// <summary>
+    /// Копии базы на сервере — лесенкой (Logic.BackupLadder): последние ежедневные, по последней копии из стольких недель и
+    /// месяцев. Копия — только в день, когда база менялась.
+    /// </summary>
+    public int DailyBackups { get; set; } = 14;
+    public int WeeklyBackups { get; set; } = 8;
+    public int MonthlyBackups { get; set; } = 12;
     /// <summary>«Тип проверки» в проекте: категории и подкатегории из «Настроек» видны всегда, пустые — серым с нулём.</summary>
     public bool ShowEmptyCategories { get; set; }
-    public int NightlyBackups { get; set; } = 60;
 
     /// <summary>Папка сайта на этом компьютере: программа («Программа»), данные, settings.json.</summary>
     public static string DefaultFolder => Path.Combine(RasPaths.Local, ModuleFolder, "Site");
@@ -47,6 +51,6 @@ public sealed class SiteOptions
     public string DatabaseFile => Path.Combine(Data, "clashes.db");
     public string ImagesFolder => Path.Combine(Data, "Снимки");
     public string LogsFolder => Path.Combine(Data, "Журнал");
-    /// <summary>Копии базы на этом компьютере — на случай, если сервер недоступен.</summary>
+    /// <summary>Копии базы на этом компьютере — на случай, если сервер недоступен; там же «Перед изменениями».</summary>
     public string LocalBackups => Path.Combine(Data, "Копии базы");
 }

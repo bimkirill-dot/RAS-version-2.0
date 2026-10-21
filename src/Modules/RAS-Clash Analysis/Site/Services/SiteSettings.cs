@@ -9,8 +9,9 @@ public sealed class SiteSettingsValues
 {
     /// <summary>Папка копий базы на сервере; пусто — по умолчанию (папка плагина на сервере).</summary>
     public string BackupFolder { get; set; } = "";
-    public int HourlyBackups { get; set; }
-    public int NightlyBackups { get; set; }
+    public int DailyBackups { get; set; }
+    public int WeeklyBackups { get; set; }
+    public int MonthlyBackups { get; set; }
     /// <summary>Как часто проверять папки проектов, минут; 0 — только по кнопке.</summary>
     public int ScanMinutes { get; set; }
     public int Port { get; set; }
@@ -57,8 +58,9 @@ public sealed class SiteSettings
         {
             // в поле — фактическая папка: своя или по умолчанию (папка плагина на сервере)
             BackupFolder = string.IsNullOrWhiteSpace(_options.BackupFolder) ? DefaultBackupFolder : _options.BackupFolder,
-            HourlyBackups = _options.HourlyBackups,
-            NightlyBackups = _options.NightlyBackups,
+            DailyBackups = _options.DailyBackups,
+            WeeklyBackups = _options.WeeklyBackups,
+            MonthlyBackups = _options.MonthlyBackups,
             ScanMinutes = _options.ScanMinutes,
             Port = port,
             Network = network,
@@ -69,8 +71,9 @@ public sealed class SiteSettings
     public static string Validate(SiteSettingsValues v)
     {
         if (v.ScanMinutes < 0 || v.ScanMinutes > 1440) return "Проверять папки: от 0 до 1440 минут.";
-        if (v.HourlyBackups < 1 || v.HourlyBackups > 1000) return "Часовых копий: от 1 до 1000.";
-        if (v.NightlyBackups < 1 || v.NightlyBackups > 1000) return "Ночных копий: от 1 до 1000.";
+        if (v.DailyBackups < 1 || v.DailyBackups > 1000) return "Ежедневных копий: от 1 до 1000.";
+        if (v.WeeklyBackups < 0 || v.WeeklyBackups > 1000) return "Еженедельных копий: от 0 до 1000.";
+        if (v.MonthlyBackups < 0 || v.MonthlyBackups > 1000) return "Ежемесячных копий: от 0 до 1000.";
         if (v.Port < 1024 || v.Port > 65535) return "Порт: от 1024 до 65535.";
         if (string.IsNullOrWhiteSpace(v.BackupFolder)) return "Укажите папку копий базы.";
         if (v.BackupFolder.IndexOfAny(Path.GetInvalidPathChars()) >= 0) return "В пути папки копий недопустимые знаки.";
@@ -86,8 +89,12 @@ public sealed class SiteSettings
         // папка по умолчанию запоминается как «по умолчанию» (пусто): тогда она следует за папкой плагина на сервере
         var folder = (v.BackupFolder ?? "").Trim().Trim('"').TrimEnd('\\', '/');
         site["BackupFolder"] = string.Equals(folder, DefaultBackupFolder.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase) ? "" : folder;
-        site["HourlyBackups"] = v.HourlyBackups;
-        site["NightlyBackups"] = v.NightlyBackups;
+        // прежние «часовых / ночных» (до 21.10.2026) — больше не действуют
+        site.Remove("HourlyBackups");
+        site.Remove("NightlyBackups");
+        site["DailyBackups"] = v.DailyBackups;
+        site["WeeklyBackups"] = v.WeeklyBackups;
+        site["MonthlyBackups"] = v.MonthlyBackups;
         site["ScanMinutes"] = v.ScanMinutes;
         root["Urls"] = $"http://{(v.Network ? "*" : "localhost")}:{v.Port}";
 
@@ -98,17 +105,19 @@ public sealed class SiteSettings
 
         // сразу: копии и проверка папок читают эти значения при каждом обращении
         _options.BackupFolder = (string)site["BackupFolder"];
-        _options.HourlyBackups = v.HourlyBackups;
-        _options.NightlyBackups = v.NightlyBackups;
+        _options.DailyBackups = v.DailyBackups;
+        _options.WeeklyBackups = v.WeeklyBackups;
+        _options.MonthlyBackups = v.MonthlyBackups;
         _options.ScanMinutes = v.ScanMinutes;
-        _log.LogInformation("Настройки сайта сохранены: копии — {Backups}, часовых {Hourly}, ночных {Nightly}, проверка папок — {Scan} мин, адрес — {Urls}",
-            _options.Backups, v.HourlyBackups, v.NightlyBackups, v.ScanMinutes, (string)root["Urls"]);
+        _log.LogInformation("Настройки сайта сохранены: копии — {Backups}, ежедневных {Daily}, еженедельных {Weekly}, ежемесячных {Monthly}, проверка папок — {Scan} мин, адрес — {Urls}",
+            _options.Backups, v.DailyBackups, v.WeeklyBackups, v.MonthlyBackups, v.ScanMinutes, (string)root["Urls"]);
         // в историю сайта — только то, что поменялось
         var changes = new List<string>();
         var folderNow = (v.BackupFolder ?? "").Trim().Trim('"').TrimEnd('\\', '/');
         if (!string.Equals(before.BackupFolder.TrimEnd('\\', '/'), folderNow, StringComparison.OrdinalIgnoreCase)) changes.Add($"папка копий базы: {before.BackupFolder} → {folderNow}");
-        if (before.HourlyBackups != v.HourlyBackups) changes.Add($"часовых копий: {before.HourlyBackups} → {v.HourlyBackups}");
-        if (before.NightlyBackups != v.NightlyBackups) changes.Add($"ночных копий: {before.NightlyBackups} → {v.NightlyBackups}");
+        if (before.DailyBackups != v.DailyBackups) changes.Add($"ежедневных копий: {before.DailyBackups} → {v.DailyBackups}");
+        if (before.WeeklyBackups != v.WeeklyBackups) changes.Add($"еженедельных копий: {before.WeeklyBackups} → {v.WeeklyBackups}");
+        if (before.MonthlyBackups != v.MonthlyBackups) changes.Add($"ежемесячных копий: {before.MonthlyBackups} → {v.MonthlyBackups}");
         if (before.ScanMinutes != v.ScanMinutes) changes.Add($"проверять папки: каждые {before.ScanMinutes} → {v.ScanMinutes} мин");
         if (before.Port != v.Port) changes.Add($"порт: {before.Port} → {v.Port} (после перезапуска)");
         if (before.Network != v.Network) changes.Add($"доступ по сети: {(before.Network ? "да" : "нет")} → {(v.Network ? "да" : "нет")} (после перезапуска)");
