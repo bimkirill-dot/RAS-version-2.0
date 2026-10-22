@@ -463,14 +463,15 @@ namespace RASv2.ModelHistory.Tracking
             if (source == ChangeSource.Sync)
             {
                 // всё несинхронизированное (и этого сеанса, и перенесённое из прошлых) теперь в хранилище
-                WriteEvent(t, eventName, ModelEventType.Commit, t.CarriedSessions.Count > 0 ? new List<string>(t.CarriedSessions) : null);
+                WriteEvent(t, eventName, ModelEventType.Commit, t.CarriedSessions.Count > 0 ? new List<string>(t.CarriedSessions) : null,
+                    storageVersion: StorageVersionOf(t));
                 t.CarriedSessions.Clear();
                 t.UncommittedRecords = 0;
                 LocalState.SetPending(t.LocalPath, null);
             }
             else
             {
-                WriteEvent(t, eventName, ModelEventType.Reload);
+                WriteEvent(t, eventName, ModelEventType.Reload, storageVersion: StorageVersionOf(t));
             }
             ProcessRemote(t, source);
             if (source == ChangeSource.Sync)
@@ -907,7 +908,10 @@ namespace RASv2.ModelHistory.Tracking
             return t == null ? new List<string>() : t.Snapshots.ParamNames.ToList();
         }
 
-        private void WriteEvent(DocumentTracker t, string name, ModelEventType type, List<string> sessions = null)
+        /// <summary>Версия хранилища после синхронизации — в событие (ChangeRecord.StorageVersion); не совместная работа — нет.</summary>
+        private static string StorageVersionOf(DocumentTracker t) => t.Model.IsWorkshared ? DocVersionString(t.Doc) : null;
+
+        private void WriteEvent(DocumentTracker t, string name, ModelEventType type, List<string> sessions = null, string storageVersion = null)
         {
             var r = NewRecord(ChangeKind.Event, ChangeSource.Live, CurrentUser, OperationKind.None, "", null);
             r.ElementId = -1;
@@ -916,6 +920,7 @@ namespace RASv2.ModelHistory.Tracking
             r.Session = t.SessionId;
             r.EventType = type;
             r.Sessions = sessions;
+            r.StorageVersion = storageVersion;
             _store.Append(t.Model, r);
             // период «С моей последней синхронизации»: время запоминается здесь, чтобы не искать его по журналу
             if (type == ModelEventType.Commit) LocalState.SetLastCommit(t.Model.Key, r.Time);

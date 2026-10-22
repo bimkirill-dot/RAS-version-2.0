@@ -173,6 +173,12 @@ namespace RASv2.ModelHistory.Tracking
         [JsonPropertyName("inc")] public List<string> Sessions { get; set; }
         /// <summary>Для Exclude: id записей, убранных из журнала при актуализации.</summary>
         [JsonPropertyName("ex")] public List<string> Excludes { get; set; }
+        /// <summary>
+        /// Для Commit / Reload: версия хранилища после синхронизации — «VersionGUID:N:NumberOfSaves» (Document.GetDocumentVersion).
+        /// По ней виден момент копии, если хранилище заменят копией: синхронизации, чьих версий в хранилище больше нет, — потеряны
+        /// (DECISIONS.md модуля, «Хранилище заменено копией»). Нет — запись до 22.10.2026 или не совместная работа.
+        /// </summary>
+        [JsonPropertyName("sv")] public string StorageVersion { get; set; }
 
         /// <summary>
         /// Удалён вместе с элементом, от которого зависел (марка — со стеной, проём — с перекрытием, арматура — с балкой):
