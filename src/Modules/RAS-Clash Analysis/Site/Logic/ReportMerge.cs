@@ -111,7 +111,17 @@ namespace RASv2.ClashAnalysis.Site.Logic
         }
 
         /// <summary>Отчёт полный — в нём все коллизии проверки (итог Navisworks «всего» не больше, чем коллизий в отчёте; итога нет — полный).</summary>
-        public static bool IsComplete(ClashTest test) => test.Summary == null || test.Summary.Total <= Math.Max(test.ResultsInFile, test.Results.Count);
+        /// <remarks>
+        /// Статусы Navisworks сайт не ведёт (DECISIONS.md, «Полный отчёт — все нерешённые коллизии»): нужно только, чтобы в файле
+        /// были все нерешённые коллизии проверки. «Исправлено» в Navisworks можно и не выгружать — пропавшая и так «Исправлена».
+        /// </remarks>
+        public static bool IsComplete(ClashTest test)
+        {
+            if (test.Summary == null) return true;
+            var open = test.Summary.Total - test.Summary.Resolved;
+            var openInFile = Math.Max(test.OpenInFile, test.Results.Count(r => r.Status != NavisworksStatus.Resolved));
+            return open <= openInFile;
+        }
 
         /// <summary>
         /// Предохранитель: из отчёта пропало подозрительно много активных — больше 10 и больше половины. Так бывает, если

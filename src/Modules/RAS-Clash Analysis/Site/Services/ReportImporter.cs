@@ -578,12 +578,14 @@ public sealed class ReportImporter
             if (!latest) result.Older = true;
             var known = KnownClashes(c, tx, testId);
             var dateText = date.ToString(dateSource == ReportPath.DateFromFolder ? "dd.MM.yyyy" : "dd.MM.yyyy HH:mm");
-            // неполный отчёт (выгружены не все статусы): пропавшие не считаем исправленными — DECISIONS.md, «Неполный отчёт»
+            // неполный отчёт (в файле не все нерешённые коллизии — выгружен с отбором): пропавшие не считаем исправленными —
+            // DECISIONS.md, «Неполный отчёт», «Полный отчёт — все нерешённые коллизии»
             var complete = ReportMerge.IsComplete(test);
             if (!complete)
             {
-                var warning = $"«{test.Name}»: отчёт неполный — в проверке {Fmt.Plural(test.Summary.Total, "коллизия", "коллизии", "коллизий")}, в отчёте {test.ResultsInFile}. "
-                              + "Пропавшие из отчёта не считаются исправленными. Выгрузите отчёт со всеми статусами.";
+                var open = test.Summary.Total - test.Summary.Resolved;
+                var warning = $"«{test.Name}»: отчёт неполный — в проверке {Fmt.Plural(open, "нерешённая коллизия", "нерешённые коллизии", "нерешённых коллизий")}, в отчёте {test.OpenInFile}. "
+                              + "Пропавшие из отчёта не считаются исправленными. Выгрузите отчёт заново без отбора коллизий в настройках отчёта.";
                 result.Warning = result.Warning == null ? warning : result.Warning + " " + warning;
                 _log.LogWarning("{File}: {Warning}", path, warning);
             }

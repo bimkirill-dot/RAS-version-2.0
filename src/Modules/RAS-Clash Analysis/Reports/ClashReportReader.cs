@@ -79,6 +79,7 @@ namespace RASv2.ClashAnalysis.Reports
             {
                 test.ResultsInFile++;
                 var result = ReadResult(r);
+                if (result.Status != NavisworksStatus.Resolved) test.OpenInFile++;
                 if (result.Elements.Count == 0)
                     warn?.Invoke("Проверка «" + test.Name + "», «" + result.Name + "»: нет элементов — пропущена.");
                 else

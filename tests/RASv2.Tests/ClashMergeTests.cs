@@ -123,10 +123,20 @@ namespace RASv2.Tests
                 Check(steps.Count == 1 && Step(steps, 5, 6).Returned, "только найденная: " + steps.Count);
                 var test = new ClashTest { Summary = new ClashSummary { Total = 5 } };
                 test.Results.Add(Result(9, 9));
-                test.ResultsInFile = 3;
+                test.OpenInFile = 3;
                 Check(!ReportMerge.IsComplete(test), "в проверке 5, в файле 3 — неполный");
-                test.ResultsInFile = 5;
+                test.OpenInFile = 5;
                 Check(ReportMerge.IsComplete(test), "в файле все 5 (одна без элементов пропущена) — полный");
+            });
+            yield return Case("полный отчёт — все нерешённые; «Исправлено» Navisworks выгружать не обязательно", () =>
+            {
+                // в проверке 7: 5 нерешённых, 2 «Исправлено»; выгружены только нерешённые
+                var test = new ClashTest { Summary = new ClashSummary { Total = 7, Active = 5, Resolved = 2 } };
+                test.OpenInFile = 5;
+                Check(ReportMerge.IsComplete(test), "без «Исправлено» — полный");
+                // выгружены только «Создать» (3 из 5 нерешённых) и «Исправлено»: 5 в файле, но нерешённых — 3
+                test.OpenInFile = 3;
+                Check(!ReportMerge.IsComplete(test), "отбор без «Активные» — неполный");
             });
             yield return Case("предохранитель: пропало больше 10 и больше половины активных", () =>
             {
