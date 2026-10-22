@@ -19,6 +19,8 @@
   <ItemGroup>
     <Compile Include="..\Reports\*.cs" LinkBase="Reports" />
     <Compile Include="..\..\..\Shared\RasPaths.cs" Link="Shared\RasPaths.cs" />
+    <!-- регламент для BIM-специалистов — страница «Регламент» (Components\Pages\Reglament.razor): тот же файл, без копий -->
+    <EmbeddedResource Include="..\Регламент выгрузки отчётов.md" LogicalName="Reglament.md" />
   </ItemGroup>
 
   <ItemGroup>

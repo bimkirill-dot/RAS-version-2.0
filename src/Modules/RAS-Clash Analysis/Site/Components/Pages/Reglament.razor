@@ -1,0 +1,25 @@
+@page "/reglament"
+
+<PageTitle>Регламент · Clash Analysis</PageTitle>
+
+@* «Регламент выгрузки отчётов» (файл в папке модуля, для BIM-специалистов) — на сайте, кнопкой в шапке (разработчик, 22.10.2026).
+   Текст — из того же файла, вшит в программу при сборке: правка файла и site.cmd обновляют и страницу; копий текста нет. *@
+<div class="doc-page">
+    <nav class="crumbs no-print"><a href="/">Проекты</a> <span class="sep">/</span></nav>
+    <div class="doc-actions no-print">
+        <button class="btn small" onclick="window.print()">Печать / PDF</button>
+    </div>
+    <article class="doc">@((MarkupString)Html)</article>
+</div>
+
+@code {
+    private static readonly Lazy<string> Text = new(() =>
+    {
+        using var stream = typeof(Reglament).Assembly.GetManifestResourceStream("Reglament.md");
+        if (stream == null) return "<p>Регламент не найден в программе сайта — пересоберите сайт (site.cmd).</p>";
+        using var reader = new StreamReader(stream);
+        return Logic.Markdown.ToHtml(reader.ReadToEnd());
+    });
+
+    private static string Html => Text.Value;
+}

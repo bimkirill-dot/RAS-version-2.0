@@ -11,6 +11,10 @@
     @* Revit с мостом на этом компьютере — подключён или нет; заполняет wwwroot\site.js (ras.revit), Blazor его не трогает *@
     <span id="revit-state" class="revit-state off" title="Revit с мостом не запущен">Revit</span>
     @* тема — без связи с сайтом (обычный обработчик): работает и пока страница подключается *@
+    @* регламент выгрузки отчётов — всем (для BIM-специалистов; разработчик, 22.10.2026: «кнопку рядом с настройками») *@
+    <a class="theme-toggle head-btn" href="reglament" title="Регламент выгрузки отчётов">
+        <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M4 1.8h5.4L12.5 5v9.2H4z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M6.2 8h4.1M6.2 10.6h4.1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+    </a>
     <a class="theme-toggle head-btn" href="history" title="История сайта — что и когда сделано">
         <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.6V8l2.4 1.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
     </a>
