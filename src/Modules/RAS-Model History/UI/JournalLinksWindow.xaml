@@ -1,0 +1,47 @@
+<Window x:Class="RASv2.ModelHistory.UI.JournalLinksWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:RASv2.ModelHistory.UI"
+        Title="RAS-Model History — связанные журналы"
+        Width="620" Height="640" MinWidth="480" MinHeight="460"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        FontSize="12" Background="{DynamicResource Spy.Bg}" Foreground="{DynamicResource Spy.Text}">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <local:ThemeResources />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <DockPanel Margin="14,12,14,12">
+        <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Style="{StaticResource Spy.MutedText}"
+                   Text="Журнал модели узнаётся по номеру хранилища. Если хранилище восстанавливали из копии или переносили, номер другой — и журнал начинается заново. Связанный журнал читается вместе с журналом модели, у всех." />
+        <Border DockPanel.Dock="Top" Margin="0,8,0,10" Padding="6,3" CornerRadius="3" Background="{DynamicResource Spy.WarningBg}"
+                BorderBrush="{DynamicResource Spy.WarningBorder}" BorderThickness="1">
+            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Spy.Warning}"
+                       Text="Только для BIM-менеджера: связывайте журналы одной и той же модели — чужой журнал смешает историю двух моделей." />
+        </Border>
+
+        <TextBlock DockPanel.Dock="Top" x:Name="ModelText" FontWeight="SemiBold" Margin="0,0,0,4" TextTrimming="CharacterEllipsis" />
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+            <Button x:Name="UnlinkButton" DockPanel.Dock="Right" Content="Отвязать" Width="100" Height="26" Margin="8,0,0,0"
+                    VerticalAlignment="Top" Click="Unlink_Click" IsEnabled="False"
+                    ToolTip="Убрать связь: записи этого журнала больше не будут видны вместе с журналом модели (журнал не удаляется)" />
+            <ListBox x:Name="LinkedList" Height="84" SelectionChanged="Linked_SelectionChanged" />
+        </DockPanel>
+
+        <TextBlock DockPanel.Dock="Top" Text="Все журналы в общей папке" FontWeight="SemiBold" Margin="0,0,0,4" />
+        <TextBox x:Name="Search" DockPanel.Dock="Top" Margin="0,0,0,6" TextChanged="Search_TextChanged"
+                 ToolTip="Начните вводить имя модели" />
+
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0" LastChildFill="False">
+            <TextBlock x:Name="CountText" DockPanel.Dock="Left" VerticalAlignment="Center" Style="{StaticResource Spy.MutedText}" />
+            <Button DockPanel.Dock="Right" Content="Закрыть" Width="100" Height="26" Margin="8,0,0,0" IsCancel="True" />
+            <Button x:Name="LinkButton" DockPanel.Dock="Right" Content="Связать" Width="100" Height="26" IsEnabled="False" Click="Link_Click"
+                    ToolTip="Записи выбранного журнала будут видны вместе с журналом этой модели — у всех" />
+        </DockPanel>
+        <TextBlock x:Name="DetailsText" DockPanel.Dock="Bottom" Margin="0,8,0,0" TextWrapping="Wrap" Style="{StaticResource Spy.MutedText}" />
+        <ListBox x:Name="AllList" SelectionChanged="All_SelectionChanged" MouseDoubleClick="All_MouseDoubleClick" />
+    </DockPanel>
+</Window>

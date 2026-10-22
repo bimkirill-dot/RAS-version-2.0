@@ -60,7 +60,16 @@ namespace RASv2.ModelHistory.Tracking
         /// Модель сохранена из отсоединённой копии (новое хранилище или новый файл): отсоединённую копию журнал не вёл,
         /// поэтому здесь граница — что было с моделью до этого, журнал не знает.
         /// </summary>
-        FromDetached
+        FromDetached,
+        /// <summary>
+        /// Хранилище заменено копией: синхронизации с «rt» до этого события пропали (DECISIONS.md модуля, «Хранилище заменено
+        /// копией»). «sv» — версия хранилища, на которой замену заметили: по ней же видно, что эту замену уже записали.
+        /// </summary>
+        StorageReplaced,
+        /// <summary>Связан журнал прежней истории модели («lk» — его ключ; DECISIONS.md модуля, «Связь журналов»).</summary>
+        JournalLinked,
+        /// <summary>Связь с журналом прежней истории убрана («lk» — его ключ).</summary>
+        JournalUnlinked
     }
 
     /// <summary>Укрупнённый тип объекта — для фильтра «Тип объекта».</summary>
@@ -179,6 +188,10 @@ namespace RASv2.ModelHistory.Tracking
         /// (DECISIONS.md модуля, «Хранилище заменено копией»). Нет — запись до 22.10.2026 или не совместная работа.
         /// </summary>
         [JsonPropertyName("sv")] public string StorageVersion { get; set; }
+        /// <summary>Для StorageReplaced: время первой пропавшей синхронизации — изменения, попавшие в хранилище с него до замены, потеряны.</summary>
+        [JsonPropertyName("rt")] public DateTimeOffset? LostFrom { get; set; }
+        /// <summary>Для JournalLinked / JournalUnlinked: ключ журнала (папка) прежней истории.</summary>
+        [JsonPropertyName("lk")] public string LinkedKey { get; set; }
 
         /// <summary>
         /// Удалён вместе с элементом, от которого зависел (марка — со стеной, проём — с перекрытием, арматура — с балкой):

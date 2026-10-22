@@ -52,6 +52,8 @@
                                 <MenuItem Header="Выделить все из списка в модели" Command="{Binding SelectAllInModelCommand}"
                                           ToolTip="Выделить в Revit все существующие элементы из текущего списка" />
                                 <Separator />
+                                <MenuItem Header="Связанные журналы…" Command="{Binding JournalLinksCommand}"
+                                          ToolTip="Журналы прежней истории этой модели (хранилище восстанавливали из копии или переносили): связать или отвязать" />
                                 <MenuItem Header="Открыть папку журнала" Command="{Binding OpenLogFolderCommand}" />
                                 <MenuItem Header="Настройки…" Command="{Binding SettingsCommand}" />
                             </ContextMenu>
@@ -80,6 +82,22 @@
                                Margin="0,0,6,0" VerticalAlignment="Center" />
                     <TextBlock Foreground="{DynamicResource Spy.Warning}" TextWrapping="Wrap" VerticalAlignment="Center"
                                Text="Нет связи с общей папкой журналов: изменения коллег не обновляются, ваши копятся на этом компьютере и уйдут, когда связь появится." />
+                </DockPanel>
+            </Border>
+            <!-- найден журнал прежней истории этой модели (DECISIONS.md модуля, «Связь журналов») — полоса, без всплывающих окон -->
+            <Border Margin="0,4,0,0" Padding="8,5" CornerRadius="4" Background="{DynamicResource Spy.WarningBg}"
+                    BorderBrush="{DynamicResource Spy.WarningBorder}" BorderThickness="1"
+                    Visibility="{Binding HasJournalCandidate, Converter={StaticResource BoolToVis}}">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Content="Связать" FontWeight="SemiBold" Margin="8,0,0,0" Command="{Binding LinkCandidateCommand}"
+                                ToolTip="Записи прежнего журнала будут видны вместе с журналом модели — у всех. Связь записывается в журнал; убрать — «⋯» → «Связанные журналы…»" />
+                        <Button Content="Это другая модель" Margin="6,0,0,0" Command="{Binding RejectCandidateCommand}"
+                                ToolTip="Больше не предлагать этот журнал (у всех)" />
+                    </StackPanel>
+                    <TextBlock Text="&#xE946;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="{DynamicResource Spy.Warning}"
+                               Margin="0,0,8,0" VerticalAlignment="Center" DockPanel.Dock="Left" />
+                    <TextBlock Text="{Binding JournalCandidateText}" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{DynamicResource Spy.Warning}" />
                 </DockPanel>
             </Border>
         </StackPanel>

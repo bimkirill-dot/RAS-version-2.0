@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.IO;
 using System.Text;
 using System.Text.Json;
@@ -41,6 +42,16 @@ namespace RASv2.ModelHistory.Storage
         }
 
         public string ModelKey => _modelKey;
+
+        /// <summary>
+        /// Читать ещё журналы (связанные — DECISIONS.md модуля, «Связь журналов»): связи узнаются из сетевой папки, поэтому —
+        /// в фоне, перед первым чтением. Вызывать из того же потока, что ReadNew.
+        /// </summary>
+        public void AddKeys(IEnumerable<string> keys)
+        {
+            foreach (var k in keys ?? new string[0])
+                if (!_keys.Contains(k, StringComparer.OrdinalIgnoreCase)) _keys.Add(k);
+        }
         public DateTimeOffset? Since => _since;
         public string LastError { get; private set; }
         /// <summary>Было ли уже хотя бы одно чтение.</summary>

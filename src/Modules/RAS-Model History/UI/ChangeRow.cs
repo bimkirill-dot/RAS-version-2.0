@@ -131,7 +131,8 @@ namespace RASv2.ModelHistory.UI
                     case SyncStatus.NotSynced:
                     case SyncStatus.SavedLocally: return "pending";
                     case SyncStatus.Discarded:
-                    case SyncStatus.LostLocal: return "void";
+                    case SyncStatus.LostLocal:
+                    case SyncStatus.LostOnRestore: return "void";
                     default: return "";
                 }
             }
@@ -287,7 +288,8 @@ namespace RASv2.ModelHistory.UI
                         switch (Record.EventType)
                         {
                             case ModelEventType.Commit: return "created";
-                            case ModelEventType.Lost: return "deleted";
+                            case ModelEventType.Lost:
+                            case ModelEventType.StorageReplaced: return "deleted";
                             case ModelEventType.Exclude:
                             case ModelEventType.Restore: return "modified";
                             default: return "event";
@@ -313,6 +315,10 @@ namespace RASv2.ModelHistory.UI
                     case ModelEventType.Reload: return "Обновление из хранилища";
                     case ModelEventType.Exclude: return "Актуализация журнала";
                     case ModelEventType.Restore: return "Возврат в журнал";
+                    case ModelEventType.FromDetached: return "Из отсоединённой копии";
+                    case ModelEventType.StorageReplaced: return "Хранилище заменено копией";
+                    case ModelEventType.JournalLinked: return "Связан прежний журнал";
+                    case ModelEventType.JournalUnlinked: return "Связь журналов убрана";
                     default: return "Событие";
                 }
             }

@@ -18,7 +18,9 @@ namespace RASv2.ModelHistory.Tracking
         /// <summary>Модель закрыта без сохранения и синхронизации — изменения не случилось.</summary>
         Discarded,
         /// <summary>Изменение было в локальной копии, но её заменили новой — в хранилище оно не попало.</summary>
-        LostLocal
+        LostLocal,
+        /// <summary>Изменение было в хранилище, но хранилище заменили копией, сделанной раньше, — изменение пропало.</summary>
+        LostOnRestore
     }
 
     /// <summary>
@@ -41,10 +43,18 @@ namespace RASv2.ModelHistory.Tracking
             public DateTimeOffset? CommittedElsewhere;
         }
 
+        /// <summary>Замена хранилища копией: что попало в хранилище с LostFrom до At — пропало.</summary>
+        private struct Replacement
+        {
+            public DateTimeOffset LostFrom, At;
+        }
+
         public static Dictionary<ChangeRecord, SyncStatus> Compute(IEnumerable<ChangeRecord> records)
         {
             var list = records as IList<ChangeRecord> ?? records.ToList();
             var sessions = new Dictionary<string, SessionInfo>(StringComparer.Ordinal);
+            var replacements = list.Where(r => r.Kind == ChangeKind.Event && r.EventType == ModelEventType.StorageReplaced && r.LostFrom.HasValue)
+                .Select(r => new Replacement { LostFrom = r.LostFrom.Value, At = r.Time }).ToList();
             SessionInfo Get(string id)
             {
                 if (!sessions.TryGetValue(id, out var si))
@@ -111,15 +121,27 @@ namespace RASv2.ModelHistory.Tracking
                     result[r] = SyncStatus.Unknown;
                     continue;
                 }
-                result[r] = StatusOf(r, sessions);
+                var status = StatusOf(r, sessions, out var storedAt);
+                // в хранилище попало, но хранилище потом заменили копией, сделанной до этого, — пропало
+                if (status == SyncStatus.InCentral && storedAt.HasValue &&
+                    replacements.Any(x => storedAt.Value >= x.LostFrom && storedAt.Value <= x.At))
+                    status = SyncStatus.LostOnRestore;
+                result[r] = status;
             }
             return result;
         }
 
-        private static SyncStatus StatusOf(ChangeRecord r, Dictionary<string, SessionInfo> sessions)
+        /// <param name="storedAt">Для «в хранилище» — когда попало в хранилище (синхронизация); иначе — null.</param>
+        private static SyncStatus StatusOf(ChangeRecord r, Dictionary<string, SessionInfo> sessions, out DateTimeOffset? storedAt)
         {
+            storedAt = null;
             if (!sessions.TryGetValue(r.Session, out var si)) return SyncStatus.NotSynced;
-            if (si.Commits.Any(c => c >= r.Time)) return SyncStatus.InCentral;
+            var own = si.Commits.Where(c => c >= r.Time).ToList();
+            if (own.Count > 0)
+            {
+                storedAt = own.Min();
+                return SyncStatus.InCentral;
+            }
 
             // было ли изменение сохранено в локальную копию до её закрытия
             var saved = si.Saves.Any(sv => sv >= r.Time);
@@ -128,13 +150,22 @@ namespace RASv2.ModelHistory.Tracking
             for (int hop = 0; hop < 20; hop++)
             {
                 if (cur.CommittedElsewhere.HasValue && cur.CommittedElsewhere.Value >= from)
+                {
+                    if (saved) storedAt = cur.CommittedElsewhere;
                     return saved ? SyncStatus.InCentral : SyncStatus.Discarded;
+                }
                 if (cur.LostAt.HasValue && cur.LostAt.Value >= from)
                     return saved ? SyncStatus.LostLocal : SyncStatus.Discarded;
                 if (cur.AdoptedBy != null && cur.AdoptedAt >= from && sessions.TryGetValue(cur.AdoptedBy, out var next))
                 {
                     if (!saved) return SyncStatus.Discarded; // не было сохранено — в подхваченной копии его нет
-                    if (next.Commits.Any(c => c >= cur.AdoptedAt)) return SyncStatus.InCentral;
+                    var adoptedAt = cur.AdoptedAt;
+                    var commits = next.Commits.Where(c => c >= adoptedAt).ToList();
+                    if (commits.Count > 0)
+                    {
+                        storedAt = commits.Min();
+                        return SyncStatus.InCentral;
+                    }
                     from = cur.AdoptedAt;
                     cur = next;
                     // в продолжившем сеансе изменения уже лежат в файле копии
@@ -155,6 +186,7 @@ namespace RASv2.ModelHistory.Tracking
                 case SyncStatus.SavedLocally: return "… только в локальной копии";
                 case SyncStatus.Discarded: return workshared ? "✗ не попало в хранилище" : "✗ закрыто без сохранения";
                 case SyncStatus.LostLocal: return "✗ не попало в хранилище";
+                case SyncStatus.LostOnRestore: return "✗ потеряно при восстановлении";
                 default: return "";
             }
         }
@@ -177,12 +209,14 @@ namespace RASv2.ModelHistory.Tracking
                         : "Модель закрыта без сохранения — изменения фактически не было.";
                 case SyncStatus.LostLocal:
                     return "Изменение оставалось только в локальной копии, но автор открыл модель через новую локальную копию — в хранилище оно не попало.";
+                case SyncStatus.LostOnRestore:
+                    return "Изменение было синхронизировано, но потом хранилище заменили копией, сделанной раньше, — в модели его больше нет (событие «Хранилище заменено копией»).";
                 default:
                     return "";
             }
         }
 
         /// <summary>Изменения фактически не было (не попало в модель).</summary>
-        public static bool IsVoid(SyncStatus s) => s == SyncStatus.Discarded || s == SyncStatus.LostLocal;
+        public static bool IsVoid(SyncStatus s) => s == SyncStatus.Discarded || s == SyncStatus.LostLocal || s == SyncStatus.LostOnRestore;
     }
 }

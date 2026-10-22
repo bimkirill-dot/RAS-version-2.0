@@ -115,6 +115,9 @@ namespace RASv2.ModelHistory.Tracking
                 case ModelEventType.SaveLocal:
                 case ModelEventType.Exclude:
                 case ModelEventType.Restore: // отметки актуализации — правка журнала, а не конец работы автора
+                case ModelEventType.StorageReplaced: // замена хранилища и связи журналов — тоже не работа автора
+                case ModelEventType.JournalLinked:
+                case ModelEventType.JournalUnlinked:
                     return false;
                 case ModelEventType.None: // события старых версий плагина — без типа, только название
                     return r.Name == null || !r.Name.StartsWith("Сохранение", StringComparison.OrdinalIgnoreCase);
@@ -155,7 +158,9 @@ namespace RASv2.ModelHistory.Tracking
             return result;
         }
 
-        private static bool IsVoid(SyncStatus s) => s == SyncStatus.Discarded || s == SyncStatus.LostLocal;
+        // «потеряно при восстановлении» — тоже не сверяется с моделью: известно, что в модели его нет; из журнала не убирается —
+        // видно, чья работа пропала при замене хранилища
+        private static bool IsVoid(SyncStatus s) => SyncStatusCalculator.IsVoid(s);
 
         /// <summary>Id записей, уже убранных из журнала при прошлых актуализациях.</summary>
         public static HashSet<string> ExcludedIds(IEnumerable<ChangeRecord> records)

@@ -908,10 +908,64 @@ namespace RASv2.ModelHistory.Tracking
             return t == null ? new List<string>() : t.Snapshots.ParamNames.ToList();
         }
 
+        // ───────────────────── хранилище заменено копией, связь журналов ─────────────────────
+
+        /// <summary>Есть ли версия в истории модели; не удалось узнать — считаем, что есть (без ложной тревоги).</summary>
+        private static bool IsValidVersion(Document doc, Guid version)
+        {
+            try { return Document.IsValidVersionGUID(doc, version); }
+            catch (Exception) { return true; }
+        }
+
+        /// <summary>
+        /// Хранилище заменено копией? (DECISIONS.md модуля, «Хранилище заменено копией»). По журналу (с прежними и связанными):
+        /// синхронизации, чьих версий в хранилище нет, — пропали; есть такие и замену ещё никто не записал — событие. Читает
+        /// журнал целиком — только когда есть повод (незнакомая версия, связали журнал). Только в контексте Revit API.
+        /// </summary>
+        public void CheckStorageReplaced(string modelKey, string why)
+        {
+            var t = ByKey(modelKey);
+            if (t != null && t.Model.IsWorkshared) CheckStorageReplaced(t, why);
+        }
+
+        private void CheckStorageReplaced(DocumentTracker t, string why)
+        {
+            try
+            {
+                _store.Flush();
+                var legacy = t.Model.LegacyKeys;
+                var keys = legacy.Concat(JournalLinkStore.LinkedKeys(t.Model.Key, legacy)).ToList();
+                var records = new LogReader(DataFolders.LogFolder, t.Model.Key, null, keys).ReadNew();
+                var doc = t.Doc;
+                // связали журнал другого хранилища — пропажу доказывает только оставшаяся в хранилище синхронизация
+                var verdict = StorageReplacement.Judge(records, g => IsValidVersion(doc, g), requireKept: why == "link");
+                Diag.Log($"Storage check ({why}) {t.Model.Title}: replaced={verdict.Replaced}, recorded={verdict.AlreadyRecorded}, lost={verdict.Lost.Count}");
+                if (!verdict.Replaced || verdict.AlreadyRecorded) return;
+                WriteEvent(t, StorageReplacement.EventText(verdict), ModelEventType.StorageReplaced, storageVersion: StorageVersionOf(t),
+                    fill: r => r.LostFrom = verdict.LostFrom);
+            }
+            catch (Exception ex)
+            {
+                Diag.Log("Storage check failed", ex);
+            }
+        }
+
+        /// <summary>Связан или отвязан журнал прежней истории — событие в журнал модели (видно всем, кто и когда).</summary>
+        public bool WriteLinkEvent(string modelKey, JournalLinkEntry entry, bool linked)
+        {
+            var t = ByKey(modelKey);
+            if (t == null) return false;
+            var title = string.IsNullOrEmpty(entry.Title) ? entry.Key : entry.Title;
+            WriteEvent(t, (linked ? "Связан журнал прежней истории модели: «" : "Убрана связь с журналом: «") + title + "» (" + entry.Key + ")",
+                linked ? ModelEventType.JournalLinked : ModelEventType.JournalUnlinked, fill: r => r.LinkedKey = entry.Key);
+            return true;
+        }
+
         /// <summary>Версия хранилища после синхронизации — в событие (ChangeRecord.StorageVersion); не совместная работа — нет.</summary>
         private static string StorageVersionOf(DocumentTracker t) => t.Model.IsWorkshared ? DocVersionString(t.Doc) : null;
 
-        private void WriteEvent(DocumentTracker t, string name, ModelEventType type, List<string> sessions = null, string storageVersion = null)
+        private void WriteEvent(DocumentTracker t, string name, ModelEventType type, List<string> sessions = null, string storageVersion = null,
+            Action<ChangeRecord> fill = null)
         {
             var r = NewRecord(ChangeKind.Event, ChangeSource.Live, CurrentUser, OperationKind.None, "", null);
             r.ElementId = -1;
@@ -921,6 +975,7 @@ namespace RASv2.ModelHistory.Tracking
             r.EventType = type;
             r.Sessions = sessions;
             r.StorageVersion = storageVersion;
+            fill?.Invoke(r);
             _store.Append(t.Model, r);
             // период «С моей последней синхронизации»: время запоминается здесь, чтобы не искать его по журналу
             if (type == ModelEventType.Commit) LocalState.SetLastCommit(t.Model.Key, r.Time);
@@ -1064,6 +1119,8 @@ namespace RASv2.ModelHistory.Tracking
         {
             var baseGuid = t.VersionBeforeSync;
             t.VersionBeforeSync = null;
+            // версии, которую модуль помнил, в истории модели больше нет — не заменили ли хранилище копией
+            if (baseGuid != null && t.Model.IsWorkshared && !IsValidVersion(t.Doc, baseGuid.Value)) CheckStorageReplaced(t, source.ToString());
             if (baseGuid == null || !_s.DetectRemoteChanges || !t.Model.IsWorkshared) return null;
 
             var doc = t.Doc;

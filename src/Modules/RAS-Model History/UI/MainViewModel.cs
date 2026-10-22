@@ -87,6 +87,9 @@ namespace RASv2.ModelHistory.UI
             StopActualizeCommand = new RelayCommand(StopActualize, () => IsActualizing);
             ClearSearchCommand = new RelayCommand(() => SearchText = "");
             OpenLogFolderCommand = new RelayCommand(OpenLogFolder);
+            LinkCandidateCommand = new RelayCommand(() => { if (_journalCandidate != null) LinkJournal(_journalCandidate); });
+            RejectCandidateCommand = new RelayCommand(() => { if (_journalCandidate != null) RejectJournal(_journalCandidate); });
+            JournalLinksCommand = new RelayCommand(() => JournalLinksRequested?.Invoke(), () => HasModel);
             AllKindsCommand = new RelayCommand(SetAllKinds);
             OpenSortCommand = new RelayCommand(() => SortDialogRequested?.Invoke());
             OpenFilterCommand = new RelayCommand(() => FilterDialogRequested?.Invoke());
@@ -119,6 +122,8 @@ namespace RASv2.ModelHistory.UI
 
         /// <summary>Панель просит открыть окно настроек (обрабатывает App).</summary>
         public event Action OpenSettingsRequested;
+        /// <summary>«⋯» → «Связанные журналы…» (обрабатывает код окна).</summary>
+        public event Action JournalLinksRequested;
         /// <summary>Запрос диалога сохранения файла (обрабатывает код окна).</summary>
         public Func<string, string> SaveFileDialog { get; set; }
         /// <summary>Скопировать текст в буфер (обрабатывает код окна).</summary>
@@ -179,6 +184,15 @@ namespace RASv2.ModelHistory.UI
         public string ModelKey => _modelKey;
         /// <summary>Прежние ключи модели: журнал, записанный старыми версиями плагина, лежит и в их подпапках.</summary>
         private IReadOnlyList<string> _legacyKeys = Array.Empty<string>();
+        /// <summary>Связанные журналы прежней истории (DECISIONS.md модуля, «Связь журналов») — читаются вместе с журналом модели.</summary>
+        private IReadOnlyList<string> _linkedKeys = Array.Empty<string>();
+        /// <summary>Путь модели (для поиска журнала прежней истории по тому же месту на Revit Server).</summary>
+        private string _modelPath;
+        /// <summary>Связи и найденные журналы — по модели, один раз за сеанс (сетевая папка бывает медленной); связали — заново.</summary>
+        private readonly Dictionary<string, (List<string> Linked, List<JournalInfo> Candidates)> _linkCache =
+            new Dictionary<string, (List<string>, List<JournalInfo>)>(StringComparer.OrdinalIgnoreCase);
+        /// <summary>Что читать для 3D-вида и актуализации: прежние ключи и связанные журналы.</summary>
+        private List<string> ReadKeys => _legacyKeys.Concat(_linkedKeys).ToList();
 
         private string _modelTitle = "Нет открытой модели";
         public string ModelTitle { get => _modelTitle; private set => Set(ref _modelTitle, value); }
@@ -1326,7 +1340,7 @@ namespace RASv2.ModelHistory.UI
             var created = _showCreated;
             var modified = _showModified;
             var root = DataFolders.LogFolder;
-            var legacy = _legacyKeys;
+            var legacy = ReadKeys;
             var localExcluded = new HashSet<string>(_localExcluded, StringComparer.Ordinal);
             var localRestored = new HashSet<string>(_localRestored, StringComparer.Ordinal);
             var style = (_uiState.ChangesStyle ?? new ChangesViewStyle()).Clone();
@@ -1591,7 +1605,7 @@ namespace RASv2.ModelHistory.UI
             IsActualizing = true;
             ActualizeText = "Актуализация: читаю весь журнал модели…";
             var root = DataFolders.LogFolder;
-            var legacyKeys = _legacyKeys;
+            var legacyKeys = ReadKeys;
             var store = _tracker.Store;
             var localExcluded = new HashSet<string>(_localExcluded, StringComparer.Ordinal);
             var localRestored = new HashSet<string>(_localRestored, StringComparer.Ordinal);
@@ -1802,6 +1816,9 @@ namespace RASv2.ModelHistory.UI
             _modelKey = key;
             if (_changesViewKey != null && key != _changesViewKey) HideChangesView(); // легенда относится к другой модели
             _legacyKeys = t?.Model.LegacyKeys ?? Array.Empty<string>();
+            _linkedKeys = Array.Empty<string>();
+            _modelPath = t?.Model.Path;
+            JournalCandidate = null;
             AbortActualize(); // актуализация и предпросмотр относятся к прежней модели
             _elementFilter = null; // фильтр «история элементов» относится к прежней модели
             ElementFilterText = "";
@@ -1954,6 +1971,7 @@ namespace RASv2.ModelHistory.UI
                     if (reader == null) return;
                     var initial = !reader.HasRead;
                     if (initial) Post(() => IsLoading = true);
+                    if (initial) PrepareLinks(reader);
                     var fresh = reader.ReadNew();
                     var error = reader.LastError ?? _tracker.Store.LastError;
                     reader.LiveBefore(out var liveBefore, out var liveDeletedBefore);
@@ -2844,6 +2862,122 @@ namespace RASv2.ModelHistory.UI
         }
 
         /// <summary>Открыть в проводнике папку журнала этой модели (или общую папку, если записей ещё нет).</summary>
+        // ───────────────────── связь журналов (DECISIONS.md модуля, «Связь журналов») ─────────────────────
+
+        public RelayCommand LinkCandidateCommand { get; }
+        public RelayCommand RejectCandidateCommand { get; }
+        public RelayCommand JournalLinksCommand { get; }
+
+        private JournalInfo _journalCandidate;
+        /// <summary>Найден журнал прежней истории этой модели (то же место на Revit Server, другой номер хранилища) — полоса в панели.</summary>
+        public JournalInfo JournalCandidate
+        {
+            get => _journalCandidate;
+            private set
+            {
+                if (!Set(ref _journalCandidate, value)) return;
+                OnPropertyChanged(nameof(HasJournalCandidate));
+                OnPropertyChanged(nameof(JournalCandidateText));
+            }
+        }
+        public bool HasJournalCandidate => _journalCandidate != null;
+        public string JournalCandidateText => _journalCandidate == null ? "" :
+            "Найдена прежняя история этой модели: журнал «" + _journalCandidate.Title + "»" +
+            (string.IsNullOrEmpty(_journalCandidate.Period) ? "" : ", " + _journalCandidate.Period) +
+            (string.IsNullOrEmpty(_journalCandidate.Users) ? "" : " (" + _journalCandidate.Users + ")") +
+            ". У хранилища сменился номер (например, его восстанавливали из копии), и журнал начался заново. «Связать» — записи прежнего журнала будут видны здесь, у всех.";
+
+        /// <summary>Модель, для которой открыто окно «Связанные журналы»: ключ, прежние и связанные ключи.</summary>
+        public string LinksModelKey => _modelKey;
+        public IReadOnlyList<string> LinksOwnKeys => new[] { _modelKey }.Concat(_legacyKeys).ToList();
+        public IReadOnlyList<string> LinkedKeys => _linkedKeys;
+
+        /// <summary>В фоне, перед первым чтением: связанные журналы — в чтение, журнал прежней истории — в полосу.</summary>
+        private void PrepareLinks(LogReader reader)
+        {
+            var key = reader.ModelKey;
+            var legacy = _legacyKeys;
+            var path = _modelPath;
+            try
+            {
+                (List<string> Linked, List<JournalInfo> Candidates) links;
+                lock (_linkCache)
+                {
+                    if (!_linkCache.TryGetValue(key, out links))
+                    {
+                        var linked = JournalLinkStore.LinkedKeys(key, legacy);
+                        var reading = new HashSet<string>(legacy.Concat(linked), StringComparer.OrdinalIgnoreCase) { key };
+                        links = (linked, JournalLinkStore.FindCandidates(key, path, reading));
+                        _linkCache[key] = links;
+                    }
+                }
+                reader.AddKeys(links.Linked);
+                Post(() =>
+                {
+                    if (!ReferenceEquals(reader, _reader)) return;
+                    _linkedKeys = links.Linked;
+                    JournalCandidate = links.Candidates.FirstOrDefault();
+                });
+            }
+            catch (Exception ex)
+            {
+                Diag.Log("Journal links failed", ex);
+            }
+        }
+
+        /// <summary>Связать журнал прежней истории: links.json, событие в журнал, проверка «хранилище заменено копией», перечитать.</summary>
+        public void LinkJournal(JournalInfo info) => ChangeLink(info, link: true, reject: false);
+
+        /// <summary>Отвязать журнал (окно «Связанные журналы»).</summary>
+        public void UnlinkJournal(JournalInfo info) => ChangeLink(info, link: false, reject: false);
+
+        /// <summary>«Это другая модель»: больше не предлагать этот журнал (у всех).</summary>
+        public void RejectJournal(JournalInfo info) => ChangeLink(info, link: false, reject: true);
+
+        /// <summary>Связь поменялась (окно «Связанные журналы» перечитывает список).</summary>
+        public event Action LinksChanged;
+
+        private void ChangeLink(JournalInfo info, bool link, bool reject)
+        {
+            var key = _modelKey;
+            if (key == null || info == null) return;
+            var entry = new JournalLinkEntry { Key = info.Key, Title = info.Title, By = _tracker.CurrentUser, At = DateTimeOffset.Now };
+            Task.Run(() =>
+            {
+                try
+                {
+                    var file = JournalLinkStore.Read(key);
+                    if (link) JournalLinks.Link(file, entry);
+                    else JournalLinks.Unlink(file, entry, reject);
+                    JournalLinkStore.Write(key, file);
+                }
+                catch (Exception ex)
+                {
+                    Diag.Log("Journal link change failed", ex);
+                    Post(() => Status = "Не удалось записать связь журналов: " + ex.Message);
+                    return;
+                }
+                if (!reject)
+                {
+                    _actions.Run(app =>
+                    {
+                        _tracker.WriteLinkEvent(key, entry, link);
+                        if (link) _tracker.CheckStorageReplaced(key, "link"); // пропало ли что-то при восстановлении
+                    });
+                }
+                lock (_linkCache) _linkCache.Remove(key);
+                Post(() =>
+                {
+                    if (ReferenceEquals(info, _journalCandidate)) JournalCandidate = null;
+                    Status = link ? "Журнал «" + info.Title + "» связан: его записи видны вместе с журналом модели."
+                        : reject ? "Журнал «" + info.Title + "» больше не предлагается."
+                        : "Связь с журналом «" + info.Title + "» убрана.";
+                    LinksChanged?.Invoke();
+                    if (!reject && key == _modelKey) Reload();
+                });
+            });
+        }
+
         private void OpenLogFolder()
         {
             var root = DataFolders.LogFolder;

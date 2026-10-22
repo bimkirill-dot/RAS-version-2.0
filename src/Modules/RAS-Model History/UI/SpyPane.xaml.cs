@@ -148,6 +148,7 @@ namespace RASv2.ModelHistory.UI
                 else if (_sortFields.TryGetValue(e.Column, out var field)) _vm.SortByColumn(field);
             };
             vm.SortDialogRequested += OpenSortDialog;
+            vm.JournalLinksRequested += OpenJournalLinks;
             vm.FilterDialogRequested += OpenFilterDialog;
             vm.AskChangesView = dialog =>
             {
@@ -616,6 +617,22 @@ namespace RASv2.ModelHistory.UI
                 if (owner != IntPtr.Zero) new WindowInteropHelper(win).Owner = owner;
             }
             catch (Exception) { /* окно без владельца — тоже можно */ }
+        }
+
+        /// <summary>«⋯» → «Связанные журналы…» (немодальное — панель живёт, пока окно открыто).</summary>
+        private void OpenJournalLinks()
+        {
+            try
+            {
+                var win = new JournalLinksWindow(_vm);
+                OwnByRevit(win);
+                win.Show();
+            }
+            catch (Exception ex)
+            {
+                Diag.Log("Journal links window failed", ex);
+                _vm.Status = "Не удалось открыть окно связанных журналов: " + ex.Message;
+            }
         }
 
         /// <summary>Кнопка «Сортировка…»: окно как «Сортировка/группирование» в свойствах спецификации Revit.</summary>
