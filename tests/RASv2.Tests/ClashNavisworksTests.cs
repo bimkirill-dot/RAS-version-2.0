@@ -17,9 +17,10 @@ namespace RASv2.Tests
             yield return Case("виды: направления — единичные, смотрят вниз или вбок, привычный ракурс — наискось сверху", () =>
             {
                 var c = ViewPick.Candidates();
-                Check(c.Count == 17, "кандидатов 17: " + c.Count);
+                Check(c.Count == 21, "кандидатов 21: " + c.Count);
                 Check(c.All(v => Math.Abs(Math.Sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z) - 1) < 1e-9), "единичные");
-                Check(c.All(v => v.Z < 0), "камера всегда смотрит сверху вниз (снизу модель не показываем)");
+                Check(c.Count(v => v.Z > 0) == 4 && c.Where(v => v.Z > 0).All(v => v.Preference < 0.6),
+                    "4 взгляда чуть снизу (плита над стеной) — и они наименее привычные");
                 Check(c.Where(v => v.Preference == 1.0).All(v => v.Elevation == 35), "самый привычный — 35° сверху");
             });
             yield return Case("виды: один элемент закрыл другой — такой вид проигрывает", () =>
@@ -34,12 +35,16 @@ namespace RASv2.Tests
             {
                 Check(ViewPick.Score(300, 300, 2000, 1.0) > ViewPick.Score(300, 300, 2000, 0.6), "35° сверху лучше, чем сверху");
             });
-            yield return Case("виды: цвета элементов — с учётом освещения и тени", () =>
+            yield return Case("виды: цвета элементов — с учётом освещения и тени, оси и фон — не элементы", () =>
             {
-                Check(ViewPick.IsFirst(200, 30, 30) && ViewPick.IsFirst(110, 40, 35), "красный — на свету и в тени");
-                Check(ViewPick.IsSecond(30, 190, 40) && ViewPick.IsSecond(25, 95, 30), "зелёный — на свету и в тени");
-                Check(!ViewPick.IsFirst(180, 180, 180) && !ViewPick.IsSecond(180, 180, 180) && !ViewPick.IsFirst(40, 10, 10),
-                    "серый фон и почти чёрное — не элементы");
+                Check(ViewPick.IsFirst(210, 40, 200) && ViewPick.IsFirst(110, 35, 100), "пурпурный — на свету и в тени");
+                Check(ViewPick.IsSecond(220, 210, 40) && ViewPick.IsSecond(100, 95, 30), "жёлтый — на свету и в тени");
+                // картинки проверки разработчика 23.10.2026: оси модели — красные и зелёные линии и подписи, фон — голубой
+                Check(!ViewPick.IsFirst(230, 30, 30) && !ViewPick.IsSecond(230, 30, 30), "красная ось — не элемент");
+                Check(!ViewPick.IsFirst(40, 220, 40) && !ViewPick.IsSecond(40, 220, 40), "зелёная ось — не элемент");
+                Check(!ViewPick.IsFirst(110, 160, 230) && !ViewPick.IsSecond(110, 160, 230), "голубой фон — не элемент");
+                Check(!ViewPick.IsFirst(180, 180, 180) && !ViewPick.IsSecond(180, 180, 180) && !ViewPick.IsFirst(40, 10, 40),
+                    "серое и почти чёрное — не элементы");
             });
             yield return Case("виды: что показать — место коллизии с запасом, а не стена целиком", () =>
             {

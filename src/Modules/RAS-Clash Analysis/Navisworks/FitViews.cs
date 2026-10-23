@@ -85,8 +85,10 @@ namespace RASv2.ClashAnalysis.Navisworks
             var com = ComResults(out var comProblem);
             if (com == null) Log.Write("Виды в коллизии не записываются: " + comProblem);
 
-            var original = doc.CurrentViewpoint.CreateCopy();
             doc.CurrentSelection.Clear();
+            // подобранные виды — ещё раз в конце: пока камера ходит по коллизиям, Clash Detective («Автообновление» вида) переписывает
+            // выбранную в нём коллизию каждым её движением (разработчик, 23.10.2026: «не обрабатывает вид, на котором сейчас сидишь»)
+            var chosen = new List<(InwOclTestResult Target, InwNvViewPoint View)>();
             var candidates = ViewPick.Candidates();
             int fitted = 0, written = 0, skipped = 0;
             var watch = Stopwatch.StartNew();
@@ -104,9 +106,9 @@ namespace RASv2.ClashAnalysis.Navisworks
                             Log.Write($"Коллизия не найдена через COM: «{test.DisplayName}» / «{result.DisplayName}»");
                         var name = $"«{test.DisplayName}» / «{result.DisplayName}»";
                         var dump = debugDir != null && i < DebugClashes ? Path.Combine(debugDir, $"{i + 1:00} {Safe(result.DisplayName)}") : null;
-                        if (!FitOne(doc, name, result, candidates, target, dump, out var saved)) { skipped++; continue; }
+                        if (!FitOne(doc, name, result, candidates, target, dump, out var view)) { skipped++; continue; }
                         fitted++;
-                        if (saved) written++;
+                        if (view != null) { written++; chosen.Add((target, view)); }
                     }
                     catch (Exception ex)
                     {
@@ -119,7 +121,13 @@ namespace RASv2.ClashAnalysis.Navisworks
             {
                 NwApp.EndProgress();
                 doc.Models.ResetAllTemporaryMaterials();
-                doc.CurrentViewpoint.CopyFrom(original);
+                // камера не возвращается на прежнее место: её движение Clash Detective записал бы в выбранную коллизию; запись через COM
+                // камеру не двигает — повтор ставит каждой коллизии её вид, и выбранной тоже
+                foreach (var (target, view) in chosen)
+                {
+                    try { target.ViewPoint = view; }
+                    catch (Exception ex) { Log.Write("Вид не записан повторно", ex); }
+                }
             }
             watch.Stop();
             var perClash = fitted > 0 ? watch.Elapsed.TotalSeconds / fitted : 0;
@@ -183,14 +191,18 @@ namespace RASv2.ClashAnalysis.Navisworks
         /// (разработчик, 23.10.2026: «на подобранных видах видно другие объекты модели»). Нет элементов — false.
         /// </summary>
         private static bool FitOne(Document doc, string name, ClashResult result, List<ViewCandidate> candidates, InwOclTestResult target,
-            string dump, out bool saved)
+            string dump, out InwNvViewPoint saved)
         {
-            saved = false;
-            var first = result.Item1;
-            var second = result.Item2;
+            saved = null;
+            // элемент коллизии: Item — сам элемент; нет его (у «Конфликт1» проверки разработчика 23.10.2026 Item2 пустой) — составной
+            // элемент или первый из выбора
+            var first = ItemOf(result.Item1, result.CompositeItem1, result.Selection1);
+            var second = ItemOf(result.Item2, result.CompositeItem2, result.Selection2);
             if (first == null || second == null)
             {
-                Log.Write($"{name}: пропущена — нет {(first == null ? "первого" : "второго")} элемента (элемент коллизии не найден в модели)");
+                Log.Write($"{name}: пропущена — нет {(first == null ? "первого" : "второго")} элемента (элемент коллизии не найден в модели: " +
+                          $"Item {(first == null ? result.Item1 : result.Item2) != null}, Composite {(first == null ? result.CompositeItem1 : result.CompositeItem2) != null}, " +
+                          $"Selection {(first == null ? result.Selection1 : result.Selection2)?.Count ?? 0})");
                 return false;
             }
             if (dump != null) Directory.CreateDirectory(dump);
@@ -199,8 +211,9 @@ namespace RASv2.ClashAnalysis.Navisworks
             var hidden = HideAllBut(doc, first, second);
             try
             {
-                doc.Models.OverrideTemporaryColor(new[] { first }, NwColor.Red);
-                doc.Models.OverrideTemporaryColor(new[] { second }, NwColor.Green);
+                // пурпурный и жёлтый: красным и зелёным Navisworks рисует оси модели (Logic\ViewPick.IsFirst / IsSecond)
+                doc.Models.OverrideTemporaryColor(new[] { first }, new NwColor(1, 0, 1));
+                doc.Models.OverrideTemporaryColor(new[] { second }, new NwColor(1, 1, 0));
                 Viewpoint best = null;
                 var bestScore = double.NegativeInfinity;
                 var bestIndex = -1;
@@ -229,8 +242,8 @@ namespace RASv2.ClashAnalysis.Navisworks
                 doc.CurrentViewpoint.CopyFrom(best);
                 if (target != null)
                 {
-                    target.ViewPoint = (InwNvViewPoint)ComApiBridge.State.CurrentView.ViewPoint.Copy();
-                    saved = true;
+                    saved = (InwNvViewPoint)ComApiBridge.State.CurrentView.ViewPoint.Copy();
+                    target.ViewPoint = saved;
                 }
                 return true;
             }
@@ -240,6 +253,9 @@ namespace RASv2.ClashAnalysis.Navisworks
                 if (hidden.Count > 0) doc.Models.SetHidden(hidden, false);
             }
         }
+
+        private static ModelItem ItemOf(ModelItem item, ModelItem composite, ModelItemCollection selection) =>
+            item ?? composite ?? selection?.FirstOrDefault();
 
         /// <summary>«Скрыть остальное»: всё, кроме двух элементов и их родителей. Возвращает скрытое — чтобы потом показать.</summary>
         private static ModelItemCollection HideAllBut(Document doc, ModelItem first, ModelItem second)
