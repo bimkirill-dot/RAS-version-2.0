@@ -41,8 +41,8 @@
     <None Include="Ribbon\RASv2Ribbon.xaml" Link="en-US\RASv2Ribbon.xaml" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Ribbon\RASv2Ribbon.xaml" Link="ru-RU\RASv2Ribbon.xaml" CopyToOutputDirectory="PreserveNewest" />
     <!-- иконки — рядом со сборкой, путь строится в коде (pack://siteOfOrigin ведёт в папку Navisworks, а не пакета) -->
-    <None Include="..\..\Modules\RAS-Clash Analysis\Revit\Icons\ElementClashes16.png" Link="icons\FitViews16.png" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\..\Modules\RAS-Clash Analysis\Revit\Icons\ElementClashes32.png" Link="icons\FitViews32.png" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\Modules\RAS-Clash Analysis\Navisworks\Icons\FitViews16.png" Link="icons\FitViews16.png" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\Modules\RAS-Clash Analysis\Navisworks\Icons\FitViews32.png" Link="icons\FitViews32.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- PackageContents.xml — в корень пакета, рядом с Contents -->
