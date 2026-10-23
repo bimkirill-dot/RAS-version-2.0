@@ -85,23 +85,23 @@ namespace RASv2.ClashAnalysis.Navisworks
                 var selected = FindSelected(doc, com, before, onScreen);
                 if (selected != null)
                 {
-                    MessageBox.Show($"В Clash Detective выбрана коллизия «{selected.Replace("\u001f", " / ")}» (вкладка «Результаты»).{Environment.NewLine}{Environment.NewLine}" +
-                                    "Перейдите в Clash Detective на вкладку «Правила» и запустите снова: пока коллизия выбрана, Clash Detective " +
-                                    "перезаписывает её вид при каждом движении камеры, и её вид подобрать нельзя. Её вид не изменён.",
-                        Entry.Title, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    WarningDialog.Show("Перейдите в Clash Detective на вкладку «Правила» и запустите снова",
+                        $"Сейчас выбрана коллизия «{selected.Replace("\u001f", " / ")}» (вкладка «Результаты»). Пока коллизия выбрана, " +
+                        "Clash Detective перезаписывает её вид при каждом движении камеры — подобрать виды правильно нельзя. Ничего не изменено.",
+                        "Понятно");
                     return 0;
                 }
             }
             // уже подобранные (и подправленные вручную) — с сохранённым видом: при повторном запуске их не трогать (разработчик, 23.10.2026)
             var fresh = results.Where(r => !r.Result.HasSavedViewpoint).ToList();
-            var answer = MessageBox.Show(
-                $"Коллизий: {results.Count} в {tests} проверках, из них без сохранённого вида — {fresh.Count}.{Environment.NewLine}{Environment.NewLine}" +
-                "«Да» — подобрать вид только им (уже подобранные и подправленные вручную не трогать).\n" +
-                "«Нет» — подобрать заново всем.\n«Отмена» — ничего не делать.\n\n" +
-                "Clash Detective — на вкладке «Правила» (не на коллизии). Сохраните файл до этого — так можно вернуть прежние виды.",
-                Entry.Title, MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
-            if (answer == DialogResult.Cancel) return 0;
-            if (answer == DialogResult.Yes) results = fresh;
+            // предупреждение — заметное, красное (разработчик, 23.10.2026: «чтобы пользователь точно не пропустил»)
+            var answer = WarningDialog.Show("Clash Detective — на вкладке «Правила», не на коллизии",
+                $"Если выбрана коллизия на вкладке «Результаты», её вид подберётся неправильно.{Environment.NewLine}{Environment.NewLine}" +
+                $"Коллизий: {results.Count} в {tests} {(tests % 10 == 1 && tests % 100 != 11 ? "проверке" : "проверках")}, из них без сохранённого вида — {fresh.Count}. Уже подобранные и подправленные " +
+                $"вручную виды можно не трогать.{Environment.NewLine}{Environment.NewLine}Сохраните файл до этого — так можно вернуть прежние виды.",
+                $"Только без вида ({fresh.Count})", $"Все заново ({results.Count})", "Отмена");
+            if (answer != 0 && answer != 1) return 0;
+            if (answer == 0) results = fresh;
             if (results.Count == 0)
             {
                 MessageBox.Show("У всех коллизий вид уже есть — подбирать нечего.", Entry.Title, MessageBoxButtons.OK, MessageBoxIcon.Information);
