@@ -48,7 +48,7 @@
         <TextBlock Style="{StaticResource Head}" Text="Показ" />
         <RadioButton x:Name="ShowCrop" GroupName="show" Content="С обрезкой вокруг места коллизии" />
         <RadioButton x:Name="ShowIsolate" GroupName="show" Content="Изолировать элементы коллизии" />
-        <TextBlock Style="{StaticResource Hint}" Text="В модели видны только два элемента коллизии." />
+        <TextBlock Style="{StaticResource Hint}" Text="Видны только элементы коллизии и обобщённые модели (отверстия) — их можно поправить на этом же виде." />
 
         <TextBlock Style="{StaticResource Head}" Text="Обрезка" />
         <RadioButton x:Name="MarginSize" GroupName="margin" Content="По размеру места коллизии — половина его размера, не меньше 0,5 м" />

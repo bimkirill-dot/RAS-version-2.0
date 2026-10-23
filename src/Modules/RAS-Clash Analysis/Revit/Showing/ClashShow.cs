@@ -203,26 +203,32 @@ namespace RASv2.ClashAnalysis.Showing
         }
 
         /// <summary>
-        /// «Изолировать»: в самой модели — временно только элементы пары; в связях — только категории элементов коллизии
-        /// (элемент связи по отдельности Revit не изолирует).
+        /// «Изолировать»: в самой модели — временно только элементы пары и обобщённые модели (отверстия) в виде; в связях — только
+        /// категории элементов коллизии и обобщённые модели (элемент связи по отдельности Revit не изолирует).
         /// </summary>
         private static void Isolate(Document doc, View view, List<Found> found, bool isolate)
         {
             if (view.IsInTemporaryViewMode(TemporaryViewMode.TemporaryHideIsolate)) view.DisableTemporaryViewMode(TemporaryViewMode.TemporaryHideIsolate);
             HideOtherCategories(doc, view, found, isolate);
             if (!isolate) return;
-            var ids = found.Select(f => f.Link == null ? f.Element.Id : f.Link.Id).Distinct().ToList();
+            var ids = found.Select(f => f.Link == null ? f.Element.Id : f.Link.Id)
+                .Concat(new FilteredElementCollector(doc, view.Id).OfCategory(BuiltInCategory.OST_GenericModel).WhereElementIsNotElementType().ToElementIds())
+                .Distinct().ToList();
             view.IsolateElementsTemporary(ids);
         }
 
         /// <summary>
         /// «Изолировать» и в связях — по категориям (разработчик, 19.10.2026: «так же, как покраску, — по категории скрывать то,
-        /// что к коллизии не относится»): в нашем виде скрыты все категории модели, кроме категорий элементов коллизии; связь —
-        /// «по основному виду», и в ней скрывается то же. Связи как таковые не скрываются. Без «Изолировать» — всё видно.
+        /// что к коллизии не относится»): в нашем виде скрыты все категории модели, кроме категорий элементов коллизии и
+        /// обобщённых моделей — ими сделаны отверстия, их правят на том же виде (разработчик, 23.10.2026); связь — «по основному
+        /// виду», и в ней скрывается то же. Связи как таковые не скрываются. Без «Изолировать» — всё видно.
         /// </summary>
         private static void HideOtherCategories(Document doc, View view, List<Found> found, bool isolate)
         {
-            var keep = new HashSet<ElementId>(found.Select(f => (f.Element.Category?.Parent ?? f.Element.Category)?.Id).Where(id => id != null));
+            var keep = new HashSet<ElementId>(found.Select(f => (f.Element.Category?.Parent ?? f.Element.Category)?.Id).Where(id => id != null))
+            {
+                new ElementId(BuiltInCategory.OST_GenericModel)
+            };
             var links = new ElementId(BuiltInCategory.OST_RvtLinks);
             foreach (Category c in doc.Settings.Categories)
             {
