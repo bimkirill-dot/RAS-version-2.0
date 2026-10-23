@@ -19,10 +19,12 @@
 - **Сборка** — .NET Framework 4.8, x64; API Navisworks — из папки Navisworks, без копирования (`Private=false`); без `UseWPF` (иначе разметка ленты собиралась бы как страница WPF).
 - **Журнал** — `%LocalAppData%\RAS_v_2.0\Logs\navisworks.log` (загрузчик и сборка). Не появилась вкладка — журнал запуска Navisworks: `& "C:\Program Files\Autodesk\Navisworks Manage 2023\Roamer.exe" -log "<файл>"`.
 
-## Разработчику
+## Установка, выпуск, обновление
 
-- `navisworks.cmd` — собрать загрузчик и сборку, проверки (`tests\RASv2.Tests`, .NET Framework 4.8), сборка — в `out\Releases\Navisworks\2023` (канал «разработка»), пакет — себе (если изменился; занят открытым Navisworks — закрыть и повторить), `%AppData%\RAS_v_2.0\navisworks-loader.ini` — загрузчик берёт сборки из папки исходников. Перезапустить Navisworks.
-- Прежний пакет `RasGroup.ClashViewFixer` (первая попытка, 09.2026, исходники — `D:\Code\Navisworks-viewer`) `navisworks.cmd` убирает.
-- Выпуск для коллег (сервер, каналы, установка) — после проверки прототипа.
+- **Сервер:** `Releases\Navisworks\2023\<сборка>` (выпущенные сборки, не меняются), `test.txt` / `all.txt` (какая сборка у канала), `history.txt`; `Setup\Navisworks` — `install-navisworks.cmd` + пакет. Тестовая группа — та же, что у Revit (`Config\test-users.txt`).
+- **Установка у человека** — `setup\install-navisworks.ps1` (запускает `install-navisworks.cmd`): есть Navisworks Manage или Simulate 2023 — пакет в `%AppData%\Autodesk\ApplicationPlugins` (копируется изменившееся; занят открытым Navisworks — закрыть и повторить), прежний `RasGroup.ClashViewFixer` (первая попытка, 09.2026, исходники — `D:\Code\Navisworks-viewer`) убирается. Права администратора не нужны.
+- **Обновление** — само: при первом нажатии кнопки за сеанс загрузчик берёт сборку своего канала; новая — копирует к себе. Людям — перезапустить Navisworks. Переустановка — только когда изменился пакет (кнопки, иконки, загрузчик).
+- **Разработчику** — `navisworks.cmd` (двойной щелчок — меню; `tools\Navisworks.ps1`): `build` — собрать, проверить (`tests\RASv2.Tests`, .NET Framework 4.8), сборка — в `out\Releases\Navisworks\2023` (канал «разработка»), пакет — себе тем же `install-navisworks.ps1 -Dev`, `%AppData%\RAS_v_2.0\navisworks-loader.ini` — загрузчик берёт сборки из папки исходников; `publish test|all`, `promote`, `rollback [test]`, `status`, `setup` — как у Revit (`publish.cmd`, `promote.cmd`, `rollback.cmd`, `status.cmd`, `publish-setup.cmd`), в своих папках.
+- **Загрузчик без файла отладки** (`DebugType=none`): иначе в сборку пишется номер `.pdb`, а он зависит от путей к исходникам (буква диска то строчная, то заглавная), и одинаковый код давал «новый» загрузчик — установка просила закрыть Navisworks. У загрузчика Revit — то же самое (поэтому `build.cmd` часто пишет «загрузчик не обновлён»); поправить — отдельным решением (изменение загрузчика Revit).
 
 Основа — руководство разработчика «Плагин для Navisworks Manage 2023: полное руководство» (`Add-plugin-to-panel.md`, проверено на учебном плагине `HelloNavis`).

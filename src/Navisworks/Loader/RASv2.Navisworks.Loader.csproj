@@ -17,6 +17,9 @@
     <!-- пакет: out\navisworks\2023\RASv2.Navisworks.bundle\Contents -->
     <OutputPath>$(RasRoot)out\navisworks\2023\RASv2.Navisworks.bundle\Contents\</OutputPath>
     <GenerateDependencyFile>false</GenerateDependencyFile>
+    <!-- без файла отладки: иначе в сборку пишется его номер, а он зависит от путей к исходникам (буква диска то строчная, то
+         заглавная — откуда запущена сборка), и одинаковый код давал «новый» загрузчик — установка просила закрыть Navisworks -->
+    <DebugType>none</DebugType>
   </PropertyGroup>
 
   <ItemGroup>
