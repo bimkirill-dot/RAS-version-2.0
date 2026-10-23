@@ -1,5 +1,5 @@
 ﻿# Сборка и выпуск RAS v. 2.0 (PRINCIPLES.md, раздел 10).
-# Запускается из build.cmd, publish.cmd, promote.cmd, rollback.cmd, publish-setup.cmd в корне.
+# Запускается из revit.cmd в корне (меню; пункты 1–8 — действия ниже).
 #   build    — собрать под Revit 2023 и 2026, проверить, положить сборку в out\Releases и установить загрузчик себе
 #   publish  — то же + выпуск на сервер в канал «тест» или «все»
 #   promote  — перевести сборку канала «тест» на «всех» (без пересборки)
@@ -139,7 +139,7 @@ function Set-DevConfig {
     $dir = Join-Path $env:APPDATA 'RAS_v_2.0'
     New-Item -ItemType Directory -Path $dir -Force | Out-Null
     $ini = @(
-        '# Компьютер разработчика: загрузчик берёт сборки из папки исходников (build.cmd).',
+        '# Компьютер разработчика: загрузчик берёт сборки из папки исходников (revit.cmd, пункт 1).',
         '# Удалите этот файл — сборки снова будут браться с сервера, как у всех.',
         "releases=$DevReleases",
         'channel=dev')
@@ -207,7 +207,7 @@ try {
             Write-Host "Выпущено: сборка $id, канал «$($ChannelNames[$Channel])»."
             if ($Channel -eq 'all') { Write-Host 'Канал «тест» переведён на ту же сборку: тестовая группа тоже получит её.' }
             Write-Host 'Пользователям этого канала достаточно перезапустить Revit.'
-            if ($Channel -eq 'test') { Write-Host "Тестовая группа: $testers. Проверили — promote.cmd переведёт эту сборку на всех." }
+            if ($Channel -eq 'test') { Write-Host "Тестовая группа: $testers. Проверили — revit.cmd, пункт 4, переведёт эту сборку на всех." }
         }
         'setup' {
             Assert-Server
@@ -224,7 +224,7 @@ try {
             if ($changed.Count -eq 0) { Write-Host 'Загрузчик тот же, что на сервере: обновятся только скрипты установки.' }
             else {
                 Write-Warning ("Загрузчик для Revit " + ($changed -join ', ') + " новый или изменился. Ошибка в загрузчике ломает плагин у всех, кто его поставит: " +
-                    "сначала проверьте его у себя в каждой версии Revit (build.cmd ставит его вам). У тех, кто уже установил плагин, " +
+                    "сначала проверьте его у себя в каждой версии Revit (revit.cmd, пункт 1, ставит его вам). У тех, кто уже установил плагин, " +
                     "новый загрузчик появится только после повторного запуска install.cmd.")
             }
             if (-not (Confirm "Выложить установку в ${setup}?")) { Write-Host 'Отменено.'; exit 1 }
@@ -244,7 +244,7 @@ try {
             Rename-Item -Path $temp -NewName (Split-Path -Leaf $setup)
             Write-Host ""
             Write-Host "Установка выложена: $setup\install.cmd"
-            Write-Host 'Коллеге: закрыть Revit, запустить install.cmd, открыть Revit. Ядро и модули загрузчик возьмёт из выпусков (publish.cmd).'
+            Write-Host 'Коллеге: закрыть Revit, запустить install.cmd, открыть Revit. Ядро и модули загрузчик возьмёт из выпусков (revit.cmd, пункты 2–4).'
         }
         'status' {
             Assert-Server

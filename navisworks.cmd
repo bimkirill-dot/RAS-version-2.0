@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 setlocal
-rem RAS v. 2.0 для Navisworks 2023 — отдельно от Revit (build.cmd / publish.cmd) и от сайта (site.cmd). Логика — tools\Navisworks.ps1.
+rem RAS v. 2.0 для Navisworks 2023 — отдельно от Revit (revit.cmd) и от сайта (site.cmd). Логика — tools\Navisworks.ps1.
 rem Двойной щелчок — меню; из командной строки: navisworks.cmd build | publish test | publish all | promote | rollback [test] | status | setup
 if not "%~1"=="" goto run
 echo RAS v. 2.0 для Navisworks — что сделать?

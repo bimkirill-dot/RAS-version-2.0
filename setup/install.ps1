@@ -2,8 +2,8 @@
 # (PRINCIPLES.md, раздел 2), для каждой версии Revit, которая есть на компьютере. Ядро и модули не ставятся:
 # их приносит загрузчик с сервера. Убирает прежние отдельные установки RAS-Model History (бывший SpyPlugin) —
 # иначе журнал изменений писали бы два плагина.
-# Пользователь запускает install.cmd рядом (на сервере — папка Setup, её выкладывает publish-setup.cmd).
-# build.cmd ставит загрузчик разработчику этим же скриптом (-Dev).
+# Пользователь запускает install.cmd рядом (на сервере — папка Setup, её выкладывает revit.cmd, пункт 8).
+# revit.cmd (пункт 1) ставит загрузчик разработчику этим же скриптом (-Dev).
 # Файл в UTF-8 с BOM: иначе Windows PowerShell 5.1 искажает русский текст.
 param(
     # где лежат загрузчики: <Source>\<год Revit>\<Inner>
@@ -18,7 +18,7 @@ try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 
 $Years = @(2023, 2026)
 $LegacyNames = @('RasModelHistory', 'SpyPlugin')
-$Retry = if ($Dev) { 'запустите build.cmd ещё раз' } else { 'запустите установку ещё раз' }
+$Retry = if ($Dev) { 'запустите revit.cmd ещё раз' } else { 'запустите установку ещё раз' }
 $found = $false
 $failed = $false
 

@@ -5,7 +5,7 @@
     пакет .bundle в %AppData%\Autodesk\ApplicationPlugins. Вкладка «RAS v. 2.0» и кнопки — здесь (разметка ленты читается
     Navisworks из пакета); работу делает сборка с сервера (Releases\Navisworks\2023, каналы «тест» и «все») — её загрузчик
     копирует к себе и вызывает. Выбор сборки — тот же код, что у загрузчика Revit (src\Loader\BuildResolver.cs, NAVISWORKS).
-    Не часть Revit: build.cmd и publish.cmd его не собирают — navisworks.cmd (tools\Navisworks.ps1).
+    Не часть Revit: revit.cmd его не собирает — navisworks.cmd (tools\Navisworks.ps1).
     Как устроен пакет — src\Navisworks\README.md (по руководству разработчика «Add-plugin-to-panel», 23.10.2026).
   -->
   <PropertyGroup>

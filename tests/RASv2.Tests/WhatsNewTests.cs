@@ -23,7 +23,7 @@ namespace RASv2.Tests
             yield return Case("«что нового»: без текста и у разработчика — не показывать", () =>
             {
                 Check(!WhatsNew.ShouldShow(id, "all", "  ", null) && !WhatsNew.ShouldShow(id, "all", null, null), "текста нет");
-                Check(!WhatsNew.ShouldShow(id, "dev", "текст", null), "сборка разработчика (build.cmd)");
+                Check(!WhatsNew.ShouldShow(id, "dev", "текст", null), "сборка разработчика (revit.cmd build)");
             });
             yield return Case("«что нового»: дата выпуска из номера сборки", () =>
             {

@@ -2,7 +2,7 @@
   <!--
     Общее для всех проектов RAS v. 2.0 (PRINCIPLES.md, раздел 9).
     Версия Revit выбирается при сборке: -p:RevitVersion=2023 (.NET Framework 4.8) или 2026 (.NET 8).
-    Сборку под обе версии делают build.cmd и publish.cmd (tools\Release.ps1).
+    Сборку под обе версии делает revit.cmd (tools\Release.ps1).
   -->
   <PropertyGroup>
     <RevitVersion Condition="'$(RevitVersion)' == ''">2026</RevitVersion>

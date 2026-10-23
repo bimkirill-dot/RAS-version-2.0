@@ -2,7 +2,7 @@
 
   <!--
     Сайт модуля RAS-Clash Analysis — единая база коллизий (PRINCIPLES.md, «Сайт модуля»; DECISIONS.md модуля).
-    Не часть Revit: собирается и запускается отдельно — site.cmd в корне (tools\Site.ps1); build.cmd его не собирает.
+    Не часть Revit: собирается и запускается отдельно — site.cmd в корне (tools\Site.ps1); revit.cmd его не собирает.
     Разбор отчётов — общий с модулем в Revit (..\Reports, исходниками, без копий).
   -->
   <PropertyGroup>
