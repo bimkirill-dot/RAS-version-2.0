@@ -6,13 +6,15 @@ using System.Windows.Forms;
 namespace RASv2.ClashAnalysis.Navisworks
 {
     /// <summary>
-    /// Окно с заметным предупреждением — красный круг с восклицательным знаком и красный текст (разработчик, 23.10.2026: «прям такое
-    /// предупреждение с восклицательным знаком красным, чтобы пользователь точно не пропустил»): стандартное окно Windows с жёлтым
-    /// треугольником пропускают. Кнопки — с понятными подписями; результат — номер нажатой (−1 — закрыли окно).
+    /// Окно с заметным предупреждением — как обычное окно Windows (системный шрифт, серая полоса с кнопками справа), но с красным
+    /// значком «!» и красной строкой-предупреждением (разработчик, 23.10.2026: «предупреждение с восклицательным знаком красным,
+    /// чтобы пользователь точно не пропустил»; затем — «попроще, под стандартный интерфейс Windows, просто оставить заметное
+    /// предупреждение»). Стандартное окно Windows красного «!» не умеет (у него жёлтый треугольник). Результат — номер нажатой кнопки
+    /// (−1 — закрыли окно).
     /// </summary>
     internal sealed class WarningDialog : Form
     {
-        private static readonly Color Red = Color.FromArgb(200, 30, 30);
+        private static readonly Color Red = Color.FromArgb(196, 43, 28);
 
         public int Choice { get; private set; } = -1;
 
@@ -23,51 +25,53 @@ namespace RASv2.ClashAnalysis.Navisworks
             MaximizeBox = MinimizeBox = false;
             ShowInTaskbar = false;
             StartPosition = FormStartPosition.CenterScreen;
-            Font = new Font("Segoe UI", 9.75f);
-            BackColor = Color.White;
-            AutoScaleMode = AutoScaleMode.Dpi;
-            const int width = 560;
+            Font = SystemFonts.MessageBoxFont;
+            BackColor = SystemColors.Window;
+            const int textLeft = 66, textWidth = 420;
 
-            var icon = new Panel { Location = new Point(18, 18), Size = new Size(48, 48) };
+            // значок — размера системного (32), красный круг с белым «!»
+            var icon = new Panel { Location = new Point(20, 22), Size = new Size(32, 32) };
             icon.Paint += (s, e) =>
             {
                 var g = e.Graphics;
                 g.SmoothingMode = SmoothingMode.AntiAlias;
-                using (var fill = new SolidBrush(Red)) g.FillEllipse(fill, 1, 1, 45, 45);
+                using (var fill = new SolidBrush(Red)) g.FillEllipse(fill, 0, 0, 31, 31);
                 using (var white = new SolidBrush(Color.White))
                 {
-                    g.FillRectangle(white, 20.5f, 9, 6, 21);
-                    g.FillEllipse(white, 20.5f, 33, 6, 6);
+                    g.FillRectangle(white, 13.5f, 6, 4, 14);
+                    g.FillEllipse(white, 13.5f, 22.5f, 4, 4);
                 }
             };
-            // высота подписей — их собственная (AutoSize с ограничением ширины): расчёт заранее обрезал последнюю строку
             var head = new Label
             {
-                Text = warning, ForeColor = Red, Font = new Font("Segoe UI", 12f, FontStyle.Bold),
-                Location = new Point(80, 16), AutoSize = true, MaximumSize = new Size(width - 100, 0),
+                Text = warning, ForeColor = Red, Font = new Font(Font, FontStyle.Bold),
+                AutoSize = true, MaximumSize = new Size(textWidth, 0), Location = new Point(textLeft, 22),
             };
-            var body = new Label { Text = text, AutoSize = true, MaximumSize = new Size(width - 100, 0) };
+            var body = new Label { Text = text, AutoSize = true, MaximumSize = new Size(textWidth, 0) };
+            Controls.Add(icon);
             Controls.Add(head);
             Controls.Add(body);
-            body.Location = new Point(80, Math.Max(icon.Bottom, head.Bottom) + 14);
+            body.Location = new Point(textLeft, head.Bottom + 10);
 
-            var buttonsTop = body.Bottom + 20;
-            var strip = new Panel { BackColor = Color.FromArgb(240, 240, 240), Location = new Point(0, buttonsTop - 10), Size = new Size(width, 56) };
-            var right = width - 14;
+            // полоса кнопок — как у окон Windows: серая, кнопки справа, одинаковой высоты, с промежутками
+            var strip = new Panel { BackColor = SystemColors.Control, Location = new Point(0, Math.Max(icon.Bottom, body.Bottom) + 22) };
+            var width = textLeft + textWidth + 24;
+            var right = width - 12;
             for (var i = buttons.Length - 1; i >= 0; i--)
             {
                 var index = i;
-                var button = new Button { Text = buttons[i], AutoSize = true, MinimumSize = new Size(96, 30), Padding = new Padding(8, 0, 8, 0) };
+                var button = new Button { Text = buttons[i], AutoSize = false, UseVisualStyleBackColor = true };
+                var w = Math.Max(88, TextRenderer.MeasureText(buttons[i], Font).Width + 24);
+                button.Size = new Size(w, 26);
+                right -= w;
+                button.Location = new Point(right, 12);
+                right -= 8;
                 button.Click += (s, e) => { Choice = index; Close(); };
                 strip.Controls.Add(button);
-                var size = button.GetPreferredSize(Size.Empty);
-                button.Size = new Size(Math.Max(96, size.Width), 30);
-                right -= button.Width;
-                button.Location = new Point(right, 13);
-                right -= 8;
                 if (i == 0) AcceptButton = button;
+                if (i == buttons.Length - 1) CancelButton = button;
             }
-            Controls.Add(icon);
+            strip.Size = new Size(width, 50);
             Controls.Add(strip);
             ClientSize = new Size(width, strip.Bottom);
         }
