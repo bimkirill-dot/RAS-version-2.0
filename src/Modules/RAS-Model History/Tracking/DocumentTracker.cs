@@ -119,6 +119,11 @@ namespace RASv2.ModelHistory.Tracking
         public bool PendingActivation { get; set; }
         /// <summary>Версия с прошлого сеанса — разобрать при первой активации.</summary>
         public Guid? PendingOpenVersion { get; set; }
+        /// <summary>
+        /// Версия хранилища, которую модуль помнил при открытии (state.json), — для проверки «хранилище заменено копией» при первой
+        /// активации; не зависит от настройки «изменения коллег».
+        /// </summary>
+        public Guid? RememberedVersion { get; set; }
         /// <summary>Идёт закрытие (DocumentClosing получен, DocumentClosed ещё нет).</summary>
         public long? ClosingDocumentId { get; set; }
 

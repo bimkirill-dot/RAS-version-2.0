@@ -147,16 +147,16 @@ namespace RASv2.ModelHistory.Tracking
                 var t = GetOrCreate(e.Document);
                 if (t == null) return;
                 try { t.LocalPath = e.Document.PathName; } catch { /* ignore */ }
-                WriteEvent(t, "Открытие модели", ModelEventType.Open);
+                WriteEvent(t, "Открытие модели", ModelEventType.Open, storageVersion: StorageVersionOf(t));
                 CheckPendingLocal(t);
                 AbandonOtherLocalCopies(t);
                 // Подготовку и разбор «что изменилось с прошлого сеанса» делаем при первой активации вида:
                 // документы, открытые другими плагинами в фоне (без окна), так не нагружаются.
                 t.PendingActivation = true;
-                if (_s.DetectRemoteChanges && t.Model.IsWorkshared &&
-                    Guid.TryParse(LastVersion(t.Model), out var g))
+                if (t.Model.IsWorkshared && Guid.TryParse(LastVersion(t.Model), out var g))
                 {
-                    t.PendingOpenVersion = g;
+                    t.RememberedVersion = g;
+                    if (_s.DetectRemoteChanges) t.PendingOpenVersion = g;
                 }
                 SaveVersionState(t);
             });
@@ -197,6 +197,7 @@ namespace RASv2.ModelHistory.Tracking
         private void OnFirstActivation(DocumentTracker t)
         {
             t.PendingActivation = false;
+            ProbeStorage(t, "открытие");
             HashSet<long> remote = null;
             if (t.PendingOpenVersion.HasValue)
             {
@@ -413,6 +414,7 @@ namespace RASv2.ModelHistory.Tracking
                         ModelEventType.FromDetached);
                 }
                 OnSavedCommon(t, "Сохранение как");
+                ProbeStorage(t, "сохранить как");
                 MarkSnapshotsSaved(t);
                 if (ReferenceEquals(Active, t)) ActiveModelChanged?.Invoke(t);
                 else SetActive(t);
@@ -910,6 +912,41 @@ namespace RASv2.ModelHistory.Tracking
 
         // ───────────────────── хранилище заменено копией, связь журналов ─────────────────────
 
+        /// <summary>
+        /// Запись для разбора (ras.log) и проверка замены. Хранилище заменяют старой локальной копией (разработчик, 23.10.2026):
+        /// открыть старую копию — ещё не замена, в ней просто нет последних версий; поэтому проверка — только у свежей локальной
+        /// копии (создана при этом открытии) и после «Сохранить как». Как ведёт себя Revit при замене (номер хранилища, история
+        /// версий, число сохранений) — по этой записи после проверки разработчиком.
+        /// </summary>
+        private void ProbeStorage(DocumentTracker t, string when)
+        {
+            if (t?.Model == null || !t.Model.IsWorkshared) return;
+            try
+            {
+                var doc = t.Doc;
+                Guid central = Guid.Empty;
+                try { central = doc.WorksharingCentralGUID; } catch { /* нет */ }
+                var remembered = t.RememberedVersion;
+                bool? valid = remembered.HasValue ? IsValidVersion(doc, remembered.Value) : (bool?)null;
+                var created = LocalCreated(t.LocalPath);
+                var fresh = created.HasValue && DateTime.Now - created.Value < TimeSpan.FromMinutes(15);
+                Diag.Log($"Storage probe ({when}) {t.Model.Title}: key={t.Model.Key}, central={central:N}, version={DocVersionString(doc)}, " +
+                         $"remembered={remembered?.ToString("N") ?? "-"}, valid={(valid.HasValue ? valid.Value.ToString() : "-")}, " +
+                         $"local={t.LocalPath}, created={created?.ToString("dd.MM HH:mm:ss") ?? "-"}, fresh={fresh}");
+                if (valid == false && (fresh || when != "открытие")) CheckStorageReplaced(t, when);
+            }
+            catch (Exception ex)
+            {
+                Diag.Log("Storage probe failed", ex);
+            }
+        }
+
+        private static DateTime? LocalCreated(string path)
+        {
+            try { return !string.IsNullOrEmpty(path) && System.IO.File.Exists(path) ? System.IO.File.GetCreationTime(path) : (DateTime?)null; }
+            catch (Exception) { return null; }
+        }
+
         /// <summary>Есть ли версия в истории модели; не удалось узнать — считаем, что есть (без ложной тревоги).</summary>
         private static bool IsValidVersion(Document doc, Guid version)
         {
@@ -942,7 +979,7 @@ namespace RASv2.ModelHistory.Tracking
                 Diag.Log($"Storage check ({why}) {t.Model.Title}: replaced={verdict.Replaced}, recorded={verdict.AlreadyRecorded}, lost={verdict.Lost.Count}");
                 if (!verdict.Replaced || verdict.AlreadyRecorded) return;
                 WriteEvent(t, StorageReplacement.EventText(verdict), ModelEventType.StorageReplaced, storageVersion: StorageVersionOf(t),
-                    fill: r => r.LostFrom = verdict.LostFrom);
+                    fill: r => { r.LostFrom = verdict.LostFrom; r.LostUntil = verdict.LostUntil; });
             }
             catch (Exception ex)
             {
@@ -1119,8 +1156,6 @@ namespace RASv2.ModelHistory.Tracking
         {
             var baseGuid = t.VersionBeforeSync;
             t.VersionBeforeSync = null;
-            // версии, которую модуль помнил, в истории модели больше нет — не заменили ли хранилище копией
-            if (baseGuid != null && t.Model.IsWorkshared && !IsValidVersion(t.Doc, baseGuid.Value)) CheckStorageReplaced(t, source.ToString());
             if (baseGuid == null || !_s.DetectRemoteChanges || !t.Model.IsWorkshared) return null;
 
             var doc = t.Doc;

@@ -190,6 +190,8 @@ namespace RASv2.ModelHistory.Tracking
         [JsonPropertyName("sv")] public string StorageVersion { get; set; }
         /// <summary>Для StorageReplaced: время первой пропавшей синхронизации — изменения, попавшие в хранилище с него до замены, потеряны.</summary>
         [JsonPropertyName("rt")] public DateTimeOffset? LostFrom { get; set; }
+        /// <summary>Для StorageReplaced: время последней пропавшей синхронизации — синхронизации после неё (уже с новым хранилищем) не пропали.</summary>
+        [JsonPropertyName("ru")] public DateTimeOffset? LostUntil { get; set; }
         /// <summary>Для JournalLinked / JournalUnlinked: ключ журнала (папка) прежней истории.</summary>
         [JsonPropertyName("lk")] public string LinkedKey { get; set; }
 

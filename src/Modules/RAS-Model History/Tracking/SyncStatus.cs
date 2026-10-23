@@ -43,7 +43,7 @@ namespace RASv2.ModelHistory.Tracking
             public DateTimeOffset? CommittedElsewhere;
         }
 
-        /// <summary>Замена хранилища копией: что попало в хранилище с LostFrom до At — пропало.</summary>
+        /// <summary>Замена хранилища копией: что попало в хранилище с LostFrom по At (последняя пропавшая синхронизация) — пропало.</summary>
         private struct Replacement
         {
             public DateTimeOffset LostFrom, At;
@@ -54,7 +54,7 @@ namespace RASv2.ModelHistory.Tracking
             var list = records as IList<ChangeRecord> ?? records.ToList();
             var sessions = new Dictionary<string, SessionInfo>(StringComparer.Ordinal);
             var replacements = list.Where(r => r.Kind == ChangeKind.Event && r.EventType == ModelEventType.StorageReplaced && r.LostFrom.HasValue)
-                .Select(r => new Replacement { LostFrom = r.LostFrom.Value, At = r.Time }).ToList();
+                .Select(r => new Replacement { LostFrom = r.LostFrom.Value, At = r.LostUntil ?? r.Time }).ToList();
             SessionInfo Get(string id)
             {
                 if (!sessions.TryGetValue(id, out var si))

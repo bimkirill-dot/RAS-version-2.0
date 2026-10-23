@@ -37,7 +37,8 @@
 
         <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0" LastChildFill="False">
             <TextBlock x:Name="CountText" DockPanel.Dock="Left" VerticalAlignment="Center" Style="{StaticResource Spy.MutedText}" />
-            <Button DockPanel.Dock="Right" Content="Закрыть" Width="100" Height="26" Margin="8,0,0,0" IsCancel="True" />
+            <!-- окно немодальное: IsCancel закрывает только диалог — закрытие своим обработчиком (и Esc) -->
+            <Button DockPanel.Dock="Right" Content="Закрыть" Width="100" Height="26" Margin="8,0,0,0" Click="Close_Click" />
             <Button x:Name="LinkButton" DockPanel.Dock="Right" Content="Связать" Width="100" Height="26" IsEnabled="False" Click="Link_Click"
                     ToolTip="Записи выбранного журнала будут видны вместе с журналом этой модели — у всех" />
         </DockPanel>

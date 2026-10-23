@@ -35,6 +35,7 @@ namespace RASv2.ModelHistory.UI
             vm.LinksChanged += Refresh;
             Closed += (s, e) => vm.LinksChanged -= Refresh;
             Loaded += (s, e) => Search.Focus();
+            PreviewKeyDown += (s, e) => { if (e.Key == Key.Escape) Close(); };
             Refresh();
         }
 
@@ -101,6 +102,8 @@ namespace RASv2.ModelHistory.UI
                 }));
             });
         }
+
+        private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
         private void All_MouseDoubleClick(object sender, MouseButtonEventArgs e) => Link();
 

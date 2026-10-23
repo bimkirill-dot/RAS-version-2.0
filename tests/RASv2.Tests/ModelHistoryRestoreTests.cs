@@ -16,11 +16,12 @@ namespace RASv2.Tests
 
         private static string V(Guid g, int saves) => g.ToString("N") + ":" + saves;
 
-        private static ChangeRecord Ev(int minute, ModelEventType type, string session, string user = "ivanov", string sv = null, DateTimeOffset? lostFrom = null) =>
+        private static ChangeRecord Ev(int minute, ModelEventType type, string session, string user = "ivanov", string sv = null,
+            DateTimeOffset? lostFrom = null, DateTimeOffset? lostUntil = null) =>
             new ChangeRecord
             {
                 RecordId = "e" + minute, Kind = ChangeKind.Event, EventType = type, Session = session, User = user, Time = T0.AddMinutes(minute),
-                StorageVersion = sv, LostFrom = lostFrom, ElementId = -1,
+                StorageVersion = sv, LostFrom = lostFrom, LostUntil = lostUntil, ElementId = -1,
             };
 
         private static ChangeRecord Edit(int minute, string session, long id) =>
@@ -29,26 +30,39 @@ namespace RASv2.Tests
         public static IEnumerable<KeyValuePair<string, Action>> Restore()
         {
             Guid a = Guid.NewGuid(), b = Guid.NewGuid(), c = Guid.NewGuid(), d = Guid.NewGuid();
-            // синхронизации: a (10), b (20), c (30, Петров), d (40); хранилище заменили копией на состоянии b — a и b в нём есть
+            // как пишет Revit (журнал тестовой модели 23.10.2026): обновление — нынешняя версия «b:590»; синхронизация сразу после —
+            // ещё «b», но уже 591; новую версию «c:591» видно при следующем обновлении
+            // синхронизации: 1 (a → b, 590), 2 (b → c, 591, Петров), 3 (c → d, 592); хранилище заменили копией после 1-й: есть a и b
             var journal = new List<ChangeRecord>
             {
-                Ev(10, ModelEventType.Commit, "s1", sv: V(a, 1)),
-                Ev(20, ModelEventType.Commit, "s1", sv: V(b, 2)),
-                Ev(30, ModelEventType.Commit, "s2", user: "petrov", sv: V(c, 3)),
-                Ev(35, ModelEventType.Reload, "s1", sv: V(c, 3)),
-                Ev(40, ModelEventType.Commit, "s1", sv: V(d, 4)),
+                Ev(5, ModelEventType.Open, "s1", sv: V(a, 589)),
+                Ev(9, ModelEventType.Reload, "s1", sv: V(a, 589)),
+                Ev(10, ModelEventType.Commit, "s1", sv: V(a, 590)),
+                Ev(19, ModelEventType.Reload, "s2", user: "petrov", sv: V(b, 590)),
+                Ev(20, ModelEventType.Commit, "s2", user: "petrov", sv: V(b, 591)),
+                Ev(29, ModelEventType.Reload, "s1", sv: V(c, 591)),
+                Ev(30, ModelEventType.Commit, "s1", sv: V(c, 592)),
             };
             Func<Guid, bool> kept = g => g == a || g == b;
 
-            yield return Case("замена: пропавшие синхронизации — после последней, что осталась в хранилище", () =>
+            yield return Case("замена: пропали синхронизации после той, что создала оставшуюся версию (сдвиг записи Revit учтён)", () =>
             {
                 var v = StorageReplacement.Judge(journal, kept);
                 Check(v.Replaced && !v.AlreadyRecorded, "замена подтверждена");
-                Check(v.KeptUntil?.RecordId == "e20", "состояние копии — синхронизация 20: " + v.KeptUntil?.RecordId);
-                Check(string.Join(",", v.Lost.Select(r => r.RecordId)) == "e30,e40", "пропали 30 и 40 (обновление 35 — не синхронизация): " + string.Join(",", v.Lost.Select(r => r.RecordId)));
-                Check(v.LostFrom == T0.AddMinutes(30), "пропало с 30");
+                Check(v.KeptUntil?.RecordId == "e10", "состояние копии — синхронизация 1 (создала b): " + v.KeptUntil?.RecordId);
+                Check(string.Join(",", v.Lost.Select(r => r.RecordId)) == "e20,e30", "пропали 2 и 3: " + string.Join(",", v.Lost.Select(r => r.RecordId)));
+                Check(v.LostFrom == T0.AddMinutes(20) && v.LostUntil == T0.AddMinutes(30), "пропало с синхронизации 2 по 3");
                 var text = StorageReplacement.EventText(v);
                 Check(text.Contains("пропали синхронизации: 2") && text.Contains("petrov") && text.Contains("ivanov"), "текст: " + text);
+            });
+            yield return Case("замена: копия после 2-й — пропала только 3-я", () =>
+            {
+                var v = StorageReplacement.Judge(journal, g => g == a || g == b || g == c);
+                Check(!v.Replaced, "версия, созданная 3-й, нигде не записана — пропажу не видно, тревоги нет");
+                var withOpen = journal.Concat(new[] { Ev(35, ModelEventType.Open, "s3", sv: V(d, 592)) }).ToList();
+                v = StorageReplacement.Judge(withOpen, g => g == a || g == b || g == c);
+                Check(v.Replaced && v.Lost.Count == 1 && v.Lost[0].RecordId == "e30" && v.KeptUntil?.RecordId == "e20",
+                    "версию 3-й увидели при открытии — пропала 3-я, состояние — на 2-й: " + string.Join(",", v.Lost.Select(r => r.RecordId)));
             });
             yield return Case("замена: все версии на месте или версий в журнале нет — тревоги нет", () =>
             {
@@ -56,18 +70,32 @@ namespace RASv2.Tests
                 var old = journal.Select(r => new ChangeRecord { RecordId = r.RecordId, Kind = r.Kind, EventType = r.EventType, Time = r.Time }).ToList();
                 Check(!StorageReplacement.Judge(old, g => false).Replaced, "журнал без версий (до 22.10.2026) — не подтвердить");
             });
-            yield return Case("замена: копия старше всех записанных синхронизаций — пропало всё записанное", () =>
+            yield return Case("замена: копия старше всех записанных версий — пропало всё записанное", () =>
             {
                 var v = StorageReplacement.Judge(journal, g => false);
-                Check(v.Replaced && v.KeptUntil == null && v.Lost.Count == 4 && v.LostFrom == T0.AddMinutes(10), "все 4: " + v.Lost.Count);
+                Check(v.Replaced && v.KeptUntil == null && v.Lost.Count == 3 && v.LostFrom == T0.AddMinutes(10), "все 3: " + v.Lost.Count);
                 Check(StorageReplacement.EventText(v).Contains("копия старше"), StorageReplacement.EventText(v));
                 Check(!StorageReplacement.Judge(journal, g => false, requireKept: true).Replaced,
                     "связали журнал другого хранилища, и ни одной его версии нет — пропажу не доказать, события нет");
                 Check(StorageReplacement.Judge(journal, kept, requireKept: true).Replaced, "версия из связанного журнала нашлась — замена подтверждена");
             });
+            yield return Case("замена: новое хранилище после замены — его версии не считаются оставшимися", () =>
+            {
+                Guid n1 = Guid.NewGuid(), n2 = Guid.NewGuid();
+                // после замены копией (590) коллега открыл и синхронизировал: новые версии n1:590, n2:592 — есть в хранилище, но позже
+                var after = journal.Concat(new[]
+                {
+                    Ev(40, ModelEventType.Open, "s4", user: "sidorov", sv: V(n1, 590)),
+                    Ev(41, ModelEventType.Commit, "s4", user: "sidorov", sv: V(n1, 591)),
+                    Ev(45, ModelEventType.Reload, "s4", user: "sidorov", sv: V(n2, 592)),
+                }).ToList();
+                var v = StorageReplacement.Judge(after, g => kept(g) || g == n1 || g == n2);
+                Check(v.Replaced && string.Join(",", v.Lost.Select(r => r.RecordId)) == "e20,e30",
+                    "пропали 2 и 3, синхронизация после замены — не пропала: " + string.Join(",", v.Lost.Select(r => r.RecordId)));
+            });
             yield return Case("замена: уже записана другим — второй раз не пишется", () =>
             {
-                var withEvent = journal.Concat(new[] { Ev(50, ModelEventType.StorageReplaced, "s3", sv: V(Guid.NewGuid(), 3), lostFrom: T0.AddMinutes(30)) }).ToList();
+                var withEvent = journal.Concat(new[] { Ev(50, ModelEventType.StorageReplaced, "s3", sv: V(Guid.NewGuid(), 590), lostFrom: T0.AddMinutes(20)) }).ToList();
                 var e = withEvent.Last();
                 var recorded = StorageReplacement.GuidOf(e.StorageVersion).Value;
                 Check(StorageReplacement.Judge(withEvent, g => kept(g) || g == recorded).AlreadyRecorded, "событие с версией нынешнего хранилища — записано");
@@ -84,7 +112,8 @@ namespace RASv2.Tests
                 {
                     Edit(5, "s1", 101), Ev(10, ModelEventType.Commit, "s1"),   // осталось в копии
                     Edit(25, "s1", 102), Ev(30, ModelEventType.Commit, "s1"),  // пропало
-                    Ev(45, ModelEventType.StorageReplaced, "s9", lostFrom: T0.AddMinutes(30)),
+                    Edit(36, "s7", 105), Ev(38, ModelEventType.Commit, "s7"),  // после замены, до того как её заметили, — в новом хранилище
+                    Ev(45, ModelEventType.StorageReplaced, "s9", lostFrom: T0.AddMinutes(30), lostUntil: T0.AddMinutes(30)),
                     Edit(50, "s1", 103), Ev(55, ModelEventType.Commit, "s1"),  // после замены — в новом хранилище
                     Edit(60, "s1", 104),                                        // ещё не синхронизировано
                 };
@@ -93,6 +122,7 @@ namespace RASv2.Tests
                 Check(Of(101) == SyncStatus.InCentral, "до копии — в хранилище");
                 Check(Of(102) == SyncStatus.LostOnRestore, "пропавшая синхронизация — потеряно: " + Of(102));
                 Check(Of(103) == SyncStatus.InCentral, "после замены — в хранилище: " + Of(103));
+                Check(Of(105) == SyncStatus.InCentral, "синхронизировано с новым хранилищем до того, как замену заметили, — в хранилище: " + Of(105));
                 Check(Of(104) == SyncStatus.NotSynced, "не синхронизировано");
                 Check(SyncStatusCalculator.IsVoid(SyncStatus.LostOnRestore) && SyncStatusCalculator.Text(SyncStatus.LostOnRestore, true).StartsWith("✗"), "✗ и «изменения нет»");
             });
