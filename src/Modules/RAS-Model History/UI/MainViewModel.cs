@@ -2685,6 +2685,17 @@ namespace RASv2.ModelHistory.UI
             SetElementFilter(ids, label);
         }
 
+        /// <summary>
+        /// Кнопка «Журнал»: вся модель — отбор «История элемента / вида», оставшийся от кнопки «История», снимается (разработчик,
+        /// 23.10.2026: «мне нужна история всей модели», а журнал показывал историю вида).
+        /// </summary>
+        public void ShowWholeModel()
+        {
+            if (_elementFilter == null) return;
+            SetElementFilter(null, null);
+            Status = "";
+        }
+
         /// <summary>«История выделенного», когда ничего не выделено: открытый вид и элементы, нарисованные на нём.</summary>
         public void ShowViewHistory(long viewId, string viewName)
         {

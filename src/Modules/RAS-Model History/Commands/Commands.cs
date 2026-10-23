@@ -19,6 +19,8 @@ namespace RASv2.ModelHistory.Commands
                 App.Instance?.RememberMainWindow(uiapp);
                 // журнал открывается в окне (по умолчанию) — открыть или показать окно, как «Настройки»
                 var journal = App.Instance?.Pane;
+                // «Журнал» — вся модель: отбор, оставшийся от кнопки «История», снимается
+                App.Instance?.ViewModel?.ShowWholeModel();
                 if (journal != null && (journal.IsDetached || journal.OpenInWindow))
                 {
                     journal.OpenWindow();
