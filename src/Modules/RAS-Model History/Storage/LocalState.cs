@@ -32,6 +32,20 @@ namespace RASv2.ModelHistory.Storage
             Set(modelKey, versionGuid);
         }
 
+        private const string ObservedPrefix = "observed|";
+
+        /// <summary>
+        /// Версия хранилища, которую этот пользователь видел при последней синхронизации или обновлении (не при открытии: открыть
+        /// старую локальную копию — не значит увидеть хранилище) — для проверки «хранилище заменено копией».
+        /// </summary>
+        public static string GetObservedVersion(string modelKey) => string.IsNullOrEmpty(modelKey) ? null : GetLastVersion(ObservedPrefix + modelKey);
+
+        public static void SetObservedVersion(string modelKey, string versionGuid)
+        {
+            if (string.IsNullOrEmpty(modelKey) || string.IsNullOrEmpty(versionGuid)) return;
+            Set(ObservedPrefix + modelKey, versionGuid);
+        }
+
         /// <summary>В том же файле, с приставкой: когда этот пользователь последний раз синхронизировался (сохранил одиночный файл).</summary>
         private const string CommitPrefix = "commit|";
 

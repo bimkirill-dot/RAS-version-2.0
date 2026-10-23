@@ -6,18 +6,16 @@ using System.Windows.Interop;
 namespace RASv2.ModelHistory.UI
 {
     /// <summary>
-    /// Журнал в отдельном окне — по умолчанию (UiState.OpenInWindow): у стыкуемой панели Revit нет кнопки «Развернуть»,
-    /// а окно растягивается, разворачивается на весь экран и переносится на другой монитор. Кто хочет журнал в панели Revit,
-    /// закрепляет его кнопкой в окне — выбор запоминается. Содержимое панели переносится в окно и обратно: переносится
-    /// корень разметки (PaneRoot) — те же элементы и та же модель представления, ничего не пересоздаётся.
+    /// Журнал — всегда в отдельном окне (разработчик, 23.10.2026: «надо, чтобы сразу было отдельное окно»; закрепление в панели
+    /// Revit убрано — нажатое случайно, оно давало узкую панель без «Развернуть»): у стыкуемой панели Revit нет кнопки
+    /// «Развернуть», а окно растягивается, разворачивается на весь экран и переносится на другой монитор. Содержимое панели
+    /// переносится в окно и обратно: переносится корень разметки (PaneRoot) — те же элементы и та же модель представления.
     /// Закрыть окно — закрыть журнал (содержимое тихо возвращается в скрытую панель). Положение окна — в ui.json.
     /// </summary>
     public partial class SpyPane
     {
         private const string DetachIcon = ""; // «Во весь экран» (Segoe MDL2 Assets)
-        private const string AttachIcon = ""; // «Вернуть в окно»
         private const string DetachTip = "Открывать журнал в отдельном окне: его можно развернуть на весь экран или перенести на другой монитор";
-        private const string AttachTip = "Закрепить журнал в панели Revit — он будет открываться там";
 
         private Window _window;
         private FrameworkElement _placeholder;
@@ -25,20 +23,24 @@ namespace RASv2.ModelHistory.UI
         /// <summary>Журнал сейчас в отдельном окне.</summary>
         public bool IsDetached => _window != null;
 
-        /// <summary>Журнал открывается в окне (а не в панели Revit) — выбор пользователя.</summary>
-        public bool OpenInWindow => _state.OpenInWindow;
+        /// <summary>Журнал открывается в окне — всегда (прежнее «закрепить в панели», UiState.OpenInWindow = false, не действует).</summary>
+        public bool OpenInWindow => true;
 
         /// <summary>Открыть журнал в окне или показать уже открытое (кнопки ленты).</summary>
         public void OpenWindow()
         {
-            if (_window == null) Detach();
+            if (_window == null)
+            {
+                Detach();
+                ShowRevitPane(false); // панель Revit, открытая с прошлого сеанса (было «закрепить в панели»), — убрать
+            }
             else ActivateWindow();
         }
 
+        /// <summary>Кнопка видна, только если журнал оказался в панели Revit (панель, открытая Revit с прошлого сеанса), — в окно.</summary>
         private void WindowButton_Click(object sender, RoutedEventArgs e)
         {
-            if (IsDetached) MoveToPane();
-            else MoveToWindow();
+            if (!IsDetached) MoveToWindow();
         }
 
         /// <summary>Из панели — в окно; дальше журнал открывается в окне, панель Revit скрывается.</summary>
@@ -47,14 +49,6 @@ namespace RASv2.ModelHistory.UI
             _state.OpenInWindow = true;
             Detach();
             ShowRevitPane(false);
-        }
-
-        /// <summary>Из окна — в панель Revit; дальше журнал открывается в панели.</summary>
-        private void MoveToPane()
-        {
-            _state.OpenInWindow = false;
-            _window?.Close(); // Closed → Attach
-            ShowRevitPane(true);
         }
 
         /// <summary>Показать / скрыть стыкуемую панель — это Revit API, поэтому через ExternalEvent.</summary>
@@ -99,8 +93,7 @@ namespace RASv2.ModelHistory.UI
             window.Closed += (s, e) => Attach();
 
             _window = window;
-            WindowButton.Content = AttachIcon;
-            WindowButton.ToolTip = AttachTip;
+            WindowButton.Visibility = Visibility.Collapsed; // в окне — закреплять некуда
             window.Show();
             _vm.SetPaneVisible(true); // журнал виден, даже если панель Revit скрыта
         }
@@ -113,6 +106,7 @@ namespace RASv2.ModelHistory.UI
             _window = null;
             window.Content = null;
             Content = PaneRoot;
+            WindowButton.Visibility = Visibility.Visible;
             WindowButton.Content = DetachIcon;
             WindowButton.ToolTip = DetachTip;
             _vm.SetPaneVisible(IsVisible);
@@ -162,8 +156,6 @@ namespace RASv2.ModelHistory.UI
         {
             var show = new Button { Content = "Показать окно", Padding = new Thickness(12, 3, 12, 3), Margin = new Thickness(0, 0, 6, 0) };
             show.Click += (s, e) => ActivateWindow();
-            var back = new Button { Content = "Вернуть в панель", Padding = new Thickness(12, 3, 12, 3) };
-            back.Click += (s, e) => MoveToPane();
             return new StackPanel
             {
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -171,7 +163,7 @@ namespace RASv2.ModelHistory.UI
                 Children =
                 {
                     new TextBlock { Text = "Журнал открыт в отдельном окне.", HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 8) },
-                    new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Children = { show, back } }
+                    new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Children = { show } }
                 }
             };
         }

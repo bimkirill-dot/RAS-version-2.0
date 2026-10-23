@@ -38,59 +38,43 @@ namespace RASv2.ModelHistory.Tracking
             return Guid.TryParseExact(text.Trim(), "N", out var g) ? g : (Guid?)null;
         }
 
-        /// <summary>Номер сохранения из «VersionGUID:N:NumberOfSaves»; нет — null.</summary>
+        /// <summary>Число сохранений из «VersionGUID:N:NumberOfSaves» (для записи в журнал плагина; в правиле не участвует); нет — null.</summary>
         public static int? SavesOf(string storageVersion)
         {
             var colon = storageVersion?.IndexOf(':') ?? -1;
             return colon >= 0 && int.TryParse(storageVersion.Substring(colon + 1), NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : (int?)null;
         }
 
-        /// <summary>Версия хранилища из записи журнала: номер версии, число сохранений, когда записана, какая запись.</summary>
-        private struct Point
-        {
-            public Guid Version;
-            public int Saves;
-            public ChangeRecord Record;
-        }
-
         /// <summary>
         /// Что говорит журнал о нынешнем хранилище. isValid — есть ли версия в истории открытой модели (Revit).
         /// <para>
-        /// Как Revit сообщает версию (журнал тестовой модели, 23.10.2026): при открытии и обновлении — номер и число сохранений
-        /// нынешней версии хранилища; сразу после синхронизации — ещё прежний номер, но уже новое число сохранений. Поэтому запись
-        /// синхронизации «G:N» — это версия «G:N−1» (до неё), а версию, которую синхронизация создала, видно только в следующей
-        /// записи с N сохранений (открытие, обновление, следующая синхронизация).
+        /// Как Revit сообщает версию (журнал тестовой модели, 23.10.2026): номер версии меняется при обновлении из хранилища
+        /// (в начале синхронизации), синхронизация пишет тот же номер; «Сохранить как» в хранилище начинает число сохранений
+        /// заново с 1, а историю версий сохраняет. Поэтому граница — по времени, а не по числу сохранений.
         /// </para>
         /// <para>
-        /// Пропавшие версии — записанные версии, которых в хранилище нет; новое хранилище появляется после всех них. Что осталось —
-        /// версии, которые есть в хранилище и записаны не позже последней пропавшей; синхронизации с числом сохранений больше
-        /// оставшегося — пропали. Одна лишь незнакомая версия без записей «sv» (журнал до 22.10.2026) — не повод: без ложной
-        /// тревоги. requireKept — нужна хоть одна оставшаяся версия (связали журнал другого хранилища: ни одной версии из него —
-        /// может, у хранилища просто нет прежней истории, и пропажу не доказать).
+        /// Пропавшие версии — записанные версии, которых в хранилище нет; заменили хранилище после всех них. Оставшееся — последняя
+        /// по времени запись (не позже последней пропавшей), чья версия в хранилище есть. Синхронизации после неё и не позже
+        /// последней пропавшей — пропали. Одна лишь незнакомая версия без записей «sv» (журнал до 22.10.2026) — не повод: без
+        /// ложной тревоги. requireKept — нужна хоть одна оставшаяся запись (связали журнал другого хранилища: ни одной версии из
+        /// него — может, у хранилища просто нет прежней истории, и пропажу не доказать).
         /// </para>
         /// </summary>
         public static Verdict Judge(IEnumerable<ChangeRecord> records, Func<Guid, bool> isValid, bool requireKept = false)
         {
             var verdict = new Verdict();
-            var points = new List<Point>();
-            var commits = new List<(ChangeRecord Record, int Saves)>();
+            var points = new List<(ChangeRecord Record, Guid Version)>();
             foreach (var r in records)
             {
                 if (r.Kind != ChangeKind.Event) continue;
                 var g = GuidOf(r.StorageVersion);
-                var n = SavesOf(r.StorageVersion);
-                if (!g.HasValue || !n.HasValue) continue;
+                if (!g.HasValue) continue;
                 if (r.EventType == ModelEventType.StorageReplaced)
                 {
                     if (isValid(g.Value)) verdict.AlreadyRecorded = true;
                     continue;
                 }
-                if (r.EventType == ModelEventType.Commit)
-                {
-                    commits.Add((r, n.Value));
-                    points.Add(new Point { Version = g.Value, Saves = n.Value - 1, Record = r }); // версия до синхронизации
-                }
-                else points.Add(new Point { Version = g.Value, Saves = n.Value, Record = r });
+                points.Add((r, g.Value));
             }
             var valid = new Dictionary<Guid, bool>();
             bool Valid(Guid g)
@@ -101,17 +85,13 @@ namespace RASv2.ModelHistory.Tracking
             var missing = points.Where(p => !Valid(p.Version)).ToList();
             if (missing.Count == 0) return verdict; // все записанные версии на месте — пропажи не видно
             var lastMissing = missing.Max(p => p.Record.Time);
-            var kept = points.Where(p => Valid(p.Version) && p.Record.Time <= lastMissing).ToList();
-            int? keptSaves = kept.Count > 0 ? kept.Max(p => p.Saves) : (int?)null;
-            // состояние копии — синхронизация, создавшая оставшуюся версию (а нет её в журнале — запись, где версия видна)
-            verdict.KeptUntil = keptSaves.HasValue
-                ? commits.Where(c => c.Saves == keptSaves.Value).Select(c => c.Record).OrderBy(r => r.Time).FirstOrDefault()
-                  ?? kept.Where(p => p.Saves == keptSaves.Value).Select(p => p.Record).OrderBy(r => r.Time).First()
-                : null;
-            verdict.Lost = commits
-                .Where(c => c.Record.Time <= lastMissing && (!keptSaves.HasValue || c.Saves > keptSaves.Value))
-                .Select(c => c.Record).OrderBy(r => r.Time).ToList();
-            verdict.Replaced = verdict.Lost.Count > 0 && (!requireKept || keptSaves.HasValue);
+            var keptPoint = points.Where(p => Valid(p.Version) && p.Record.Time <= lastMissing)
+                .OrderBy(p => p.Record.Time).Select(p => p.Record).LastOrDefault();
+            var commits = points.Where(p => p.Record.EventType == ModelEventType.Commit).Select(p => p.Record).OrderBy(r => r.Time).ToList();
+            // состояние копии — последняя синхронизация, что осталась
+            verdict.KeptUntil = keptPoint == null ? null : commits.LastOrDefault(c => c.Time <= keptPoint.Time) ?? keptPoint;
+            verdict.Lost = commits.Where(c => c.Time <= lastMissing && (keptPoint == null || c.Time > keptPoint.Time)).ToList();
+            verdict.Replaced = verdict.Lost.Count > 0 && (!requireKept || keptPoint != null);
             return verdict;
         }
 

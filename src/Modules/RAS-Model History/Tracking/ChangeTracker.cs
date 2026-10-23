@@ -153,10 +153,10 @@ namespace RASv2.ModelHistory.Tracking
                 // Подготовку и разбор «что изменилось с прошлого сеанса» делаем при первой активации вида:
                 // документы, открытые другими плагинами в фоне (без окна), так не нагружаются.
                 t.PendingActivation = true;
-                if (t.Model.IsWorkshared && Guid.TryParse(LastVersion(t.Model), out var g))
+                if (_s.DetectRemoteChanges && t.Model.IsWorkshared &&
+                    Guid.TryParse(LastVersion(t.Model), out var g))
                 {
-                    t.RememberedVersion = g;
-                    if (_s.DetectRemoteChanges) t.PendingOpenVersion = g;
+                    t.PendingOpenVersion = g;
                 }
                 SaveVersionState(t);
             });
@@ -197,7 +197,7 @@ namespace RASv2.ModelHistory.Tracking
         private void OnFirstActivation(DocumentTracker t)
         {
             t.PendingActivation = false;
-            ProbeStorage(t, "открытие");
+            ProbeStorage(t, "открытие", check: false);
             HashSet<long> remote = null;
             if (t.PendingOpenVersion.HasValue)
             {
@@ -414,7 +414,8 @@ namespace RASv2.ModelHistory.Tracking
                         ModelEventType.FromDetached);
                 }
                 OnSavedCommon(t, "Сохранение как");
-                ProbeStorage(t, "сохранить как");
+                // «Сохранить как» в хранилище (путь документа — путь хранилища) — это и есть замена; в файл — нет
+                ProbeStorage(t, "сохранить как", check: IsCentralPath(t));
                 MarkSnapshotsSaved(t);
                 if (ReferenceEquals(Active, t)) ActiveModelChanged?.Invoke(t);
                 else SetActive(t);
@@ -462,6 +463,7 @@ namespace RASv2.ModelHistory.Tracking
                 return;
             }
             t.CentralUpToDateAt = DateTimeOffset.Now;
+            ProbeStorage(t, source == ChangeSource.Sync ? "синхронизация" : "обновление", check: true);
             if (source == ChangeSource.Sync)
             {
                 // всё несинхронизированное (и этого сеанса, и перенесённое из прошлых) теперь в хранилище
@@ -913,12 +915,12 @@ namespace RASv2.ModelHistory.Tracking
         // ───────────────────── хранилище заменено копией, связь журналов ─────────────────────
 
         /// <summary>
-        /// Запись для разбора (ras.log) и проверка замены. Хранилище заменяют старой локальной копией (разработчик, 23.10.2026):
-        /// открыть старую копию — ещё не замена, в ней просто нет последних версий; поэтому проверка — только у свежей локальной
-        /// копии (создана при этом открытии) и после «Сохранить как». Как ведёт себя Revit при замене (номер хранилища, история
-        /// версий, число сохранений) — по этой записи после проверки разработчиком.
+        /// Запись для разбора (ras.log, «Storage probe») и проверка замены (DECISIONS.md модуля, «Хранилище заменено копией»).
+        /// Хранилище заменяют старой локальной копией (разработчик, 23.10.2026); открыть старую копию — ещё не замена: в ней просто
+        /// нет последних версий. Поэтому проверка — только когда модель сверилась с хранилищем (синхронизация, обновление) и при
+        /// «Сохранить как» в хранилище; версия, которую сверяют, — увиденная при прошлой синхронизации или обновлении (не при открытии).
         /// </summary>
-        private void ProbeStorage(DocumentTracker t, string when)
+        private void ProbeStorage(DocumentTracker t, string when, bool check)
         {
             if (t?.Model == null || !t.Model.IsWorkshared) return;
             try
@@ -926,19 +928,29 @@ namespace RASv2.ModelHistory.Tracking
                 var doc = t.Doc;
                 Guid central = Guid.Empty;
                 try { central = doc.WorksharingCentralGUID; } catch { /* нет */ }
-                var remembered = t.RememberedVersion;
-                bool? valid = remembered.HasValue ? IsValidVersion(doc, remembered.Value) : (bool?)null;
-                var created = LocalCreated(t.LocalPath);
-                var fresh = created.HasValue && DateTime.Now - created.Value < TimeSpan.FromMinutes(15);
+                Guid? observed = Guid.TryParse(LocalState.GetObservedVersion(t.Model.Key), out var o) ? o : (Guid?)null;
+                bool? valid = observed.HasValue ? IsValidVersion(doc, observed.Value) : (bool?)null;
                 Diag.Log($"Storage probe ({when}) {t.Model.Title}: key={t.Model.Key}, central={central:N}, version={DocVersionString(doc)}, " +
-                         $"remembered={remembered?.ToString("N") ?? "-"}, valid={(valid.HasValue ? valid.Value.ToString() : "-")}, " +
-                         $"local={t.LocalPath}, created={created?.ToString("dd.MM HH:mm:ss") ?? "-"}, fresh={fresh}");
-                if (valid == false && (fresh || when != "открытие")) CheckStorageReplaced(t, when);
+                         $"observed={observed?.ToString("N") ?? "-"}, valid={(valid.HasValue ? valid.Value.ToString() : "-")}, " +
+                         $"local={t.LocalPath}, created={LocalCreated(t.LocalPath)?.ToString("dd.MM HH:mm:ss") ?? "-"}, check={check}");
+                if (!check) return;
+                if (valid == false) CheckStorageReplaced(t, when);
+                // теперь модель — как хранилище: эту версию и сверять в следующий раз
+                var now = CurrentVersion(doc);
+                if (now.HasValue) LocalState.SetObservedVersion(t.Model.Key, now.Value.ToString());
             }
             catch (Exception ex)
             {
                 Diag.Log("Storage probe failed", ex);
             }
+        }
+
+        /// <summary>Документ сохранён как хранилище (его путь — путь хранилища модели), а не в файл.</summary>
+        private static bool IsCentralPath(DocumentTracker t)
+        {
+            var path = t.LocalPath ?? "";
+            if (path.StartsWith("RSN://", StringComparison.OrdinalIgnoreCase)) return true;
+            return !string.IsNullOrEmpty(t.Model.Path) && string.Equals(path.Trim(), t.Model.Path.Trim(), StringComparison.OrdinalIgnoreCase);
         }
 
         private static DateTime? LocalCreated(string path)
