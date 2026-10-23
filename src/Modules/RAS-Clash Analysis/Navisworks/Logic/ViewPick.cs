@@ -71,37 +71,44 @@ namespace RASv2.ClashAnalysis.Navisworks.Logic
 
         /// <summary>
         /// Сколько видно каждого элемента — по четырём картинкам одного направления: оба элемента, только первый, только второй,
-        /// ни одного (фон, оси, подписи). Элемент — там, где его картинка отличается от пустой; виден — где картинка с обоими
+        /// ни одного (фон, оси, подписи). Элемент — там, где его картинка отличается от пустой (firstAll, secondAll — сколько это
+        /// точек); виден — где картинка с обоими
         /// совпадает с его собственной (второй его там не заслонил). Цвета не важны: подсветка Clash Detective (первый — красный,
         /// второй — зелёный) и оси модели перекраску перебивали (проверка разработчика 23.10.2026).
         /// </summary>
-        public static void Visible(int[] both, int[] onlyFirst, int[] onlySecond, int[] none, out int first, out int second)
+        public static void Visible(int[] both, int[] onlyFirst, int[] onlySecond, int[] none, out int first, out int second,
+            out int firstAll, out int secondAll)
         {
-            first = second = 0;
+            first = second = firstAll = secondAll = 0;
             for (var i = 0; i < both.Length; i++)
             {
                 var isFirst = !Same(onlyFirst[i], none[i]);
                 var isSecond = !Same(onlySecond[i], none[i]);
+                if (isFirst) firstAll++;
+                if (isSecond) secondAll++;
                 if (isFirst && Same(both[i], onlyFirst[i]) && !(isSecond && Same(both[i], onlySecond[i]) && !Same(onlyFirst[i], onlySecond[i]))) first++;
                 if (isSecond && Same(both[i], onlySecond[i]) && !(isFirst && Same(both[i], onlyFirst[i]) && !Same(onlyFirst[i], onlySecond[i]))) second++;
             }
         }
 
         /// <summary>
-        /// Оценка вида: главное — сколько видно хуже видимого элемента (доля картинки); немного — сколько видно обоих вместе;
-        /// чуть-чуть — привычность ракурса. Одного из элементов не видно вовсе — вид не годится.
+        /// Оценка вида. Главное — какая доля каждого элемента не закрыта другим (открытость): побеждает вид, где хуже открытый
+        /// элемент открыт больше всего. Крошечный в кадре элемент засчитывается не целиком — множитель размера (меньше ~100 точек
+        /// из 19 200 — уже заметно хуже); чуть-чуть — привычность ракурса. Прежняя оценка «сколько видно обоих вместе» выбирала вид
+        /// сверху, где плита во весь кадр, а второго элемента 3 точки (проверка разработчика 23.10.2026).
         /// </summary>
-        public static double Score(int first, int second, int total, double preference)
+        public static double Score(int first, int firstAll, int second, int secondAll, int total, double preference)
         {
-            if (total <= 0 || first <= 0 || second <= 0) return -1 + preference * 0.001;
-            var worse = Math.Min(first, second) / (double)total;
-            var both = (first + second) / (double)total;
-            return worse + 0.2 * both + 0.02 * preference;
+            if (total <= 0 || first <= 0 || second <= 0 || firstAll <= 0 || secondAll <= 0) return -1 + preference * 0.001;
+            var open = Math.Min(first / (double)firstAll, second / (double)secondAll);
+            var size = Math.Min(first, second) / (double)total;
+            return open * size / (size + 0.005) + 0.02 * preference;
         }
 
         /// <summary>
         /// Что показать: место коллизии (общая часть габаритов, нет её — промежуток между ними) с запасом — чтобы были видны оба
-        /// элемента вокруг места, а не большая стена целиком: запас — размер места, но не меньше трети меньшего элемента.
+        /// элемента вокруг места, а не большая стена целиком: запас — половина размера места, но не меньше четверти меньшего элемента
+        /// (треть и целый размер давали мелкие элементы в кадре — проверка разработчика 23.10.2026).
         /// </summary>
         public static Box3 Zone(Box3 a, Box3 b)
         {
@@ -110,7 +117,7 @@ namespace RASv2.ClashAnalysis.Navisworks.Logic
                 Math.Min(Math.Max(a.MinZ, b.MinZ), Math.Min(a.MaxZ, b.MaxZ)),
                 Math.Max(Math.Max(a.MinX, b.MinX), Math.Min(a.MaxX, b.MaxX)), Math.Max(Math.Max(a.MinY, b.MinY), Math.Min(a.MaxY, b.MaxY)),
                 Math.Max(Math.Max(a.MinZ, b.MinZ), Math.Min(a.MaxZ, b.MaxZ)));
-            var margin = Math.Max(zone.Diagonal, Math.Min(a.Diagonal, b.Diagonal) / 3);
+            var margin = Math.Max(zone.Diagonal / 2, Math.Min(a.Diagonal, b.Diagonal) / 4);
             if (margin <= 0) margin = Math.Max(Math.Max(a.Diagonal, b.Diagonal), 1e-3);
             return new Box3(zone.MinX - margin, zone.MinY - margin, zone.MinZ - margin, zone.MaxX + margin, zone.MaxY + margin, zone.MaxZ + margin);
         }

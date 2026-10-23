@@ -23,17 +23,23 @@ namespace RASv2.Tests
                     "4 взгляда чуть снизу (плита над стеной) — и они наименее привычные");
                 Check(c.Where(v => v.Preference == 1.0).All(v => v.Elevation == 35), "самый привычный — 35° сверху");
             });
-            yield return Case("виды: один элемент закрыл другой — такой вид проигрывает", () =>
+            yield return Case("виды: один элемент закрыл другой — такой вид проигрывает (числа проверки разработчика 23.10.2026)", () =>
             {
-                // 2000 пикселей картинки: в первом виде второго элемента почти нет, во втором — оба видны поровну
-                var hidden = ViewPick.Score(900, 10, 2000, 1.0);
-                var both = ViewPick.Score(400, 350, 2000, 0.6);
-                Check(both > hidden, $"оба видны ({both:0.000}) лучше, чем один закрыл другой ({hidden:0.000})");
-                Check(ViewPick.Score(900, 0, 2000, 1.0) < 0, "второго не видно вовсе — вид не годится");
+                // «Конфликт2»: сверху плита во весь кадр, колонны видно 3 точки из ~60; снизу — оба открыты целиком
+                var top = ViewPick.Score(5600, 5600, 3, 60, 19200, 0.6);
+                var below = ViewPick.Score(990, 990, 213, 213, 19200, 0.5);
+                Check(below > top, $"снизу, оба открыты ({below:0.000}), лучше, чем сверху, колонна закрыта ({top:0.000})");
+                Check(ViewPick.Score(900, 900, 0, 50, 19200, 1.0) < 0, "второго не видно вовсе — вид не годится");
+            });
+            yield return Case("виды: крошечный в кадре элемент не перевешивает заметный, хоть и чуть закрытый", () =>
+            {
+                var sliver = ViewPick.Score(800, 800, 3, 3, 19200, 1.0);     // открыт целиком, но 3 точки
+                var visible = ViewPick.Score(800, 800, 400, 500, 19200, 1.0); // открыт на 80 %, 400 точек
+                Check(visible > sliver, $"заметный ({visible:0.000}) лучше крошечного ({sliver:0.000})");
             });
             yield return Case("виды: при равной видимости побеждает привычный ракурс", () =>
             {
-                Check(ViewPick.Score(300, 300, 2000, 1.0) > ViewPick.Score(300, 300, 2000, 0.6), "35° сверху лучше, чем сверху");
+                Check(ViewPick.Score(300, 300, 300, 300, 19200, 1.0) > ViewPick.Score(300, 300, 300, 300, 19200, 0.6), "35° сверху лучше, чем сверху");
             });
             yield return Case("виды: видимость — по четырём картинкам, цвета не важны", () =>
             {
@@ -43,11 +49,12 @@ namespace RASv2.Tests
                 var onlyFirst = new[] { bg, axis, slab, slab, slab, bg };       // плита — пиксели 2–4
                 var onlySecond = new[] { bg, axis, bg, column, column, column }; // колонна — 3–5
                 var both = new[] { bg, axis, slab, slab, column, column };      // в 3 плита впереди, в 4 — колонна
-                ViewPick.Visible(both, onlyFirst, onlySecond, none, out var first, out var second);
-                Check(first == 2 && second == 2, $"видно плиты 2 (2, 3), колонны 2 (4, 5): {first} / {second}");
+                ViewPick.Visible(both, onlyFirst, onlySecond, none, out var first, out var second, out var firstAll, out var secondAll);
+                Check(first == 2 && second == 2 && firstAll == 3 && secondAll == 3,
+                    $"видно плиты 2 из 3, колонны 2 из 3: {first}/{firstAll}, {second}/{secondAll}");
                 // колонна целиком за плитой — её не видно, ось (красная, как подсветка) элементом не считается
-                ViewPick.Visible(onlyFirst, onlyFirst, new[] { bg, axis, bg, column, column, bg }, none, out first, out second);
-                Check(first == 3 && second == 0, $"колонна за плитой не видна: {first} / {second}");
+                ViewPick.Visible(onlyFirst, onlyFirst, new[] { bg, axis, bg, column, column, bg }, none, out first, out second, out firstAll, out secondAll);
+                Check(first == 3 && second == 0 && secondAll == 2, $"колонна за плитой не видна: {first} / {second} из {secondAll}");
                 Check(ViewPick.Same(0xC83232, 0xCC3030) && !ViewPick.Same(0xC83232, 0x32B432), "допуск на сглаживание — 12");
             });
             yield return Case("виды: что показать — место коллизии с запасом, а не стена целиком", () =>
