@@ -26,7 +26,7 @@ namespace RASv2.ClashAnalysis.Navisworks
         public static int Execute(string command, string buildId, string buildDir, string channel)
         {
             Log.Write("Команда «" + command + "», сборка " + buildId + ", канал «" + channel + "»");
-            if (command == "ClashAnalysis.FitViews") return FitViews.Run();
+            if (command == "ClashAnalysis.FitViews") return FitViews.Run(channel == "dev");
             MessageBox.Show("Неизвестная команда: " + command, Title, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return 0;
         }
@@ -44,8 +44,10 @@ namespace RASv2.ClashAnalysis.Navisworks
     internal static class FitViews
     {
         private const int ImageWidth = 160, ImageHeight = 120;
+        /// <summary>Сборка разработчика — картинки, по которым выбран вид, сохраняются для разбора (первые коллизии).</summary>
+        private const int DebugClashes = 5;
 
-        public static int Run()
+        public static int Run(bool debug)
         {
             var doc = NwApp.ActiveDocument;
             if (doc == null || doc.IsClear)
@@ -63,10 +65,22 @@ namespace RASv2.ClashAnalysis.Navisworks
                 return 0;
             }
             var tests = results.Select(r => r.Test.DisplayName).Distinct().Count();
-            if (MessageBox.Show($"Подстроить виды {results.Count} коллизий в {tests} проверках?{Environment.NewLine}{Environment.NewLine}" +
-                                "Вид каждой коллизии будет заменён подобранным: оба элемента видны и не закрывают друг друга. " +
-                                "Сохраните файл до этого — так можно вернуть прежние виды.",
-                    Entry.Title, MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return 0;
+            // уже подобранные (и подправленные вручную) — с сохранённым видом: при повторном запуске их не трогать (разработчик, 23.10.2026)
+            var fresh = results.Where(r => !r.Result.HasSavedViewpoint).ToList();
+            var answer = MessageBox.Show(
+                $"Коллизий: {results.Count} в {tests} проверках, из них без сохранённого вида — {fresh.Count}.{Environment.NewLine}{Environment.NewLine}" +
+                "«Да» — подобрать вид только им (уже подобранные и подправленные вручную не трогать).\n" +
+                "«Нет» — подобрать заново всем.\n«Отмена» — ничего не делать.\n\n" +
+                "Сохраните файл до этого — так можно вернуть прежние виды.",
+                Entry.Title, MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+            if (answer == DialogResult.Cancel) return 0;
+            if (answer == DialogResult.Yes) results = fresh;
+            if (results.Count == 0)
+            {
+                MessageBox.Show("У всех коллизий вид уже есть — подбирать нечего.", Entry.Title, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return 0;
+            }
+            var debugDir = debug ? Path.Combine(RasPaths.Local, "Navisworks", "Разбор", DateTime.Now.ToString("yyyy-MM-dd HHmmss")) : null;
 
             var com = ComResults(out var comProblem);
             if (com == null) Log.Write("Виды в коллизии не записываются: " + comProblem);
@@ -85,14 +99,14 @@ namespace RASv2.ClashAnalysis.Navisworks
                     var (test, result) = results[i];
                     try
                     {
-                        if (!FitOne(doc, result, candidates)) { skipped++; continue; }
+                        InwOclTestResult target = null;
+                        if (com != null && !com.TryGetValue(Key(test.DisplayName, result.DisplayName), out target))
+                            Log.Write($"Коллизия не найдена через COM: «{test.DisplayName}» / «{result.DisplayName}»");
+                        var name = $"«{test.DisplayName}» / «{result.DisplayName}»";
+                        var dump = debugDir != null && i < DebugClashes ? Path.Combine(debugDir, $"{i + 1:00} {Safe(result.DisplayName)}") : null;
+                        if (!FitOne(doc, name, result, candidates, target, dump, out var saved)) { skipped++; continue; }
                         fitted++;
-                        if (com != null && com.TryGetValue(Key(test.DisplayName, result.DisplayName), out var target))
-                        {
-                            target.ViewPoint = (InwNvViewPoint)ComApiBridge.State.CurrentView.ViewPoint.Copy();
-                            written++;
-                        }
-                        else if (com != null) Log.Write($"Коллизия не найдена через COM: «{test.DisplayName}» / «{result.DisplayName}»");
+                        if (saved) written++;
                     }
                     catch (Exception ex)
                     {
@@ -116,6 +130,7 @@ namespace RASv2.ClashAnalysis.Navisworks
             if (com == null) text.AppendLine("Записать виды в коллизии не удалось: " + comProblem);
             else text.AppendLine($"Записано в коллизии: {written}.");
             if (skipped > 0) text.AppendLine($"Пропущено: {skipped} (подробности — в журнале).");
+            if (debugDir != null) Log.Write("Картинки для разбора: " + debugDir);
             text.AppendLine($"Время: {watch.Elapsed.TotalSeconds:0} с ({perClash:0.0} с на коллизию).");
             MessageBox.Show(text.ToString(), Entry.Title, MessageBoxButtons.OK, MessageBoxIcon.Information);
             return 0;
@@ -131,6 +146,12 @@ namespace RASv2.ClashAnalysis.Navisworks
         }
 
         private static string Key(string test, string result) => (test ?? "") + "\u001f" + (result ?? "");
+
+        private static string Safe(string name)
+        {
+            var bad = Path.GetInvalidFileNameChars();
+            return new string((name ?? "").Select(ch => bad.Contains(ch) ? '_' : ch).ToArray());
+        }
 
         /// <summary>Коллизии через COM — для записи вида: «проверка / коллизия» → результат. Нет Clash Detective в COM — null.</summary>
         private static Dictionary<string, InwOclTestResult> ComResults(out string problem)
@@ -156,12 +177,23 @@ namespace RASv2.ClashAnalysis.Navisworks
             }
         }
 
-        /// <summary>Подобрать вид одной коллизии и оставить его текущим видом документа. Нет элементов — false.</summary>
-        private static bool FitOne(Document doc, ClashResult result, List<ViewCandidate> candidates)
+        /// <summary>
+        /// Подобрать вид одной коллизии и записать его в коллизию (target, через COM). Вид записывается, пока остальное ещё скрыто
+        /// и цвета уже сняты: если Navisworks сохраняет в виде и видимость, в коллизии будет «скрыть остальные», а не вся модель
+        /// (разработчик, 23.10.2026: «на подобранных видах видно другие объекты модели»). Нет элементов — false.
+        /// </summary>
+        private static bool FitOne(Document doc, string name, ClashResult result, List<ViewCandidate> candidates, InwOclTestResult target,
+            string dump, out bool saved)
         {
+            saved = false;
             var first = result.Item1;
             var second = result.Item2;
-            if (first == null || second == null) return false;
+            if (first == null || second == null)
+            {
+                Log.Write($"{name}: пропущена — нет {(first == null ? "первого" : "второго")} элемента (элемент коллизии не найден в модели)");
+                return false;
+            }
+            if (dump != null) Directory.CreateDirectory(dump);
             var zone = ViewPick.Zone(BoxOf(first.BoundingBox()), BoxOf(second.BoundingBox()));
             var zoom = new BoundingBox3D(new Point3D(zone.MinX, zone.MinY, zone.MinZ), new Point3D(zone.MaxX, zone.MaxY, zone.MaxZ));
             var hidden = HideAllBut(doc, first, second);
@@ -171,8 +203,11 @@ namespace RASv2.ClashAnalysis.Navisworks
                 doc.Models.OverrideTemporaryColor(new[] { second }, NwColor.Green);
                 Viewpoint best = null;
                 var bestScore = double.NegativeInfinity;
-                foreach (var c in candidates)
+                var bestIndex = -1;
+                var scores = new StringBuilder();
+                for (var k = 0; k < candidates.Count; k++)
                 {
+                    var c = candidates[k];
                     var vp = doc.CurrentViewpoint.CreateCopy();
                     vp.AlignDirection(new Vector3D(c.X, c.Y, c.Z));
                     vp.AlignUp(c.Elevation > 80 ? new Vector3D(0, 1, 0) : new Vector3D(0, 0, 1));
@@ -180,12 +215,24 @@ namespace RASv2.ClashAnalysis.Navisworks
                     doc.CurrentViewpoint.CopyFrom(vp);
                     int red, green, total;
                     using (var image = doc.ActiveView.GenerateImage(ImageGenerationStyle.Scene, ImageWidth, ImageHeight))
+                    {
                         Count(image, out red, out green, out total);
+                        if (dump != null) image.Save(Path.Combine(dump, $"{k + 1:00} {c.Elevation:0}° {red}-{green}.png"), ImageFormat.Png);
+                    }
                     var score = ViewPick.Score(red, green, total, c.Preference);
-                    if (score > bestScore) { bestScore = score; best = vp; }
+                    scores.Append($" {k + 1}:{red}/{green}");
+                    if (score > bestScore) { bestScore = score; best = vp; bestIndex = k; }
                 }
-                if (best != null) doc.CurrentViewpoint.CopyFrom(best);
-                return best != null;
+                Log.Write($"{name}: лучший — {bestIndex + 1} ({candidates[bestIndex].Elevation:0}°); красный/зелёный по направлениям:{scores}");
+                // цвета — снять до записи вида (иначе красный и зелёный могли бы сохраниться в виде), остальное — пока скрыто
+                doc.Models.ResetAllTemporaryMaterials();
+                doc.CurrentViewpoint.CopyFrom(best);
+                if (target != null)
+                {
+                    target.ViewPoint = (InwNvViewPoint)ComApiBridge.State.CurrentView.ViewPoint.Copy();
+                    saved = true;
+                }
+                return true;
             }
             finally
             {
