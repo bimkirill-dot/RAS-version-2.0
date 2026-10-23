@@ -13,7 +13,6 @@ using Autodesk.Navisworks.Api.ComApi;
 using Autodesk.Navisworks.Api.Interop.ComApi;
 using RASv2.ClashAnalysis.Navisworks.Logic;
 using NwApp = Autodesk.Navisworks.Api.Application;
-using NwColor = Autodesk.Navisworks.Api.Color;
 
 namespace RASv2.ClashAnalysis.Navisworks
 {
@@ -88,7 +87,7 @@ namespace RASv2.ClashAnalysis.Navisworks
             doc.CurrentSelection.Clear();
             // подобранные виды — ещё раз в конце: пока камера ходит по коллизиям, Clash Detective («Автообновление» вида) переписывает
             // выбранную в нём коллизию каждым её движением (разработчик, 23.10.2026: «не обрабатывает вид, на котором сейчас сидишь»)
-            var chosen = new List<(InwOclTestResult Target, InwNvViewPoint View)>();
+            var chosen = new List<(InwOclTestResult Target, InwNvViewPoint View, ModelItem First, ModelItem Second)>();
             var candidates = ViewPick.Candidates();
             int fitted = 0, written = 0, skipped = 0;
             var watch = Stopwatch.StartNew();
@@ -106,9 +105,9 @@ namespace RASv2.ClashAnalysis.Navisworks
                             Log.Write($"Коллизия не найдена через COM: «{test.DisplayName}» / «{result.DisplayName}»");
                         var name = $"«{test.DisplayName}» / «{result.DisplayName}»";
                         var dump = debugDir != null && i < DebugClashes ? Path.Combine(debugDir, $"{i + 1:00} {Safe(result.DisplayName)}") : null;
-                        if (!FitOne(doc, name, result, candidates, target, dump, out var view)) { skipped++; continue; }
+                        if (!FitOne(doc, name, result, candidates, target, dump, out var view, out var first, out var second)) { skipped++; continue; }
                         fitted++;
-                        if (view != null) { written++; chosen.Add((target, view)); }
+                        if (view != null) { written++; chosen.Add((target, view, first, second)); }
                     }
                     catch (Exception ex)
                     {
@@ -120,12 +119,17 @@ namespace RASv2.ClashAnalysis.Navisworks
             finally
             {
                 NwApp.EndProgress();
-                doc.Models.ResetAllTemporaryMaterials();
                 // камера не возвращается на прежнее место: её движение Clash Detective записал бы в выбранную коллизию; запись через COM
-                // камеру не двигает — повтор ставит каждой коллизии её вид, и выбранной тоже
-                foreach (var (target, view) in chosen)
+                // камеру не двигает — повтор ставит каждой коллизии её вид, и выбранной тоже. Повтор — тоже со «скрыть остальное»:
+                // Clash Detective при записи вида сохраняет и то, что скрыто (без этого на видах была вся модель — проверка 23.10.2026)
+                foreach (var (target, view, first, second) in chosen)
                 {
-                    try { target.ViewPoint = view; }
+                    try
+                    {
+                        var isolation = Isolate(doc, first, second);
+                        try { target.ViewPoint = view; }
+                        finally { isolation.Undo(doc); }
+                    }
                     catch (Exception ex) { Log.Write("Вид не записан повторно", ex); }
                 }
             }
@@ -186,18 +190,18 @@ namespace RASv2.ClashAnalysis.Navisworks
         }
 
         /// <summary>
-        /// Подобрать вид одной коллизии и записать его в коллизию (target, через COM). Вид записывается, пока остальное ещё скрыто
-        /// и цвета уже сняты: если Navisworks сохраняет в виде и видимость, в коллизии будет «скрыть остальные», а не вся модель
-        /// (разработчик, 23.10.2026: «на подобранных видах видно другие объекты модели»). Нет элементов — false.
+        /// Подобрать вид одной коллизии и записать его в коллизию (target, через COM) — пока остальное скрыто: Clash Detective
+        /// сохраняет в виде и видимость (без этого на видах была вся модель — проверка разработчика 23.10.2026). На каждое
+        /// направление — четыре картинки: оба элемента, только первый, только второй, ни одного (ViewPick.Visible); без перекраски:
+        /// подсветка Clash Detective и оси модели её перебивали. Нет элементов — false.
         /// </summary>
         private static bool FitOne(Document doc, string name, ClashResult result, List<ViewCandidate> candidates, InwOclTestResult target,
-            string dump, out InwNvViewPoint saved)
+            string dump, out InwNvViewPoint saved, out ModelItem first, out ModelItem second)
         {
             saved = null;
-            // элемент коллизии: Item — сам элемент; нет его (у «Конфликт1» проверки разработчика 23.10.2026 Item2 пустой) — составной
-            // элемент или первый из выбора
-            var first = ItemOf(result.Item1, result.CompositeItem1, result.Selection1);
-            var second = ItemOf(result.Item2, result.CompositeItem2, result.Selection2);
+            // элемент коллизии: Item — сам элемент; нет его — составной элемент или первый из выбора
+            first = ItemOf(result.Item1, result.CompositeItem1, result.Selection1);
+            second = ItemOf(result.Item2, result.CompositeItem2, result.Selection2);
             if (first == null || second == null)
             {
                 Log.Write($"{name}: пропущена — нет {(first == null ? "первого" : "второго")} элемента (элемент коллизии не найден в модели: " +
@@ -208,12 +212,12 @@ namespace RASv2.ClashAnalysis.Navisworks
             if (dump != null) Directory.CreateDirectory(dump);
             var zone = ViewPick.Zone(BoxOf(first.BoundingBox()), BoxOf(second.BoundingBox()));
             var zoom = new BoundingBox3D(new Point3D(zone.MinX, zone.MinY, zone.MinZ), new Point3D(zone.MaxX, zone.MaxY, zone.MaxZ));
-            var hidden = HideAllBut(doc, first, second);
+            var onlyFirst = new ModelItemCollection { second };   // скрыть, чтобы остался первый
+            var onlySecond = new ModelItemCollection { first };
+            var none = new ModelItemCollection { first, second };
+            var isolation = Isolate(doc, first, second);
             try
             {
-                // пурпурный и жёлтый: красным и зелёным Navisworks рисует оси модели (Logic\ViewPick.IsFirst / IsSecond)
-                doc.Models.OverrideTemporaryColor(new[] { first }, new NwColor(1, 0, 1));
-                doc.Models.OverrideTemporaryColor(new[] { second }, new NwColor(1, 1, 0));
                 Viewpoint best = null;
                 var bestScore = double.NegativeInfinity;
                 var bestIndex = -1;
@@ -226,19 +230,16 @@ namespace RASv2.ClashAnalysis.Navisworks
                     vp.AlignUp(c.Elevation > 80 ? new Vector3D(0, 1, 0) : new Vector3D(0, 0, 1));
                     vp.ZoomBox(zoom);
                     doc.CurrentViewpoint.CopyFrom(vp);
-                    int red, green, total;
-                    using (var image = doc.ActiveView.GenerateImage(ImageGenerationStyle.Scene, ImageWidth, ImageHeight))
-                    {
-                        Count(image, out red, out green, out total);
-                        if (dump != null) image.Save(Path.Combine(dump, $"{k + 1:00} {c.Elevation:0}° {red}-{green}.png"), ImageFormat.Png);
-                    }
-                    var score = ViewPick.Score(red, green, total, c.Preference);
-                    scores.Append($" {k + 1}:{red}/{green}");
+                    var both = Render(doc, null, dump, k, c, "оба");
+                    var a = Render(doc, onlyFirst, dump, k, c, "первый");
+                    var b = Render(doc, onlySecond, dump, k, c, "второй");
+                    var empty = Render(doc, none, dump, k, c, "пусто");
+                    ViewPick.Visible(both, a, b, empty, out var firstSeen, out var secondSeen);
+                    var score = ViewPick.Score(firstSeen, secondSeen, both.Length, c.Preference);
+                    scores.Append($" {k + 1}:{firstSeen}/{secondSeen}");
                     if (score > bestScore) { bestScore = score; best = vp; bestIndex = k; }
                 }
-                Log.Write($"{name}: лучший — {bestIndex + 1} ({candidates[bestIndex].Elevation:0}°); красный/зелёный по направлениям:{scores}");
-                // цвета — снять до записи вида (иначе красный и зелёный могли бы сохраниться в виде), остальное — пока скрыто
-                doc.Models.ResetAllTemporaryMaterials();
+                Log.Write($"{name}: лучший — {bestIndex + 1} ({candidates[bestIndex].Elevation:0}°); видно первого/второго по направлениям:{scores}");
                 doc.CurrentViewpoint.CopyFrom(best);
                 if (target != null)
                 {
@@ -249,46 +250,80 @@ namespace RASv2.ClashAnalysis.Navisworks
             }
             finally
             {
-                doc.Models.ResetAllTemporaryMaterials();
-                if (hidden.Count > 0) doc.Models.SetHidden(hidden, false);
+                isolation.Undo(doc);
+            }
+        }
+
+        /// <summary>Картинка вида (на время — скрыть hide); пиксели — 0xRRGGBB. Сборка разработчика — сохранить для разбора.</summary>
+        private static int[] Render(Document doc, ModelItemCollection hide, string dump, int k, ViewCandidate c, string what)
+        {
+            if (hide != null) doc.Models.SetHidden(hide, true);
+            try
+            {
+                using (var image = doc.ActiveView.GenerateImage(ImageGenerationStyle.Scene, ImageWidth, ImageHeight))
+                {
+                    if (dump != null) image.Save(Path.Combine(dump, $"{k + 1:00} {c.Elevation:0}° {what}.png"), ImageFormat.Png);
+                    return Pixels(image);
+                }
+            }
+            finally
+            {
+                if (hide != null) doc.Models.SetHidden(hide, false);
             }
         }
 
         private static ModelItem ItemOf(ModelItem item, ModelItem composite, ModelItemCollection selection) =>
             item ?? composite ?? selection?.FirstOrDefault();
 
-        /// <summary>«Скрыть остальное»: всё, кроме двух элементов и их родителей. Возвращает скрытое — чтобы потом показать.</summary>
-        private static ModelItemCollection HideAllBut(Document doc, ModelItem first, ModelItem second)
+        /// <summary>Что изменено «скрыть остальное» — чтобы вернуть как было.</summary>
+        private sealed class Isolation
         {
+            public ModelItemCollection Hidden = new ModelItemCollection();
+            public ModelItemCollection Shown = new ModelItemCollection();
+
+            public void Undo(Document doc)
+            {
+                if (Hidden.Count > 0) doc.Models.SetHidden(Hidden, false);
+                if (Shown.Count > 0) doc.Models.SetHidden(Shown, true);
+            }
+        }
+
+        /// <summary>
+        /// «Скрыть остальное»: скрыть всё, кроме двух элементов и их родителей, а их самих показать, если они скрыты (например,
+        /// «скрыть остальные» Clash Detective для другой, выбранной коллизии).
+        /// </summary>
+        private static Isolation Isolate(Document doc, ModelItem first, ModelItem second)
+        {
+            var result = new Isolation();
             var keep = new HashSet<ModelItem>();
             foreach (var x in first.AncestorsAndSelf) keep.Add(x);
             foreach (var x in second.AncestorsAndSelf) keep.Add(x);
-            var hide = new ModelItemCollection();
+            foreach (var x in keep) if (x.IsHidden) result.Shown.Add(x);
             void Walk(ModelItem node)
             {
                 foreach (var child in node.Children)
                 {
                     if (child.Equals(first) || child.Equals(second)) continue;
                     if (keep.Contains(child)) Walk(child);
-                    else if (!child.IsHidden) hide.Add(child);
+                    else if (!child.IsHidden) result.Hidden.Add(child);
                 }
             }
             foreach (var root in doc.Models.RootItems)
             {
                 if (keep.Contains(root)) Walk(root);
-                else if (!root.IsHidden) hide.Add(root);
+                else if (!root.IsHidden) result.Hidden.Add(root);
             }
-            if (hide.Count > 0) doc.Models.SetHidden(hide, true);
-            return hide;
+            if (result.Shown.Count > 0) doc.Models.SetHidden(result.Shown, false);
+            if (result.Hidden.Count > 0) doc.Models.SetHidden(result.Hidden, true);
+            return result;
         }
 
         private static Box3 BoxOf(BoundingBox3D b) => new Box3(b.Min.X, b.Min.Y, b.Min.Z, b.Max.X, b.Max.Y, b.Max.Z);
 
-        /// <summary>Сколько пикселей первого (красного) и второго (зелёного) элемента.</summary>
-        private static void Count(Bitmap image, out int red, out int green, out int total)
+        /// <summary>Пиксели картинки — 0xRRGGBB построчно.</summary>
+        private static int[] Pixels(Bitmap image)
         {
-            red = green = 0;
-            total = image.Width * image.Height;
+            var result = new int[image.Width * image.Height];
             var data = image.LockBits(new Rectangle(0, 0, image.Width, image.Height), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
             try
             {
@@ -300,9 +335,7 @@ namespace RASv2.ClashAnalysis.Navisworks
                     for (var x = 0; x < data.Width; x++)
                     {
                         var p = row + x * 3; // BGR
-                        byte b = bytes[p], g = bytes[p + 1], r = bytes[p + 2];
-                        if (ViewPick.IsFirst(r, g, b)) red++;
-                        else if (ViewPick.IsSecond(r, g, b)) green++;
+                        result[y * data.Width + x] = (bytes[p + 2] << 16) | (bytes[p + 1] << 8) | bytes[p];
                     }
                 }
             }
@@ -310,6 +343,7 @@ namespace RASv2.ClashAnalysis.Navisworks
             {
                 image.UnlockBits(data);
             }
+            return result;
         }
     }
 

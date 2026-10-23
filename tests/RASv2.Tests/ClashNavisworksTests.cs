@@ -35,16 +35,20 @@ namespace RASv2.Tests
             {
                 Check(ViewPick.Score(300, 300, 2000, 1.0) > ViewPick.Score(300, 300, 2000, 0.6), "35° сверху лучше, чем сверху");
             });
-            yield return Case("виды: цвета элементов — с учётом освещения и тени, оси и фон — не элементы", () =>
+            yield return Case("виды: видимость — по четырём картинкам, цвета не важны", () =>
             {
-                Check(ViewPick.IsFirst(210, 40, 200) && ViewPick.IsFirst(110, 35, 100), "пурпурный — на свету и в тени");
-                Check(ViewPick.IsSecond(220, 210, 40) && ViewPick.IsSecond(100, 95, 30), "жёлтый — на свету и в тени");
-                // картинки проверки разработчика 23.10.2026: оси модели — красные и зелёные линии и подписи, фон — голубой
-                Check(!ViewPick.IsFirst(230, 30, 30) && !ViewPick.IsSecond(230, 30, 30), "красная ось — не элемент");
-                Check(!ViewPick.IsFirst(40, 220, 40) && !ViewPick.IsSecond(40, 220, 40), "зелёная ось — не элемент");
-                Check(!ViewPick.IsFirst(110, 160, 230) && !ViewPick.IsSecond(110, 160, 230), "голубой фон — не элемент");
-                Check(!ViewPick.IsFirst(180, 180, 180) && !ViewPick.IsSecond(180, 180, 180) && !ViewPick.IsFirst(40, 10, 40),
-                    "серое и почти чёрное — не элементы");
+                // строка из 6 пикселей: фон (с осью), плита (красная подсветка), колонна (зелёная), колонна за плитой
+                const int bg = 0x6496E6, axis = 0xE61E1E, slab = 0xC83232, column = 0x32B432;
+                var none = new[] { bg, axis, bg, bg, bg, bg };
+                var onlyFirst = new[] { bg, axis, slab, slab, slab, bg };       // плита — пиксели 2–4
+                var onlySecond = new[] { bg, axis, bg, column, column, column }; // колонна — 3–5
+                var both = new[] { bg, axis, slab, slab, column, column };      // в 3 плита впереди, в 4 — колонна
+                ViewPick.Visible(both, onlyFirst, onlySecond, none, out var first, out var second);
+                Check(first == 2 && second == 2, $"видно плиты 2 (2, 3), колонны 2 (4, 5): {first} / {second}");
+                // колонна целиком за плитой — её не видно, ось (красная, как подсветка) элементом не считается
+                ViewPick.Visible(onlyFirst, onlyFirst, new[] { bg, axis, bg, column, column, bg }, none, out first, out second);
+                Check(first == 3 && second == 0, $"колонна за плитой не видна: {first} / {second}");
+                Check(ViewPick.Same(0xC83232, 0xCC3030) && !ViewPick.Same(0xC83232, 0x32B432), "допуск на сглаживание — 12");
             });
             yield return Case("виды: что показать — место коллизии с запасом, а не стена целиком", () =>
             {
