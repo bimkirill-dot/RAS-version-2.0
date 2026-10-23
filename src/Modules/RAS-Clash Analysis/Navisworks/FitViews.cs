@@ -66,23 +66,6 @@ namespace RASv2.ClashAnalysis.Navisworks
             var tests = results.Select(r => r.Test.DisplayName).Distinct().Count();
             var all = new Dictionary<string, ClashResult>();
             foreach (var r in results) all[Key(r.Test.DisplayName, r.Result.DisplayName)] = r.Result; // одинаковые имена — последняя
-            // уже подобранные (и подправленные вручную) — с сохранённым видом: при повторном запуске их не трогать (разработчик, 23.10.2026)
-            var fresh = results.Where(r => !r.Result.HasSavedViewpoint).ToList();
-            var answer = MessageBox.Show(
-                $"Коллизий: {results.Count} в {tests} проверках, из них без сохранённого вида — {fresh.Count}.{Environment.NewLine}{Environment.NewLine}" +
-                "«Да» — подобрать вид только им (уже подобранные и подправленные вручную не трогать).\n" +
-                "«Нет» — подобрать заново всем.\n«Отмена» — ничего не делать.\n\n" +
-                "Сохраните файл до этого — так можно вернуть прежние виды.",
-                Entry.Title, MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
-            if (answer == DialogResult.Cancel) return 0;
-            if (answer == DialogResult.Yes) results = fresh;
-            if (results.Count == 0)
-            {
-                MessageBox.Show("У всех коллизий вид уже есть — подбирать нечего.", Entry.Title, MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return 0;
-            }
-            var debugDir = debug ? Path.Combine(RasPaths.Local, "Navisworks", "Разбор", DateTime.Now.ToString("yyyy-MM-dd HHmmss")) : null;
-
             var com = ComResults(out var comProblem);
             if (com == null) Log.Write("Виды в коллизии не записываются: " + comProblem);
             // прежние виды — чтобы вернуть выбранной коллизии, если её не подбирали (её вид затрёт движение камеры)
@@ -94,6 +77,37 @@ namespace RASv2.ClashAnalysis.Navisworks
                 foreach (var kv in com)
                     try { if (kv.Value.ViewPoint != null) before[kv.Key] = (InwNvViewPoint)kv.Value.ViewPoint.Copy(); }
                     catch (Exception) { /* у коллизии нет вида */ }
+
+            // в Clash Detective выбрана коллизия (вкладка «Результаты») — её вид он перезапишет движением камеры: не начинать
+            // (разработчик, 23.10.2026: «если выйти из всех видов — всё работает хорошо»; запускать — с вкладки «Правила»)
+            if (com != null)
+            {
+                var selected = FindSelected(doc, com, before, onScreen);
+                if (selected != null)
+                {
+                    MessageBox.Show($"В Clash Detective выбрана коллизия «{selected.Replace("\u001f", " / ")}» (вкладка «Результаты»).{Environment.NewLine}{Environment.NewLine}" +
+                                    "Перейдите в Clash Detective на вкладку «Правила» и запустите снова: пока коллизия выбрана, Clash Detective " +
+                                    "перезаписывает её вид при каждом движении камеры, и её вид подобрать нельзя. Её вид не изменён.",
+                        Entry.Title, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return 0;
+                }
+            }
+            // уже подобранные (и подправленные вручную) — с сохранённым видом: при повторном запуске их не трогать (разработчик, 23.10.2026)
+            var fresh = results.Where(r => !r.Result.HasSavedViewpoint).ToList();
+            var answer = MessageBox.Show(
+                $"Коллизий: {results.Count} в {tests} проверках, из них без сохранённого вида — {fresh.Count}.{Environment.NewLine}{Environment.NewLine}" +
+                "«Да» — подобрать вид только им (уже подобранные и подправленные вручную не трогать).\n" +
+                "«Нет» — подобрать заново всем.\n«Отмена» — ничего не делать.\n\n" +
+                "Clash Detective — на вкладке «Правила» (не на коллизии). Сохраните файл до этого — так можно вернуть прежние виды.",
+                Entry.Title, MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+            if (answer == DialogResult.Cancel) return 0;
+            if (answer == DialogResult.Yes) results = fresh;
+            if (results.Count == 0)
+            {
+                MessageBox.Show("У всех коллизий вид уже есть — подбирать нечего.", Entry.Title, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return 0;
+            }
+            var debugDir = debug ? Path.Combine(RasPaths.Local, "Navisworks", "Разбор", DateTime.Now.ToString("yyyy-MM-dd HHmmss")) : null;
 
             doc.CurrentSelection.Clear();
             // подобранные виды — ещё раз в конце: пока камера ходит по коллизиям, Clash Detective («Автообновление» вида) переписывает
@@ -168,33 +182,8 @@ namespace RASv2.ClashAnalysis.Navisworks
             Dictionary<string, (InwOclTestResult Target, InwNvViewPoint View, ModelItem First, ModelItem Second)> chosen,
             Dictionary<string, InwNvViewPoint> before, InwNvViewPoint onScreen)
         {
-            string selected = null;
-            try
-            {
-                var probe = doc.CurrentViewpoint.CreateCopy();
-                var p = probe.Position;
-                var mark = new Point3D(p.X + 1234.5, p.Y - 987.25, p.Z + 321.75);
-                probe.Position = mark;
-                doc.CurrentViewpoint.CopyFrom(probe);
-                foreach (var kv in com)
-                {
-                    try
-                    {
-                        var at = kv.Value.ViewPoint?.Camera?.Position;
-                        if (at != null && Math.Abs(at.data1 - mark.X) < 1e-3 && Math.Abs(at.data2 - mark.Y) < 1e-3 && Math.Abs(at.data3 - mark.Z) < 1e-3)
-                        {
-                            selected = kv.Key;
-                            break;
-                        }
-                    }
-                    catch (Exception) { /* вида нет */ }
-                }
-                Log.Write("Выбранная в Clash Detective коллизия: " + (selected?.Replace("\u001f", " / ") ?? "нет (или «Автообновление» вида выключено)"));
-            }
-            catch (Exception ex)
-            {
-                Log.Write("Выбранная коллизия не определена", ex);
-            }
+            var selected = FindSelected(doc, com, null, null);
+            if (selected != null) Log.Write("Выбранная в Clash Detective коллизия (в конце): " + selected.Replace("\u001f", " / "));
 
             foreach (var kv in chosen)
             {
@@ -232,6 +221,49 @@ namespace RASv2.ClashAnalysis.Navisworks
             {
                 Log.Write("Выбранная коллизия не восстановлена", ex);
             }
+        }
+
+        /// <summary>
+        /// Какая коллизия выбрана в Clash Detective (его «Автообновление» вида пишет в неё движение камеры): сдвинуть камеру и
+        /// посмотреть, в какую коллизию сдвиг записан; нет такой — null. restoreView / restoreCamera — вернуть выбранной её вид и
+        /// камеру (проверка перед началом не должна ничего менять); null — не возвращать (в конце работы).
+        /// </summary>
+        private static string FindSelected(Document doc, Dictionary<string, InwOclTestResult> com, Dictionary<string, InwNvViewPoint> restoreView,
+            InwNvViewPoint restoreCamera)
+        {
+            string selected = null;
+            try
+            {
+                var probe = doc.CurrentViewpoint.CreateCopy();
+                var p = probe.Position;
+                var mark = new Point3D(p.X + 1234.5, p.Y - 987.25, p.Z + 321.75);
+                probe.Position = mark;
+                doc.CurrentViewpoint.CopyFrom(probe);
+                foreach (var kv in com)
+                {
+                    try
+                    {
+                        var at = kv.Value.ViewPoint?.Camera?.Position;
+                        if (at != null && Math.Abs(at.data1 - mark.X) < 1e-3 && Math.Abs(at.data2 - mark.Y) < 1e-3 && Math.Abs(at.data3 - mark.Z) < 1e-3)
+                        {
+                            selected = kv.Key;
+                            break;
+                        }
+                    }
+                    catch (Exception) { /* вида нет */ }
+                }
+                if (restoreCamera != null)
+                {
+                    ComApiBridge.State.CurrentView.ViewPoint = (InwNvViewPoint)restoreCamera.Copy();
+                    if (selected != null)
+                        com[selected].ViewPoint = restoreView != null && restoreView.TryGetValue(selected, out var old) ? old : restoreCamera;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Write("Выбранная коллизия не определена", ex);
+            }
+            return selected;
         }
 
         private static string Key(string test, string result) => (test ?? "") + "\u001f" + (result ?? "");
