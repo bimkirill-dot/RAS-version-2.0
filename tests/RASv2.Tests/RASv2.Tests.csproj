@@ -30,6 +30,7 @@
     <!-- мост в Revit: логика без Revit API -->
     <Compile Include="..\..\src\Modules\RAS-Clash Analysis\Revit\Logic\*.cs" LinkBase="ClashAnalysis\Revit" />
     <Compile Include="..\..\src\Modules\RAS-Clash Analysis\Revit\Bridge\BridgeMessages.cs" Link="ClashAnalysis\Revit\BridgeMessages.cs" />
+    <Compile Include="..\..\src\Modules\RAS-Clash Analysis\Navisworks\Logic\*.cs" LinkBase="ClashAnalysis\Navisworks" />
   </ItemGroup>
 
   <!-- логика RAS-Model History: модуль пока только для Revit 2026 (.NET 8) -->

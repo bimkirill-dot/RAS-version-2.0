@@ -33,9 +33,10 @@ function Invoke-Build {
     $projects = @()
     $projects += Get-ChildItem (Join-Path $Root 'src\Loader') -Filter *.csproj
     $projects += Get-ChildItem (Join-Path $Root 'src\Core') -Filter *.csproj
-    # сайт модуля — не часть Revit: собирается и обновляется отдельно (site.cmd, tools\Site.ps1)
+    # сайт модуля и части для Navisworks — не часть Revit: собираются и выпускаются отдельно
+    # (site.cmd — tools\Site.ps1; navisworks.cmd — tools\Navisworks.ps1)
     $projects += Get-ChildItem (Join-Path $Root 'src\Modules') -Filter *.csproj -Recurse |
-        Where-Object { $_.Name -notlike '*.Site.csproj' }
+        Where-Object { $_.Name -notlike '*.Site.csproj' -and $_.Name -notlike '*.Navisworks.csproj' }
     $projects += Get-ChildItem (Join-Path $Root 'tests') -Filter *.csproj -Recurse
     foreach ($year in $Years) {
         if (-not (Test-Path "C:\Program Files\Autodesk\Revit $year\RevitAPI.dll")) {

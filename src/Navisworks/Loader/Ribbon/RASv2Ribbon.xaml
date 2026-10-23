@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Вкладка «RAS v. 2.0» в Navisworks. Id кнопки = имя команды в [Command] (LoaderPlugin.cs). Одна разметка — в en-US и ru-RU. -->
+<RibbonControl
+   x:Uid="RASv2Ribbon_1"
+   xmlns="clr-namespace:Autodesk.Windows;assembly=AdWindows"
+   xmlns:wpf="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+   xmlns:system="clr-namespace:System;assembly=mscorlib"
+   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+   xmlns:local="clr-namespace:Autodesk.Navisworks.Gui.Roamer.AIRLook;assembly=navisworks.gui.roamer"
+   xmlns:ras="clr-namespace:RASv2.Navisworks.Loader;assembly=RASv2.Navisworks.Loader">
+
+   <RibbonTab x:Uid="RibbonTab_RASv2" Id="RASv2Tab" Title="RAS v. 2.0" KeyTip="R" IsVisible="True">
+      <RibbonPanel x:Uid="RibbonPanel_Clash">
+         <RibbonPanelSource x:Uid="RibbonPanelSource_Clash" KeyTip="C" Title="Менеджер коллизий">
+            <local:NWRibbonButton x:Uid="local:RibbonButton_FitViews"
+                                  Id="ClashAnalysis.FitViews"
+                                  Orientation="Vertical"
+                                  Size="Large"
+                                  ShowText="True"
+                                  Text="Подстроить&#10;виды"
+                                  Image="{x:Static ras:LoaderIcons.FitViews16}"
+                                  LargeImage="{x:Static ras:LoaderIcons.FitViews32}"
+                                  KeyTip="V"/>
+         </RibbonPanelSource>
+      </RibbonPanel>
+   </RibbonTab>
+</RibbonControl>

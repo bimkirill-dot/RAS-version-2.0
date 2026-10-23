@@ -34,6 +34,7 @@ namespace RASv2.Tests
             Run("RAS-Clash Analysis: сайт — вход, пароли", SiteAuthTests.All);
             Run("RAS-Clash Analysis: сайт — копии базы", SiteBackupTests.All);
             Run("RAS-Clash Analysis: сайт — документы на странице", SiteMarkdownTests.All);
+            Run("RAS-Clash Analysis: Navisworks — подбор вида коллизии", ClashNavisworksTests.All);
 #if REVIT2026
             Run("RAS-Model History: фильтр", ModelHistoryTests.Filter);
             Run("RAS-Model History: пары «правка + отмена»", ModelHistoryTests.Undo);

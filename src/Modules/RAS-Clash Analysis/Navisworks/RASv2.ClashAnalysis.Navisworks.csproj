@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    RAS-Clash Analysis в Navisworks Manage 2023 (DECISIONS.md модуля, «Navisworks: подстроить виды коллизий»): сборка, которую
+    загрузчик для Navisworks (src\Navisworks\Loader) берёт с сервера и вызывает — Entry.Execute. Не часть Revit: build.cmd и
+    publish.cmd её не собирают (*.Navisworks.csproj исключены в tools\Release.ps1) — navisworks.cmd (tools\Navisworks.ps1).
+    Правила без Navisworks — Logic\ (тесты в tests\RASv2.Tests).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>RASv2.ClashAnalysis.Navisworks</AssemblyName>
+    <RootNamespace>RASv2.ClashAnalysis.Navisworks</RootNamespace>
+    <NavisworksDir Condition="'$(NavisworksDir)' == ''">C:\Program Files\Autodesk\Navisworks Manage 2023</NavisworksDir>
+    <OutputPath>$(RasRoot)out\navisworks\2023\build\</OutputPath>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\..\Shared\RasPaths.cs" Link="Shared\RasPaths.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="Autodesk.Navisworks.Api">
+      <HintPath>$(NavisworksDir)\Autodesk.Navisworks.Api.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Autodesk.Navisworks.Clash">
+      <HintPath>$(NavisworksDir)\Autodesk.Navisworks.Clash.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Autodesk.Navisworks.ComApi">
+      <HintPath>$(NavisworksDir)\Autodesk.Navisworks.ComApi.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Autodesk.Navisworks.Interop.ComApi">
+      <HintPath>$(NavisworksDir)\Autodesk.Navisworks.Interop.ComApi.dll</HintPath>
+      <Private>false</Private>
+      <EmbedInteropTypes>false</EmbedInteropTypes>
+    </Reference>
+  </ItemGroup>
+
+</Project>

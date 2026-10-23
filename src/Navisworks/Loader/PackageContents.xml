@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Пакет RAS v. 2.0 для Navisworks Manage / Simulate 2023 (Nw20). Name = имя папки пакета без .bundle. -->
+<ApplicationPackage SchemaVersion="1.0"
+                    AutodeskProduct="Navisworks"
+                    Name="RASv2.Navisworks"
+                    Description="RAS v. 2.0 для Navisworks"
+                    AppVersion="2.0.0"
+                    ProductType="Application">
+  <CompanyDetails Name="RAS Group" />
+  <Components Description="Navisworks Manage/Simulate 2023">
+    <RuntimeRequirements OS="Win64" Platform="NAVMAN|NAVSIM" SeriesMin="Nw20" SeriesMax="Nw20" />
+    <ComponentEntry AppName="RASv2.Navisworks"
+                    AppType="ManagedPlugin"
+                    Version="2.0.0"
+                    ModuleName="./Contents/RASv2.Navisworks.Loader.dll"
+                    AppDescription="RAS v. 2.0 для Navisworks" />
+  </Components>
+</ApplicationPackage>

@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Загрузчик RAS v. 2.0 для Navisworks Manage 2023 — единственное, что ставит установка Navisworks (setup\install-navisworks.ps1):
+    пакет .bundle в %AppData%\Autodesk\ApplicationPlugins. Вкладка «RAS v. 2.0» и кнопки — здесь (разметка ленты читается
+    Navisworks из пакета); работу делает сборка с сервера (Releases\Navisworks\2023, каналы «тест» и «все») — её загрузчик
+    копирует к себе и вызывает. Выбор сборки — тот же код, что у загрузчика Revit (src\Loader\BuildResolver.cs, NAVISWORKS).
+    Не часть Revit: build.cmd и publish.cmd его не собирают — navisworks.cmd (tools\Navisworks.ps1).
+    Как устроен пакет — src\Navisworks\README.md (по руководству разработчика «Add-plugin-to-panel», 23.10.2026).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>RASv2.Navisworks.Loader</AssemblyName>
+    <RootNamespace>RASv2.Navisworks.Loader</RootNamespace>
+    <DefineConstants>$(DefineConstants);NAVISWORKS</DefineConstants>
+    <NavisworksDir Condition="'$(NavisworksDir)' == ''">C:\Program Files\Autodesk\Navisworks Manage 2023</NavisworksDir>
+    <!-- пакет: out\navisworks\2023\RASv2.Navisworks.bundle\Contents -->
+    <OutputPath>$(RasRoot)out\navisworks\2023\RASv2.Navisworks.bundle\Contents\</OutputPath>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Loader\BuildResolver.cs" Link="Shared\BuildResolver.cs" />
+    <Compile Include="..\..\Shared\RasPaths.cs" Link="Shared\RasPaths.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="Autodesk.Navisworks.Api">
+      <HintPath>$(NavisworksDir)\Autodesk.Navisworks.Api.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- разметка ленты — обычный файл, Navisworks читает её из подпапки языка (без en-US / ru-RU вкладки нет, ошибок тоже) -->
+  <ItemGroup>
+    <None Remove="Ribbon\**;PackageContents.xml" />
+    <None Include="Ribbon\RASv2Ribbon.xaml" Link="en-US\RASv2Ribbon.xaml" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Ribbon\RASv2Ribbon.xaml" Link="ru-RU\RASv2Ribbon.xaml" CopyToOutputDirectory="PreserveNewest" />
+    <!-- иконки — рядом со сборкой, путь строится в коде (pack://siteOfOrigin ведёт в папку Navisworks, а не пакета) -->
+    <None Include="..\..\Modules\RAS-Clash Analysis\Revit\Icons\ElementClashes16.png" Link="icons\FitViews16.png" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\Modules\RAS-Clash Analysis\Revit\Icons\ElementClashes32.png" Link="icons\FitViews32.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- PackageContents.xml — в корень пакета, рядом с Contents -->
+  <Target Name="CopyPackageContents" AfterTargets="Build">
+    <Copy SourceFiles="PackageContents.xml" DestinationFolder="$(OutputPath)..\" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

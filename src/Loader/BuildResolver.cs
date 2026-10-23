@@ -42,7 +42,12 @@ namespace RASv2.Loader
     /// </summary>
     public static class BuildResolver
     {
+#if NAVISWORKS
+        // загрузчик для Navisworks (src\Navisworks\Loader) — тот же выбор сборки, другая главная сборка
+        public const string EntryAssembly = "RASv2.ClashAnalysis.Navisworks.dll";
+#else
         public const string EntryAssembly = "RASv2.Core.dll";
+#endif
         /// <summary>Копия скопирована целиком (метка ставится до переименования временной папки).</summary>
         public const string ReadyMark = ".ready";
         /// <summary>Сборка не запустилась на этом компьютере — больше её не берём.</summary>
