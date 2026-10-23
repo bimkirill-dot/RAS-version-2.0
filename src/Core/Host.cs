@@ -90,7 +90,54 @@ namespace RASv2.Core
             RibbonIcons.Set(aboutData, about, "About");
             AddButton(aboutData, ServicePanel);
             CreateRibbon(app, file.Layout);
+            ScheduleWhatsNew();
             IsStarted = true;
+        }
+
+        private static bool _whatsNewShown;
+
+        /// <summary>
+        /// «Что нового» — один раз после новой сборки, окном при первом простое Revit (когда окно Revit уже есть): текст из notes.txt
+        /// сборки (WhatsNew). Показано — номер сборки запоминается до показа: сбой окна не повторит его при каждом запуске.
+        /// </summary>
+        private static void ScheduleWhatsNew()
+        {
+            string notes = null, seen = null;
+            var seenPath = Path.Combine(RasPaths.User, WhatsNew.SeenFile);
+            try
+            {
+                var notesPath = Path.Combine(BuildDir ?? "", WhatsNew.NotesFile);
+                if (File.Exists(notesPath)) notes = File.ReadAllText(notesPath).Trim();
+                if (File.Exists(seenPath)) seen = File.ReadAllText(seenPath).Trim();
+            }
+            catch (Exception ex)
+            {
+                Log.Write(Tag, "«Что нового»: не прочитано", ex);
+                return;
+            }
+            if (!WhatsNew.ShouldShow(BuildId, Channel, notes, seen)) return;
+            _events.Idling.Add(Tag, (s, e) =>
+            {
+                if (_whatsNewShown) return;
+                _whatsNewShown = true;
+                try
+                {
+                    Directory.CreateDirectory(RasPaths.User);
+                    File.WriteAllText(seenPath, BuildId);
+                }
+                catch (Exception ex)
+                {
+                    Log.Write(Tag, "«Что нового»: не запомнено, что показано", ex);
+                }
+                var date = WhatsNew.DateOf(BuildId);
+                var dialog = new TaskDialog("RAS v. 2.0 — что нового")
+                {
+                    MainInstruction = "Плагин обновлён" + (date.Length > 0 ? " — выпуск от " + date : ""),
+                    MainContent = notes,
+                    FooterText = "Версия и модули — кнопка «О плагине» на вкладке «" + TabName + "».",
+                };
+                dialog.Show();
+            });
         }
 
         public static void Stop(UIControlledApplication app)
