@@ -85,9 +85,9 @@ namespace RASv2.ClashAnalysis.Navisworks
                 var selected = FindSelected(doc, com, before, onScreen);
                 if (selected != null)
                 {
-                    WarningDialog.Show("Перейдите в Clash Detective на вкладку «Правила» и запустите снова",
-                        $"Сейчас выбрана коллизия «{selected.Replace("\u001f", " / ")}» (вкладка «Результаты»). Пока коллизия выбрана, " +
-                        "Clash Detective перезаписывает её вид при каждом движении камеры — подобрать виды правильно нельзя. Ничего не изменено.",
+                    WarningDialog.Show("Нельзя запускать на вкладке «Результаты»",
+                        $"Сейчас в Clash Detective выбрана коллизия «{selected.Replace("\u001f", " / ")}». " +
+                        "Перейдите на вкладку «Правила» и запустите снова. Ничего не изменено.",
                         "Понятно");
                     return 0;
                 }
@@ -95,8 +95,8 @@ namespace RASv2.ClashAnalysis.Navisworks
             // уже подобранные (и подправленные вручную) — с сохранённым видом: при повторном запуске их не трогать (разработчик, 23.10.2026)
             var fresh = results.Where(r => !r.Result.HasSavedViewpoint).ToList();
             // предупреждение — заметное, красное (разработчик, 23.10.2026: «чтобы пользователь точно не пропустил»)
-            var answer = WarningDialog.Show("Clash Detective — на вкладке «Правила», не на коллизии",
-                $"Если выбрана коллизия на вкладке «Результаты», её вид подберётся неправильно.{Environment.NewLine}{Environment.NewLine}" +
+            var answer = WarningDialog.Show("Нельзя запускать на вкладке «Результаты»",
+                $"Запускайте с вкладки «Правила» Clash Detective.{Environment.NewLine}{Environment.NewLine}" +
                 $"Коллизий: {results.Count} в {tests} {(tests % 10 == 1 && tests % 100 != 11 ? "проверке" : "проверках")}, из них без сохранённого вида — {fresh.Count}. Уже подобранные и подправленные " +
                 $"вручную виды можно не трогать.{Environment.NewLine}{Environment.NewLine}Сохраните файл до этого — так можно вернуть прежние виды.",
                 $"Только без вида ({fresh.Count})", $"Все заново ({results.Count})", "Отмена");
