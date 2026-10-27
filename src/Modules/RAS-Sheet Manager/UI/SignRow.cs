@@ -67,14 +67,21 @@ namespace RASv2.SheetManager.UI
         public bool CanCheck => Item != null && Item.Action != SignAction.Skip;
         public bool IsAdded => Item != null && Item.HasDwg && Item.Action == SignAction.Replace;
         public bool IsSkip => Item == null || Item.Action == SignAction.Skip;
-        public string Status => File.Error != null ? "не очищена: " + File.Error : Item?.Status ?? "";
+        public string Status =>
+            File.NameProblem != null ? "имя файла не по регламенту: " + File.NameProblem + " — не будет добавлена"
+            : File.Error != null ? "не очищена: " + File.Error
+            : (Item?.Status ?? "") + (File.Outdated ? "; очищена по прежним настройкам — «Обновить»" : "");
+
+        /// <summary>Очищена заново кнопкой «Обновить»: уже добавленная в семейство — отмечена, чтобы заменить DWG.</summary>
+        public bool Refreshed { get; set; }
         public string NumberText => Item?.Number != null ? "№" + Item.Number.Value.ToString(CultureInfo.InvariantCulture) : "";
 
         /// <summary>Новый план для строки: отметка — своя, если человек её менял и строку всё ещё можно отметить.</summary>
         public void SetPlan(SignPlanItem item)
         {
             Item = item;
-            if (File.Error != null) { item.Action = SignAction.Skip; item.Checked = false; }
+            if (File.Error != null || File.NameProblem != null) { item.Action = SignAction.Skip; item.Checked = false; }
+            if (Refreshed && item.Action == SignAction.Replace) item.Checked = true;
             _checked = _userChecked && CanCheck ? _checked : item.Checked && CanCheck;
             item.Checked = _checked;
             OnChanged(nameof(Checked));

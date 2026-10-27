@@ -24,6 +24,12 @@ namespace RASv2.SheetManager.Logic
         /// <summary>Почему не очищена или не прочитана; null — всё хорошо.</summary>
         public string Error;
         public string Summary;
+        /// <summary>Имя файла не по регламенту (что не так); такая подпись не чистится и не добавляется.</summary>
+        public string NameProblem;
+        /// <summary>Очищена по прежним настройкам (поменялись размер, точность…) — её можно «Обновить».</summary>
+        public bool Outdated;
+        /// <summary>Чем очищена (CleanOptions.Key); null — неизвестно (очищена раньше, не этой кнопкой).</summary>
+        public string CleanedWith;
     }
 
     /// <summary>
@@ -51,13 +57,14 @@ namespace RASv2.SheetManager.Logic
 
         /// <summary>
         /// Обработать папку: новые — очистить (DWG → DXF → чистка → DXF → DWG), остальные — прочитать для картинки.
-        /// progress(сделано, всего). Ошибка одного файла — в его Error, остальные идут дальше.
+        /// reclean — исходные, которые очистить заново («Обновить»: настройки поменялись); checkName — регламент имени файла
+        /// (не по регламенту — не чистится). progress(сделано, всего). Ошибка одного файла — в его Error, остальные идут дальше.
         /// </summary>
         public static List<SignFile> Process(string folder, CleanOptions options, string acad, string workRoot, string cacheDir,
-            int parallel, Action<int, int> progress, CancellationToken cancel)
+            int parallel, Action<int, int> progress, CancellationToken cancel, ISet<string> reclean = null, Func<string, string> checkName = null)
         {
             var sources = Sources(folder);
-            var files = sources.Select(s => new SignFile { Source = s, Clean = CleanPathFor(s) }).ToList();
+            var files = sources.Select(s => new SignFile { Source = s, Clean = CleanPathFor(s), NameProblem = checkName?.Invoke(Path.GetFileName(s)) }).ToList();
             var done = 0;
             progress?.Invoke(0, files.Count);
             Directory.CreateDirectory(workRoot);
@@ -66,7 +73,7 @@ namespace RASv2.SheetManager.Logic
             {
                 var work = Path.Combine(workRoot, "w" + Interlocked.Increment(ref counter).ToString("0000", CultureInfo.InvariantCulture));
                 Directory.CreateDirectory(work);
-                try { One(f, options, acad, work, cacheDir, cancel); }
+                try { One(f, options, acad, work, cacheDir, cancel, reclean != null && reclean.Contains(f.Source)); }
                 catch (Exception ex) { f.Error = ex.Message; }
                 finally
                 {
@@ -77,10 +84,11 @@ namespace RASv2.SheetManager.Logic
             return files;
         }
 
-        private static void One(SignFile f, CleanOptions options, string acad, string work, string cacheDir, CancellationToken cancel)
+        private static void One(SignFile f, CleanOptions options, string acad, string work, string cacheDir, CancellationToken cancel, bool again)
         {
             f.SourceBytes = new FileInfo(f.Source).Length;
-            if (!File.Exists(f.Clean))
+            if (f.NameProblem != null && !File.Exists(f.Clean)) return; // не по регламенту — не чистим
+            if (!File.Exists(f.Clean) || (again && f.NameProblem == null))
             {
                 if (acad == null) { f.Error = "не очищена: нет AutoCAD"; return; }
                 var dxf = f.Source.EndsWith(".dxf", StringComparison.OrdinalIgnoreCase) ? f.Source : AcadConsole.ToDxf(acad, f.Source, work, "in", cancel);
@@ -97,11 +105,16 @@ namespace RASv2.SheetManager.Logic
                 f.HeightMm = sign.HeightMm;
                 f.Summary = sign.Summary;
                 f.CleanBytes = new FileInfo(f.Clean).Length;
+                f.CleanedWith = options.Key;
                 SavePreview(cacheDir, f);
                 return;
             }
             f.CleanBytes = new FileInfo(f.Clean).Length;
-            if (LoadPreview(cacheDir, f)) return;
+            if (LoadPreview(cacheDir, f))
+            {
+                f.Outdated = f.CleanedWith != null && f.CleanedWith != options.Key;
+                return;
+            }
             if (acad == null) { f.Error = "картинки нет: нет AutoCAD"; return; }
             var cleanDxf = AcadConsole.ToDxf(acad, f.Clean, work, "clean", cancel);
             if (cleanDxf == null) { f.Error = "AutoCAD не открыл очищенный файл"; return; }
@@ -128,7 +141,9 @@ namespace RASv2.SheetManager.Logic
             }
         }
 
-        /// <summary>Формат: строка «ширина высота», затем по строке на ломаную: «c x,y x,y …» (c — 1 замкнута, 0 нет).</summary>
+        /// <summary>
+        /// Формат: строка «ширина высота [чем очищена]», затем по строке на ломаную: «c x,y x,y …» (c — 1 замкнута, 0 нет).
+        /// </summary>
         private static void SavePreview(string cacheDir, SignFile f)
         {
             try
@@ -136,7 +151,9 @@ namespace RASv2.SheetManager.Logic
                 Directory.CreateDirectory(cacheDir);
                 var inv = CultureInfo.InvariantCulture;
                 var sb = new StringBuilder();
-                sb.Append(f.WidthMm.ToString("0.###", inv)).Append(' ').Append(f.HeightMm.ToString("0.###", inv)).Append('\n');
+                sb.Append(f.WidthMm.ToString("0.###", inv)).Append(' ').Append(f.HeightMm.ToString("0.###", inv));
+                if (f.CleanedWith != null) sb.Append(' ').Append(f.CleanedWith);
+                sb.Append('\n');
                 foreach (var p in f.Lines)
                 {
                     sb.Append(p.Closed ? '1' : '0');
@@ -159,6 +176,7 @@ namespace RASv2.SheetManager.Logic
                 var head = lines[0].Split(' ');
                 f.WidthMm = double.Parse(head[0], inv);
                 f.HeightMm = double.Parse(head[1], inv);
+                f.CleanedWith = head.Length > 2 ? head[2] : null;
                 f.Lines = new List<Polyline2>();
                 foreach (var line in lines.Skip(1).Where(l => l.Length > 0))
                 {

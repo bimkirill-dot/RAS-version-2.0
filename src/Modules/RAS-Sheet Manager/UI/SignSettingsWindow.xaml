@@ -69,10 +69,10 @@
         </StackPanel>
         <StackPanel Orientation="Horizontal" Margin="0,2">
             <RadioButton x:Name="ModeBox" GroupName="mode" Content="Вписать в рамку" Width="150" />
-            <TextBox x:Name="BoxWidth" Style="{StaticResource Num}" />
-            <TextBlock Style="{StaticResource Unit}" Text="×" />
-            <TextBox x:Name="BoxHeight" Style="{StaticResource Num}" />
-            <TextBlock Style="{StaticResource Unit}" Text="мм, пропорции сохраняются" />
+            <TextBox x:Name="BoxWidth" Style="{StaticResource Num}" ToolTip="Ширина рамки, мм" />
+            <TextBlock Style="{StaticResource Unit}" Text="мм шириной," />
+            <TextBox x:Name="BoxHeight" Style="{StaticResource Num}" ToolTip="Высота рамки, мм" />
+            <TextBlock Style="{StaticResource Unit}" Text="мм высотой; пропорции сохраняются" />
         </StackPanel>
         <RadioButton x:Name="ModeKeep" GroupName="mode" Content="Как в DWG — не менять размер" Margin="0,4,0,0" />
         <TextBlock Style="{StaticResource Hint}" Text="Центр подписи — в начале координат файла. Меняет размер только новых подписей: очищенные (…_clean.dwg) не трогаются — чтобы перечистить, удалите очищенный файл." />
@@ -91,6 +91,30 @@
         <TextBlock Style="{StaticResource Unit}" Text="AutoCAD Core Console (accoreconsole.exe)" Margin="0,10,0,4" />
         <TextBox x:Name="Acad" />
         <TextBlock x:Name="AcadFound" Style="{StaticResource Hint}" />
+
+        <TextBlock Style="{StaticResource Head}" Text="Наименование файлов подписей — регламент" />
+        <TextBlock Style="{StaticResource Hint}" Text="«[Отдел]_Подпись_Фамилия.dwg»; главный специалист — «#» перед отделом; ГИП и ГАП — «!» и ГИП или ГАП на месте отдела. Подпись, названная не по регламенту, не добавляется." />
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="260" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <TextBlock Grid.Row="0" Style="{StaticResource Unit}" Text="Слово перед фамилией" />
+            <TextBox Grid.Row="0" Grid.Column="1" x:Name="FileWord" Margin="0,2" Width="160" HorizontalAlignment="Left" />
+            <TextBlock Grid.Row="1" Style="{StaticResource Unit}" Text="Отделы (через запятую)" />
+            <TextBox Grid.Row="1" Grid.Column="1" x:Name="Departments" Margin="0,2" ToolTip="Пусто — любой отдел заглавными буквами (КЖ, ОВ, ВК, ЭЛ…)" />
+            <TextBlock Grid.Row="2" Style="{StaticResource Unit}" Text="Со знаком «!» на месте отдела" />
+            <TextBox Grid.Row="2" Grid.Column="1" x:Name="Leaders" Margin="0,2" Width="160" HorizontalAlignment="Left" />
+            <TextBlock Grid.Row="3" Style="{StaticResource Unit}" Text="Регламент — ссылка или файл" />
+            <TextBox Grid.Row="3" Grid.Column="1" x:Name="Regulation" Margin="0,2" ToolTip="Пусто — регламент в окне плагина" />
+        </Grid>
+        <TextBlock Style="{StaticResource Hint}" Text="Отделы: пусто — любые заглавными буквами. Регламент: пусто — окно с регламентом в плагине." />
 
         <TextBlock Style="{StaticResource Head}" Text="Семейство подписей" />
         <Grid>
@@ -120,10 +144,8 @@
             <TextBox Grid.Row="4" Grid.Column="1" x:Name="Column" Margin="0,2" />
             <TextBlock Grid.Row="5" Style="{StaticResource Unit}" Text="Значение, если фамилии нет в таблице" />
             <TextBox Grid.Row="5" Grid.Column="1" x:Name="DefaultValue" Margin="0,2" Width="80" HorizontalAlignment="Left" />
-            <TextBlock Grid.Row="6" Style="{StaticResource Unit}" Text="Слово в имени файла перед фамилией" />
-            <TextBox Grid.Row="6" Grid.Column="1" x:Name="FileWord" Margin="0,2" Width="160" HorizontalAlignment="Left" />
-            <TextBlock Grid.Row="7" Style="{StaticResource Unit}" Text="Цвет подписей в Revit (R, G, B)" />
-            <TextBox Grid.Row="7" Grid.Column="1" x:Name="ColorBox" Margin="0,2" Width="120" HorizontalAlignment="Left" />
+            <TextBlock Grid.Row="6" Style="{StaticResource Unit}" Text="Цвет подписей в Revit (R, G, B)" />
+            <TextBox Grid.Row="6" Grid.Column="1" x:Name="ColorBox" Margin="0,2" Width="120" HorizontalAlignment="Left" />
         </Grid>
         <TextBlock Style="{StaticResource Hint}" Text="Если в семействе уже есть подписи, таблица и форма формулы берутся из него; эти значения — для нового семейства." />
 

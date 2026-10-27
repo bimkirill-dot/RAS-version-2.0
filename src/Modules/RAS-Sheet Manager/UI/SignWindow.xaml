@@ -98,11 +98,31 @@
         </Grid>
 
         <!-- ход очистки и фильтр -->
-        <DockPanel Grid.Row="3" Margin="0,2,0,6">
+        <StackPanel Grid.Row="3">
+        <!-- не по регламенту: такие подписи не добавляются (разработчик, 27.10.2026) -->
+        <Border x:Name="NamingBanner" Visibility="Collapsed" Margin="0,0,0,8" Padding="10,6" CornerRadius="3"
+                BorderBrush="{DynamicResource Error}" BorderThickness="1">
+            <TextBlock TextWrapping="Wrap">
+                <Run x:Name="NamingText" Foreground="{DynamicResource Error}" />
+                <Hyperlink Click="Regulation_Click" Foreground="{DynamicResource Accent}">Регламент наименования подписей</Hyperlink>
+            </TextBlock>
+        </Border>
+        <DockPanel Margin="0,2,0,6">
             <CheckBox x:Name="ShowAdded" DockPanel.Dock="Right" Checked="ShowAdded_Changed" Unchecked="ShowAdded_Changed" />
+            <Button x:Name="RefreshButton" DockPanel.Dock="Right" Margin="0,0,16,0" Click="Refresh_Click" IsEnabled="False"
+                    ToolTip="Очистить подписи заново по текущим настройкам (если поменяли размер, точность…): все или отмеченные. Уже добавленные в семейство — отметятся, чтобы заменить DWG.">
+                <Button.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem x:Name="RefreshAll" Click="RefreshAll_Click" />
+                        <MenuItem x:Name="RefreshChecked" Click="RefreshChecked_Click" />
+                    </ContextMenu>
+                </Button.ContextMenu>
+                <TextBlock Text="Обновить ▾" />
+            </Button>
             <ProgressBar x:Name="Progress" Width="160" Height="6" Margin="0,0,10,0" Visibility="Collapsed" VerticalAlignment="Center" />
             <TextBlock x:Name="StatusText" Style="{StaticResource Muted}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
         </DockPanel>
+        </StackPanel>
 
         <!-- список подписей -->
         <Border Grid.Row="4" BorderBrush="{DynamicResource Line}" BorderThickness="1">

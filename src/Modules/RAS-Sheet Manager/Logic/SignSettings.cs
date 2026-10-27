@@ -39,6 +39,12 @@ namespace RASv2.SheetManager.Logic
         [DataMember(Name = "keyParam")] public string KeyParam { get; set; }
         [DataMember(Name = "column")] public string Column { get; set; }
         [DataMember(Name = "defaultValue")] public string DefaultValue { get; set; }
+        /// <summary>Регламент наименования: отделы через запятую (пусто — любые, заглавными буквами).</summary>
+        [DataMember(Name = "departments")] public string Departments { get; set; }
+        /// <summary>Кто со знаком «!» — на месте отдела (ГИП, ГАП).</summary>
+        [DataMember(Name = "leaders")] public string Leaders { get; set; }
+        /// <summary>Регламент — ссылка или путь к файлу; пусто — окно с регламентом в плагине.</summary>
+        [DataMember(Name = "regulation")] public string Regulation { get; set; }
         /// <summary>Цвет подписей в Revit (стили объектов), «R,G,B».</summary>
         [DataMember(Name = "color")] public string Color { get; set; }
         [DataMember(Name = "changedBy")] public string ChangedBy { get; set; }
@@ -68,6 +74,9 @@ namespace RASv2.SheetManager.Logic
             Column = "Да/Нет";
             DefaultValue = "1000";
             Color = "0,0,255";
+            Departments = "";
+            Leaders = "ГИП, ГАП";
+            Regulation = "";
         }
 
         public SignSettings Normalize()
@@ -85,6 +94,9 @@ namespace RASv2.SheetManager.Logic
             Table = Text(Table, d.Table); GipTable = Text(GipTable, d.GipTable); GipMarker = (GipMarker ?? "").Trim();
             KeyParam = Text(KeyParam, d.KeyParam); Column = Text(Column, d.Column); DefaultValue = Text(DefaultValue, d.DefaultValue);
             if (Rgb(Color) == null) Color = d.Color;
+            Departments = string.Join(", ", SignFileName.List(Departments));
+            Leaders = Leaders == null ? d.Leaders : string.Join(", ", SignFileName.List(Leaders));
+            Regulation = (Regulation ?? "").Trim();
             return this;
         }
 
@@ -102,6 +114,10 @@ namespace RASv2.SheetManager.Logic
             for (var i = 0; i < 3; i++) if (!byte.TryParse(parts[i], out b[i])) return null;
             return b;
         }
+
+        /// <summary>Проверить имя файла подписи по регламенту.</summary>
+        public SignFileName CheckName(string fileName) =>
+            SignFileName.Check(fileName, FileWord, SignFileName.List(Departments), SignFileName.List(Leaders));
 
         public CleanOptions Clean => new CleanOptions
         {

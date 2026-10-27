@@ -37,6 +37,10 @@ namespace RASv2.SheetManager.Logic
         /// <summary>Точность прореживания, мм.</summary>
         public double Tolerance = 0.02;
         public string Hatch = HatchModes.Outline;
+
+        /// <summary>Чем очищена подпись — запоминается с картинкой: настройки поменялись — подпись «по прежним настройкам».</summary>
+        public string Key => string.Join(";", new object[] { Mode, Height, MaxWidth, Width, MaxHeight, BoxWidth, BoxHeight, Tolerance, Hatch }
+            .Select(v => Convert.ToString(v, CultureInfo.InvariantCulture)));
     }
 
     /// <summary>Чистая подпись: ломаные в мм, центр габарита — в 0,0.</summary>

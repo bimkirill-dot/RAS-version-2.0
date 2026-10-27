@@ -135,6 +135,23 @@ namespace RASv2.Tests
                 Check(SignNames.Problem("Әбілов") == null && SignNames.Problem("Иванов №2") == null && SignNames.Problem("Ива:нов") != null && SignNames.Problem("Ivan😀") != null, "допустимые знаки");
                 Check(SignNames.ToRussian("Әбілқайыр") == "Абилкайыр", "казахские → русские");
             });
+            yield return Case("регламент имени файла: «[Отдел]_Подпись_Фамилия.dwg», «#» — главный специалист, «!» — ГИП и ГАП", () =>
+            {
+                var s = new SignSettings();
+                string P(string f) => s.CheckName(f).Problem;
+                foreach (var ok in new[] { "КЖ_Подпись_Иванов.dwg", "#КЖ_Подпись_Әбілов.dwg", "!ГИП_Подпись_Абдукахаров.dwg", "!ГАП_Подпись_Жусанбаева.dwg",
+                                           "#АПТ_Подпись_Сейткали.dwg", "КЖ_Подпись_Ким И.dwg", "#ОВ_Подпись_Нұр-Ахмет.dwg", "ВК_подпись_Петров.dwg" })
+                    Check(P(ok) == null, ok + ": " + P(ok));
+                var n = s.CheckName("#КЖ_Подпись_Ким Н.dwg");
+                Check(n.Prefix == "#" && n.Department == "КЖ" && n.Surname == "Ким Н", "части имени");
+                Check(P("КЖ_Подпись_Иванов.dxf") != null, "расширение — .dwg");
+                Check(P("КЖ Подпись Иванов.dwg") != null && P("Подпись_Иванов.dwg") != null && P("КЖ_Иванов.dwg") != null, "нет «_Подпись_» или отдела");
+                Check(P("Кж_Подпись_Иванов.dwg").Contains("заглавными"), "отдел — заглавными");
+                Check(P("ГИП_Подпись_Иванов.dwg").Contains("«!»") && P("!КЖ_Подпись_Иванов.dwg").Contains("«!»"), "«!» — только и обязательно у ГИП и ГАП");
+                Check(P("КЖ_Подпись_иванов.dwg") != null && P("КЖ_Подпись_Иванов_2.dwg") != null && P("КЖ_Подпись_Сидоровdwg.dwg").Contains("смешаны"), "фамилия");
+                s.Departments = "КЖ, ОВ";
+                Check(P("ЭЛ_Подпись_Иванов.dwg").Contains("нет в списке") && P("КЖ_Подпись_Иванов.dwg") == null && P("!ГИП_Подпись_Иванов.dwg") == null, "список отделов; ГИП — вне списка");
+            });
             yield return Case("формула и таблица выбора", () =>
             {
                 var f = SignFormula.Parse("size_lookup(\"RAS_Таблица выбора фамилий\", \"Да/Нет\", 1000, Фамилия) = 12");
@@ -226,6 +243,9 @@ namespace RASv2.Tests
                 Check(SignSettings.FromJson("{\"height\": -3, \"color\": \"синий\"}").Height == 7 && SignSettings.FromJson("{\"color\": \"x\"}").Color == "0,0,255", "вне пределов — по умолчанию");
                 Check(SignSettings.FromJson("{ испорчен") == null, "не разобрать — null");
                 Check(new SignSettings().TableFor("RAS_Фамилия_ГИП") == "RAS_Таблица выбора ГИП" && new SignSettings().TableFor("RAS_Фамилия") == "RAS_Таблица выбора фамилий", "таблица ГИПов");
+                var r = SignSettings.FromJson(new SignSettings { Departments = " КЖ ,ОВ,, ", Leaders = "ГИП", Regulation = " \\\\srv\\Регламент.pdf " }.ToJson());
+                Check(r.Departments == "КЖ, ОВ" && r.Leaders == "ГИП" && r.Regulation == "\\\\srv\\Регламент.pdf" && SignSettings.FromJson("{}").Leaders == "ГИП, ГАП", "регламент в настройках");
+                Check(new SignSettings().Clean.Key != new SignSettings { Height = 8 }.Clean.Key && new SignSettings().Clean.Key == new SignSettings().Clean.Key, "чем очищена — меняется вместе с настройками");
             });
         }
     }

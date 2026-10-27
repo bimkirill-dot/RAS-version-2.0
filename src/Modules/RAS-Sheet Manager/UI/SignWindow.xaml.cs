@@ -136,8 +136,11 @@ namespace RASv2.SheetManager.UI
             if (!string.Equals(FolderBox.Text.Trim(), _s.Folder, StringComparison.OrdinalIgnoreCase)) Process();
         }
 
-        /// <summary>Очистить новые подписи папки и прочитать очищенные — в фоне; потом список.</summary>
-        private async void Process()
+        /// <summary>
+        /// Очистить новые подписи папки и прочитать очищенные — в фоне; потом список. reclean — исходные, которые очистить заново
+        /// («Обновить»). Имя файла не по регламенту — подпись не чистится и не добавляется.
+        /// </summary>
+        private async void Process(ISet<string> reclean = null)
         {
             var folder = FolderBox.Text.Trim().Trim('"');
             if (string.Equals(folder, _s.Folder, StringComparison.OrdinalIgnoreCase) && _busy) return;
@@ -152,6 +155,7 @@ namespace RASv2.SheetManager.UI
             }
             var acad = AcadConsole.Find(_s.Settings.Acad);
             var options = _s.Settings.Clean;
+            var settings = _s.Settings;
             var cancel = _cancel = new CancellationTokenSource();
             _busy = true;
             Counts();
@@ -169,7 +173,7 @@ namespace RASv2.SheetManager.UI
                         Progress.Maximum = Math.Max(1, total);
                         Progress.Value = done;
                         StatusText.Text = "Очистка и чтение подписей: " + done + " из " + total;
-                    })), cancel.Token));
+                    })), cancel.Token, reclean, name => settings.CheckName(name).Problem));
             }
             catch (OperationCanceledException) { return; }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is AggregateException)
@@ -190,16 +194,98 @@ namespace RASv2.SheetManager.UI
             foreach (var f in files)
             {
                 var name = SignNames.FromFile(Path.GetFileName(f.Source), _s.Settings.FileWord, out var note);
-                _rows.Add(new SignRow(f, name, note, Replan) { Preview = SignRow.Draw(f.Lines, boxW, boxH, ink) });
+                var refreshed = reclean != null && reclean.Contains(f.Source) && f.CleanedNow;
+                _rows.Add(new SignRow(f, name, note, Replan) { Preview = SignRow.Draw(f.Lines, boxW, boxH, ink), Refreshed = refreshed });
             }
             _s.CleanedNow = files.Count(f => f.CleanedNow);
             var errors = files.Count(f => f.Error != null);
+            var wrong = files.Count(f => f.NameProblem != null);
+            var outdated = files.Count(f => f.Outdated);
             StatusText.Text = "Подписей в папке: " + files.Count +
-                              (_s.CleanedNow > 0 ? " · очищено сейчас: " + _s.CleanedNow : "") +
+                              (_s.CleanedNow > 0 ? (reclean != null ? " · очищено заново: " : " · очищено сейчас: ") + _s.CleanedNow : "") +
                               (errors > 0 ? " · не очищено: " + errors : "") +
+                              (wrong > 0 ? " · не по регламенту: " + wrong : "") +
+                              (outdated > 0 ? " · по прежним настройкам: " + outdated : "") +
                               (acad == null && files.Any(f => !File.Exists(f.Clean)) ? " · AutoCAD не найден — новые подписи не очистить (путь — в настройках)" : "");
+            NamingBanner.Visibility = wrong > 0 ? Visibility.Visible : Visibility.Collapsed;
+            NamingText.Text = "Названы не по регламенту: " + wrong + " — такие подписи не будут добавлены. Переименуйте файлы и откройте папку заново. ";
             if (_s.State == null) ReadFamily();
             else Replan();
+            // заново очищенные, уже стоящие в семействе, отмечены для замены — показать их
+            if (_rows.Any(r => r.Refreshed && r.IsAdded)) ShowAdded.IsChecked = true;
+            if (wrong > 0 && reclean == null)
+            {
+                var list = string.Join(Environment.NewLine, files.Where(f => f.NameProblem != null).Take(8)
+                    .Select(f => "• " + Path.GetFileName(f.Source) + " — " + f.NameProblem)) + (wrong > 8 ? Environment.NewLine + "… и ещё " + (wrong - 8) : "");
+                var answer = MessageBox.Show(this,
+                    "Названы не по регламенту: " + wrong + Environment.NewLine + Environment.NewLine + list + Environment.NewLine + Environment.NewLine +
+                    "Такие подписи не будут добавлены в семейство. Открыть регламент наименования подписей?",
+                    "Подпись", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                if (answer == MessageBoxResult.Yes) OpenRegulation();
+            }
+        }
+
+        // ───────────────────────── «Обновить» и регламент ─────────────────────────
+
+        private void Refresh_Click(object sender, RoutedEventArgs e)
+        {
+            var menu = RefreshButton.ContextMenu;
+            RefreshAll.Header = "Все подписи в папке (" + _rows.Count(r => r.File.NameProblem == null) + ")";
+            var chosen = _rows.Count(r => r.Checked);
+            RefreshChecked.Header = "Отмеченные (" + chosen + ")";
+            RefreshChecked.IsEnabled = chosen > 0;
+            menu.PlacementTarget = RefreshButton;
+            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+            menu.IsOpen = true;
+        }
+
+        private void RefreshAll_Click(object sender, RoutedEventArgs e) => Reclean(_rows.Where(r => r.File.NameProblem == null).ToList());
+
+        private void RefreshChecked_Click(object sender, RoutedEventArgs e) => Reclean(_rows.Where(r => r.Checked && r.File.NameProblem == null).ToList());
+
+        /// <summary>Очистить заново по текущим настройкам (настройки поменялись): очищенные файлы заменяются.</summary>
+        private void Reclean(List<SignRow> rows)
+        {
+            if (rows.Count == 0) return;
+            if (AcadConsole.Find(_s.Settings.Acad) == null)
+            {
+                MessageBox.Show(this, "AutoCAD не найден — очистить заново нельзя. Путь к AutoCAD — в настройках (шестерёнка).", "Подпись",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            var answer = MessageBox.Show(this,
+                "Очистить заново по текущим настройкам: " + rows.Count + " " + Plural(rows.Count) + "?" + Environment.NewLine + Environment.NewLine +
+                "Очищенные файлы (…_clean.dwg в папке «clean») будут заменены. Подписи, которые уже есть в семействе, отметятся — " +
+                "«Добавить» заменит их DWG.",
+                "Подпись", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (answer != MessageBoxResult.Yes) return;
+            _s.Folder = null; // та же папка — обработать заново
+            Process(new HashSet<string>(rows.Select(r => r.File.Source), StringComparer.OrdinalIgnoreCase));
+        }
+
+        private static string Plural(int n) =>
+            n % 10 == 1 && n % 100 != 11 ? "подпись" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? "подписи" : "подписей";
+
+        private void Regulation_Click(object sender, RoutedEventArgs e) => OpenRegulation();
+
+        /// <summary>Регламент: ссылка или файл из настроек; нет — окно с регламентом в плагине.</summary>
+        private void OpenRegulation()
+        {
+            var link = _s.Settings.Regulation;
+            if (!string.IsNullOrWhiteSpace(link))
+            {
+                try
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(link) { UseShellExecute = true });
+                    return;
+                }
+                catch (Exception ex) when (ex is System.ComponentModel.Win32Exception || ex is FileNotFoundException || ex is InvalidOperationException)
+                {
+                    MessageBox.Show(this, "Регламент не открылся (" + link + "): " + ex.Message + Environment.NewLine + "Показан регламент из плагина.",
+                        "Подпись", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+            new SignRegulationWindow(_s.Settings) { Owner = this }.ShowDialog();
         }
 
         // ───────────────────────── план ─────────────────────────
@@ -232,6 +318,7 @@ namespace RASv2.SheetManager.UI
             ShowAdded.Visibility = added > 0 ? Visibility.Visible : Visibility.Collapsed;
             AddButton.Content = chosen > 0 ? "Добавить (" + chosen + ")" : "Добавить";
             AddButton.IsEnabled = chosen > 0 && !_busy && _s.State != null;
+            RefreshButton.IsEnabled = !_busy && _rows.Any(r => r.File.NameProblem == null);
             var can = _rows.Where(r => r.CanCheck && (ShowAdded.IsChecked == true || !r.IsAdded)).ToList();
             AllBox.IsChecked = can.Count > 0 && can.All(r => r.Checked) ? true : can.Any(r => r.Checked) ? (bool?)null : false;
         }

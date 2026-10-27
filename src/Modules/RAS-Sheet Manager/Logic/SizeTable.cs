@@ -61,6 +61,57 @@ namespace RASv2.SheetManager.Logic
         }
     }
 
+    /// <summary>
+    /// Регламент наименования файла подписи (разработчик, 27.10.2026): «[Отдел]_Подпись_Фамилия.dwg»; главный специалист —
+    /// «#» перед отделом («#КЖ_Подпись_Иванов.dwg»); ГИП и ГАП — «!», на месте отдела — ГИП или ГАП («!ГИП_Подпись_Иванов.dwg»,
+    /// как у всех 119 подписей 27.10.2026). Отдел — заглавными; список отделов и «руководителей» — в настройках (пусто — любые).
+    /// Фамилия — с заглавной буквы, буквы одного алфавита, пробел (инициал: «Ким И»), дефис, точка.
+    /// </summary>
+    public sealed class SignFileName
+    {
+        public string Prefix = "", Department = "", Surname = "";
+        /// <summary>null — по регламенту; иначе — что не так.</summary>
+        public string Problem;
+
+        private static readonly Regex Shape = new Regex("^([#!]?)([^_#!]*)_(.+?)_(.+)$");
+
+        public static SignFileName Check(string fileName, string word, IList<string> departments, IList<string> leaders)
+        {
+            var r = new SignFileName();
+            var ext = System.IO.Path.GetExtension(fileName ?? "");
+            var name = System.IO.Path.GetFileNameWithoutExtension(fileName ?? "");
+            word = string.IsNullOrWhiteSpace(word) ? "Подпись" : word.Trim();
+            if (!string.Equals(ext, ".dwg", StringComparison.OrdinalIgnoreCase)) return r.Fail("расширение — .dwg");
+            var m = Shape.Match(name);
+            if (!m.Success || !string.Equals(m.Groups[3].Value, word, StringComparison.OrdinalIgnoreCase))
+                return r.Fail("нужно «[Отдел]_" + word + "_Фамилия»");
+            r.Prefix = m.Groups[1].Value;
+            r.Department = m.Groups[2].Value;
+            r.Surname = m.Groups[4].Value;
+            if (r.Department.Length == 0) return r.Fail("нет отдела перед «_" + word + "»");
+            if (!r.Department.All(ch => char.IsLetter(ch) && char.IsUpper(ch))) return r.Fail("отдел «" + r.Department + "» — заглавными буквами, без пробелов");
+            var leader = leaders.Any(l => string.Equals(l, r.Department, StringComparison.Ordinal));
+            if (leader && r.Prefix != "!") return r.Fail(r.Department + " — со знаком «!» в начале: «!" + r.Department + "_" + word + "_…»");
+            if (!leader && r.Prefix == "!") return r.Fail("«!» — только у " + (leaders.Count > 0 ? string.Join(" и ", leaders) : "руководителей"));
+            if (!leader && departments.Count > 0 && !departments.Contains(r.Department)) return r.Fail("отдела «" + r.Department + "» нет в списке: " + string.Join(", ", departments));
+            if (r.Surname.Length == 0 || !char.IsLetter(r.Surname[0]) || !char.IsUpper(r.Surname[0])) return r.Fail("фамилия — с заглавной буквы");
+            if (r.Surname.Any(ch => !(char.IsLetter(ch) || ch == ' ' || ch == '-' || ch == '.'))) return r.Fail("в фамилии — только буквы, пробел, дефис, точка (без «_»)");
+            if (r.Surname.Any(ch => ch < 128 && char.IsLetter(ch)) && r.Surname.Any(ch => ch >= 128 && char.IsLetter(ch)))
+                return r.Fail("в фамилии смешаны латиница и кириллица («" + r.Surname + "»)");
+            return r;
+        }
+
+        private SignFileName Fail(string why)
+        {
+            Problem = why;
+            return this;
+        }
+
+        /// <summary>«КЖ, ОВ ,  вк» → «КЖ», «ОВ», «вк».</summary>
+        public static List<string> List(string text) =>
+            (text ?? "").Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
+    }
+
     /// <summary>Формула параметра подписи: size_lookup("таблица", "столбец", по умолчанию, ключ) = номер.</summary>
     public sealed class SignFormula
     {

@@ -38,6 +38,7 @@ namespace RASv2.SheetManager.UI
             Table.Text = s.Table; GipTable.Text = s.GipTable; GipMarker.Text = s.GipMarker;
             KeyParam.Text = s.KeyParam; Column.Text = s.Column; DefaultValue.Text = s.DefaultValue;
             FileWord.Text = s.FileWord; ColorBox.Text = s.Color;
+            Departments.Text = s.Departments; Leaders.Text = s.Leaders; Regulation.Text = s.Regulation;
             SaveButton.IsEnabled = !offline;
         }
 
@@ -70,6 +71,7 @@ namespace RASv2.SheetManager.UI
             s.Table = Table.Text; s.GipTable = GipTable.Text; s.GipMarker = GipMarker.Text;
             s.KeyParam = KeyParam.Text; s.Column = Column.Text; s.DefaultValue = DefaultValue.Text;
             s.FileWord = FileWord.Text;
+            s.Departments = Departments.Text; s.Leaders = Leaders.Text; s.Regulation = Regulation.Text;
             if (SignSettings.Rgb(ColorBox.Text) == null)
             {
                 Fail("Цвет — три числа от 0 до 255 через запятую, например «0,0,255».", ColorBox);
