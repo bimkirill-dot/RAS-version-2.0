@@ -18,8 +18,13 @@ namespace RASv2.Core
     {
         private const string Tag = "Ядро";
         public const string SelectorId = "Core.About";
-        /// <summary>Сколько раз в простое Revit искать кнопки без подписи, если при запуске лента ещё не была готова.</summary>
-        private const int HideTextAttempts = 200;
+        /// <summary>Сколько раз в простое Revit искать кнопки во внутренней ленте, если при запуске она ещё не была готова.</summary>
+        private const int PendingAttempts = 200;
+        /// <summary>
+        /// Ширина «О плагине» (переключателя отделов) не меньше этой: с короткой подписью («BIM») панель «Плагин» была заметно
+        /// уже соседних (разработчик, 27.10.2026).
+        /// </summary>
+        private const double SelectorMinWidth = 80;
 
         /// <summary>Кнопки на ленте по кодам (у кнопки в нескольких отделах — несколько).</summary>
         private static readonly Dictionary<string, List<RibbonItem>> Items = new Dictionary<string, List<RibbonItem>>(StringComparer.OrdinalIgnoreCase);
@@ -27,9 +32,17 @@ namespace RASv2.Core
         private static readonly List<PulldownButton> Selectors = new List<PulldownButton>();
         private static RibbonPlan _plan;
         private static string _tab;
-        /// <summary>Кнопки без подписи, которых ещё не нашли во внутренней ленте Revit: имя панели → код кнопки.</summary>
-        private static readonly List<KeyValuePair<string, string>> PendingNoText = new List<KeyValuePair<string, string>>();
-        private static int _hideAttempts;
+        /// <summary>
+        /// Что сделать с кнопкой во внутренней ленте Revit, чего не умеет Revit API (убрать подпись, ширина), — пока кнопку там
+        /// не нашли: имя панели, код кнопки, действие.
+        /// </summary>
+        private sealed class Tweak
+        {
+            public string Panel, Name, What;
+            public Action<AW.RibbonItem> Apply;
+        }
+        private static readonly List<Tweak> Pending = new List<Tweak>();
+        private static int _pendingAttempts;
 
         private static string SavedDepartmentFile => Path.Combine(RasPaths.User, "department.txt");
 
@@ -73,7 +86,7 @@ namespace RASv2.Core
                 Panels.Add(new KeyValuePair<RibbonPanelSpec, RibbonPanel>(spec, panel));
                 foreach (var slot in spec.Slots) AddSlot(panel, panelName, slot, data, departments);
             }
-            HidePendingText();
+            ApplyPending();
 
             if (departments.Count > 0) ShowDepartment(RibbonLayout.StartDepartment(plan, ReadSaved()), save: false);
         }
@@ -102,6 +115,8 @@ namespace RASv2.Core
                     if (item is PulldownButton selector) FillSelector(selector, data[entry.Id], departments);
                     else if (entry.Label != null) SetLabel(panelName, item, entry.Label);
                     if (!entry.Enabled) Disable(item, entry.Id);
+                    if (string.Equals(entry.Id, SelectorId, StringComparison.OrdinalIgnoreCase))
+                        Pending.Add(new Tweak { Panel = panelName, Name = item.Name, What = "ширина", Apply = i => i.MinWidth = Math.Max(i.MinWidth, SelectorMinWidth) });
                 }
             }
             catch (Exception ex)
@@ -131,7 +146,7 @@ namespace RASv2.Core
         {
             if (label.Length == 0)
             {
-                PendingNoText.Add(new KeyValuePair<string, string>(panelName, item.Name));
+                Pending.Add(new Tweak { Panel = panelName, Name = item.Name, What = "без подписи", Apply = i => i.ShowText = false });
                 return;
             }
             try { item.ItemText = label; }
@@ -139,43 +154,43 @@ namespace RASv2.Core
         }
 
         /// <summary>
-        /// Выключить текст у кнопок без подписи. Кнопка во внутренней ленте Revit — по номеру вида
+        /// Сделать во внутренней ленте Revit то, чего не умеет Revit API (Pending). Кнопка там — по номеру вида
         /// «…%&lt;вкладка&gt;%&lt;панель&gt;%…%&lt;код кнопки&gt;». Если лента ещё не готова (запуск Revit), — повтор в простое
-        /// (RetryHiddenText), пока не найдутся.
+        /// (RetryPending), пока не найдутся.
         /// </summary>
-        private static void HidePendingText()
+        private static void ApplyPending()
         {
-            if (PendingNoText.Count == 0) return;
+            if (Pending.Count == 0) return;
             try
             {
                 var tab = AW.ComponentManager.Ribbon?.Tabs.FirstOrDefault(t => t.Id == _tab || t.Title == _tab);
                 if (tab == null) return;
                 var items = tab.Panels.SelectMany(p => Flatten(p.Source?.Items)).Where(i => i?.Id != null).ToList();
-                foreach (var pending in PendingNoText.ToList())
+                foreach (var pending in Pending.ToList())
                 {
-                    var found = items.Where(i => i.Id.EndsWith("%" + pending.Value, StringComparison.Ordinal) &&
-                                                 i.Id.IndexOf("%" + pending.Key + "%", StringComparison.Ordinal) >= 0).ToList();
+                    var found = items.Where(i => i.Id.EndsWith("%" + pending.Name, StringComparison.Ordinal) &&
+                                                 i.Id.IndexOf("%" + pending.Panel + "%", StringComparison.Ordinal) >= 0).ToList();
                     if (found.Count == 0) continue;
-                    foreach (var i in found) i.ShowText = false;
-                    PendingNoText.Remove(pending);
+                    foreach (var i in found) pending.Apply(i);
+                    Pending.Remove(pending);
                 }
             }
             catch (Exception ex)
             {
-                Log.Write(Tag, "Не удалось убрать подпись кнопок", ex);
-                PendingNoText.Clear();
+                Log.Write(Tag, "Не удалось настроить кнопки во внутренней ленте Revit (подпись, ширина)", ex);
+                Pending.Clear();
             }
         }
 
-        /// <summary>В простое Revit: кнопки без подписи, которые при запуске не нашлись во внутренней ленте.</summary>
-        public static void RetryHiddenText()
+        /// <summary>В простое Revit: кнопки, которые при запуске не нашлись во внутренней ленте.</summary>
+        public static void RetryPending()
         {
-            if (PendingNoText.Count == 0) return;
-            HidePendingText();
-            if (PendingNoText.Count == 0 || ++_hideAttempts < HideTextAttempts) return;
-            Log.Write(Tag, "Не нашлись во внутренней ленте Revit кнопки без подписи — подпись осталась: " +
-                           string.Join(", ", PendingNoText.Select(p => p.Value)));
-            PendingNoText.Clear();
+            if (Pending.Count == 0) return;
+            ApplyPending();
+            if (Pending.Count == 0 || ++_pendingAttempts < PendingAttempts) return;
+            Log.Write(Tag, "Не нашлись во внутренней ленте Revit кнопки — не сделано: " +
+                           string.Join(", ", Pending.Select(p => p.Name + " (" + p.What + ")")));
+            Pending.Clear();
         }
 
         /// <summary>Кнопки панели, в том числе в стопках (строки стопки — RibbonRowPanel).</summary>
