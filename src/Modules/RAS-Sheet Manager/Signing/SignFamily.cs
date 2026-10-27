@@ -178,7 +178,14 @@ namespace RASv2.SheetManager.Signing
         /// <summary>Подпись — DWG с привязанной к параметру видимостью или очищенный («…_clean»).</summary>
         private IEnumerable<ImportInstance> Signatures() =>
             new FilteredElementCollector(_doc).OfClass(typeof(ImportInstance)).Cast<ImportInstance>()
-                .Where(i => Associated(i) != null || Path.GetFileNameWithoutExtension(i.Category?.Name ?? "").EndsWith(SignFolder.Suffix, StringComparison.OrdinalIgnoreCase));
+                .Where(i => Associated(i) != null || IsClean(i));
+
+        /// <summary>
+        /// Вставка — очищенная подпись: в имени вставки (категории импорта, по имени файла) есть «_clean». Не «оканчивается»:
+        /// Revit может дописать к имени повторно вставленного файла « 2» и т. п.
+        /// </summary>
+        private static bool IsClean(ImportInstance i) =>
+            (i.Category?.Name ?? "").IndexOf(SignFolder.Suffix, StringComparison.OrdinalIgnoreCase) >= 0;
 
         private static XYZ Origin(ImportInstance i)
         {
@@ -539,7 +546,7 @@ namespace RASv2.SheetManager.Signing
                 if (name == state.Key) continue;
                 string why = null;
                 if (!inFolder.Contains(SignNames.ToRussian(name))) why = "файла подписи нет в папке";
-                else if (imports != null && imports.Any(i => !Path.GetFileNameWithoutExtension(i.Category?.Name ?? "").EndsWith(SignFolder.Suffix, StringComparison.OrdinalIgnoreCase)))
+                else if (imports != null && imports.Any(i => !IsClean(i)))
                     why = "подпись вставлена вручную — не очищена";
                 if (why == null) continue;
                 result.Add(new SignStale { Name = name, Reason = why, Number = formula?.Number, Dwg = (imports ?? new List<ImportInstance>()).Select(i => i.Category?.Name ?? "").ToList() });

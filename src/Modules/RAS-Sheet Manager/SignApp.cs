@@ -79,6 +79,7 @@ namespace RASv2.SheetManager
                 WorkRoot = SignFolder.WorkRoot(Path.Combine(_context.LocalDataDir, "work")),
                 PreviewCache = Path.Combine(_context.LocalDataDir, "Картинки подписей"),
                 SaveSettings = SaveSettings,
+                Log = _context.Log.Info,
             };
             session.Anchor = family.Anchor(out session.AnchorSpread);
 
@@ -120,7 +121,12 @@ namespace RASv2.SheetManager
                 dialog.Show();
                 return;
             }
-            dialog.MainInstruction = "Добавлено подписей: " + ok + " из " + s.Jobs.Count;
+            // разработчик, 27.10.2026: «сократить — просто „добавлено 44 из 44“»; остальное — в «Показать подробности»
+            dialog.MainInstruction = "Добавлено " + ok + " из " + s.Jobs.Count;
+            var failed = s.Jobs.Where(j => !j.Ok).ToList();
+            if (failed.Count > 0)
+                dialog.MainContent = "Не добавлены:" + Environment.NewLine + string.Join(Environment.NewLine, failed.Take(10).Select(j => "• " + j.Item.Name + " — " + j.Result)) +
+                                     (failed.Count > 10 ? Environment.NewLine + "… и ещё " + (failed.Count - 10) : "");
             var text = new StringBuilder();
             text.AppendLine("Таблица выбора: «" + r.Table + "», кодировка " + EncodingName(r.Encoding) + ".");
             text.AppendLine("Проверка: " + r.Check + ".");
@@ -130,8 +136,9 @@ namespace RASv2.SheetManager
             if (r.Painted > 0) text.AppendLine("Перекрашено в цвет подписей: " + r.Painted + ".");
             if (r.RemovedTables.Count > 0) text.AppendLine("Удалены таблицы: " + string.Join(", ", r.RemovedTables) + ".");
             if (r.Backup != null) text.AppendLine("Таблица до изменений: " + r.Backup);
-            dialog.MainContent = text.ToString().TrimEnd();
-            dialog.ExpandedContent = string.Join(Environment.NewLine, s.Jobs.Select(j => j.Item.Name + (j.Item.Number != null ? " (№" + j.Item.Number + ")" : "") + " — " + j.Result));
+            text.AppendLine();
+            text.Append(string.Join(Environment.NewLine, s.Jobs.Select(j => j.Item.Name + (j.Item.Number != null ? " (№" + j.Item.Number + ")" : "") + " — " + j.Result)));
+            dialog.ExpandedContent = text.ToString().TrimEnd();
             if (ok < s.Jobs.Count) dialog.MainIcon = TaskDialogIcon.TaskDialogIconWarning;
             dialog.Show();
         }

@@ -298,6 +298,10 @@ namespace RASv2.SheetManager.UI
             var people = _rows.Where(r => r.File.NameProblem == null).Select(r => r.Name).ToList();
             var stale = _s.Family.Stale(_s.State, people);
             var orphans = OrphanCleanFiles();
+            _s.Log?.Invoke("Актуализация «" + _s.Family.Title + "», таблица «" + _s.Table + "»: в папке подписей — " + people.Count +
+                           ", неактуальных — " + stale.Count + (stale.Count > 0 ? ": " + string.Join("; ", stale.Take(20).Select(x =>
+                               x.Name + " — " + x.Reason + " [DWG: " + string.Join(", ", x.Dwg) + "]")) : "") +
+                           (orphans.Count > 0 ? "; очищенных без исходного — " + orphans.Count : ""));
             if (stale.Count == 0 && orphans.Count == 0)
             {
                 MessageBox.Show(this, "Всё актуально: подписей, которых нет в папке, и вставленных вручную в семействе нет.", "Подпись",

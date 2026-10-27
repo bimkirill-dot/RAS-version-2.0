@@ -26,6 +26,8 @@ namespace RASv2.SheetManager
         public int AnchorSpread;
         /// <summary>Сохранить общие настройки: null — сохранено, иначе — почему нет.</summary>
         public Func<SignSettings, string> SaveSettings;
+        /// <summary>Строка в журнал модуля (ras.log).</summary>
+        public Action<string> Log;
 
         // ── результат окна ──
         public string Folder;
