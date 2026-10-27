@@ -243,8 +243,11 @@ namespace RASv2.Tests
                 Check(SignSettings.FromJson("{\"height\": -3, \"color\": \"синий\"}").Height == 7 && SignSettings.FromJson("{\"color\": \"x\"}").Color == "0,0,255", "вне пределов — по умолчанию");
                 Check(SignSettings.FromJson("{ испорчен") == null, "не разобрать — null");
                 Check(new SignSettings().TableFor("RAS_Фамилия_ГИП") == "RAS_Таблица выбора ГИП" && new SignSettings().TableFor("RAS_Фамилия") == "RAS_Таблица выбора фамилий", "таблица ГИПов");
-                var r = SignSettings.FromJson(new SignSettings { Departments = " КЖ ,ОВ,, ", Leaders = "ГИП", Regulation = " \\\\srv\\Регламент.pdf " }.ToJson());
-                Check(r.Departments == "КЖ, ОВ" && r.Leaders == "ГИП" && r.Regulation == "\\\\srv\\Регламент.pdf" && SignSettings.FromJson("{}").Leaders == "ГИП, ГАП", "регламент в настройках");
+                var r = SignSettings.FromJson(new SignSettings { Departments = " КЖ ,ОВ,, ", Leaders = "ГИП" }.ToJson());
+                Check(r.Departments == "КЖ, ОВ" && r.Leaders == "ГИП" && SignSettings.FromJson("{}").Leaders == "ГИП, ГАП", "регламент в настройках");
+                var rules = SignRegulation.Rules(r);
+                Check(SignRegulation.Pattern(r) == "[Отдел]_Подпись_Фамилия.dwg" && rules.Any(x => x.Contains("КЖ, ОВ")) && rules.Any(x => x.Contains("Инициал") && x.Contains("двое")) &&
+                      SignRegulation.Examples(r).All(e => r.CheckName(e.Split(' ')[0] + (e.Contains("Ким") ? " И.dwg" : "")).Problem == null), "текст регламента — из настроек, примеры проходят проверку");
                 Check(new SignSettings().Clean.Key != new SignSettings { Height = 8 }.Clean.Key && new SignSettings().Clean.Key == new SignSettings().Clean.Key, "чем очищена — меняется вместе с настройками");
             });
         }

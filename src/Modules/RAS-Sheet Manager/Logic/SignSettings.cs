@@ -43,8 +43,6 @@ namespace RASv2.SheetManager.Logic
         [DataMember(Name = "departments")] public string Departments { get; set; }
         /// <summary>Кто со знаком «!» — на месте отдела (ГИП, ГАП).</summary>
         [DataMember(Name = "leaders")] public string Leaders { get; set; }
-        /// <summary>Регламент — ссылка или путь к файлу; пусто — окно с регламентом в плагине.</summary>
-        [DataMember(Name = "regulation")] public string Regulation { get; set; }
         /// <summary>Цвет подписей в Revit (стили объектов), «R,G,B».</summary>
         [DataMember(Name = "color")] public string Color { get; set; }
         [DataMember(Name = "changedBy")] public string ChangedBy { get; set; }
@@ -76,7 +74,6 @@ namespace RASv2.SheetManager.Logic
             Color = "0,0,255";
             Departments = "";
             Leaders = "ГИП, ГАП";
-            Regulation = "";
         }
 
         public SignSettings Normalize()
@@ -96,7 +93,6 @@ namespace RASv2.SheetManager.Logic
             if (Rgb(Color) == null) Color = d.Color;
             Departments = string.Join(", ", SignFileName.List(Departments));
             Leaders = Leaders == null ? d.Leaders : string.Join(", ", SignFileName.List(Leaders));
-            Regulation = (Regulation ?? "").Trim();
             return this;
         }
 

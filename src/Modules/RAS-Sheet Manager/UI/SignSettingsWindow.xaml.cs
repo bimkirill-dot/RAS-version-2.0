@@ -1,3 +1,4 @@
+using System;
 using System.Globalization;
 using System.IO;
 using System.Windows;
@@ -13,10 +14,16 @@ namespace RASv2.SheetManager.UI
 
         public SignSettings Result { get; private set; }
 
-        public SignSettingsWindow(SignSettings settings, bool offline, string acadFound)
+        private bool _ready;
+
+        /// <param name="showRegulation">Открыть сразу на регламенте наименования (ссылка из окна «Подпись»).</param>
+        public SignSettingsWindow(SignSettings settings, bool offline, string acadFound, bool showRegulation = false)
         {
             InitializeComponent();
             RASv2.Core.WindowTheme.Apply(this);
+            // по высоте содержимого, но не выше экрана — дальше прокрутка
+            MaxHeight = SystemParameters.WorkArea.Height * 0.9;
+            if (showRegulation) Loaded += (o, e) => RegulationHead.BringIntoView(new Rect(0, 0, 1, Scroll.ViewportHeight * 0.9));
             var s = settings.Copy();
             Result = s;
             Changed.Text = "Настройки общие для всех, кто добавляет подписи." +
@@ -38,11 +45,42 @@ namespace RASv2.SheetManager.UI
             Table.Text = s.Table; GipTable.Text = s.GipTable; GipMarker.Text = s.GipMarker;
             KeyParam.Text = s.KeyParam; Column.Text = s.Column; DefaultValue.Text = s.DefaultValue;
             FileWord.Text = s.FileWord; ColorBox.Text = s.Color;
-            Departments.Text = s.Departments; Leaders.Text = s.Leaders; Regulation.Text = s.Regulation;
+            Departments.Text = s.Departments; Leaders.Text = s.Leaders;
+            _ready = true;
+            ShowRegulation();
             SaveButton.IsEnabled = !offline;
         }
 
         private static string N(double v) => v.ToString("0.###", Ru);
+
+        /// <summary>Регламент — из полей окна (слово, отделы, кто с «!»): меняются поля — меняется и текст.</summary>
+        private void ShowRegulation()
+        {
+            var s = Result.Copy();
+            s.FileWord = FileWord.Text; s.Departments = Departments.Text; s.Leaders = Leaders.Text; s.KeyParam = KeyParam.Text;
+            s.Normalize();
+            RegulationPattern.Text = SignRegulation.Pattern(s);
+            RegulationRules.ItemsSource = SignRegulation.Rules(s);
+            RegulationExamples.ItemsSource = SignRegulation.Examples(s);
+        }
+
+        private void Naming_Changed(object sender, TextChangedEventArgs e)
+        {
+            if (_ready) ShowRegulation();
+        }
+
+        /// <summary>Размеры — как изначально (dwg_clean.bat): одной высоты 7 мм, ширина не больше 22 мм и т. д.</summary>
+        private void SizeDefaults_Click(object sender, RoutedEventArgs e)
+        {
+            var d = new SignSettings();
+            ModeHeight.IsChecked = d.SizeMode == SizeModes.Height;
+            ModeWidth.IsChecked = d.SizeMode == SizeModes.Width;
+            ModeBox.IsChecked = d.SizeMode == SizeModes.Box;
+            ModeKeep.IsChecked = d.SizeMode == SizeModes.Keep;
+            HeightBox.Text = N(d.Height); MaxWidthBox.Text = N(d.MaxWidth);
+            WidthBox.Text = N(d.Width); MaxHeightBox.Text = N(d.MaxHeight);
+            BoxWidth.Text = N(d.BoxWidth); BoxHeight.Text = N(d.BoxHeight);
+        }
 
         private void Browse_Click(object sender, RoutedEventArgs e)
         {
@@ -71,7 +109,7 @@ namespace RASv2.SheetManager.UI
             s.Table = Table.Text; s.GipTable = GipTable.Text; s.GipMarker = GipMarker.Text;
             s.KeyParam = KeyParam.Text; s.Column = Column.Text; s.DefaultValue = DefaultValue.Text;
             s.FileWord = FileWord.Text;
-            s.Departments = Departments.Text; s.Leaders = Leaders.Text; s.Regulation = Regulation.Text;
+            s.Departments = Departments.Text; s.Leaders = Leaders.Text;
             if (SignSettings.Rgb(ColorBox.Text) == null)
             {
                 Fail("Цвет — три числа от 0 до 255 через запятую, например «0,0,255».", ColorBox);

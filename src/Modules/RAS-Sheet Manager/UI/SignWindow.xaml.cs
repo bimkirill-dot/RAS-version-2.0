@@ -268,25 +268,8 @@ namespace RASv2.SheetManager.UI
 
         private void Regulation_Click(object sender, RoutedEventArgs e) => OpenRegulation();
 
-        /// <summary>Регламент: ссылка или файл из настроек; нет — окно с регламентом в плагине.</summary>
-        private void OpenRegulation()
-        {
-            var link = _s.Settings.Regulation;
-            if (!string.IsNullOrWhiteSpace(link))
-            {
-                try
-                {
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(link) { UseShellExecute = true });
-                    return;
-                }
-                catch (Exception ex) when (ex is System.ComponentModel.Win32Exception || ex is FileNotFoundException || ex is InvalidOperationException)
-                {
-                    MessageBox.Show(this, "Регламент не открылся (" + link + "): " + ex.Message + Environment.NewLine + "Показан регламент из плагина.",
-                        "Подпись", MessageBoxButton.OK, MessageBoxImage.Warning);
-                }
-            }
-            new SignRegulationWindow(_s.Settings) { Owner = this }.ShowDialog();
-        }
+        /// <summary>Регламент — в настройках (шестерёнка), открыть сразу на нём.</summary>
+        private void OpenRegulation() => ShowSettings(true);
 
         // ───────────────────────── план ─────────────────────────
 
@@ -340,9 +323,11 @@ namespace RASv2.SheetManager.UI
 
         // ───────────────────────── настройки и «Добавить» ─────────────────────────
 
-        private void Settings_Click(object sender, RoutedEventArgs e)
+        private void Settings_Click(object sender, RoutedEventArgs e) => ShowSettings(false);
+
+        private void ShowSettings(bool regulation)
         {
-            var w = new SignSettingsWindow(_s.Settings, _s.SettingsOffline, AcadConsole.Find(_s.Settings.Acad)) { Owner = this };
+            var w = new SignSettingsWindow(_s.Settings, _s.SettingsOffline, AcadConsole.Find(_s.Settings.Acad), regulation) { Owner = this };
             if (w.ShowDialog() != true) return;
             var error = _s.SaveSettings(w.Result);
             if (error != null)

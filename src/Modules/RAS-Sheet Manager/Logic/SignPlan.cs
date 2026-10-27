@@ -86,7 +86,9 @@ namespace RASv2.SheetManager.Logic
                 var russian = SignNames.ToRussian(nm);
                 if (seen.TryGetValue(russian, out var other))
                 {
-                    Skip(it, other == nm ? "дубль фамилии — уже есть выше в списке" : "совпадает с «" + other + "» без казахских букв — таблица выбора их не различит");
+                    Skip(it, other == nm
+                        ? "однофамилец «" + other + "» выше в списке — по регламенту добавьте обоим инициал через пробел («" + nm + " И»)"
+                        : "совпадает с «" + other + "» без казахских букв — таблица выбора их не различит");
                     continue;
                 }
                 seen[russian] = nm;
