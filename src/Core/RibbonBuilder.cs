@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Windows;
+using System.Windows.Media;
 using Autodesk.Revit.UI;
 using AW = Autodesk.Windows;
 
@@ -21,10 +24,11 @@ namespace RASv2.Core
         /// <summary>Сколько раз в простое Revit искать кнопки во внутренней ленте, если при запуске она ещё не была готова.</summary>
         private const int PendingAttempts = 200;
         /// <summary>
-        /// Ширина «О плагине» (переключателя отделов) не меньше этой: с короткой подписью («BIM») панель «Плагин» была заметно
-        /// уже соседних (разработчик, 27.10.2026).
+        /// Подпись переключателя отделов — не уже этой (точки экрана): с короткой подписью («BIM») панель «Плагин» была заметно
+        /// уже соседних (разработчик, 27.10.2026). Ширина кнопки во внутренней ленте (MinWidth) прижимала иконку влево —
+        /// выравнивания там нет, поэтому шире делается подпись: неразрывные пробелы по бокам, иконка — по центру над ней.
         /// </summary>
-        private const double SelectorMinWidth = 80;
+        private const double SelectorTextWidth = 70;
 
         /// <summary>Кнопки на ленте по кодам (у кнопки в нескольких отделах — несколько).</summary>
         private static readonly Dictionary<string, List<RibbonItem>> Items = new Dictionary<string, List<RibbonItem>>(StringComparer.OrdinalIgnoreCase);
@@ -33,7 +37,7 @@ namespace RASv2.Core
         private static RibbonPlan _plan;
         private static string _tab;
         /// <summary>
-        /// Что сделать с кнопкой во внутренней ленте Revit, чего не умеет Revit API (убрать подпись, ширина), — пока кнопку там
+        /// Что сделать с кнопкой во внутренней ленте Revit, чего не умеет Revit API (убрать подпись), — пока кнопку там
         /// не нашли: имя панели, код кнопки, действие.
         /// </summary>
         private sealed class Tweak
@@ -115,8 +119,6 @@ namespace RASv2.Core
                     if (item is PulldownButton selector) FillSelector(selector, data[entry.Id], departments);
                     else if (entry.Label != null) SetLabel(panelName, item, entry.Label);
                     if (!entry.Enabled) Disable(item, entry.Id);
-                    if (string.Equals(entry.Id, SelectorId, StringComparison.OrdinalIgnoreCase))
-                        Pending.Add(new Tweak { Panel = panelName, Name = item.Name, What = "ширина", Apply = i => i.MinWidth = Math.Max(i.MinWidth, SelectorMinWidth) });
                 }
             }
             catch (Exception ex)
@@ -177,7 +179,7 @@ namespace RASv2.Core
             }
             catch (Exception ex)
             {
-                Log.Write(Tag, "Не удалось настроить кнопки во внутренней ленте Revit (подпись, ширина)", ex);
+                Log.Write(Tag, "Не удалось настроить кнопки во внутренней ленте Revit", ex);
                 Pending.Clear();
             }
         }
@@ -245,7 +247,7 @@ namespace RASv2.Core
             }
             foreach (var selector in Selectors)
             {
-                try { selector.ItemText = department; }
+                try { selector.ItemText = SelectorLabel(department); }
                 catch (Exception ex) { Log.Write(Tag, "Не удалось подписать переключатель отделов", ex); }
             }
             if (!save) return;
@@ -255,6 +257,26 @@ namespace RASv2.Core
                 File.WriteAllText(SavedDepartmentFile, department);
             }
             catch (Exception ex) { Log.Write(Tag, "Не удалось запомнить отдел", ex); }
+        }
+
+        /// <summary>Название отдела с неразрывными пробелами по бокам — до ширины SelectorTextWidth (длинное — как есть).</summary>
+        private static string SelectorLabel(string department)
+        {
+            try
+            {
+                double Width(string s) => new FormattedText(s, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
+                    new Typeface("Segoe UI"), 12, Brushes.Black, 1.0).WidthIncludingTrailingWhitespace;
+                var space = Width("\u00A0");
+                var pad = space > 0 ? (int)Math.Ceiling((SelectorTextWidth - Width(department)) / space / 2) : 0;
+                if (pad <= 0) return department;
+                var side = new string('\u00A0', Math.Min(pad, 30));
+                return side + department + side;
+            }
+            catch (Exception ex)
+            {
+                Log.Write(Tag, "Не удалось расширить подпись переключателя отделов", ex);
+                return department;
+            }
         }
 
         private static string ReadSaved()
