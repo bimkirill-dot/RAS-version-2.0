@@ -103,19 +103,19 @@ namespace RASv2.SheetManager.Signing
         /// иначе из настроек), её строки (выгрузка во временную папку — она же резервная копия), параметры, вставленные DWG.
         /// </summary>
         /// <summary>
-        /// Форма формулы для таблицы — как у формул на неё в семействе; формул на неё нет — как у самой частой в семействе;
-        /// и их нет — номер из первого числового столбца таблицы, ключ «Фамилия» (или первый текстовый параметр), 1000.
+        /// Форма формулы для таблицы — как у формул на неё в семействе (у семейства ГИП — своя); формул на неё нет — из настроек
+        /// («Формула»), но столбец — только тот, что есть в таблице (нет — первый числовой столбец таблицы).
         /// </summary>
         public SignForm FormFor(string table, List<SignTableChoice> choices, SizeTable rows)
         {
-            var c = choices.FirstOrDefault(x => x.Name == table && x.Key != null) ?? choices.FirstOrDefault(x => x.Key != null);
-            if (c != null) return new SignForm { Column = c.Column, Default = c.Default, Key = c.Key };
-            var texts = TextParams();
+            var c = choices.FirstOrDefault(x => x.Name == table && x.Key != null);
+            if (c != null) return new SignForm { Column = c.Column, Default = c.Default, Key = c.Key, FromFamily = true };
+            var columns = rows?.NumberColumns() ?? new List<string>();
             return new SignForm
             {
-                Column = rows?.NumberColumns().FirstOrDefault() ?? "Да/Нет",
-                Default = "1000",
-                Key = texts.Contains("Фамилия") ? "Фамилия" : texts.FirstOrDefault() ?? "Фамилия",
+                Column = columns.Count == 0 || columns.Contains(_s.FormColumn) ? _s.FormColumn : columns[0],
+                Default = _s.FormDefault,
+                Key = _s.FormKey,
             };
         }
 

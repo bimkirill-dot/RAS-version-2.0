@@ -42,6 +42,7 @@ namespace RASv2.SheetManager.UI
             RegulationRules.ItemsSource = SignRegulation.Rules(s);
             RegulationExamples.ItemsSource = SignRegulation.Examples(s);
             FileWordText.Text = s.FileWord;
+            FormColumn.Text = s.FormColumn; FormKey.Text = s.FormKey; FormDefault.Text = s.FormDefault;
             LeadersText.Text = s.Leaders;
             SaveButton.IsEnabled = !offline;
         }
@@ -59,7 +60,7 @@ namespace RASv2.SheetManager.UI
             BoxWidth.Text = N(s.BoxWidth); BoxHeight.Text = N(s.BoxHeight);
         }
 
-        private Panel[] Sections => new Panel[] { SectionSize, SectionClean, SectionNaming };
+        private Panel[] Sections => new Panel[] { SectionSize, SectionClean, SectionNaming, SectionForm };
 
         private void Nav_Changed(object sender, SelectionChangedEventArgs e)
         {
@@ -101,6 +102,12 @@ namespace RASv2.SheetManager.UI
             s.Height = h; s.MaxWidth = mw; s.Width = w; s.MaxHeight = mh; s.BoxWidth = bw; s.BoxHeight = bh; s.Tolerance = tol;
             s.Hatch = HatchDrop.IsChecked == true ? HatchModes.Drop : HatchModes.Outline;
             s.Acad = Acad.Text;
+            s.FormColumn = FormColumn.Text; s.FormKey = FormKey.Text; s.FormDefault = FormDefault.Text;
+            if (!double.TryParse((FormDefault.Text ?? "").Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+            {
+                Fail("«Если фамилии нет» — число, например «1000».", FormDefault);
+                return;
+            }
             if (!string.IsNullOrWhiteSpace(s.Acad) && !File.Exists(s.Acad.Trim()))
             {
                 Fail("Нет файла «" + s.Acad.Trim() + "» — укажите accoreconsole.exe или оставьте поле пустым.", Acad);

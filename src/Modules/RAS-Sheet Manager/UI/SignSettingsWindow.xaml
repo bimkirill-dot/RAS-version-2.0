@@ -86,6 +86,7 @@
                 <ListBoxItem Content="Папка и размер" />
                 <ListBoxItem Content="Очистка" />
                 <ListBoxItem Content="Регламент наименования" />
+                <ListBoxItem Content="Формула" />
             </ListBox>
         </Border>
 
@@ -225,6 +226,30 @@
                         <TextBlock Style="{StaticResource Hint}" Text="Регламент меняет только разработчик плагина." />
                     </StackPanel>
 
+
+                    <!-- ───── Формула (разработчик, 27.10.2026: в окне «Подпись» — только таблица выбора) ───── -->
+                    <StackPanel x:Name="SectionForm" Visibility="Collapsed">
+                        <TextBlock Style="{StaticResource Title}" Text="Формула подписи" />
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,10"
+                                   Text="У каждого человека — параметр Да/Нет с формулой: size_lookup(«таблица», «столбец», если фамилии нет, параметр с фамилией) = номер. Если на выбранную таблицу в семействе уже есть формулы, плагин берёт столбец, параметр и значение из них (у семейства ГИП — свои). Значения ниже — когда формул на таблицу ещё нет (новое семейство или новая таблица)." />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="230" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Style="{StaticResource Label}" Text="Номер — из столбца таблицы" />
+                            <TextBox Grid.Column="1" x:Name="FormColumn" Width="180" HorizontalAlignment="Left" />
+                            <TextBlock Grid.Row="1" Style="{StaticResource Label}" Text="Параметр с фамилией" />
+                            <TextBox Grid.Row="1" Grid.Column="1" x:Name="FormKey" Width="180" HorizontalAlignment="Left" />
+                            <TextBlock Grid.Row="2" Style="{StaticResource Label}" Text="Если фамилии нет в таблице" />
+                            <TextBox Grid.Row="2" Grid.Column="1" x:Name="FormDefault" Style="{StaticResource Num}" HorizontalAlignment="Left" />
+                        </Grid>
+                    </StackPanel>
                 </Grid>
             </ScrollViewer>
 

@@ -33,6 +33,10 @@ namespace RASv2.SheetManager.Logic
     public sealed class SignForm
     {
         public string Column = "Да/Нет", Default = "1000", Key = "Фамилия";
+        /// <summary>Взята из формул семейства (а не из настроек).</summary>
+        public bool FromFamily;
+
+        public string Text => "номер — из столбца «" + Column + "», по параметру «" + Key + "», если фамилии нет — " + Default;
     }
 
     /// <summary>Подпись в семействе, которую пора убрать («Актуализировать»).</summary>

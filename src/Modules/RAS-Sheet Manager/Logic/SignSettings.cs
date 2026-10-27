@@ -35,6 +35,13 @@ namespace RASv2.SheetManager.Logic
         [DataMember(Name = "fileWord")] public string FileWord { get; set; }
         /// <summary>Кто со знаком «!» — на месте отдела (ГИП, ГАП).</summary>
         [DataMember(Name = "leaders")] public string Leaders { get; set; }
+        /// <summary>
+        /// Формула новой подписи, если на таблицу в семействе формул ещё нет: из какого столбца номер, по какому параметру,
+        /// что — если фамилии нет. Если формулы есть — берутся их столбец, параметр и значение (у семейства ГИП — свои).
+        /// </summary>
+        [DataMember(Name = "formColumn")] public string FormColumn { get; set; }
+        [DataMember(Name = "formKey")] public string FormKey { get; set; }
+        [DataMember(Name = "formDefault")] public string FormDefault { get; set; }
         [DataMember(Name = "changedBy")] public string ChangedBy { get; set; }
         [DataMember(Name = "changedAt")] public string ChangedAt { get; set; }
 
@@ -56,6 +63,9 @@ namespace RASv2.SheetManager.Logic
             Acad = "";
             FileWord = "Подпись";
             Leaders = "ГИП, ГАП";
+            FormColumn = "Да/Нет";
+            FormKey = "Фамилия";
+            FormDefault = "1000";
         }
 
         public SignSettings Normalize()
@@ -71,6 +81,10 @@ namespace RASv2.SheetManager.Logic
             Acad = (Acad ?? "").Trim();
             FileWord = Text(FileWord, d.FileWord);
             Leaders = Leaders == null ? d.Leaders : string.Join(", ", SignFileName.List(Leaders));
+            FormColumn = Text(FormColumn, d.FormColumn);
+            FormKey = Text(FormKey, d.FormKey);
+            FormDefault = Text(FormDefault, d.FormDefault).Replace(',', '.');
+            if (!double.TryParse(FormDefault, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _)) FormDefault = d.FormDefault;
             return this;
         }
 

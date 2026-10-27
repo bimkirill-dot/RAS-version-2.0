@@ -54,7 +54,6 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <TextBlock Style="{StaticResource FormLabel}" Text="Папка с подписями" />
@@ -78,19 +77,6 @@
                 </StackPanel>
             </DockPanel>
 
-            <!-- форма формулы — из самого семейства; у семейства ГИП номер — из своего столбца -->
-            <TextBlock Grid.Row="2" Style="{StaticResource FormLabel}" Text="Формула" />
-            <WrapPanel Grid.Row="2" Grid.Column="1" VerticalAlignment="Center">
-                <TextBlock Text="номер — из столбца" VerticalAlignment="Center" Margin="0,0,8,0" />
-                <ComboBox x:Name="ColumnBox" Width="140" MinHeight="28" IsEditable="True" VerticalContentAlignment="Center"
-                          ToolTip="Числовой столбец таблицы, из которого формула берёт номер человека" />
-                <TextBlock Text="по параметру" VerticalAlignment="Center" Margin="10,0,8,0" />
-                <ComboBox x:Name="KeyBox" Width="140" MinHeight="28" IsEditable="True" VerticalContentAlignment="Center"
-                          ToolTip="Текстовый параметр, куда на листе вписывают фамилию" />
-                <TextBlock Text="; если фамилии нет —" VerticalAlignment="Center" Margin="8,0,8,0" />
-                <TextBox x:Name="DefaultBox" Width="70" HorizontalContentAlignment="Right" />
-                <TextBlock x:Name="FormNote" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="12,0,0,0" />
-            </WrapPanel>
         </Grid>
 
         <!-- предупреждение: файлы не по регламенту -->

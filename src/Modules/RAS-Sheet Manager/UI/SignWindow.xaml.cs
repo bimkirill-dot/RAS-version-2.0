@@ -32,9 +32,6 @@ namespace RASv2.SheetManager.UI
         private CancellationTokenSource _cancel;
         private bool _busy;
         private bool _replanning;
-        /// <summary>Таблица, для которой заполнены поля формулы (сменили таблицу — форма заново из семейства).</summary>
-        private string _formTable;
-        private bool _formFilling;
 
         public SignWindow(SignSession session)
         {
@@ -48,9 +45,6 @@ namespace RASv2.SheetManager.UI
             ScaleBox.Text = session.Personal.ScaleFor(session.Family.Title).ToString("0.###", Ru);
             SetPoint();
             FillTables();
-            ColumnBox.AddHandler(System.Windows.Controls.Primitives.TextBoxBase.TextChangedEvent, new TextChangedEventHandler((o, e) => FormChanged()));
-            KeyBox.AddHandler(System.Windows.Controls.Primitives.TextBoxBase.TextChangedEvent, new TextChangedEventHandler((o, e) => FormChanged()));
-            DefaultBox.TextChanged += (o, e) => FormChanged();
             var folder = !string.IsNullOrEmpty(session.Personal.LastFolder) && Directory.Exists(session.Personal.LastFolder)
                 ? session.Personal.LastFolder
                 : session.Settings.Folder;
@@ -102,45 +96,20 @@ namespace RASv2.SheetManager.UI
 
         private void NewTable_LostFocus(object sender, KeyboardFocusChangedEventArgs e) => ReadFamily();
 
-        private void FormChanged()
-        {
-            if (_formFilling) return;
-            ReadFamily();
-        }
-
         /// <summary>
-        /// Семейство с выбранной таблицей и формой формулы (строки таблицы, параметры, вставленные DWG) — и новый план. Сменили
-        /// таблицу — форма формулы заново из семейства (у семейства ГИП номер — из своего столбца).
+        /// Семейство с выбранной таблицей (строки таблицы, параметры, вставленные DWG) — и новый план. Форма формулы — как в
+        /// формулах семейства на эту таблицу (у семейства ГИП — своя), формул нет — из настроек («Формула»).
         /// </summary>
         private void ReadFamily()
         {
-            if (_s.Family == null || ColumnBox == null) return;
+            if (_s.Family == null) return;
             var table = ChosenTable();
             if (string.IsNullOrEmpty(table)) return;
             try
             {
-                if (table != _formTable)
-                {
-                    var rows = _s.Family.ReadTable(table, "Фамилия", "Да/Нет", out _, out _);
-                    var form = _s.Family.FormFor(table, _s.Tables, rows);
-                    _formFilling = true;
-                    ColumnBox.ItemsSource = (rows?.NumberColumns() ?? new List<string>()).Union(new[] { form.Column }).Distinct().ToList();
-                    ColumnBox.Text = form.Column;
-                    KeyBox.ItemsSource = _s.Family.TextParams().Union(new[] { form.Key }).Distinct().ToList();
-                    KeyBox.Text = form.Key;
-                    DefaultBox.Text = form.Default;
-                    _formFilling = false;
-                    _formTable = table;
-                    var c = _s.Tables.FirstOrDefault(t => t.Name == table);
-                    FormNote.Text = c != null && c.Formulas > 0 ? "как в " + c.Formulas + " формулах" : "формул нет — проверьте";
-                }
-                var f = new SignForm
-                {
-                    Column = (ColumnBox.Text ?? "").Trim(),
-                    Key = (KeyBox.Text ?? "").Trim(),
-                    Default = (DefaultBox.Text ?? "").Trim().Replace(',', '.'),
-                };
-                if (f.Column.Length == 0 || f.Key.Length == 0 || f.Default.Length == 0) { ShowError("Заполните формулу: столбец, параметр и значение, если фамилии нет."); return; }
+                var rows = _s.Family.ReadTable(table, "Фамилия", "Да/Нет", out _, out _);
+                var f = _s.Family.FormFor(table, _s.Tables, rows);
+                TableBox.ToolTip = "Формула: " + f.Text + (f.FromFamily ? " — как в формулах семейства" : " — из настроек (формул на эту таблицу нет)");
                 _s.Table = table;
                 _s.State = _s.Family.State(table, f, out _s.SourceEncoding, out _s.Backup);
                 _s.TableExisted = _s.Backup != null; // таблица есть в семействе — её выгрузили
@@ -365,7 +334,6 @@ namespace RASv2.SheetManager.UI
             _s.Tables = _s.Family.TableChoices();
             _s.Anchor = _s.Family.Anchor(out _s.AnchorSpread);
             SetPoint();
-            _formTable = null;
             ReadFamily();
             StatusText.Text = "Актуализация: убрано из семейства — " + stale.Count + ", очищенных файлов удалено — " + deleted + " (Ctrl+Z в Revit вернёт семейство).";
         }
