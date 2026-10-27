@@ -47,6 +47,7 @@ namespace RASv2.Tests
             Run("RAS-Model History: «Модель запомнена»", ModelHistoryElementTests.Warmup);
             Run("RAS-Model History: хранилище заменено копией", ModelHistoryRestoreTests.Restore);
             Run("RAS-Model History: связь журналов", ModelHistoryRestoreTests.Links);
+            Run("RAS-Model History: настройки — из сборки, общие, личные", ModelHistorySettingsTests.All);
 #endif
             Console.WriteLine(_failed == 0 ? "Все проверки прошли." : "Не прошло проверок: " + _failed);
             return _failed == 0 ? 0 : 1;

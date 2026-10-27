@@ -46,7 +46,7 @@ Core.About
 (
 ModelHistory.Journal подпись="Журнал"
 ModelHistory.History подпись="История выделенного"
-ModelHistory.Settings подпись="Настройки"
+ModelHistory.Settings подпись="Настройки" доступна="BIM"
 )
 [Менеджер коллизий]
 (

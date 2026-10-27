@@ -6,15 +6,24 @@ using RASv2.ModelHistory.Storage;
 
 namespace RASv2.ModelHistory.UI
 {
+    /// <summary>
+    /// Окно «Настройки» — только у BIM-специалистов (кнопка с «доступна=» в ribbon.txt): всё, кроме темы, — для всей команды,
+    /// сохраняется в общий файл на сервере (SettingsFiles).
+    /// </summary>
     public sealed class SettingsViewModel : ObservableObject
     {
         private readonly SpySettings _edit;
 
-        public SettingsViewModel(SpySettings current)
+        /// <param name="defaultFolder">Папка журналов по умолчанию (когда поле пустое).</param>
+        /// <param name="serverUnavailable">Сервер не ответил: показаны последние известные настройки, сохранить не получится.</param>
+        public SettingsViewModel(SpySettings current, string defaultFolder, bool serverUnavailable)
         {
             _edit = current.Clone();
+            DefaultFolder = defaultFolder;
             SaveCommand = new RelayCommand(Save);
             CancelCommand = new RelayCommand(() => RequestClose?.Invoke(false));
+            ResetFolderCommand = new RelayCommand(() => JournalFolder = "");
+            BrowseFolderCommand = new RelayCommand(BrowseFolder);
             ThemeOptions = new List<Option<string>>
             {
                 new Option<string>("Как в Revit", "Auto"),
@@ -23,6 +32,11 @@ namespace RASv2.ModelHistory.UI
             };
             _selectedTheme = ThemeOptions.FirstOrDefault(o => string.Equals(o.Value, _edit.UiTheme, StringComparison.OrdinalIgnoreCase))
                              ?? ThemeOptions[0];
+            ChangedNote = string.IsNullOrEmpty(current.ChangedBy)
+                ? "Общие настройки ещё не меняли — действуют исходные."
+                : "Последнее изменение: " + current.ChangedBy + (string.IsNullOrEmpty(current.ChangedAt) ? "" : ", " + current.ChangedAt) + ".";
+            if (serverUnavailable)
+                ServerNote = "Сервер не ответил — показаны последние известные настройки. Сохранить сейчас не получится.";
         }
 
         /// <summary>Тема панели и окна настроек.</summary>
@@ -41,10 +55,17 @@ namespace RASv2.ModelHistory.UI
             }
         }
 
+        public string DefaultFolder { get; }
+        public string ChangedNote { get; }
+        public string ServerNote { get; }
+        public bool HasServerNote => ServerNote != null;
+
         /// <summary>true — сохранить, false — отмена.</summary>
         public event Action<bool> RequestClose;
 
         public SpySettings Result => _edit;
+
+        public string JournalFolder { get => _edit.JournalFolder; set { _edit.JournalFolder = value ?? ""; OnPropertyChanged(); } }
 
         public bool TrackParameters { get => _edit.TrackParameters; set { _edit.TrackParameters = value; OnPropertyChanged(); } }
         public bool SnapshotOnOpen { get => _edit.SnapshotOnOpen; set { _edit.SnapshotOnOpen = value; OnPropertyChanged(); } }
@@ -64,11 +85,23 @@ namespace RASv2.ModelHistory.UI
 
         public RelayCommand SaveCommand { get; }
         public RelayCommand CancelCommand { get; }
+        public RelayCommand ResetFolderCommand { get; }
+        public RelayCommand BrowseFolderCommand { get; }
 
         private void Save()
         {
             _edit.Normalize();
             RequestClose?.Invoke(true);
+        }
+
+        private void BrowseFolder()
+        {
+            var dialog = new Microsoft.Win32.OpenFolderDialog
+            {
+                Title = "Папка журналов RAS-Model History",
+                InitialDirectory = string.IsNullOrWhiteSpace(JournalFolder) ? DefaultFolder : JournalFolder
+            };
+            if (dialog.ShowDialog() == true) JournalFolder = dialog.FolderName;
         }
 
         private static string Str(int v) => v.ToString(CultureInfo.InvariantCulture);

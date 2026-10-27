@@ -42,5 +42,7 @@ namespace RASv2.Core
             Buttons.Add(data);
             return data;
         }
+
+        public bool IsAllowed(string name) => Host.IsAllowed(_module.Id + "." + name);
     }
 }

@@ -80,6 +80,18 @@ namespace RASv2.Tests
                 Check(ButtonAccess.Allowed("Ivanov_A, бим", "Poletayev_BIM", people) && ButtonAccess.Allowed("Ivanov_A, бим", "ivanov_a", people), "логин и группа вместе");
                 Check(!ButtonAccess.Allowed("руководтели", "Ivanov_A", people), "опечатка в группе — серая (видно в «О плагине»), а не открыта всем");
             });
+            yield return Case("модулю — доступна ли его кнопка (закрыть то же действие в своих окнах)", () =>
+            {
+                var file = PluginFile.Split(Sample.Split('\n'), w => { });
+                var people = ButtonAccess.People(file.People, w => { });
+                var layout = RibbonLayout.Parse(file.Layout, w => { });
+                bool For(string user, string id) => ButtonAccess.AllowedButton(layout, id, a => ButtonAccess.Allowed(a, user, people));
+                Check(For("Ivanov_A", "ClashAnalysis.ElementClashes") && !For("Sidorov_C", "ClashAnalysis.ElementClashes"), "как на ленте");
+                Check(!For("Ivanov_A", "ModelHistory.Settings"), "«никому»");
+                Check(For("Sidorov_C", "ModelHistory.Journal") && For("Sidorov_C", "clashanalysis.viewsettings"), "не в раскладке или без «доступна» — доступна; код без учёта регистра");
+                var twice = RibbonLayout.Parse(new[] { "[[А]]", "[П]", "ModelHistory.Settings доступна=\"никому\"", "[[Б]]", "[П]", "ModelHistory.Settings" }, w => { });
+                Check(ButtonAccess.AllowedButton(twice, "ModelHistory.Settings", a => ButtonAccess.Allowed(a, "x", people)), "в двух отделах — доступна, если доступна хоть в одном");
+            });
             yield return Case("«О плагине» (переключатель отделов) серым не бывает", () =>
             {
                 var warnings = new List<string>();

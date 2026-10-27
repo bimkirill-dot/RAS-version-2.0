@@ -12,6 +12,7 @@
             <!-- то же оформление и тема, что у панели -->
             <local:ThemeResources />
         </ResourceDictionary.MergedDictionaries>
+        <BooleanToVisibilityConverter x:Key="Vis" />
         <Style x:Key="Hint" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource Spy.Muted}" />
             <Setter Property="TextWrapping" Value="Wrap" />
@@ -40,7 +41,7 @@
         </StackPanel>
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
             <StackPanel>
-                <GroupBox Header="Оформление">
+                <GroupBox Header="Оформление (ваше личное)">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="Тема панели:" VerticalAlignment="Center" Margin="0,0,8,0" />
@@ -52,25 +53,40 @@
                     </StackPanel>
                 </GroupBox>
 
-                <GroupBox Header="Панель">
+                <!-- остальное — для всей команды: окно только у BIM-специалистов (разработчик, 27.10.2026), файл — на сервере -->
+                <Border Margin="0,10,0,2" Padding="8,6" CornerRadius="3" Background="{DynamicResource Spy.InfoBg}"
+                        BorderBrush="{DynamicResource Spy.Line}" BorderThickness="1">
                     <StackPanel>
+                        <TextBlock TextWrapping="Wrap"
+                                   Text="Ниже — настройки для всей команды. Они сохраняются в общий файл на сервере; у коллег действуют после перезапуска Revit." />
+                        <TextBlock TextWrapping="Wrap" Margin="0,4,0,0" Foreground="{DynamicResource Spy.Muted}" Text="{Binding ChangedNote}" />
+                        <TextBlock TextWrapping="Wrap" Margin="0,4,0,0" FontWeight="SemiBold" Text="{Binding ServerNote}"
+                                   Visibility="{Binding HasServerNote, Converter={StaticResource Vis}}" />
+                    </StackPanel>
+                </Border>
+
+                <GroupBox Header="Журналы (для всей команды)">
+                    <StackPanel>
+                        <TextBlock Text="Папка журналов:" Margin="0,4,0,2" />
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="По умолчанию" Width="100" Height="22" Margin="6,0,0,0" Command="{Binding ResetFolderCommand}" />
+                            <Button DockPanel.Dock="Right" Content="Обзор…" Width="70" Height="22" Margin="6,0,0,0" Command="{Binding BrowseFolderCommand}" />
+                            <TextBox Height="22" VerticalContentAlignment="Center" Text="{Binding JournalFolder, UpdateSourceTrigger=PropertyChanged}" />
+                        </DockPanel>
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,6">
+                            <Run Text="Пусто — по умолчанию:" />
+                            <Run Text="{Binding DefaultFolder, Mode=OneWay}" />
+                            <Run Text=". Новая папка — с перезапуска Revit у каждого. Журналы из прежней папки сами не переносятся: перенесите их папки вручную, иначе прежняя история не будет видна." />
+                        </TextBlock>
+
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Период по умолчанию, дней (0 — всё время):" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <TextBlock Text="Период по умолчанию в журнале, дней (0 — всё время):" VerticalAlignment="Center" Margin="0,0,8,0" />
                             <TextBox Style="{StaticResource Num}" Width="60" Text="{Binding DefaultPeriodDays, UpdateSourceTrigger=PropertyChanged}" />
                         </StackPanel>
-                        <TextBlock Text="Применяется сразу после «Сохранить» и при каждом запуске Revit."
-                                   Style="{StaticResource Hint}" Margin="0,4,0,0" />
                     </StackPanel>
                 </GroupBox>
 
-                <!-- общее для команды: если отключить запись у одного человека, в журнале команды будут дыры -->
-                <Border Margin="0,10,0,2" Padding="8,6" CornerRadius="3" Background="{DynamicResource Spy.InfoBg}"
-                        BorderBrush="{DynamicResource Spy.Line}" BorderThickness="1">
-                    <TextBlock TextWrapping="Wrap"
-                               Text="Ниже — настройки, одинаковые для всей команды: если выключить запись у одного человека, в журнале команды появятся дыры. Их задаёт BIM-менеджер в общем файле, который раздаётся вместе с плагином; здесь они только для просмотра." />
-                </Border>
-
-                <GroupBox Header="Что отслеживать (для всей команды)" IsEnabled="False">
+                <GroupBox Header="Что отслеживать (для всей команды)">
                     <StackPanel>
                         <CheckBox Style="{StaticResource Check}" Content="Изменения параметров «было → стало»" IsChecked="{Binding TrackParameters}" />
                         <TextBlock Style="{StaticResource Hint}"
@@ -106,7 +122,7 @@
                     </StackPanel>
                 </GroupBox>
 
-                <GroupBox Header="Лимиты (для всей команды)" IsEnabled="False">
+                <GroupBox Header="Лимиты (для всей команды)">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -132,10 +148,9 @@
                     </Grid>
                 </GroupBox>
 
-                <!-- вместо путей к файлам — что делать простыми словами (разработчик, 20.10.2026); подробно — README.md модуля,
-                     «Настройки: где лежат и как поменять» -->
+                <!-- что делать простыми словами (разработчик, 20.10.2026); подробно — README.md модуля, «Настройки» -->
                 <TextBlock Foreground="{DynamicResource Spy.Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"
-                           Text="«Оформление» и «Панель» — ваши личные настройки. Остальное одинаково у всей команды: чтобы поменять, обратитесь к BIM-менеджеру. Если что-то не работает — «О плагине» → «Показать журнал ошибок», отправьте файл разработчику." />
+                           Text="Если что-то не работает — «О плагине» → «Показать журнал ошибок», отправьте файл разработчику." />
 
             </StackPanel>
         </ScrollViewer>

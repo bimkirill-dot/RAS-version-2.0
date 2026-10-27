@@ -23,6 +23,9 @@ namespace RASv2.ModelHistory
         public static App Instance { get; private set; }
 
         public SpySettings Settings { get; private set; }
+
+        /// <summary>Окно «Настройки» доступно этому человеку («доступна=» у кнопки ModelHistory.Settings в ribbon.txt).</summary>
+        private bool _settingsAllowed = true;
         public LogStore Store { get; private set; }
         public IdleWorkQueue Idle { get; private set; }
         public ChangeTracker Tracker { get; private set; }
@@ -47,7 +50,9 @@ namespace RASv2.ModelHistory
             DataFolders.Init(context);
             LegacyFolders.Migrate(DataFolders.UserDataDir, DataFolders.LocalDataDir); // личные папки с прежних мест — до чтения настроек
             WindowsUser.ResolveInBackground(); // полное имя сотрудника для записей журнала — из каталога, не задерживая запуск
-            Settings = SpySettings.Load();
+            Settings = SettingsFiles.Load();
+            DataFolders.UseJournalFolder(Settings.JournalFolder); // папка журналов — на весь сеанс
+            _settingsAllowed = context.IsAllowed("Settings");
             Store = new LogStore();
             Idle = new IdleWorkQueue();
             Tracker = new ChangeTracker(Settings, Store, Idle);
@@ -55,6 +60,7 @@ namespace RASv2.ModelHistory
             UiState = UiState.Load();
             ThemeManager.Apply(Settings); // тема как в Revit (или выбранная в настройках) — до создания панели
             ViewModel = new MainViewModel(Tracker, Settings, Actions, UiState);
+            ViewModel.SettingsAllowed = _settingsAllowed;
             ViewModel.OpenSettingsRequested += () => ShowSettings(IntPtr.Zero);
 
             _pane = new SpyPane(ViewModel, UiState);
@@ -79,7 +85,8 @@ namespace RASv2.ModelHistory
             events.Idling(Idle.OnIdling);
             events.ThemeChanged(OnThemeChanged);
 
-            Diag.Log("Модуль запущен. Папка журналов: " + DataFolders.LogFolder);
+            Diag.Log("Модуль запущен. Папка журналов: " + DataFolders.LogFolder + "; общие настройки — " +
+                     (SettingsFiles.FromServer ? "с сервера" : SettingsFiles.ServerUnavailable ? "копия на компьютере (сервер не ответил)" : "исходные из сборки"));
         }
 
         /// <summary>Revit закрывается: сохранить вид панели и дописать очередь журнала. Отписку делает ядро.</summary>
@@ -105,29 +112,70 @@ namespace RASv2.ModelHistory
             // «Актуализировать журнал» — только в меню «⋯» панели: действие для BIM-менеджера, скрывает записи у всей
             // команды; большая кнопка на ленте приглашала каждого «почистить журнал»
             var settings = context.AddButton("Settings", "Настройки", typeof(SettingsCommand),
-                "Тема и период по умолчанию; общие для команды настройки — для просмотра", icon: "Settings");
+                "Настройки журнала для всей команды: что отслеживать, лимиты, папка журналов, период по умолчанию", icon: "Settings");
             settings.AvailabilityClassName = typeof(Commands.AlwaysAvailable).FullName;
         }
 
         public void ShowSettings(IntPtr owner)
         {
+            // окно — только у BIM-специалистов: кнопка у остальных серая, а сюда ведёт ещё и меню «⋯» панели
+            if (!_settingsAllowed)
+            {
+                System.Windows.MessageBox.Show("Настройки журнала меняют BIM-специалисты — обратитесь к BIM-менеджеру.", "RAS-Model History");
+                return;
+            }
             try
             {
-                var vm = new SettingsViewModel(Settings);
+                // свежие с сервера: коллега мог поменять их после запуска Revit — иначе «Сохранить» вернуло бы прежнее
+                var fresh = SettingsFiles.Load();
+                fresh.UiTheme = Settings.UiTheme;
+                var vm = new SettingsViewModel(fresh, DataFolders.SharedDir, SettingsFiles.ServerUnavailable);
                 var win = new SettingsWindow(vm);
                 if (owner != IntPtr.Zero) new WindowInteropHelper(win).Owner = owner;
                 else if (_mainWindow != IntPtr.Zero) new WindowInteropHelper(win).Owner = _mainWindow;
                 if (win.ShowDialog() != true) return;
 
+                var result = vm.Result;
+                var folder = DataFolders.Resolve(result.JournalFolder);
+                var folderChanged = !SameFolder(folder, DataFolders.Resolve(fresh.JournalFolder));
+                if (folderChanged)
+                {
+                    var problem = SettingsFiles.CheckFolder(folder);
+                    if (problem != null)
+                    {
+                        System.Windows.MessageBox.Show("В папку журналов нельзя записывать: " + folder + "\n" + problem +
+                                                       "\n\nНастройки не сохранены.", "RAS-Model History");
+                        return;
+                    }
+                    var answer = System.Windows.MessageBox.Show(
+                        "Журналы будут вестись в папке:\n" + folder + "\n\n" +
+                        "У каждого — с перезапуска Revit; до этого коллеги пишут в прежнюю папку.\n" +
+                        "Журналы из прежней папки сами не переносятся: перенесите их папки вручную, иначе прежняя история не будет видна.\n\n" +
+                        "Сменить папку журналов?", "RAS-Model History", System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Warning);
+                    if (answer != System.Windows.MessageBoxResult.Yes) return;
+                }
+
+                result.ChangedBy = (string.IsNullOrEmpty(WindowsUser.FullName) ? "" : WindowsUser.FullName + " ") + "(" + WindowsUser.Account + ")";
+                result.ChangedAt = DateTime.Now.ToString("dd.MM.yyyy HH:mm");
+                try { SettingsFiles.SaveTeam(result); }
+                catch (Exception ex)
+                {
+                    Diag.Log("Общие настройки не записаны: " + SettingsFiles.TeamPath, ex);
+                    System.Windows.MessageBox.Show("Не удалось сохранить настройки на сервер: " + ex.Message + "\n\nНичего не изменено.", "RAS-Model History");
+                    return;
+                }
+                SettingsFiles.SavePersonal(result);
+
                 var oldPeriod = Settings.DefaultPeriodDays;
-                Settings.CopyFrom(vm.Result);
-                Settings.Save();
+                Settings.CopyFrom(result); // папка журналов этого сеанса (DataFolders.LogFolder) не меняется — с перезапуска
                 ThemeManager.Apply(Settings);
                 Tracker.OnSettingsChanged();
                 // новый «Период по умолчанию» — сразу, без перезапуска Revit (иначе панель остаётся на своём периоде)
                 if (Settings.DefaultPeriodDays != oldPeriod) ViewModel.ApplyDefaultPeriod(Settings.DefaultPeriodDays);
                 ViewModel.Reload();
-                ViewModel.Status = "Настройки сохранены.";
+                ViewModel.Status = folderChanged
+                    ? "Настройки сохранены. Новая папка журналов — после перезапуска Revit (у каждого)."
+                    : "Настройки сохранены. У коллег — после перезапуска Revit.";
             }
             catch (Exception ex)
             {
@@ -135,6 +183,9 @@ namespace RASv2.ModelHistory
                 System.Windows.MessageBox.Show("Не удалось сохранить настройки:\n" + ex.Message, "RAS-Model History");
             }
         }
+
+        private static bool SameFolder(string a, string b) =>
+            string.Equals((a ?? "").TrimEnd('\\', '/'), (b ?? "").TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
 
         /// <summary>Пользователь сменил тему Revit (светлая / тёмная) — перекрасить панель, если тема «как в Revit».</summary>
         private void OnThemeChanged(object sender, Autodesk.Revit.UI.Events.ThemeChangedEventArgs e)

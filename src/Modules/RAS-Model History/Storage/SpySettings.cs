@@ -1,15 +1,16 @@
 using System;
-using System.IO;
 using System.Reflection;
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 namespace RASv2.ModelHistory.Storage
 {
     /// <summary>
-    /// Настройки плагина. Общие для команды (что отслеживать, лимиты) — из RasModelHistory.settings.json рядом с DLL,
-    /// личные (тема, период по умолчанию) — из settings.json в DataFolders.UserDataDir (см. Load).
-    /// Папка журналов в настройках не задаётся — её даёт ядро (DataFolders.LogFolder).
+    /// Настройки модуля. Общие для команды (что отслеживать, лимиты, папка журналов, период по умолчанию) — в общем файле
+    /// на сервере, меняют BIM-специалисты в окне «Настройки» (разработчик, 27.10.2026); личная — только тема. Откуда что
+    /// читается и куда пишется — SettingsFiles; здесь — значения и правила, без файлов (проверяется тестами).
     /// </summary>
     public sealed class SpySettings
     {
@@ -43,97 +44,95 @@ namespace RASv2.ModelHistory.Storage
         public int MaxSelectionSnapshot { get; set; } = 300;
         /// <summary>Сколько снимков параметров держать в оперативной памяти (остальные — во временном файле на диске).</summary>
         public int MaxSnapshotElements { get; set; } = 3000;
-        /// <summary>Период по умолчанию в панели, дней (0 — всё время).</summary>
+        /// <summary>Период по умолчанию в панели, дней (0 — всё время). Общий для команды.</summary>
         public int DefaultPeriodDays { get; set; } = 7;
         /// <summary>Максимум строк в таблице.</summary>
         public int MaxDisplayedRows { get; set; } = 50000;
-        /// <summary>Тема панели: «Auto» — как в Revit, «Light» — светлая, «Dark» — тёмная.</summary>
+        /// <summary>
+        /// Папка журналов команды; пусто — по умолчанию (Data\RAS-Model History на сервере плагина). Действует с запуска Revit:
+        /// журналы из прежней папки не переносятся.
+        /// </summary>
+        public string JournalFolder { get; set; } = "";
+        /// <summary>Кто последним сохранил общие настройки (имя и логин) — показывается в окне.</summary>
+        public string ChangedBy { get; set; }
+        /// <summary>Когда («dd.MM.yyyy HH:mm»).</summary>
+        public string ChangedAt { get; set; }
+        /// <summary>Тема панели: «Auto» — как в Revit, «Light» — светлая, «Dark» — тёмная. Личная.</summary>
         public string UiTheme { get; set; } = "Auto";
 
-        public static string UserSettingsPath => Path.Combine(DataFolders.UserDataDir, "settings.json");
-
-        public static string CompanySettingsPath
-        {
-            get
-            {
-                var dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? "";
-                return Path.Combine(dir, "RasModelHistory.settings.json");
-            }
-        }
+        /// <summary>Единственная личная настройка: в общем файле не пишется и не действует.</summary>
+        private const string PersonalKey = nameof(UiTheme);
 
         private static readonly JsonSerializerOptions Options = new JsonSerializerOptions
         {
             WriteIndented = true,
             ReadCommentHandling = JsonCommentHandling.Skip,
             AllowTrailingCommas = true,
-            PropertyNameCaseInsensitive = true
+            PropertyNameCaseInsensitive = true,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping // имена по-русски — читаемо в файле
         };
 
+        private static readonly JsonNodeOptions NodeOptions = new JsonNodeOptions { PropertyNameCaseInsensitive = true };
+        private static readonly JsonDocumentOptions DocOptions = new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
+
         /// <summary>
-        /// Что отслеживать и лимиты — одинаковые у всей команды: только из общего файла RasModelHistory.settings.json рядом
-        /// с плагином (его раздаёт BIM-менеджер). Личный файл (UserSettingsPath) задаёт только тему
-        /// и период по умолчанию. Раньше личный файл целиком заменял общий: после любого «Сохранить» правки общего файла
-        /// до человека не доходили, и любой мог выключить запись изменений.
+        /// Настройки из трёх частей, каждая поверх предыдущей: исходные из сборки (RasModelHistory.settings.json), общий файл
+        /// команды (с сервера или его копия на компьютере), личный файл — из него только тема (в личных файлах прежних
+        /// версий записаны все поля: они не должны перебивать общие). Испорченная часть пропускается.
         /// </summary>
-        public static SpySettings Load()
+        public static SpySettings Compose(string builtJson, string teamJson, string personalJson)
         {
+            var merged = new JsonObject(NodeOptions);
+            Overlay(merged, builtJson, "из сборки", personal: false);
+            Overlay(merged, teamJson, "общие", personal: false);
+            Overlay(merged, personalJson, "личные", personal: true);
             SpySettings s = null;
+            try { s = merged.Deserialize<SpySettings>(Options); }
+            catch (Exception ex) { Diag.Log("Настройки не разобраны", ex); }
+            return (s ?? new SpySettings()).Normalize();
+        }
+
+        private static void Overlay(JsonObject target, string json, string what, bool personal)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return;
             try
             {
-                if (File.Exists(CompanySettingsPath)) s = Parse(File.ReadAllText(CompanySettingsPath));
-            }
-            catch (Exception ex)
-            {
-                Diag.Log("Settings load failed: " + CompanySettingsPath, ex);
-            }
-            s ??= new SpySettings();
-            try
-            {
-                if (File.Exists(UserSettingsPath))
+                if (!(JsonNode.Parse(LogFolderRx.Replace(json, "\"LogFolder\": \"\""), NodeOptions, DocOptions) is JsonObject part)) return;
+                foreach (var kv in part)
                 {
-                    // в личных файлах прежних версий записаны все поля — берём только личные
-                    var json = LogFolderRx.Replace(File.ReadAllText(UserSettingsPath), "\"LogFolder\": \"\"");
-                    var personal = JsonSerializer.Deserialize<PersonalSettings>(json, Options);
-                    if (!string.IsNullOrEmpty(personal?.UiTheme)) s.UiTheme = personal.UiTheme;
-                    if (personal?.DefaultPeriodDays != null) s.DefaultPeriodDays = personal.DefaultPeriodDays.Value;
+                    var isPersonal = string.Equals(kv.Key, PersonalKey, StringComparison.OrdinalIgnoreCase);
+                    if (isPersonal != personal) continue;
+                    target[kv.Key] = kv.Value?.DeepClone();
                 }
             }
-            catch (Exception ex)
-            {
-                Diag.Log("Settings load failed: " + UserSettingsPath, ex);
-            }
-            return s.Normalize();
+            catch (Exception ex) { Diag.Log("Настройки (" + what + ") не разобраны — пропущены", ex); }
         }
 
-        /// <summary>Личные настройки — то, что каждый выбирает сам.</summary>
-        private sealed class PersonalSettings
+        /// <summary>Разбирается ли текст общего файла — перед тем как взять его с сервера.</summary>
+        public static bool IsValid(string json)
         {
-            public string UiTheme { get; set; }
-            public int? DefaultPeriodDays { get; set; }
+            try { return JsonNode.Parse(json, NodeOptions, DocOptions) is JsonObject; }
+            catch (JsonException) { return false; }
         }
+
+        /// <summary>Общий файл команды: всё, кроме личной темы.</summary>
+        public string ToTeamJson()
+        {
+            var node = JsonSerializer.SerializeToNode(this, Options) as JsonObject ?? new JsonObject();
+            node.Remove(PersonalKey);
+            return node.ToJsonString(Options);
+        }
+
+        /// <summary>Личный файл: только тема.</summary>
+        public string ToPersonalJson() => new JsonObject { [PersonalKey] = UiTheme }.ToJsonString(Options);
 
         /// <summary>
-        /// Разбор настроек. В файлах прежних версий есть поле "LogFolder" — папка теперь зашита в плагин, и оно
-        /// не нужно. Но путь там бывает записан с одинарными обратными слешами ("\\server\BIM"), и тогда файл
-        /// не разобрался бы целиком, поэтому значение вырезается до разбора: остальные настройки сохраняются.
+        /// В файлах прежних версий есть поле "LogFolder" (папку журналов тогда задавал каждый у себя) — оно не действует.
+        /// Путь там бывает записан с одинарными обратными косыми ("\\server\BIM"), и файл не разобрался бы целиком, поэтому
+        /// значение вырезается до разбора: остальные настройки сохраняются.
         /// </summary>
-        public static SpySettings Parse(string json)
-        {
-            if (string.IsNullOrWhiteSpace(json)) return null;
-            json = LogFolderRx.Replace(json, "\"LogFolder\": \"\"");
-            return JsonSerializer.Deserialize<SpySettings>(json, Options);
-        }
-
         private static readonly Regex LogFolderRx =
             new Regex("\"LogFolder\"\\s*:\\s*\"[^\"\\r\\n]*\"", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-
-        /// <summary>Сохранить личное (тема, период по умолчанию). Общие для команды настройки — только в общем файле.</summary>
-        public void Save()
-        {
-            Directory.CreateDirectory(DataFolders.UserDataDir);
-            var personal = new PersonalSettings { UiTheme = UiTheme, DefaultPeriodDays = DefaultPeriodDays };
-            File.WriteAllText(UserSettingsPath, JsonSerializer.Serialize(personal, Options));
-        }
 
         public SpySettings Clone()
         {
@@ -162,6 +161,7 @@ namespace RASv2.ModelHistory.Storage
             DefaultPeriodDays = Clamp(DefaultPeriodDays, 0, 36500);
             MaxDisplayedRows = Clamp(MaxDisplayedRows, 1000, 5_000_000);
             SnapshotCacheDays = Clamp(SnapshotCacheDays, 1, 3650);
+            JournalFolder = (JournalFolder ?? "").Trim().Trim('"').Trim();
             return this;
         }
 

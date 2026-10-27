@@ -55,7 +55,8 @@
                                 <MenuItem Header="Связанные журналы…" Command="{Binding JournalLinksCommand}"
                                           ToolTip="Журналы прежней истории этой модели (хранилище восстанавливали из копии или переносили): связать или отвязать" />
                                 <MenuItem Header="Открыть папку журнала" Command="{Binding OpenLogFolderCommand}" />
-                                <MenuItem Header="Настройки…" Command="{Binding SettingsCommand}" />
+                                <MenuItem Header="Настройки…" Command="{Binding SettingsCommand}"
+                                          ToolTip="{Binding SettingsTip}" ToolTipService.ShowOnDisabled="True" />
                             </ContextMenu>
                         </Button.ContextMenu>
                     </Button>

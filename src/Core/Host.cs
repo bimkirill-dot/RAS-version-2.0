@@ -76,6 +76,7 @@ namespace RASv2.Core
             foreach (var s in switches.Where(s => s.Value != ModuleMode.Works))
                 Log.Write(Tag, "Режим модуля: " + s.Key + " — " + s.Value);
             _people = ButtonAccess.People(file.People, w => Log.Write(Tag, w));
+            _layout = ParseLayout(file.Layout); // до запуска модулей: «доступна=» нужна им уже при запуске (IsAllowed)
             foreach (var slot in ModuleCatalog.Discover(buildDir, switches))
             {
                 ModuleList.Add(slot);
@@ -89,7 +90,7 @@ namespace RASv2.Core
             };
             RibbonIcons.Set(aboutData, about, "About");
             AddButton(aboutData, ServicePanel);
-            CreateRibbon(app, file.Layout);
+            CreateRibbon(app);
             ScheduleWhatsNew();
             IsStarted = true;
         }
@@ -152,6 +153,19 @@ namespace RASv2.Core
 
         /// <summary>Группы людей из блока {Люди} — кому доступны кнопки.</summary>
         private static Dictionary<string, List<string>> _people = new Dictionary<string, List<string>>();
+
+        /// <summary>Раскладка ленты из ribbon.txt (с «доступна=» у кнопок).</summary>
+        private static List<RibbonPanelSpec> _layout = new List<RibbonPanelSpec>();
+
+        /// <summary>
+        /// Доступна ли кнопка («&lt;модуль&gt;.&lt;кнопка&gt;») этому человеку по «доступна=» в ribbon.txt — для модулей
+        /// (IModuleContext.IsAllowed): закрыть то же действие в своих окнах, а не только серую кнопку на ленте.
+        /// </summary>
+        public static bool IsAllowed(string buttonId)
+        {
+            var user = Environment.UserName;
+            return ButtonAccess.AllowedButton(_layout, buttonId, access => ButtonAccess.Allowed(access, user, _people));
+        }
 
         /// <summary>
         /// ribbon.txt в сборке — один файл на всё, что разработчик задаёт для всех (разработчик, 20.10.2026: модули, люди,
@@ -226,20 +240,24 @@ namespace RASv2.Core
         /// Лента: отделы, панели, кнопки и стопки по раскладке из сборки (ribbon.txt) — RibbonLayout, строит RibbonBuilder.
         /// Нет файла или он с ошибками — кнопки стоят на панелях по умолчанию.
         /// </summary>
-        private static void CreateRibbon(UIControlledApplication app, string[] layoutLines)
+        private static List<RibbonPanelSpec> ParseLayout(string[] layoutLines)
         {
-            var layout = new List<RibbonPanelSpec>();
             try
             {
-                layout = RibbonLayout.Parse(layoutLines, w => Log.Write(Tag, w));
+                return RibbonLayout.Parse(layoutLines, w => Log.Write(Tag, w));
             }
             catch (Exception ex)
             {
                 Log.Write(Tag, "Не удалось разобрать раскладку ленты", ex);
+                return new List<RibbonPanelSpec>();
             }
+        }
+
+        private static void CreateRibbon(UIControlledApplication app)
+        {
             // кнопка видна всегда; кому недоступна по «доступна=» — серая (разработчик, 20.10.2026: «кнопку скрыть нельзя»)
             var user = Environment.UserName;
-            var plan = RibbonLayout.Arrange(layout, RibbonOrder, w => Log.Write(Tag, w), RibbonBuilder.SelectorId,
+            var plan = RibbonLayout.Arrange(_layout, RibbonOrder, w => Log.Write(Tag, w), RibbonBuilder.SelectorId,
                 access => ButtonAccess.Allowed(access, user, _people));
             RibbonBuilder.Build(app, TabName, plan, RibbonData);
         }

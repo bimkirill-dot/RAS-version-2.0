@@ -117,6 +117,18 @@ namespace RASv2.Core
             return false;
         }
 
+        /// <summary>
+        /// Доступна ли кнопка id человеку по раскладке — так модуль закрывает то же действие в своих окнах (пункт меню панели
+        /// и т. п.), а не только кнопку на ленте. Кнопки нет в раскладке — доступна; стоит в нескольких местах — доступна, если
+        /// доступна хоть в одном (на ленте у человека тогда есть активная).
+        /// </summary>
+        public static bool AllowedButton(IEnumerable<RibbonPanelSpec> layout, string id, Func<string, bool> allowed)
+        {
+            var entries = layout.SelectMany(p => p.Slots).SelectMany(s => s.Entries)
+                .Where(e => string.Equals(e.Id, id, StringComparison.OrdinalIgnoreCase)).ToList();
+            return entries.Count == 0 || entries.Any(e => allowed(e.Access));
+        }
+
         /// <summary>«Ivanov_A, RAS\Petrov_B» → «Ivanov_A», «Petrov_B».</summary>
         private static List<string> Logins(string text) =>
             (text ?? "").Split(',').Select(Login).Where(s => s.Length > 0).ToList();

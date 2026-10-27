@@ -66,5 +66,12 @@ namespace RASv2.Core
         /// на возвращённых данных кнопки. Код после выпуска не меняется: по нему Revit помнит горячие клавиши.
         /// </summary>
         PushButtonData AddButton(string name, string text, Type command, string toolTip, string icon = null);
+
+        /// <summary>
+        /// Доступна ли кнопка модуля name этому человеку («доступна=» в ribbon.txt; кнопки нет в раскладке — доступна). Серой
+        /// кнопку на ленте делает ядро; модуль спрашивает, чтобы закрыть то же действие в своих окнах (пункт меню панели и т. п.).
+        /// Известно уже при запуске модуля.
+        /// </summary>
+        bool IsAllowed(string name);
     }
 }

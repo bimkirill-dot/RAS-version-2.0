@@ -51,12 +51,14 @@
     <Compile Include="$(MhDir)UI\WarmupProgress.cs" Link="ModelHistory\WarmupProgress.cs" />
     <Compile Include="$(MhDir)Tracking\StorageReplacement.cs" Link="ModelHistory\StorageReplacement.cs" />
     <Compile Include="$(MhDir)Tracking\JournalLinks.cs" Link="ModelHistory\JournalLinks.cs" />
+    <Compile Include="$(MhDir)Storage\SpySettings.cs" Link="ModelHistory\SpySettings.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(RevitVersion)' != '2026'">
     <Compile Remove="ModelHistoryTests.cs" />
     <Compile Remove="ModelHistoryStubs.cs" />
     <Compile Remove="ModelHistoryElementTests.cs" />
     <Compile Remove="ModelHistoryRestoreTests.cs" />
+    <Compile Remove="ModelHistorySettingsTests.cs" />
   </ItemGroup>
 
 </Project>

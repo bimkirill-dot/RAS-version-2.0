@@ -80,7 +80,7 @@ namespace RASv2.ModelHistory.UI
             CardHistoryCommand = new RelayCommand(ShowCardHistory, () => Card != null);
             ClearElementFilterCommand = new RelayCommand(() => SetElementFilter(null, null));
             ResetFiltersCommand = new RelayCommand(ResetFilters);
-            SettingsCommand = new RelayCommand(() => OpenSettingsRequested?.Invoke());
+            SettingsCommand = new RelayCommand(() => OpenSettingsRequested?.Invoke(), () => SettingsAllowed);
             ActualizeCommand = new RelayCommand(StartActualize, () => HasModel && !IsActualizing && !HasPurgePreview);
             ConfirmPurgeCommand = new RelayCommand(ConfirmPurge, () => HasPurgePreview);
             CancelPurgeCommand = new RelayCommand(CancelPurge, () => HasPurgePreview);
@@ -122,6 +122,11 @@ namespace RASv2.ModelHistory.UI
 
         /// <summary>Панель просит открыть окно настроек (обрабатывает App).</summary>
         public event Action OpenSettingsRequested;
+
+        /// <summary>«Настройки…» в меню «⋯» — как кнопка на ленте: только тем, кому она доступна (ribbon.txt).</summary>
+        public bool SettingsAllowed { get; set; } = true;
+
+        public string SettingsTip => SettingsAllowed ? null : "Недоступна у вас — обратитесь к BIM-менеджеру.";
         /// <summary>«⋯» → «Связанные журналы…» (обрабатывает код окна).</summary>
         public event Action JournalLinksRequested;
         /// <summary>Запрос диалога сохранения файла (обрабатывает код окна).</summary>
