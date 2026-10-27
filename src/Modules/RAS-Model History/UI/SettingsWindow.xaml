@@ -69,8 +69,8 @@
                     <StackPanel>
                         <TextBlock Text="Папка журналов:" Margin="0,4,0,2" />
                         <DockPanel>
-                            <Button DockPanel.Dock="Right" Content="По умолчанию" Width="100" Height="22" Margin="6,0,0,0" Command="{Binding ResetFolderCommand}" />
-                            <Button DockPanel.Dock="Right" Content="Обзор…" Width="70" Height="22" Margin="6,0,0,0" Command="{Binding BrowseFolderCommand}" />
+                            <Button DockPanel.Dock="Right" Content="По умолчанию" MinWidth="100" Height="22" Margin="6,0,0,0" Command="{Binding ResetFolderCommand}" />
+                            <Button DockPanel.Dock="Right" Content="Обзор…" MinWidth="70" Height="22" Margin="6,0,0,0" Command="{Binding BrowseFolderCommand}" />
                             <TextBox Height="22" VerticalContentAlignment="Center" Text="{Binding JournalFolder, UpdateSourceTrigger=PropertyChanged}" />
                         </DockPanel>
                         <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,6">
