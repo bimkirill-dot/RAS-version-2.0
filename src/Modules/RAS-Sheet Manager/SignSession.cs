@@ -28,6 +28,9 @@ namespace RASv2.SheetManager
         public Func<SignSettings, string> SaveSettings;
         /// <summary>Строка в журнал модуля (ras.log).</summary>
         public Action<string> Log;
+        /// <summary>Справочник инициалов для подписей ГИП (фамилия → «Д.»); пополнился — InitialsChanged, сохранит команда.</summary>
+        public Dictionary<string, string> Initials = new Dictionary<string, string>();
+        public bool InitialsChanged;
 
         // ── результат окна ──
         public string Folder;

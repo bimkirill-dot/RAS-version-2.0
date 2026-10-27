@@ -107,7 +107,7 @@
                     </StackPanel>
                 </Button>
                 <Button x:Name="ActualizeButton" Margin="8,0,0,0" Click="Actualize_Click" IsEnabled="False"
-                        ToolTip="Найти в семействе подписи, файлов которых нет в папке, и вставленные вручную (не очищенные) — и убрать их отовсюду: из семейства, таблицы выбора и папки «clean»">
+                        ToolTip="Проверить семейство подписей: подписи без файла в папке и вставленные вручную, лишние строки таблицы выбора, номера, формулы, лишние вставки DWG, очищенные файлы без исходного. Что исправить — выберете в списке">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE895;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,7,0" />
                         <TextBlock Text="Актуализировать…" VerticalAlignment="Center" />

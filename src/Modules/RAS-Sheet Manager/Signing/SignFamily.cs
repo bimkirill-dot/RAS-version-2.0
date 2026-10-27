@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using Autodesk.Revit.DB;
+using Autodesk.Revit.DB.ExtensibleStorage;
 using RASv2.SheetManager.Logic;
 
 namespace RASv2.SheetManager.Signing
@@ -156,7 +157,7 @@ namespace RASv2.SheetManager.Signing
                 f.Params[p.Definition.Name] = new SignParam { IsYesNo = IsYesNo(p), Formula = Formula(p) };
             foreach (var imp in new FilteredElementCollector(_doc).OfClass(typeof(ImportInstance)).Cast<ImportInstance>())
             {
-                var file = imp.Category?.Name;
+                var file = DwgName(imp);
                 if (!string.IsNullOrEmpty(file)) f.DwgFiles.Add(file);
                 var fp = Associated(imp);
                 if (fp != null) f.WithDwg.Add(fp.Definition.Name);
@@ -184,8 +185,61 @@ namespace RASv2.SheetManager.Signing
         /// Вставка — очищенная подпись: в имени вставки (категории импорта, по имени файла) есть «_clean». Не «оканчивается»:
         /// Revit может дописать к имени повторно вставленного файла « 2» и т. п.
         /// </summary>
-        private static bool IsClean(ImportInstance i) =>
-            (i.Category?.Name ?? "").IndexOf(SignFolder.Suffix, StringComparison.OrdinalIgnoreCase) >= 0;
+        private bool IsClean(ImportInstance i) => DwgName(i).IndexOf(SignFolder.Suffix, StringComparison.OrdinalIgnoreCase) >= 0;
+
+        /// <summary>
+        /// Имя файла вставленного DWG — имя её типа («…_clean.dwg»). Не Category.Name: в семействе у всех вставок это «Импорт в
+        /// семействах» (27.10.2026 «Актуализировать» из-за этого счёл все подписи вставленными вручную).
+        /// </summary>
+        private string DwgName(ImportInstance i)
+        {
+            try { return (_doc.GetElement(i.GetTypeId()) as CADLinkType)?.Name ?? _doc.GetElement(i.GetTypeId())?.Name ?? ""; }
+            catch (Autodesk.Revit.Exceptions.ApplicationException) { return ""; }
+        }
+
+        // ── отметка плагина на вставке: когда вставлена (чтобы заметить, что очищенный файл новее) ──
+
+        private static readonly Guid MarkSchemaId = new Guid("6F3E2B71-4C0A-4E5D-9B8E-2A7D5C1F3B90");
+        private const string MarkField = "insertedUtcTicks";
+
+        private static Schema MarkSchema()
+        {
+            var schema = Schema.Lookup(MarkSchemaId);
+            if (schema != null) return schema;
+            var b = new SchemaBuilder(MarkSchemaId);
+            b.SetSchemaName("RASv2SignMark");
+            b.SetDocumentation("RAS v. 2.0, RAS-Sheet Manager: когда подпись вставлена кнопкой «Подпись»");
+            b.SetReadAccessLevel(AccessLevel.Public);
+            b.SetWriteAccessLevel(AccessLevel.Public);
+            b.AddSimpleField(MarkField, typeof(string));
+            return b.Finish();
+        }
+
+        private static void Mark(Element imp)
+        {
+            try
+            {
+                var schema = MarkSchema();
+                var e = new Entity(schema);
+                e.Set(schema.GetField(MarkField), DateTime.UtcNow.Ticks.ToString(CultureInfo.InvariantCulture));
+                imp.SetEntity(e);
+            }
+            catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException || ex is ArgumentException) { /* без отметки — «файл новее» не заметим, не страшно */ }
+        }
+
+        private static DateTime? MarkedUtc(Element imp)
+        {
+            try
+            {
+                var schema = Schema.Lookup(MarkSchemaId);
+                if (schema == null) return null;
+                var e = imp.GetEntity(schema);
+                if (e == null || !e.IsValid()) return null;
+                var text = e.Get<string>(schema.GetField(MarkField));
+                return long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ticks) ? new DateTime(ticks, DateTimeKind.Utc) : (DateTime?)null;
+            }
+            catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException || ex is ArgumentException) { return null; }
+        }
 
         private static XYZ Origin(ImportInstance i)
         {
@@ -336,7 +390,7 @@ namespace RASv2.SheetManager.Signing
                         {
                             var file = Path.GetFileName(j.CleanPath);
                             var olds = new FilteredElementCollector(_doc).OfClass(typeof(ImportInstance)).Cast<ImportInstance>()
-                                .Where(i => Associated(i)?.Definition.Name == it.Name || string.Equals(i.Category?.Name, file, StringComparison.OrdinalIgnoreCase))
+                                .Where(i => Associated(i)?.Definition.Name == it.Name || string.Equals(DwgName(i), file, StringComparison.OrdinalIgnoreCase))
                                 .Select(i => { if (i.Pinned) i.Pinned = false; return i.Id; }).ToList();
                             if (olds.Count > 0) _doc.Delete(olds);
                         }
@@ -353,6 +407,7 @@ namespace RASv2.SheetManager.Signing
                         if (vp == null || !Fm.CanElementParameterBeAssociated(vp)) throw new InvalidOperationException("у вставки нет параметра «Видимость»");
                         Fm.AssociateElementParameterToFamilyParameter(vp, fp);
                         imp.Pinned = true;
+                        Mark(imp);
                     }
                     t.Commit();
                     j.Ok = true;
@@ -513,17 +568,11 @@ namespace RASv2.SheetManager.Signing
             return t;
         }
 
-        // ───────────────────────────────── актуализация ─────────────────────────────────
+        // ───────────────────────────────── «Актуализировать»: проверка и исправление ─────────────────────────────────
 
-        /// <summary>
-        /// Подписи семейства, которые пора убрать (разработчик, 27.10.2026, «Актуализировать»): человек (параметр Да/Нет с
-        /// формулой на выбранную таблицу и номером больше нуля, или с привязанным DWG; служебные параметры вроде «Ошибка в
-        /// фамилии» с номером -1 — не люди, 27.10.2026 попал в список), которого нет в папке подписей (people — фамилии из папки; при совпадении
-        /// без учёта казахских букв — тоже есть), или чей DWG не очищен (вставлен вручную: имя файла — не «…_clean»).
-        /// </summary>
-        public List<SignStale> Stale(SignFamilyState state, ICollection<string> people)
+        /// <summary>Люди семейства: параметр Да/Нет с формулой на таблицу и номером больше нуля или с привязанным DWG.</summary>
+        private List<(SignPerson Person, List<ImportInstance> Imports)> People(SignFamilyState state)
         {
-            var inFolder = new HashSet<string>(people.Select(SignNames.ToRussian));
             var dwg = new Dictionary<string, List<ImportInstance>>();
             foreach (var imp in new FilteredElementCollector(_doc).OfClass(typeof(ImportInstance)).Cast<ImportInstance>())
             {
@@ -532,57 +581,112 @@ namespace RASv2.SheetManager.Signing
                 if (!dwg.TryGetValue(fp.Definition.Name, out var list)) dwg[fp.Definition.Name] = list = new List<ImportInstance>();
                 list.Add(imp);
             }
-            var result = new List<SignStale>();
+            var result = new List<(SignPerson, List<ImportInstance>)>();
             foreach (FamilyParameter p in Fm.Parameters)
             {
-                var name = p.Definition.Name;
-                var formula = SignFormula.Parse(Formula(p));
-                // человек — параметр Да/Нет с номером больше нуля; служебные («Ошибка в фамилии» = -1 и т. п.) — не трогать
                 if (!IsYesNo(p)) continue;
-                var mine = formula != null && formula.Table == state.Table && formula.Number > 0;
+                var name = p.Definition.Name;
+                if (name == state.Key) continue;
+                var formula = SignFormula.Parse(Formula(p));
+                if (formula != null && formula.Number <= 0) continue; // служебные: «Ошибка в фамилии» = -1
+                var mine = formula != null && formula.Table == state.Table;
                 dwg.TryGetValue(name, out var imports);
                 if (!mine && imports == null) continue;
-                if (formula != null && formula.Number <= 0) continue;
-                if (name == state.Key) continue;
-                string why = null;
-                if (!inFolder.Contains(SignNames.ToRussian(name))) why = "файла подписи нет в папке";
-                else if (imports != null && imports.Any(i => !IsClean(i)))
-                    why = "подпись вставлена вручную — не очищена";
-                if (why == null) continue;
-                result.Add(new SignStale { Name = name, Reason = why, Number = formula?.Number, Dwg = (imports ?? new List<ImportInstance>()).Select(i => i.Category?.Name ?? "").ToList() });
+                imports = imports ?? new List<ImportInstance>();
+                var marks = imports.Select(MarkedUtc).Where(t => t != null).ToList();
+                result.Add((new SignPerson
+                {
+                    Name = name,
+                    Number = mine ? formula.Number : (int?)null,
+                    Dwg = imports.Select(DwgName).ToList(),
+                    InsertedUtc = marks.Count == imports.Count && marks.Count > 0 ? marks.Min() : null,
+                }, imports));
             }
-            return result.OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+            return result;
         }
 
+        private List<ImportInstance> OrphanImports() =>
+            new FilteredElementCollector(_doc).OfClass(typeof(ImportInstance)).Cast<ImportInstance>().Where(i => Associated(i) == null).ToList();
+
+        private List<ElementId> LeftoverTypes()
+        {
+            var used = new HashSet<ElementId>(new FilteredElementCollector(_doc).OfClass(typeof(ImportInstance)).Select(i => i.GetTypeId()));
+            return new FilteredElementCollector(_doc).OfClass(typeof(CADLinkType)).Select(t => t.Id).Where(id => !used.Contains(id)).ToList();
+        }
+
+        /// <summary>Что не так в семействе (SignAudit) — по выбранной таблице, папке подписей и справочнику инициалов.</summary>
+        public List<SignIssue> Audit(SignFamilyState state, List<SignSource> folder, IDictionary<string, string> initials) =>
+            SignAudit.Check(state.Rows, People(state).Select(x => x.Person).ToList(), folder, OrphanImports().Count, LeftoverTypes().Count,
+                SignAudit.DisplayColumn(state.Rows), initials);
+
         /// <summary>
-        /// Убрать подписи из семейства — одной группой (одно Ctrl+Z): DWG и их типы (вместе с категорией импорта), параметры,
-        /// строки таблицы (таблица загружается заново в той же кодировке). null — сделано, иначе — почему нет (откат целиком).
+        /// Исправить отмеченные находки — одной группой (одно Ctrl+Z): убрать людей (DWG с типом, параметр, строку), строки
+        /// таблицы (дубли, без людей), переписать формулы, оставить одну вставку, удалить вставки ни к кому не привязанные и
+        /// типы без вставок, вписать текст для штампа; таблица загружается заново в той же кодировке. null — сделано.
         /// </summary>
-        public string Remove(SignFamilyState state, string sourceEncoding, List<SignStale> stale)
+        public string Fix(SignFamilyState state, string sourceEncoding, List<SignIssue> issues)
         {
             using (var group = new TransactionGroup(_doc, "RAS: подписи — актуализация"))
             {
                 group.Start();
                 try
                 {
-                    Run("Подписи: удалить неактуальные", () =>
+                    Run("Подписи: актуализация", () =>
                     {
-                        var names = new HashSet<string>(stale.Select(x => x.Name));
-                        var imports = new FilteredElementCollector(_doc).OfClass(typeof(ImportInstance)).Cast<ImportInstance>()
-                            .Where(i => { var fp = Associated(i); return fp != null && names.Contains(fp.Definition.Name); }).ToList();
-                        var types = imports.Select(i => i.GetTypeId()).Where(id => id != null && id != ElementId.InvalidElementId).Distinct().ToList();
-                        foreach (var i in imports) if (i.Pinned) i.Pinned = false;
-                        if (imports.Count > 0) _doc.Delete(imports.Select(i => i.Id).ToList());
-                        // тип вставки (CAD) — вместе с ним уходит и категория импорта со слоями
-                        var leftTypes = types.Where(id => _doc.GetElement(id) != null).ToList();
-                        if (leftTypes.Count > 0) _doc.Delete(leftTypes);
-                        foreach (var n in names)
+                        var people = People(state).ToDictionary(x => x.Person.Name);
+                        var table = state.Rows;
+                        var tableChanged = false;
+                        var delete = new List<ElementId>();
+                        var deleteTypes = new HashSet<ElementId>();
+                        void DropImport(ImportInstance i)
+                        {
+                            if (i.Pinned) i.Pinned = false;
+                            delete.Add(i.Id);
+                            var t = i.GetTypeId();
+                            if (t != null && t != ElementId.InvalidElementId) deleteTypes.Add(t);
+                        }
+
+                        // строки по номерам — до удаления людей (номера строк сдвинутся)
+                        var display = SignAudit.DisplayColumn(table);
+                        foreach (var x in issues.Where(i => i.Kind == SignIssueKind.Display && i.Value != null && i.Row >= 0 && display >= 0))
+                        {
+                            table.Rows[x.Row][display] = x.Value;
+                            tableChanged = true;
+                        }
+                        var rows = issues.Where(i => (i.Kind == SignIssueKind.DuplicateRow || i.Kind == SignIssueKind.OrphanRow) && i.Row >= 0)
+                            .Select(i => i.Row).Distinct().OrderByDescending(i => i).ToList();
+                        foreach (var r in rows) table.Rows.RemoveAt(r);
+                        tableChanged |= rows.Count > 0;
+
+                        foreach (var x in issues.Where(i => i.Kind == SignIssueKind.FormulaMismatch))
+                        {
+                            var p = Fm.get_Parameter(x.Name);
+                            if (p != null) Fm.SetFormula(p, SignFormula.Make(state.Table, state.Column, state.Default, state.Key, x.Number));
+                        }
+                        foreach (var x in issues.Where(i => i.Kind == SignIssueKind.DoubleDwg))
+                            if (people.TryGetValue(x.Name, out var who))
+                                foreach (var i in who.Imports.OrderByDescending(i => RASv2.Core.RevitCompat.Value(i.Id)).Skip(1)) DropImport(i);
+                        if (issues.Any(i => i.Kind == SignIssueKind.OrphanDwg))
+                            foreach (var i in OrphanImports()) DropImport(i);
+
+                        var gone = issues.Where(i => i.Kind == SignIssueKind.NoFile || i.Kind == SignIssueKind.Manual).Select(i => i.Name).ToList();
+                        foreach (var n in gone)
+                            if (people.TryGetValue(n, out var who))
+                                foreach (var i in who.Imports) DropImport(i);
+                        if (delete.Count > 0) _doc.Delete(delete.Distinct().ToList());
+                        // тип вставки — вместе с ним уходит и категория импорта со слоями
+                        var types = deleteTypes.Where(id => _doc.GetElement(id) != null).ToList();
+                        if (issues.Any(i => i.Kind == SignIssueKind.LeftoverType)) types.AddRange(LeftoverTypes());
+                        types = types.Distinct().Where(id => _doc.GetElement(id) != null &&
+                            !new FilteredElementCollector(_doc).OfClass(typeof(ImportInstance)).Any(i => i.GetTypeId() == id)).ToList();
+                        if (types.Count > 0) _doc.Delete(types);
+                        foreach (var n in gone)
                         {
                             var p = Fm.get_Parameter(n);
                             if (p != null) Fm.RemoveParameter(p);
                         }
-                        if (state.Rows.RemoveRows(names) > 0 && Tables != null && Tables.HasSizeTable(state.Table))
-                            ImportTable(state.Rows, sourceEncoding, state.Table);
+                        if (gone.Count > 0) tableChanged |= table.RemoveRows(gone) > 0;
+                        if (tableChanged && Tables != null && Tables.HasSizeTable(state.Table)) ImportTable(table, sourceEncoding, state.Table);
                     });
                     group.Assimilate();
                     return null;

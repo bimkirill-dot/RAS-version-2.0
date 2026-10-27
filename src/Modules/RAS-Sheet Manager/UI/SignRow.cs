@@ -20,6 +20,13 @@ namespace RASv2.SheetManager.UI
         /// <summary>Можно вписать — строки этой фамилии в таблице ещё нет (у существующей — её значение, только для чтения).</summary>
         public bool Editable { get; set; }
         public bool ReadOnly => !Editable;
+        /// <summary>
+        /// Текст для штампа (у таблицы ГИП — «Байгараева Д.»): у новой строки вписывают только инициал, текст складывается сам
+        /// (SignAudit.Display); инициал подставляется из справочника.
+        /// </summary>
+        public bool Initial { get; set; }
+        /// <summary>Что подставлено из справочника — чтобы отличить от вписанного руками.</summary>
+        public string Prefilled { get; set; }
         public string Value { get => _value; set { _value = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Value))); } }
         public event PropertyChangedEventHandler PropertyChanged;
     }
@@ -50,24 +57,37 @@ namespace RASv2.SheetManager.UI
         /// <summary>Дополнительные столбцы таблицы выбора: у новой строки — вписать, у существующей — как в таблице.</summary>
         public ObservableCollection<SignExtra> Extras { get; } = new ObservableCollection<SignExtra>();
 
-        /// <summary>Остальные столбцы для новой строки таблицы (номер столбца → значение).</summary>
-        public Dictionary<int, string> ExtraValues() => Extras.Where(x => x.Editable).ToDictionary(x => x.Column, x => (x.Value ?? "").Trim());
+        /// <summary>Остальные столбцы для новой строки таблицы (номер столбца → значение); текст для штампа — из инициала.</summary>
+        public Dictionary<int, string> ExtraValues() =>
+            Extras.Where(x => x.Editable).ToDictionary(x => x.Column, x => x.Initial ? SignAudit.Display(Name, x.Value) ?? "" : (x.Value ?? "").Trim());
 
-        /// <summary>Столбцы таблицы поменялись (другая таблица) или строка появилась / пропала — набор полей заново; вписанное — сохраняется.</summary>
-        public void SetExtras(SizeTable table)
+        /// <summary>Новая строка таблицы ГИП без инициала — в штампе будет пусто.</summary>
+        public bool NoInitial => Checked && Extras.Any(x => x.Editable && x.Initial && string.IsNullOrWhiteSpace(x.Value));
+
+        /// <summary>
+        /// Столбцы таблицы поменялись (другая таблица) или строка появилась / пропала — набор полей заново; вписанное руками —
+        /// сохраняется. displayColumn — столбец текста для штампа (-1 — нет), initials — справочник инициалов.
+        /// </summary>
+        public void SetExtras(SizeTable table, int displayColumn, IDictionary<string, string> initials)
         {
-            var typed = Extras.Where(x => x.Editable).ToDictionary(x => x.Header, x => x.Value);
+            var typed = Extras.Where(x => x.Editable && x.Value != x.Prefilled).ToDictionary(x => x.Column, x => x.Value);
             var row = Item != null ? table.RowOf(Item.Name) : null;
             Extras.Clear();
             foreach (var i in table.ExtraColumns())
             {
                 var header = table.ColumnName(i);
+                var initial = i == displayColumn;
+                var editable = row == null && CanCheck;
+                string known = null;
+                if (initial && editable && initials != null) initials.TryGetValue((Name ?? "").Trim(), out known);
                 Extras.Add(new SignExtra
                 {
                     Column = i,
-                    Header = header,
-                    Editable = row == null && CanCheck,
-                    Value = row != null && i < row.Count ? row[i] : typed.TryGetValue(header, out var v) ? v : "",
+                    Header = initial && editable ? "Инициал для штампа: «" + (Name ?? "").Trim() + " Д.» — впишите «Д»" : header,
+                    Editable = editable,
+                    Initial = initial,
+                    Prefilled = known,
+                    Value = row != null && i < row.Count ? row[i] : typed.TryGetValue(i, out var v) ? v : known ?? "",
                 });
             }
         }

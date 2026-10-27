@@ -230,6 +230,67 @@ namespace RASv2.Tests
             });
         }
 
+        /// <summary>Таблица ГИП как у разработчика (27.10.2026): «Инициалы» — текст для штампа «Фамилия И.».</summary>
+        private const string Gip =
+            ",Фамилия##other##,Да/Нет##number##general,Инициалы##other##\r\n" +
+            "Байгараева,Байгараева,1.000000,Байгараева Д.\r\n" +
+            "Серикбаева,Серикбаева,6.000000,Серикабаева А.\r\n" +
+            "Абдукахаров,Абдукахаров,9.000000,\r\n" +
+            "Каюпов,Каюпов,12.000000,\r\n" +
+            "Хапина,Хапина,17.000000,Хапина Л.\r\n" +
+            "Хапина,Хапина,17.000000,Хапина Л.\r\n" +
+            "Ушедший,Ушедший,20.000000,Ушедший У.\r\n" +
+            "Двойник,Двойник,1.000000,Двойник Д.\r\n";
+
+        public static IEnumerable<KeyValuePair<string, Action>> Audit()
+        {
+            yield return Case("ГИП: столбец текста для штампа, инициалы — в справочник", () =>
+            {
+                var t = SizeTable.Parse(Gip, "Фамилия", "Да/Нет");
+                var c = SignAudit.DisplayColumn(t);
+                Check(c == 3, "столбец «Инициалы»: " + c);
+                Check(SignAudit.DisplayColumn(SizeTable.Parse(",Фамилия##other##,Да/Нет##number##general\r\nИванов,Иванов,1\r\n", "Фамилия", "Да/Нет")) == -1, "у обычной таблицы — нет");
+                var d = new Dictionary<string, string>();
+                Check(SignInitials.Learn(d, t, c) == 4 && d["Байгараева"] == "Д." && !d.ContainsKey("Серикбаева") && !d.ContainsKey("Каюпов"), "выучено: с этой фамилии и не пусто");
+                Check(SignAudit.Display("Каюпов", "е") == "Каюпов е." && SignAudit.Display("Каюпов", " Е. ") == "Каюпов Е." && SignAudit.Display("Каюпов", "") == null, "текст для штампа из инициала");
+                var back = SignInitials.Parse(SignInitials.Write(d));
+                Check(back.Count == d.Count && back["Хапина"] == "Л.", "справочник: запись и чтение");
+            });
+            yield return Case("актуализация: что не так в семействе", () =>
+            {
+                var t = SizeTable.Parse(Gip, "Фамилия", "Да/Нет");
+                var people = new List<SignPerson>
+                {
+                    new SignPerson { Name = "Байгараева", Number = 1, Dwg = { "!ГИП_Подпись_Байгараева_clean.dwg" }, InsertedUtc = new DateTime(2026, 10, 27, 10, 0, 0, DateTimeKind.Utc) },
+                    new SignPerson { Name = "Серикбаева", Number = 6, Dwg = { "!ГИП_Подпись_Серикбаева_clean.dwg", "!ГИП_Подпись_Серикбаева_clean.dwg 2" } },
+                    new SignPerson { Name = "Абдукахаров", Number = 5, Dwg = { "!ГИП_Подпись_Абдукахаров_clean.dwg" } },
+                    new SignPerson { Name = "Каюпов", Number = 12 },
+                    new SignPerson { Name = "Хапина", Number = 17, Dwg = { "Хапина подпись.dwg" } },
+                    new SignPerson { Name = "Двойник", Number = 1, Dwg = { "!ГИП_Подпись_Двойник_clean.dwg" } },
+                    new SignPerson { Name = "Нетфайла", Number = 30, Dwg = { "!ГИП_Подпись_Нетфайла_clean.dwg" } },
+                };
+                var folder = new List<SignSource>
+                {
+                    new SignSource { Name = "Байгараева", CleanTimeUtc = new DateTime(2026, 10, 27, 12, 0, 0, DateTimeKind.Utc) },
+                    new SignSource { Name = "Серикбаева" }, new SignSource { Name = "Абдукахаров" }, new SignSource { Name = "Каюпов" },
+                    new SignSource { Name = "Хапина" }, new SignSource { Name = "Двойник" },
+                };
+                var issues = SignAudit.Check(t, people, folder, 2, 3, 3, new Dictionary<string, string> { ["Абдукахаров"] = "Р." });
+                bool Has(SignIssueKind k, string n) => issues.Any(i => i.Kind == k && i.Name == n);
+                Check(Has(SignIssueKind.NoFile, "Нетфайла") && Has(SignIssueKind.Manual, "Хапина"), "нет в папке; вставлена вручную — по имени файла вставки, а не «Импорт в семействах»");
+                Check(!Has(SignIssueKind.NoFile, "Байгараева") && !Has(SignIssueKind.Manual, "Байгараева") && !Has(SignIssueKind.Manual, "Серикбаева"), "очищенные — актуальны (и «… 2» после повторной вставки)");
+                Check(Has(SignIssueKind.MissingDwg, "Каюпов") && Has(SignIssueKind.DoubleDwg, "Серикбаева") && Has(SignIssueKind.OutdatedDwg, "Байгараева"), "нет подписи, две вставки, файл новее");
+                Check(issues.Count(i => i.Kind == SignIssueKind.DuplicateRow && i.Name == "Хапина") == 1 && Has(SignIssueKind.OrphanRow, "Ушедший"), "дубль строки, строка без человека");
+                Check(Has(SignIssueKind.NumberConflict, "Двойник"), "один номер у двух фамилий");
+                var fm = issues.First(i => i.Kind == SignIssueKind.FormulaMismatch && i.Name == "Абдукахаров");
+                Check(fm.Number == 9 && fm.Fixable, "номер в формуле не как в таблице — переписать на табличный");
+                var sk = issues.First(i => i.Kind == SignIssueKind.Display && i.Name == "Серикбаева");
+                var ab = issues.First(i => i.Kind == SignIssueKind.Display && i.Name == "Абдукахаров");
+                Check(!sk.Fixable && ab.Fixable && ab.Value == "Абдукахаров Р." && Has(SignIssueKind.Display, "Каюпов"), "текст для штампа: опечатка, пусто; из справочника — исправить");
+                Check(issues.Any(i => i.Kind == SignIssueKind.OrphanDwg) && issues.Any(i => i.Kind == SignIssueKind.LeftoverType), "лишние вставки и типы");
+            });
+        }
+
         public static IEnumerable<KeyValuePair<string, Action>> Settings()
         {
             yield return Case("настройки: по умолчанию, запись и чтение, испорченное; поля прежних версий не мешают", () =>

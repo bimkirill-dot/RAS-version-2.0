@@ -41,14 +41,6 @@ namespace RASv2.SheetManager.Logic
         public string Text => "номер — из столбца «" + Column + "», по параметру «" + Key + "», если фамилии нет — " + Default;
     }
 
-    /// <summary>Подпись в семействе, которую пора убрать («Актуализировать»).</summary>
-    public sealed class SignStale
-    {
-        public string Name, Reason;
-        public int? Number;
-        public List<string> Dwg = new List<string>();
-    }
-
     /// <summary>Семейство подписей — как оно есть сейчас (читает Revit-часть модуля, план — без Revit API).</summary>
     public sealed class SignFamilyState
     {

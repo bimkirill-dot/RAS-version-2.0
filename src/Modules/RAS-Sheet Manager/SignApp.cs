@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -29,6 +30,7 @@ namespace RASv2.SheetManager
         private string SharedSettings => Path.Combine(_context.SharedDataDir, "settings.json");
         private string SettingsCopy => Path.Combine(_context.LocalDataDir, "settings-copy.json");
         private string PersonalPath => Path.Combine(_context.UserDataDir, "settings.json");
+        private string SharedInitials => Path.Combine(_context.SharedDataDir, "initials.txt");
 
         public void Start(IModuleContext context)
         {
@@ -80,12 +82,15 @@ namespace RASv2.SheetManager
                 PreviewCache = Path.Combine(_context.LocalDataDir, "Картинки подписей"),
                 SaveSettings = SaveSettings,
                 Log = _context.Log.Info,
+                Initials = LoadInitials(),
             };
             session.Anchor = family.Anchor(out session.AnchorSpread);
 
             var window = new SignWindow(session);
             new WindowInteropHelper(window).Owner = app.MainWindowHandle;
-            if (window.ShowDialog() != true || session.Jobs.Count == 0) return;
+            var go = window.ShowDialog() == true && session.Jobs.Count > 0;
+            if (session.InitialsChanged) SaveInitials(session.Initials);
+            if (!go) return;
 
             // точка: как у остальных подписей, в начало координат или указать на виде (можно и когда подписи уже есть)
             var point = session.Point == SignPoint.Same && session.Anchor != null ? session.Anchor : XYZ.Zero;
@@ -145,6 +150,40 @@ namespace RASv2.SheetManager
 
         private static string EncodingName(string e) =>
             e == TableEncodings.Utf8Bom ? "UTF-8 с BOM" : e == TableEncodings.Utf8 ? "UTF-8" : e == TableEncodings.Cp1251 ? "Windows-1251" : e ?? "—";
+
+        // ───────────────────────── справочник инициалов (ГИП): сервер ─────────────────────────
+
+        /// <summary>Справочник инициалов с сервера (не дольше 5 с); нет или не ответил — пустой (пополнится из таблиц ГИП).</summary>
+        private Dictionary<string, string> LoadInitials()
+        {
+            var task = Task.Run(() => File.Exists(SharedInitials) ? File.ReadAllText(SharedInitials) : "");
+            try
+            {
+                if (task.Wait(ServerWait)) return SignInitials.Parse(task.Result);
+            }
+            catch (AggregateException ex) { _context.Log.Error("Справочник инициалов на сервере не прочитан", ex.InnerException ?? ex); }
+            return new Dictionary<string, string>();
+        }
+
+        /// <summary>Дописать новые инициалы в справочник на сервере: прочитать его заново (другой мог дописать своё), добавить, записать.</summary>
+        private void SaveInitials(Dictionary<string, string> mine)
+        {
+            var task = Task.Run(() =>
+            {
+                var all = File.Exists(SharedInitials) ? SignInitials.Parse(File.ReadAllText(SharedInitials)) : new Dictionary<string, string>();
+                foreach (var kv in mine) all[kv.Key] = kv.Value;
+                Directory.CreateDirectory(_context.SharedDataDir);
+                var temp = SharedInitials + ".tmp";
+                File.WriteAllText(temp, SignInitials.Write(all), Encoding.UTF8);
+                if (File.Exists(SharedInitials)) File.Replace(temp, SharedInitials, null);
+                else File.Move(temp, SharedInitials);
+            });
+            try
+            {
+                if (!task.Wait(ServerWait)) _context.Log.Info("Справочник инициалов не записан: сервер не ответил");
+            }
+            catch (AggregateException ex) { _context.Log.Error("Справочник инициалов не записан на сервер", ex.InnerException ?? ex); }
+        }
 
         // ───────────────────────── общие настройки: сервер, копия на компьютере ─────────────────────────
 

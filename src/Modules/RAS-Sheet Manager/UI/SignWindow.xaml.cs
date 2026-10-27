@@ -19,8 +19,9 @@ namespace RASv2.SheetManager.UI
     /// <summary>
     /// «Подпись» (DECISIONS.md модуля): папка с подписями → новые очищаются (AutoCAD Core Console, в фоне, несколько сразу),
     /// очищенные не трогаются → список с картинками, фамилией (можно поправить), что будет, размерами → «Добавить».
-    /// Таблица выбора и форма формулы — из самого семейства. «Актуализировать» убирает из семейства подписи, файлов которых
-    /// нет в папке, и вставленные вручную. Добавляет команда (SignApp) после закрытия окна — одной группой действий.
+    /// Таблица выбора и форма формулы — из самого семейства. «Актуализировать» проверяет семейство и исправляет отмеченное
+    /// (окно SignAuditWindow). У таблицы ГИП текст для штампа («Фамилия И.») складывается из инициала (справочник на сервере).
+    /// Добавляет команда (SignApp) после закрытия окна — одной группой действий.
     /// </summary>
     public partial class SignWindow : Window
     {
@@ -32,6 +33,8 @@ namespace RASv2.SheetManager.UI
         private CancellationTokenSource _cancel;
         private bool _busy;
         private bool _replanning;
+        /// <summary>Столбец текста для штампа выбранной таблицы (у ГИП — «Фамилия И.»); -1 — нет.</summary>
+        private int _display = -1;
 
         public SignWindow(SignSession session)
         {
@@ -113,6 +116,9 @@ namespace RASv2.SheetManager.UI
                 _s.Table = table;
                 _s.State = _s.Family.State(table, f, out _s.SourceEncoding, out _s.Backup);
                 _s.TableExisted = _s.Backup != null; // таблица есть в семействе — её выгрузили
+                // таблица ГИП: инициалы, уже вписанные в неё, — в справочник (дальше подставляются сами)
+                _display = SignAudit.DisplayColumn(_s.State.Rows);
+                if (SignInitials.Learn(_s.Initials, _s.State.Rows, _display) > 0) _s.InitialsChanged = true;
                 var unused = _s.Family.UnusedTables(table);
                 RemoveUnused.Visibility = unused.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
                 RemoveUnused.Content = "Удалить таблицы выбора, на которые не ссылается ни одна формула: " + string.Join(", ", unused);
@@ -289,53 +295,74 @@ namespace RASv2.SheetManager.UI
         // ───────────────────────── «Актуализировать» ─────────────────────────
 
         /// <summary>
-        /// Подписи семейства, файлов которых нет в папке (или вставленные вручную, не очищенные), — убрать отовсюду: из семейства
-        /// (DWG, параметр), из таблицы выбора, и очищенные файлы без исходного — из папки «clean». Перед удалением — список.
+        /// Проверить семейство (SignAudit: люди без файла в папке и вставленные вручную, строки таблицы без людей и дубли, один
+        /// номер у двух фамилий, формула не как таблица, параметр без подписи, две вставки, вставки ни к кому не привязанные,
+        /// типы без вставок, подпись старее очищенного файла, текст для штампа ГИП; очищенные файлы без исходного) → окно со
+        /// списком → отмеченное исправить одной группой действий (одно Ctrl+Z). Подписи без DWG и устаревшие — отмечаются в
+        /// списке, их добавит «Добавить».
         /// </summary>
         private void Actualize_Click(object sender, RoutedEventArgs e)
         {
             if (_s.State == null || _busy) return;
-            var people = _rows.Where(r => r.File.NameProblem == null).Select(r => r.Name).ToList();
-            var stale = _s.Family.Stale(_s.State, people);
-            var orphans = OrphanCleanFiles();
-            _s.Log?.Invoke("Актуализация «" + _s.Family.Title + "», таблица «" + _s.Table + "»: в папке подписей — " + people.Count +
-                           ", неактуальных — " + stale.Count + (stale.Count > 0 ? ": " + string.Join("; ", stale.Take(20).Select(x =>
-                               x.Name + " — " + x.Reason + " [DWG: " + string.Join(", ", x.Dwg) + "]")) : "") +
-                           (orphans.Count > 0 ? "; очищенных без исходного — " + orphans.Count : ""));
-            if (stale.Count == 0 && orphans.Count == 0)
+            var folder = _rows.Where(r => r.File.NameProblem == null).Select(r => new SignSource
             {
-                MessageBox.Show(this, "Всё актуально: подписей, которых нет в папке, и вставленных вручную в семействе нет.", "Подпись",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                Name = (r.Name ?? "").Trim(),
+                CleanFile = r.File.Clean,
+                CleanTimeUtc = r.File.Clean != null && File.Exists(r.File.Clean) ? File.GetLastWriteTimeUtc(r.File.Clean) : (DateTime?)null,
+            }).ToList();
+            List<SignIssue> issues;
+            try { issues = _s.Family.Audit(_s.State, folder, _s.Initials); }
+            catch (Autodesk.Revit.Exceptions.ApplicationException ex)
+            {
+                ShowError("Не удалось проверить семейство: " + ex.Message);
                 return;
             }
-            var lines = stale.Take(15).Select(x => "• " + x.Name + (x.Number != null ? " (№" + x.Number + ")" : "") + " — " + x.Reason).ToList();
-            if (stale.Count > 15) lines.Add("… и ещё " + (stale.Count - 15));
-            var text = (stale.Count > 0
-                           ? "Убрать из семейства «" + _s.Family.Title + "» неактуальные подписи: " + stale.Count + Environment.NewLine + Environment.NewLine +
-                             string.Join(Environment.NewLine, lines) + Environment.NewLine + Environment.NewLine +
-                             "Удалятся их параметры, DWG подписей и строки таблицы выбора «" + _s.Table + "»." + Environment.NewLine
-                           : "") +
-                       (orphans.Count > 0
-                           ? "Из папки «clean» удалятся очищенные файлы, исходных для которых в папке нет: " + orphans.Count + Environment.NewLine +
-                             string.Join(Environment.NewLine, orphans.Take(10).Select(f => "• " + Path.GetFileName(f))) +
-                             (orphans.Count > 10 ? Environment.NewLine + "… и ещё " + (orphans.Count - 10) : "") + Environment.NewLine
-                           : "") +
-                       Environment.NewLine + "Удалить?";
-            if (MessageBox.Show(this, text, "Подпись — актуализация", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
-            if (stale.Count > 0)
+            foreach (var f in OrphanCleanFiles())
+                issues.Add(new SignIssue { Kind = SignIssueKind.CleanOrphan, Name = Path.GetFileName(f), Value = f, Fixable = true, Text = "очищенный файл, исходного в папке нет — удалить из «clean»" });
+            _s.Log?.Invoke("Актуализация «" + _s.Family.Title + "», таблица «" + _s.Table + "»: в папке подписей — " + folder.Count + ", находок — " + issues.Count +
+                           (issues.Count > 0 ? ": " + string.Join("; ", issues.Take(30).Select(x => (x.Name.Length > 0 ? x.Name + " — " : "") + x.Text)) : ""));
+
+            // без DWG и старее очищенного файла — отметить в списке: добавит «Добавить»
+            var outdated = new HashSet<string>(issues.Where(i => i.Kind == SignIssueKind.OutdatedDwg).Select(i => i.Name));
+            foreach (var r in _rows.Where(r => outdated.Contains((r.Name ?? "").Trim()))) r.Refreshed = true;
+            if (outdated.Count > 0)
             {
-                var error = _s.Family.Remove(_s.State, _s.SourceEncoding, stale);
+                ShowAdded.IsChecked = true;
+                Replan();
+            }
+
+            if (issues.Count == 0)
+            {
+                MessageBox.Show(this, "Всё актуально: в семействе «" + _s.Family.Title + "» исправлять нечего.", "Подпись", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            var w = new SignAuditWindow("Семейство «" + _s.Family.Title + "», таблица выбора «" + _s.Table + "»: находок — " + issues.Count, issues,
+                "Убранные подписи удаляются целиком: DWG, параметр и строка таблицы выбора.") { Owner = this };
+            if (w.ShowDialog() != true || w.Result == null || w.Result.Count == 0) return;
+
+            var chosen = w.Result;
+            var inFamily = chosen.Where(i => i.Kind != SignIssueKind.CleanOrphan).ToList();
+            if (inFamily.Count > 0)
+            {
+                var error = _s.Family.Fix(_s.State, _s.SourceEncoding, inFamily);
                 if (error != null)
                 {
-                    MessageBox.Show(this, "Не удалось убрать подписи: " + error + Environment.NewLine + "Ничего не изменено.", "Подпись",
+                    ReadFamily();
+                    MessageBox.Show(this, "Не удалось исправить: " + error + Environment.NewLine + "Семейство не изменено.", "Подпись",
                         MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
             }
-            var deleted = 0;
-            foreach (var f in orphans)
+            // вписанные инициалы — в справочник
+            foreach (var d in inFamily.Where(i => i.Kind == SignIssueKind.Display && i.Value != null))
             {
-                try { File.Delete(f); deleted++; }
+                var ini = SignAudit.Initial(d.Name, d.Value);
+                if (ini != null && (!_s.Initials.TryGetValue(d.Name, out var was) || was != ini)) { _s.Initials[d.Name] = ini; _s.InitialsChanged = true; }
+            }
+            var deleted = 0;
+            foreach (var f in chosen.Where(i => i.Kind == SignIssueKind.CleanOrphan))
+            {
+                try { File.Delete(f.Value); deleted++; }
                 catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException) { /* занят или нет прав — останется */ }
             }
             // семейство поменялось: таблицы, точка, план
@@ -343,7 +370,9 @@ namespace RASv2.SheetManager.UI
             _s.Anchor = _s.Family.Anchor(out _s.AnchorSpread);
             SetPoint();
             ReadFamily();
-            StatusText.Text = "Актуализация: убрано из семейства — " + stale.Count + ", очищенных файлов удалено — " + deleted + " (Ctrl+Z в Revit вернёт семейство).";
+            StatusText.Text = "Актуализация: исправлено в семействе — " + inFamily.Count + (deleted > 0 ? ", очищенных файлов удалено — " + deleted : "") +
+                              (inFamily.Count > 0 ? " (Ctrl+Z в Revit вернёт семейство)." : ".");
+            _s.Log?.Invoke("Актуализация «" + _s.Family.Title + "»: исправлено — " + inFamily.Count + ", файлов удалено — " + deleted);
         }
 
         /// <summary>Очищенные файлы в «clean», исходного для которых в папке больше нет.</summary>
@@ -373,7 +402,7 @@ namespace RASv2.SheetManager.UI
                 for (var i = 0; i < _rows.Count; i++)
                 {
                     _rows[i].SetPlan(items[i]);
-                    _rows[i].SetExtras(_s.State.Rows);
+                    _rows[i].SetExtras(_s.State.Rows, _display, _s.Initials);
                 }
                 SignPlan.Number(_rows.Where(r => r.Checked).Select(r => r.Item), _s.State);
                 foreach (var r in _rows) r.RefreshNumber();
@@ -474,6 +503,17 @@ namespace RASv2.SheetManager.UI
             _s.Scale = scale;
             _s.Point = PointPick.IsChecked == true ? SignPoint.Pick : PointSame.IsChecked == true && _s.Anchor != null ? SignPoint.Same : SignPoint.Origin;
             _s.RemoveUnused = RemoveUnused.Visibility == Visibility.Visible && RemoveUnused.IsChecked == true;
+            var noInitial = chosen.Where(r => r.NoInitial).Select(r => r.Name).ToList();
+            if (noInitial.Count > 0 && MessageBox.Show(this, "Не вписан инициал для штампа: " + string.Join(", ", noInitial.Take(10)) + (noInitial.Count > 10 ? " и ещё " + (noInitial.Count - 10) : "") +
+                    "." + Environment.NewLine + "В штампе у них будет пусто. Добавить так?", "Подпись", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                return;
+            // вписанные инициалы — в справочник
+            foreach (var r in chosen)
+                foreach (var x in r.Extras.Where(x => x.Editable && x.Initial && !string.IsNullOrWhiteSpace(x.Value)))
+                {
+                    var ini = SignAudit.Initial(r.Name.Trim(), SignAudit.Display(r.Name.Trim(), x.Value));
+                    if (ini != null && (!_s.Initials.TryGetValue(r.Name.Trim(), out var was) || was != ini)) { _s.Initials[r.Name.Trim()] = ini; _s.InitialsChanged = true; }
+                }
             _s.Jobs = chosen.Select(r => new SignJob { Item = r.Item, CleanPath = r.File.Clean, Extra = r.ExtraValues() }).ToList();
             DialogResult = true;
         }
