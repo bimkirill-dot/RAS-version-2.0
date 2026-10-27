@@ -1,0 +1,136 @@
+<Window x:Class="RASv2.SheetManager.UI.SignSettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Подпись — настройки" Width="620" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="{DynamicResource Bg}" Foreground="{DynamicResource Fg}" FontFamily="Segoe UI" FontSize="13">
+    <!-- Общие настройки кнопки «Подпись» (DECISIONS.md модуля): файл на сервере, Data\RAS-Sheet Manager. Цвета — кисти ядра. -->
+    <Window.Resources>
+        <Style x:Key="Head" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,14,0,6" />
+        </Style>
+        <Style x:Key="Hint" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Muted}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,2,0,4" />
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="{DynamicResource Field}" />
+            <Setter Property="Foreground" Value="{DynamicResource Fg}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+            <Setter Property="Padding" Value="4,2" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="MinHeight" Value="24" />
+        </Style>
+        <Style x:Key="Num" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="Width" Value="56" />
+            <Setter Property="Margin" Value="6,0" />
+            <Setter Property="HorizontalContentAlignment" Value="Right" />
+        </Style>
+        <Style TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{DynamicResource Fg}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style TargetType="TextBlock" x:Key="Unit">
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="MinWidth" Value="100" />
+            <Setter Property="Padding" Value="12,4" />
+        </Style>
+    </Window.Resources>
+
+    <StackPanel Margin="20,10,20,18">
+        <TextBlock x:Name="Changed" Style="{StaticResource Hint}" />
+
+        <TextBlock Style="{StaticResource Head}" Text="Папка с подписями по умолчанию" />
+        <DockPanel>
+            <Button DockPanel.Dock="Right" Content="Обзор…" Margin="8,0,0,0" Click="Browse_Click" />
+            <TextBox x:Name="Folder" />
+        </DockPanel>
+
+        <TextBlock Style="{StaticResource Head}" Text="Размер подписи — чтобы влезала в ячейку штампа" />
+        <StackPanel Orientation="Horizontal" Margin="0,2">
+            <RadioButton x:Name="ModeHeight" GroupName="mode" Content="Одной высоты" Width="150" />
+            <TextBox x:Name="HeightBox" Style="{StaticResource Num}" />
+            <TextBlock Style="{StaticResource Unit}" Text="мм, ширина не больше" />
+            <TextBox x:Name="MaxWidthBox" Style="{StaticResource Num}" />
+            <TextBlock Style="{StaticResource Unit}" Text="мм" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Margin="0,2">
+            <RadioButton x:Name="ModeWidth" GroupName="mode" Content="Одной ширины" Width="150" />
+            <TextBox x:Name="WidthBox" Style="{StaticResource Num}" />
+            <TextBlock Style="{StaticResource Unit}" Text="мм, высота не больше" />
+            <TextBox x:Name="MaxHeightBox" Style="{StaticResource Num}" />
+            <TextBlock Style="{StaticResource Unit}" Text="мм" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Margin="0,2">
+            <RadioButton x:Name="ModeBox" GroupName="mode" Content="Вписать в рамку" Width="150" />
+            <TextBox x:Name="BoxWidth" Style="{StaticResource Num}" />
+            <TextBlock Style="{StaticResource Unit}" Text="×" />
+            <TextBox x:Name="BoxHeight" Style="{StaticResource Num}" />
+            <TextBlock Style="{StaticResource Unit}" Text="мм, пропорции сохраняются" />
+        </StackPanel>
+        <RadioButton x:Name="ModeKeep" GroupName="mode" Content="Как в DWG — не менять размер" Margin="0,4,0,0" />
+        <TextBlock Style="{StaticResource Hint}" Text="Центр подписи — в начале координат файла. Меняет размер только новых подписей: очищенные (…_clean.dwg) не трогаются — чтобы перечистить, удалите очищенный файл." />
+
+        <TextBlock Style="{StaticResource Head}" Text="Очистка" />
+        <StackPanel Orientation="Horizontal">
+            <TextBlock Style="{StaticResource Unit}" Text="Точность упрощения линий" Width="190" />
+            <TextBox x:Name="Tolerance" Style="{StaticResource Num}" Margin="0,0,6,0" />
+            <TextBlock Style="{StaticResource Unit}" Text="мм" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+            <TextBlock Style="{StaticResource Unit}" Text="Штриховки" Width="190" />
+            <RadioButton x:Name="HatchOutline" GroupName="hatch" Content="оставить контуром" Margin="0,0,16,0" />
+            <RadioButton x:Name="HatchDrop" GroupName="hatch" Content="убрать" />
+        </StackPanel>
+        <TextBlock Style="{StaticResource Unit}" Text="AutoCAD Core Console (accoreconsole.exe)" Margin="0,10,0,4" />
+        <TextBox x:Name="Acad" />
+        <TextBlock x:Name="AcadFound" Style="{StaticResource Hint}" />
+
+        <TextBlock Style="{StaticResource Head}" Text="Семейство подписей" />
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="260" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <TextBlock Grid.Row="0" Style="{StaticResource Unit}" Text="Таблица выбора (новая)" />
+            <TextBox Grid.Row="0" Grid.Column="1" x:Name="Table" Margin="0,2" />
+            <TextBlock Grid.Row="1" Style="{StaticResource Unit}" Text="Признак семейства подписей ГИП в имени" />
+            <TextBox Grid.Row="1" Grid.Column="1" x:Name="GipMarker" Margin="0,2" Width="80" HorizontalAlignment="Left" />
+            <TextBlock Grid.Row="2" Style="{StaticResource Unit}" Text="Таблица выбора ГИП (новая)" />
+            <TextBox Grid.Row="2" Grid.Column="1" x:Name="GipTable" Margin="0,2" />
+            <TextBlock Grid.Row="3" Style="{StaticResource Unit}" Text="Параметр, куда вписывают фамилию" />
+            <TextBox Grid.Row="3" Grid.Column="1" x:Name="KeyParam" Margin="0,2" />
+            <TextBlock Grid.Row="4" Style="{StaticResource Unit}" Text="Столбец номера в таблице" />
+            <TextBox Grid.Row="4" Grid.Column="1" x:Name="Column" Margin="0,2" />
+            <TextBlock Grid.Row="5" Style="{StaticResource Unit}" Text="Значение, если фамилии нет в таблице" />
+            <TextBox Grid.Row="5" Grid.Column="1" x:Name="DefaultValue" Margin="0,2" Width="80" HorizontalAlignment="Left" />
+            <TextBlock Grid.Row="6" Style="{StaticResource Unit}" Text="Слово в имени файла перед фамилией" />
+            <TextBox Grid.Row="6" Grid.Column="1" x:Name="FileWord" Margin="0,2" Width="160" HorizontalAlignment="Left" />
+            <TextBlock Grid.Row="7" Style="{StaticResource Unit}" Text="Цвет подписей в Revit (R, G, B)" />
+            <TextBox Grid.Row="7" Grid.Column="1" x:Name="ColorBox" Margin="0,2" Width="120" HorizontalAlignment="Left" />
+        </Grid>
+        <TextBlock Style="{StaticResource Hint}" Text="Если в семействе уже есть подписи, таблица и форма формулы берутся из него; эти значения — для нового семейства." />
+
+        <TextBlock x:Name="Error" Foreground="{DynamicResource Error}" TextWrapping="Wrap" Margin="0,10,0,0" Visibility="Collapsed" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button x:Name="SaveButton" Content="Сохранить" IsDefault="True" Click="Save_Click" />
+            <Button Content="Отмена" IsCancel="True" Margin="8,0,0,0" />
+        </StackPanel>
+    </StackPanel>
+</Window>

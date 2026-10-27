@@ -35,6 +35,11 @@ namespace RASv2.Tests
             Run("RAS-Clash Analysis: сайт — копии базы", SiteBackupTests.All);
             Run("RAS-Clash Analysis: сайт — документы на странице", SiteMarkdownTests.All);
             Run("RAS-Clash Analysis: Navisworks — подбор вида коллизии", ClashNavisworksTests.All);
+            Run("RAS-Sheet Manager: подпись — разбор DXF", SheetSignTests.Geometry);
+            Run("RAS-Sheet Manager: подпись — очистка", SheetSignTests.Cleaning);
+            Run("RAS-Sheet Manager: подпись — имена, формула, таблица", SheetSignTests.Names);
+            Run("RAS-Sheet Manager: подпись — план добавления", SheetSignTests.Plan);
+            Run("RAS-Sheet Manager: подпись — настройки", SheetSignTests.Settings);
 #if REVIT2026
             Run("RAS-Model History: фильтр", ModelHistoryTests.Filter);
             Run("RAS-Model History: пары «правка + отмена»", ModelHistoryTests.Undo);

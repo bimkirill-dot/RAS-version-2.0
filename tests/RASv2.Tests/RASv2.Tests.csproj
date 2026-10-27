@@ -33,6 +33,11 @@
     <Compile Include="..\..\src\Modules\RAS-Clash Analysis\Navisworks\Logic\*.cs" LinkBase="ClashAnalysis\Navisworks" />
   </ItemGroup>
 
+  <!-- RAS-Sheet Manager: очистка подписей и план добавления — без Revit и AutoCAD, под обе версии -->
+  <ItemGroup>
+    <Compile Include="..\..\src\Modules\RAS-Sheet Manager\Logic\*.cs" LinkBase="SheetManager" />
+  </ItemGroup>
+
   <!-- логика RAS-Model History: модуль пока только для Revit 2026 (.NET 8) -->
   <ItemGroup Condition="'$(RevitVersion)' == '2026'">
     <Compile Include="$(MhDir)Tracking\ChangeRecord.cs" Link="ModelHistory\ChangeRecord.cs" />

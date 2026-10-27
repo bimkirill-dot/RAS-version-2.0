@@ -1,14 +1,12 @@
 using System;
 using System.Globalization;
 using System.Windows;
-using System.Windows.Media;
 using RASv2.ClashAnalysis.Logic;
 
 namespace RASv2.ClashAnalysis.UI
 {
     /// <summary>
-    /// «Настройки вида»: личные настройки вида коллизии. Тема — как в Revit: общей темы окон в ядре пока нет (PRINCIPLES.md,
-    /// раздел 12 — появится, когда понадобится второму модулю), поэтому цвета — здесь, по светлой или тёмной теме Revit.
+    /// «Настройки вида»: личные настройки вида коллизии. Цвета — общие кисти ядра (WindowTheme), по теме Revit.
     /// </summary>
     public partial class ViewSettingsWindow : Window
     {
@@ -67,22 +65,7 @@ namespace RASv2.ClashAnalysis.UI
             DialogResult = true;
         }
 
-        /// <summary>Светлая или тёмная — как интерфейс Revit (в Revit 2023 — всегда светлая).</summary>
-        private void ApplyTheme()
-        {
-            var dark = RASv2.Core.RevitCompat.IsDarkTheme;
-            Resources["Bg"] = Brush(dark ? "#2B2F36" : "#FFFFFF");
-            Resources["Fg"] = Brush(dark ? "#E6E9EE" : "#1F2328");
-            Resources["Muted"] = Brush(dark ? "#9AA3AF" : "#6B7280");
-            Resources["Field"] = Brush(dark ? "#1F2329" : "#FFFFFF");
-            Resources["Line"] = Brush(dark ? "#4A525E" : "#C9CED6");
-        }
-
-        private static SolidColorBrush Brush(string hex)
-        {
-            var b = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
-            b.Freeze();
-            return b;
-        }
+        /// <summary>Светлая или тёмная — как интерфейс Revit: общие кисти ядра.</summary>
+        private void ApplyTheme() => RASv2.Core.WindowTheme.Apply(this);
     }
 }

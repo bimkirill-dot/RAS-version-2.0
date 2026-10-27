@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- подпись: лист с загнутым уголком, черта и росчерк цветом отдела -->
+  <path d="M7 3 L19 3 L25 9 L25 29 L7 29 Z" fill="#FFFFFF" stroke="#39424E" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M19 3 L19 9 L25 9" fill="none" stroke="#39424E" stroke-width="2" stroke-linejoin="round"/>
+  <line x1="11" y1="25" x2="21" y2="25" stroke="#39424E" stroke-width="2" stroke-linecap="round"/>
+  <path d="M10 21 C11 15 14 13 13 18 C12 22 15 16 17 17 C18 18 18 20 22 15" fill="none" stroke="#2F6FED" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
