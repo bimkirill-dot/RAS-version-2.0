@@ -42,6 +42,11 @@ namespace RASv2.SheetManager.Logic
         [DataMember(Name = "formColumn")] public string FormColumn { get; set; }
         [DataMember(Name = "formKey")] public string FormKey { get; set; }
         [DataMember(Name = "formDefault")] public string FormDefault { get; set; }
+        /// <summary>Семейство подписей ГИП — если в его имени есть это слово; для него — своя формула (номер — из своего столбца).</summary>
+        [DataMember(Name = "gipMarker")] public string GipMarker { get; set; }
+        [DataMember(Name = "gipFormColumn")] public string GipFormColumn { get; set; }
+        [DataMember(Name = "gipFormKey")] public string GipFormKey { get; set; }
+        [DataMember(Name = "gipFormDefault")] public string GipFormDefault { get; set; }
         [DataMember(Name = "changedBy")] public string ChangedBy { get; set; }
         [DataMember(Name = "changedAt")] public string ChangedAt { get; set; }
 
@@ -66,6 +71,10 @@ namespace RASv2.SheetManager.Logic
             FormColumn = "Да/Нет";
             FormKey = "Фамилия";
             FormDefault = "1000";
+            GipMarker = "ГИП";
+            GipFormColumn = "Да/Нет";
+            GipFormKey = "Фамилия";
+            GipFormDefault = "1000";
         }
 
         public SignSettings Normalize()
@@ -85,6 +94,11 @@ namespace RASv2.SheetManager.Logic
             FormKey = Text(FormKey, d.FormKey);
             FormDefault = Text(FormDefault, d.FormDefault).Replace(',', '.');
             if (!double.TryParse(FormDefault, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _)) FormDefault = d.FormDefault;
+            GipMarker = (GipMarker ?? d.GipMarker).Trim();
+            GipFormColumn = Text(GipFormColumn, d.GipFormColumn);
+            GipFormKey = Text(GipFormKey, d.GipFormKey);
+            GipFormDefault = Text(GipFormDefault, d.GipFormDefault).Replace(',', '.');
+            if (!double.TryParse(GipFormDefault, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _)) GipFormDefault = d.GipFormDefault;
             return this;
         }
 
@@ -109,6 +123,12 @@ namespace RASv2.SheetManager.Logic
 
         /// <summary>Цвет подписей в Revit — всегда синий (разработчик, 27.10.2026: «пусть всегда будет такой»); очищенные DWG — тоже синие.</summary>
         public static readonly byte[] SignColor = { 0, 0, 255 };
+
+        /// <summary>Формула для семейства без формул на таблицу: в имени семейства есть признак ГИП — формула ГИП, иначе обычная.</summary>
+        public SignForm FormFor(string familyTitle) =>
+            !string.IsNullOrEmpty(GipMarker) && (familyTitle ?? "").IndexOf(GipMarker, StringComparison.OrdinalIgnoreCase) >= 0
+                ? new SignForm { Column = GipFormColumn, Key = GipFormKey, Default = GipFormDefault, Gip = true }
+                : new SignForm { Column = FormColumn, Key = FormKey, Default = FormDefault };
 
         public CleanOptions Clean => new CleanOptions
         {

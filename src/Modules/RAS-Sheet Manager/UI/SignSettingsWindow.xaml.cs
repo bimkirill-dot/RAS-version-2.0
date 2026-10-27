@@ -43,6 +43,7 @@ namespace RASv2.SheetManager.UI
             RegulationExamples.ItemsSource = SignRegulation.Examples(s);
             FileWordText.Text = s.FileWord;
             FormColumn.Text = s.FormColumn; FormKey.Text = s.FormKey; FormDefault.Text = s.FormDefault;
+            GipMarker.Text = s.GipMarker; GipFormColumn.Text = s.GipFormColumn; GipFormKey.Text = s.GipFormKey; GipFormDefault.Text = s.GipFormDefault;
             LeadersText.Text = s.Leaders;
             SaveButton.IsEnabled = !offline;
         }
@@ -103,11 +104,13 @@ namespace RASv2.SheetManager.UI
             s.Hatch = HatchDrop.IsChecked == true ? HatchModes.Drop : HatchModes.Outline;
             s.Acad = Acad.Text;
             s.FormColumn = FormColumn.Text; s.FormKey = FormKey.Text; s.FormDefault = FormDefault.Text;
-            if (!double.TryParse((FormDefault.Text ?? "").Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out _))
-            {
-                Fail("«Если фамилии нет» — число, например «1000».", FormDefault);
-                return;
-            }
+            s.GipMarker = GipMarker.Text; s.GipFormColumn = GipFormColumn.Text; s.GipFormKey = GipFormKey.Text; s.GipFormDefault = GipFormDefault.Text;
+            foreach (var box in new[] { FormDefault, GipFormDefault })
+                if (!double.TryParse((box.Text ?? "").Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+                {
+                    Fail("«Если фамилии нет» — число, например «1000».", box);
+                    return;
+                }
             if (!string.IsNullOrWhiteSpace(s.Acad) && !File.Exists(s.Acad.Trim()))
             {
                 Fail("Нет файла «" + s.Acad.Trim() + "» — укажите accoreconsole.exe или оставьте поле пустым.", Acad);

@@ -29,9 +29,13 @@
             <Setter Property="TextWrapping" Value="Wrap" />
             <Setter Property="Margin" Value="0,4,12,4" />
         </Style>
+        <!-- поля в формах — с промежутком по высоте, чтобы не слипались (поверх общего образца ядра) -->
+        <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="Margin" Value="0,4" />
+        </Style>
         <Style x:Key="Num" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
             <Setter Property="Width" Value="64" />
-            <Setter Property="HorizontalContentAlignment" Value="Right" />
+            <Setter Property="Margin" Value="0,4" />
         </Style>
         <Style x:Key="Unit" TargetType="TextBlock">
             <Setter Property="VerticalAlignment" Value="Center" />
@@ -108,11 +112,11 @@
                         </DockPanel>
                         <TextBlock Style="{StaticResource Hint}" Text="Обычно — папка на сервере. В окне «Подпись» её можно сменить; запоминается последняя." />
 
-                        <DockPanel Margin="0,18,0,6">
-                            <Button DockPanel.Dock="Right" Content="Вернуть по умолчанию" Click="SizeDefaults_Click"
+                        <StackPanel Orientation="Horizontal" Margin="0,18,0,6">
+                            <TextBlock Text="Размер подписи — чтобы влезала в ячейку штампа" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <Button Style="{StaticResource LinkButton}" Content="вернуть по умолчанию" Margin="14,0,0,0" Click="SizeDefaults_Click"
                                     ToolTip="Одной высоты 7 мм, ширина не больше 22 мм (и остальные размеры — как были изначально)" />
-                            <TextBlock Text="Размер подписи — чтобы влезала в ячейку штампа" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="Wrap" />
-                        </DockPanel>
+                        </StackPanel>
                         <!-- ровные колонки: поля одно под другим (разработчик, 27.10.2026: «поля криво») -->
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -227,14 +231,16 @@
                     </StackPanel>
 
 
-                    <!-- ───── Формула (разработчик, 27.10.2026: в окне «Подпись» — только таблица выбора) ───── -->
+                    <!-- ───── Формула (разработчик, 27.10.2026: в окне «Подпись» — только таблица выбора; ГИП — отдельно, «на всякий случай») ───── -->
                     <StackPanel x:Name="SectionForm" Visibility="Collapsed">
                         <TextBlock Style="{StaticResource Title}" Text="Формула подписи" />
-                        <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,10"
-                                   Text="У каждого человека — параметр Да/Нет с формулой: size_lookup(«таблица», «столбец», если фамилии нет, параметр с фамилией) = номер. Если на выбранную таблицу в семействе уже есть формулы, плагин берёт столбец, параметр и значение из них (у семейства ГИП — свои). Значения ниже — когда формул на таблицу ещё нет (новое семейство или новая таблица)." />
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,6"
+                                   Text="У каждого человека — параметр Да/Нет с формулой: size_lookup(«таблица», «столбец», если фамилии нет, параметр с фамилией) = номер. Если на выбранную таблицу в семействе уже есть формулы, плагин берёт столбец, параметр и значение из них. Значения ниже — когда формул на таблицу ещё нет (новое семейство или новая таблица)." />
+
+                        <TextBlock Style="{StaticResource Head}" Text="Семейство подписей" />
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="230" />
+                                <ColumnDefinition Width="250" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
@@ -243,11 +249,33 @@
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <TextBlock Style="{StaticResource Label}" Text="Номер — из столбца таблицы" />
-                            <TextBox Grid.Column="1" x:Name="FormColumn" Width="180" HorizontalAlignment="Left" />
+                            <TextBox Grid.Column="1" x:Name="FormColumn" Width="200" HorizontalAlignment="Left" />
                             <TextBlock Grid.Row="1" Style="{StaticResource Label}" Text="Параметр с фамилией" />
-                            <TextBox Grid.Row="1" Grid.Column="1" x:Name="FormKey" Width="180" HorizontalAlignment="Left" />
+                            <TextBox Grid.Row="1" Grid.Column="1" x:Name="FormKey" Width="200" HorizontalAlignment="Left" />
                             <TextBlock Grid.Row="2" Style="{StaticResource Label}" Text="Если фамилии нет в таблице" />
-                            <TextBox Grid.Row="2" Grid.Column="1" x:Name="FormDefault" Style="{StaticResource Num}" HorizontalAlignment="Left" />
+                            <TextBox Grid.Row="2" Grid.Column="1" x:Name="FormDefault" Width="100" HorizontalAlignment="Left" />
+                        </Grid>
+
+                        <TextBlock Style="{StaticResource Head}" Text="Семейство подписей ГИП" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="250" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Style="{StaticResource Label}" Text="Семейство ГИП, если в его имени есть" />
+                            <TextBox Grid.Column="1" x:Name="GipMarker" Width="100" HorizontalAlignment="Left" />
+                            <TextBlock Grid.Row="1" Style="{StaticResource Label}" Text="Номер — из столбца таблицы" />
+                            <TextBox Grid.Row="1" Grid.Column="1" x:Name="GipFormColumn" Width="200" HorizontalAlignment="Left" />
+                            <TextBlock Grid.Row="2" Style="{StaticResource Label}" Text="Параметр с фамилией" />
+                            <TextBox Grid.Row="2" Grid.Column="1" x:Name="GipFormKey" Width="200" HorizontalAlignment="Left" />
+                            <TextBlock Grid.Row="3" Style="{StaticResource Label}" Text="Если фамилии нет в таблице" />
+                            <TextBox Grid.Row="3" Grid.Column="1" x:Name="GipFormDefault" Width="100" HorizontalAlignment="Left" />
                         </Grid>
                     </StackPanel>
                 </Grid>

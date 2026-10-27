@@ -115,7 +115,7 @@
                 </Button>
             </StackPanel>
             <Grid Width="280" Margin="0,0,16,0">
-                <TextBox x:Name="SearchBox" Padding="28,3,5,3" TextChanged="Search_Changed" ToolTip="Найти подпись по фамилии или имени файла" />
+                <TextBox x:Name="SearchBox" Padding="28,0,6,0" TextChanged="Search_Changed" ToolTip="Найти подпись по фамилии или имени файла" />
                 <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" Foreground="{DynamicResource Muted}" IsHitTestVisible="False"
                            VerticalAlignment="Center" Margin="9,0,0,0" />
                 <TextBlock x:Name="SearchHint" Text="Найти: фамилия или файл" IsHitTestVisible="False" Margin="29,0,0,0"

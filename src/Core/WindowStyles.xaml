@@ -92,14 +92,37 @@
         <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
 
+    <!-- кнопка-ссылка: небольшое действие рядом с заголовком («вернуть по умолчанию») -->
+    <Style x:Key="LinkButton" TargetType="Button">
+        <Setter Property="Foreground" Value="{DynamicResource Accent}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <TextBlock x:Name="T" Text="{TemplateBinding Content}" Background="Transparent" />
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="T" Property="TextDecorations" Value="Underline" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- поле ввода -->
     <Style TargetType="TextBox">
         <Setter Property="Foreground" Value="{DynamicResource Fg}" />
         <Setter Property="Background" Value="{DynamicResource Field}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Padding" Value="5,3" />
-        <Setter Property="MinHeight" Value="28" />
+        <Setter Property="Padding" Value="6,0" />
+        <Setter Property="MinHeight" Value="30" />
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="SnapsToDevicePixels" Value="True" />

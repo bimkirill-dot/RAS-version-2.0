@@ -247,6 +247,10 @@ namespace RASv2.Tests
                 Check(SignRegulation.Pattern(s) == "[Отдел]_Подпись_Фамилия.dwg" && rules.Any(x => x.Contains("Инициал") && x.Contains("двое")) && rules.Any(x => x.Contains("актуализации")) &&
                       SignRegulation.Examples(s).All(e => s.CheckName(e.Split(' ')[0] + (e.Contains("Ким") ? " И.dwg" : "")).Problem == null), "текст регламента; примеры проходят проверку");
                 Check(new SignSettings().Clean.Key != new SignSettings { Height = 8 }.Clean.Key && new SignSettings().Clean.Key == new SignSettings().Clean.Key, "чем очищена — меняется вместе с настройками");
+                var g = new SignSettings { GipFormColumn = "Номер", GipFormDefault = "0" };
+                Check(g.FormFor("RAS_Фамилия_ГИП").Column == "Номер" && g.FormFor("RAS_Фамилия_ГИП").Gip && g.FormFor("RAS_Фамилия").Column == "Да/Нет" && !g.FormFor("RAS_Фамилия").Gip,
+                    "формула из настроек: семейство ГИП — по признаку в имени");
+                Check(SignSettings.FromJson("{\"gipFormDefault\": \"x\", \"formDefault\": \"7,5\"}").GipFormDefault == "1000" && SignSettings.FromJson("{\"formDefault\": \"7,5\"}").FormDefault == "7.5", "значение, если фамилии нет, — число");
             });
             yield return Case("таблица: свои столбцы (у ГИП), строка с ними, убрать строки", () =>
             {

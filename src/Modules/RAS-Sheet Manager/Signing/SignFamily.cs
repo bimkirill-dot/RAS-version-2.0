@@ -104,19 +104,17 @@ namespace RASv2.SheetManager.Signing
         /// </summary>
         /// <summary>
         /// Форма формулы для таблицы — как у формул на неё в семействе (у семейства ГИП — своя); формул на неё нет — из настроек
-        /// («Формула»), но столбец — только тот, что есть в таблице (нет — первый числовой столбец таблицы).
+        /// («Формула»: обычная или для семейства ГИП — по признаку в имени семейства), но столбец — только тот, что есть в
+        /// таблице (нет — первый числовой столбец таблицы).
         /// </summary>
         public SignForm FormFor(string table, List<SignTableChoice> choices, SizeTable rows)
         {
             var c = choices.FirstOrDefault(x => x.Name == table && x.Key != null);
             if (c != null) return new SignForm { Column = c.Column, Default = c.Default, Key = c.Key, FromFamily = true };
+            var form = _s.FormFor(_doc.Title);
             var columns = rows?.NumberColumns() ?? new List<string>();
-            return new SignForm
-            {
-                Column = columns.Count == 0 || columns.Contains(_s.FormColumn) ? _s.FormColumn : columns[0],
-                Default = _s.FormDefault,
-                Key = _s.FormKey,
-            };
+            if (columns.Count > 0 && !columns.Contains(form.Column)) form.Column = columns[0];
+            return form;
         }
 
         /// <summary>Текстовые параметры экземпляра семейства — куда вписывают фамилию (ключ таблицы).</summary>
@@ -511,8 +509,9 @@ namespace RASv2.SheetManager.Signing
         // ───────────────────────────────── актуализация ─────────────────────────────────
 
         /// <summary>
-        /// Подписи семейства, которые пора убрать (разработчик, 27.10.2026, «Актуализировать»): человек (параметр с формулой на
-        /// выбранную таблицу или с привязанным DWG), которого нет в папке подписей (people — фамилии из папки; при совпадении
+        /// Подписи семейства, которые пора убрать (разработчик, 27.10.2026, «Актуализировать»): человек (параметр Да/Нет с
+        /// формулой на выбранную таблицу и номером больше нуля, или с привязанным DWG; служебные параметры вроде «Ошибка в
+        /// фамилии» с номером -1 — не люди, 27.10.2026 попал в список), которого нет в папке подписей (people — фамилии из папки; при совпадении
         /// без учёта казахских букв — тоже есть), или чей DWG не очищен (вставлен вручную: имя файла — не «…_clean»).
         /// </summary>
         public List<SignStale> Stale(SignFamilyState state, ICollection<string> people)
@@ -531,9 +530,12 @@ namespace RASv2.SheetManager.Signing
             {
                 var name = p.Definition.Name;
                 var formula = SignFormula.Parse(Formula(p));
-                var mine = formula != null && formula.Table == state.Table;
+                // человек — параметр Да/Нет с номером больше нуля; служебные («Ошибка в фамилии» = -1 и т. п.) — не трогать
+                if (!IsYesNo(p)) continue;
+                var mine = formula != null && formula.Table == state.Table && formula.Number > 0;
                 dwg.TryGetValue(name, out var imports);
                 if (!mine && imports == null) continue;
+                if (formula != null && formula.Number <= 0) continue;
                 if (name == state.Key) continue;
                 string why = null;
                 if (!inFolder.Contains(SignNames.ToRussian(name))) why = "файла подписи нет в папке";

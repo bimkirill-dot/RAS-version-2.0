@@ -109,7 +109,7 @@ namespace RASv2.SheetManager.UI
             {
                 var rows = _s.Family.ReadTable(table, "Фамилия", "Да/Нет", out _, out _);
                 var f = _s.Family.FormFor(table, _s.Tables, rows);
-                TableBox.ToolTip = "Формула: " + f.Text + (f.FromFamily ? " — как в формулах семейства" : " — из настроек (формул на эту таблицу нет)");
+                TableBox.ToolTip = "Формула: " + f.Text + (f.FromFamily ? " — как в формулах семейства" : f.Gip ? " — из настроек для семейства ГИП (формул на эту таблицу нет)" : " — из настроек (формул на эту таблицу нет)");
                 _s.Table = table;
                 _s.State = _s.Family.State(table, f, out _s.SourceEncoding, out _s.Backup);
                 _s.TableExisted = _s.Backup != null; // таблица есть в семействе — её выгрузили
@@ -311,7 +311,11 @@ namespace RASv2.SheetManager.UI
                              string.Join(Environment.NewLine, lines) + Environment.NewLine + Environment.NewLine +
                              "Удалятся их параметры, DWG подписей и строки таблицы выбора «" + _s.Table + "»." + Environment.NewLine
                            : "") +
-                       (orphans.Count > 0 ? "Из папки «clean» удалятся очищенные файлы без исходного: " + orphans.Count + "." + Environment.NewLine : "") +
+                       (orphans.Count > 0
+                           ? "Из папки «clean» удалятся очищенные файлы, исходных для которых в папке нет: " + orphans.Count + Environment.NewLine +
+                             string.Join(Environment.NewLine, orphans.Take(10).Select(f => "• " + Path.GetFileName(f))) +
+                             (orphans.Count > 10 ? Environment.NewLine + "… и ещё " + (orphans.Count - 10) : "") + Environment.NewLine
+                           : "") +
                        Environment.NewLine + "Удалить?";
             if (MessageBox.Show(this, text, "Подпись — актуализация", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
             if (stale.Count > 0)
