@@ -10,9 +10,10 @@ namespace RASv2.SheetManager.Logic
 {
     /// <summary>
     /// Настройки кнопки «Подпись» — общие для всех, кто ею пользуется (шестерёнка в окне; файл — Data\RAS-Sheet Manager на
-    /// сервере). По умолчанию — как в dwg_clean.bat и «Добавить подписи»: высота 7 мм, ширина не больше 22 мм, точность
-    /// 0,02 мм, синий цвет. Имена таблицы и параметров — здесь, а не в коде (PRINCIPLES.md, ред. 10). Незнакомое и
-    /// испорченное — значения по умолчанию.
+    /// сервере): папка, размер и очистка подписей; регламент наименования (слово «Подпись», кто со знаком «!») — только для
+    /// чтения в окне. Таблица выбора и форма формулы — из самого семейства (окно «Подпись»), цвет — всегда синий
+    /// (разработчик, 27.10.2026). По умолчанию — как в dwg_clean.bat: высота 7 мм, ширина не больше 22 мм, точность 0,02 мм.
+    /// Незнакомое и испорченное — значения по умолчанию; поля прежних версий (таблица, цвет…) не читаются.
     /// </summary>
     [DataContract]
     public sealed class SignSettings
@@ -32,19 +33,8 @@ namespace RASv2.SheetManager.Logic
         [DataMember(Name = "acad")] public string Acad { get; set; }
         /// <summary>Слово в имени файла, после которого — фамилия.</summary>
         [DataMember(Name = "fileWord")] public string FileWord { get; set; }
-        [DataMember(Name = "table")] public string Table { get; set; }
-        /// <summary>Таблица для семейства, в имени которого есть GipMarker (подписи ГИПов).</summary>
-        [DataMember(Name = "gipTable")] public string GipTable { get; set; }
-        [DataMember(Name = "gipMarker")] public string GipMarker { get; set; }
-        [DataMember(Name = "keyParam")] public string KeyParam { get; set; }
-        [DataMember(Name = "column")] public string Column { get; set; }
-        [DataMember(Name = "defaultValue")] public string DefaultValue { get; set; }
-        /// <summary>Регламент наименования: отделы через запятую (пусто — любые, заглавными буквами).</summary>
-        [DataMember(Name = "departments")] public string Departments { get; set; }
         /// <summary>Кто со знаком «!» — на месте отдела (ГИП, ГАП).</summary>
         [DataMember(Name = "leaders")] public string Leaders { get; set; }
-        /// <summary>Цвет подписей в Revit (стили объектов), «R,G,B».</summary>
-        [DataMember(Name = "color")] public string Color { get; set; }
         [DataMember(Name = "changedBy")] public string ChangedBy { get; set; }
         [DataMember(Name = "changedAt")] public string ChangedAt { get; set; }
 
@@ -65,14 +55,6 @@ namespace RASv2.SheetManager.Logic
             Hatch = HatchModes.Outline;
             Acad = "";
             FileWord = "Подпись";
-            Table = "RAS_Таблица выбора фамилий";
-            GipTable = "RAS_Таблица выбора ГИП";
-            GipMarker = "ГИП";
-            KeyParam = "Фамилия";
-            Column = "Да/Нет";
-            DefaultValue = "1000";
-            Color = "0,0,255";
-            Departments = "";
             Leaders = "ГИП, ГАП";
         }
 
@@ -88,10 +70,6 @@ namespace RASv2.SheetManager.Logic
             Folder = (Folder ?? "").Trim();
             Acad = (Acad ?? "").Trim();
             FileWord = Text(FileWord, d.FileWord);
-            Table = Text(Table, d.Table); GipTable = Text(GipTable, d.GipTable); GipMarker = (GipMarker ?? "").Trim();
-            KeyParam = Text(KeyParam, d.KeyParam); Column = Text(Column, d.Column); DefaultValue = Text(DefaultValue, d.DefaultValue);
-            if (Rgb(Color) == null) Color = d.Color;
-            Departments = string.Join(", ", SignFileName.List(Departments));
             Leaders = Leaders == null ? d.Leaders : string.Join(", ", SignFileName.List(Leaders));
             return this;
         }
@@ -113,17 +91,16 @@ namespace RASv2.SheetManager.Logic
 
         /// <summary>Проверить имя файла подписи по регламенту.</summary>
         public SignFileName CheckName(string fileName) =>
-            SignFileName.Check(fileName, FileWord, SignFileName.List(Departments), SignFileName.List(Leaders));
+            SignFileName.Check(fileName, FileWord, new List<string>(), SignFileName.List(Leaders));
+
+        /// <summary>Цвет подписей в Revit — всегда синий (разработчик, 27.10.2026: «пусть всегда будет такой»); очищенные DWG — тоже синие.</summary>
+        public static readonly byte[] SignColor = { 0, 0, 255 };
 
         public CleanOptions Clean => new CleanOptions
         {
             Mode = SizeMode, Height = Height, MaxWidth = MaxWidth, Width = Width, MaxHeight = MaxHeight,
             BoxWidth = BoxWidth, BoxHeight = BoxHeight, Tolerance = Tolerance, Hatch = Hatch,
         };
-
-        /// <summary>Таблица по умолчанию для семейства: в имени есть «ГИП» — таблица ГИПов.</summary>
-        public string TableFor(string familyTitle) =>
-            !string.IsNullOrEmpty(GipMarker) && (familyTitle ?? "").IndexOf(GipMarker, StringComparison.OrdinalIgnoreCase) >= 0 ? GipTable : Table;
 
         public SignSettings Copy() => (SignSettings)MemberwiseClone();
 

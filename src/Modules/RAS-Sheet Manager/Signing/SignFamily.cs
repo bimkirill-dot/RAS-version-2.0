@@ -21,6 +21,8 @@ namespace RASv2.SheetManager.Signing
     public sealed class SignJob
     {
         public SignPlanItem Item;
+        /// <summary>Остальные столбцы новой строки таблицы (номер столбца → значение): у таблицы ГИП, например, свои.</summary>
+        public Dictionary<int, string> Extra = new Dictionary<int, string>();
         public string CleanPath;
         public string Result;
         public bool Ok;
@@ -100,28 +102,58 @@ namespace RASv2.SheetManager.Signing
         /// Состояние семейства для плана с этой таблицей: форма формулы — как у неё (новой — как у самой частой в семействе,
         /// иначе из настроек), её строки (выгрузка во временную папку — она же резервная копия), параметры, вставленные DWG.
         /// </summary>
-        public SignFamilyState State(string table, List<SignTableChoice> choices, out string sourceEncoding, out string backup)
+        /// <summary>
+        /// Форма формулы для таблицы — как у формул на неё в семействе; формул на неё нет — как у самой частой в семействе;
+        /// и их нет — номер из первого числового столбца таблицы, ключ «Фамилия» (или первый текстовый параметр), 1000.
+        /// </summary>
+        public SignForm FormFor(string table, List<SignTableChoice> choices, SizeTable rows)
         {
-            var form = choices.FirstOrDefault(c => c.Name == table && c.Key != null) ?? choices.FirstOrDefault(c => c.Key != null);
-            var f = new SignFamilyState
+            var c = choices.FirstOrDefault(x => x.Name == table && x.Key != null) ?? choices.FirstOrDefault(x => x.Key != null);
+            if (c != null) return new SignForm { Column = c.Column, Default = c.Default, Key = c.Key };
+            var texts = TextParams();
+            return new SignForm
             {
-                Table = table,
-                Column = form?.Column ?? _s.Column,
-                Default = form?.Default ?? _s.DefaultValue,
-                Key = form?.Key ?? _s.KeyParam,
+                Column = rows?.NumberColumns().FirstOrDefault() ?? "Да/Нет",
+                Default = "1000",
+                Key = texts.Contains("Фамилия") ? "Фамилия" : texts.FirstOrDefault() ?? "Фамилия",
             };
-            f.Rows = SizeTable.Create(f.Key, f.Column);
+        }
+
+        /// <summary>Текстовые параметры экземпляра семейства — куда вписывают фамилию (ключ таблицы).</summary>
+        public List<string> TextParams()
+        {
+            var list = new List<string>();
+            foreach (FamilyParameter p in Fm.Parameters)
+            {
+                try { if (p.IsInstance && p.Definition.GetDataType() == SpecTypeId.String.Text) list.Add(p.Definition.Name); }
+                catch (Autodesk.Revit.Exceptions.ApplicationException) { /* параметр без типа — не ключ */ }
+            }
+            return list.OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase).ToList();
+        }
+
+        /// <summary>Строки таблицы как есть (выгрузка во временную папку); таблицы нет — null.</summary>
+        public SizeTable ReadTable(string table, string key, string column, out string sourceEncoding, out string backup)
+        {
             sourceEncoding = TableEncodings.Cp1251;
             backup = null;
             var mgr = Tables;
-            if (mgr != null && mgr.HasSizeTable(table))
+            if (mgr == null || !mgr.HasSizeTable(table)) return null;
+            Directory.CreateDirectory(_temp);
+            backup = Path.Combine(_temp, "исходная_" + Safe(table) + "_" + DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture) + ".csv");
+            if (!mgr.ExportSizeTable(table, backup)) { backup = null; return null; }
+            return SizeTable.Parse(TableEncodings.Decode(File.ReadAllBytes(backup), out sourceEncoding), key, column);
+        }
+
+        public SignFamilyState State(string table, SignForm form, out string sourceEncoding, out string backup)
+        {
+            var f = new SignFamilyState
             {
-                Directory.CreateDirectory(_temp);
-                backup = Path.Combine(_temp, "исходная_" + Safe(table) + "_" + DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture) + ".csv");
-                if (mgr.ExportSizeTable(table, backup))
-                    f.Rows = SizeTable.Parse(TableEncodings.Decode(File.ReadAllBytes(backup), out sourceEncoding), f.Key, f.Column);
-                else backup = null;
-            }
+                Table = table,
+                Column = form.Column,
+                Default = form.Default,
+                Key = form.Key,
+            };
+            f.Rows = ReadTable(table, f.Key, f.Column, out sourceEncoding, out backup) ?? SizeTable.Create(f.Key, f.Column);
             foreach (FamilyParameter p in Fm.Parameters)
                 f.Params[p.Definition.Name] = new SignParam { IsYesNo = IsYesNo(p), Formula = Formula(p) };
             foreach (var imp in new FilteredElementCollector(_doc).OfClass(typeof(ImportInstance)).Cast<ImportInstance>())
@@ -193,7 +225,7 @@ namespace RASv2.SheetManager.Signing
             report.Point = string.Format(CultureInfo.GetCultureInfo("ru-RU"), "X={0:0.0}, Y={1:0.0} мм", point.X * MmPerFoot, point.Y * MmPerFoot);
             var table = state.Rows;
             foreach (var j in jobs.Where(j => j.Item.AddRow && j.Item.Number != null))
-                if (!table.NumberByKey().ContainsKey(j.Item.Name)) table.AddRow(j.Item.Name, j.Item.Number.Value);
+                if (!table.NumberByKey().ContainsKey(j.Item.Name)) table.AddRow(j.Item.Name, j.Item.Number.Value, j.Extra);
             var order = TableEncodings.Order(table.HasKazakh, sourceEncoding, table.Text(TableEncodings.Utf8).Any(ch => ch > 127), tableExisted);
 
             using (var group = new TransactionGroup(_doc, "RAS: подписи"))
@@ -427,7 +459,7 @@ namespace RASv2.SheetManager.Signing
         /// <summary>Цвет подписей — у категории импорта и её слоёв (как «Стили объектов» → «Импортированные категории»).</summary>
         private int Paint()
         {
-            var rgb = SignSettings.Rgb(_s.Color) ?? new byte[] { 0, 0, 255 };
+            var rgb = SignSettings.SignColor;
             var color = new Color(rgb[0], rgb[1], rgb[2]);
             var n = 0;
             foreach (var imp in Signatures())
@@ -474,6 +506,84 @@ namespace RASv2.SheetManager.Signing
             t.SetFailureHandlingOptions(o);
             t.Start();
             return t;
+        }
+
+        // ───────────────────────────────── актуализация ─────────────────────────────────
+
+        /// <summary>
+        /// Подписи семейства, которые пора убрать (разработчик, 27.10.2026, «Актуализировать»): человек (параметр с формулой на
+        /// выбранную таблицу или с привязанным DWG), которого нет в папке подписей (people — фамилии из папки; при совпадении
+        /// без учёта казахских букв — тоже есть), или чей DWG не очищен (вставлен вручную: имя файла — не «…_clean»).
+        /// </summary>
+        public List<SignStale> Stale(SignFamilyState state, ICollection<string> people)
+        {
+            var inFolder = new HashSet<string>(people.Select(SignNames.ToRussian));
+            var dwg = new Dictionary<string, List<ImportInstance>>();
+            foreach (var imp in new FilteredElementCollector(_doc).OfClass(typeof(ImportInstance)).Cast<ImportInstance>())
+            {
+                var fp = Associated(imp);
+                if (fp == null) continue;
+                if (!dwg.TryGetValue(fp.Definition.Name, out var list)) dwg[fp.Definition.Name] = list = new List<ImportInstance>();
+                list.Add(imp);
+            }
+            var result = new List<SignStale>();
+            foreach (FamilyParameter p in Fm.Parameters)
+            {
+                var name = p.Definition.Name;
+                var formula = SignFormula.Parse(Formula(p));
+                var mine = formula != null && formula.Table == state.Table;
+                dwg.TryGetValue(name, out var imports);
+                if (!mine && imports == null) continue;
+                if (name == state.Key) continue;
+                string why = null;
+                if (!inFolder.Contains(SignNames.ToRussian(name))) why = "файла подписи нет в папке";
+                else if (imports != null && imports.Any(i => !Path.GetFileNameWithoutExtension(i.Category?.Name ?? "").EndsWith(SignFolder.Suffix, StringComparison.OrdinalIgnoreCase)))
+                    why = "подпись вставлена вручную — не очищена";
+                if (why == null) continue;
+                result.Add(new SignStale { Name = name, Reason = why, Number = formula?.Number, Dwg = (imports ?? new List<ImportInstance>()).Select(i => i.Category?.Name ?? "").ToList() });
+            }
+            return result.OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+        }
+
+        /// <summary>
+        /// Убрать подписи из семейства — одной группой (одно Ctrl+Z): DWG и их типы (вместе с категорией импорта), параметры,
+        /// строки таблицы (таблица загружается заново в той же кодировке). null — сделано, иначе — почему нет (откат целиком).
+        /// </summary>
+        public string Remove(SignFamilyState state, string sourceEncoding, List<SignStale> stale)
+        {
+            using (var group = new TransactionGroup(_doc, "RAS: подписи — актуализация"))
+            {
+                group.Start();
+                try
+                {
+                    Run("Подписи: удалить неактуальные", () =>
+                    {
+                        var names = new HashSet<string>(stale.Select(x => x.Name));
+                        var imports = new FilteredElementCollector(_doc).OfClass(typeof(ImportInstance)).Cast<ImportInstance>()
+                            .Where(i => { var fp = Associated(i); return fp != null && names.Contains(fp.Definition.Name); }).ToList();
+                        var types = imports.Select(i => i.GetTypeId()).Where(id => id != null && id != ElementId.InvalidElementId).Distinct().ToList();
+                        foreach (var i in imports) if (i.Pinned) i.Pinned = false;
+                        if (imports.Count > 0) _doc.Delete(imports.Select(i => i.Id).ToList());
+                        // тип вставки (CAD) — вместе с ним уходит и категория импорта со слоями
+                        var leftTypes = types.Where(id => _doc.GetElement(id) != null).ToList();
+                        if (leftTypes.Count > 0) _doc.Delete(leftTypes);
+                        foreach (var n in names)
+                        {
+                            var p = Fm.get_Parameter(n);
+                            if (p != null) Fm.RemoveParameter(p);
+                        }
+                        if (state.Rows.RemoveRows(names) > 0 && Tables != null && Tables.HasSizeTable(state.Table))
+                            ImportTable(state.Rows, sourceEncoding, state.Table);
+                    });
+                    group.Assimilate();
+                    return null;
+                }
+                catch (Exception ex)
+                {
+                    if (group.HasStarted()) group.RollBack();
+                    return ex.Message;
+                }
+            }
         }
 
         private sealed class NoWarnings : IFailuresPreprocessor

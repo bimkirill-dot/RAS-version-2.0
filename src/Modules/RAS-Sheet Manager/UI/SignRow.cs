@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Linq;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Windows;
@@ -9,6 +11,19 @@ using RASv2.SheetManager.Logic;
 
 namespace RASv2.SheetManager.UI
 {
+    /// <summary>Значение дополнительного столбца таблицы выбора (у таблицы ГИП, например, свои) в строке списка.</summary>
+    public sealed class SignExtra : INotifyPropertyChanged
+    {
+        private string _value;
+        public int Column { get; set; }
+        public string Header { get; set; }
+        /// <summary>Можно вписать — строки этой фамилии в таблице ещё нет (у существующей — её значение, только для чтения).</summary>
+        public bool Editable { get; set; }
+        public bool ReadOnly => !Editable;
+        public string Value { get => _value; set { _value = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Value))); } }
+        public event PropertyChangedEventHandler PropertyChanged;
+    }
+
     /// <summary>Строка списка подписей: файл, картинка, фамилия (можно поправить), что будет, размеры.</summary>
     public sealed class SignRow : INotifyPropertyChanged
     {
@@ -31,6 +46,31 @@ namespace RASv2.SheetManager.UI
         }
 
         public SignFile File { get; }
+
+        /// <summary>Дополнительные столбцы таблицы выбора: у новой строки — вписать, у существующей — как в таблице.</summary>
+        public ObservableCollection<SignExtra> Extras { get; } = new ObservableCollection<SignExtra>();
+
+        /// <summary>Остальные столбцы для новой строки таблицы (номер столбца → значение).</summary>
+        public Dictionary<int, string> ExtraValues() => Extras.Where(x => x.Editable).ToDictionary(x => x.Column, x => (x.Value ?? "").Trim());
+
+        /// <summary>Столбцы таблицы поменялись (другая таблица) или строка появилась / пропала — набор полей заново; вписанное — сохраняется.</summary>
+        public void SetExtras(SizeTable table)
+        {
+            var typed = Extras.Where(x => x.Editable).ToDictionary(x => x.Header, x => x.Value);
+            var row = Item != null ? table.RowOf(Item.Name) : null;
+            Extras.Clear();
+            foreach (var i in table.ExtraColumns())
+            {
+                var header = table.ColumnName(i);
+                Extras.Add(new SignExtra
+                {
+                    Column = i,
+                    Header = header,
+                    Editable = row == null && CanCheck,
+                    Value = row != null && i < row.Count ? row[i] : typed.TryGetValue(header, out var v) ? v : "",
+                });
+            }
+        }
         public string Note { get; }
         public string SizeText { get; }
         public string BytesText { get; }

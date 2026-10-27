@@ -16,26 +16,26 @@ namespace RASv2.SheetManager.Logic
         {
             var word = s.FileWord;
             var leaders = SignFileName.List(s.Leaders);
-            var departments = SignFileName.List(s.Departments);
             var rules = new List<string>
             {
                 "Части — через «_»: отдел, слово «" + word + "», фамилия; расширение — .dwg.",
-                "Отдел — заглавными буквами" + (departments.Count > 0 ? ": " + string.Join(", ", departments) : " (КЖ, АР, ОВ, ВК, ЭЛ, ГП…)") + ".",
+                "Отдел — сокращение заглавными буквами: КЖ, АР, ОВ, ВК, ЭЛ, ГП…",
                 "Главный специалист — «#» перед отделом.",
             };
             if (leaders.Count > 0)
                 rules.Add(string.Join(" и ", leaders) + " — «!» в начале, на месте отдела — " + string.Join(" или ", leaders) + "; у остальных «!» не ставится.");
             rules.Add("Фамилия — с заглавной буквы, как в штампе; можно казахские буквы и дефис. Латиницу и кириллицу в одной фамилии не смешивать.");
             rules.Add("Инициал — только в двух случаях: у " + (leaders.Count > 0 ? string.Join(" и ", leaders) : "руководителей") +
-                      " — в специальное поле таблицы выбора «" + s.KeyParam + "»; если специалистов с одинаковой фамилией двое — в имени файла, через пробел после фамилии, чтобы их не путать.");
+                      " — в специальное поле таблицы выбора; если специалистов с одинаковой фамилией двое — в имени файла, через пробел после фамилии, чтобы их не путать.");
             rules.Add("Подпись, названная не по регламенту, в семейство не добавляется: переименуйте файл и откройте папку в окне «Подпись» заново.");
+            rules.Add("Подписи добавляются в семейство только кнопкой «Подпись». Подписи, вставленные вручную (не очищенные), и подписи, файлов которых нет в папке, удаляются из семейства при актуализации.");
             return rules;
         }
 
         public static List<string> Examples(SignSettings s)
         {
             var word = s.FileWord;
-            var dep = SignFileName.List(s.Departments).FirstOrDefault() ?? "КЖ";
+            const string dep = "КЖ";
             var lead = SignFileName.List(s.Leaders).FirstOrDefault() ?? "ГИП";
             return new List<string>
             {

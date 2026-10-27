@@ -266,13 +266,44 @@ namespace RASv2.SheetManager.Logic
             return d;
         }
 
-        public void AddRow(string name, int number)
+        /// <param name="extra">Остальные столбцы (номер столбца → значение): у таблицы ГИП, например, свои.</param>
+        public void AddRow(string name, int number, IDictionary<int, string> extra = null)
         {
             var r = Enumerable.Repeat("", Math.Max(Header.Count, Math.Max(KeyCol, ValueCol) + 1)).ToList();
             r[0] = name;
             r[KeyCol] = name;
             r[ValueCol] = number.ToString(CultureInfo.InvariantCulture);
+            if (extra != null)
+                foreach (var kv in extra)
+                    if (kv.Key > 0 && kv.Key < r.Count && kv.Key != KeyCol && kv.Key != ValueCol) r[kv.Key] = kv.Value ?? "";
             Rows.Add(r);
+        }
+
+        /// <summary>Убрать строки этих фамилий (и их написания без казахских букв). Сколько убрано.</summary>
+        public int RemoveRows(IEnumerable<string> names)
+        {
+            var set = new HashSet<string>();
+            foreach (var n in names) { set.Add(n); set.Add(SignNames.ToRussian(n)); }
+            return Rows.RemoveAll(r => r[KeyCol].Trim().Length > 0 && set.Contains(r[KeyCol].Trim()));
+        }
+
+        /// <summary>Имя столбца — до «##» («Да/Нет##number##general» → «Да/Нет»).</summary>
+        public string ColumnName(int i) => i < Header.Count ? Header[i].Split(new[] { "##" }, StringSplitOptions.None)[0].Trim() : "";
+
+        /// <summary>Числовые столбцы — откуда формула может брать номер.</summary>
+        public List<string> NumberColumns() =>
+            Enumerable.Range(1, Math.Max(0, Header.Count - 1)).Where(i => Header[i].IndexOf("##number", StringComparison.OrdinalIgnoreCase) >= 0)
+                .Select(ColumnName).Where(n => n.Length > 0).ToList();
+
+        /// <summary>Остальные столбцы — не ключ и не номер: их заполняют в списке у новых строк.</summary>
+        public List<int> ExtraColumns() =>
+            Enumerable.Range(1, Math.Max(0, Header.Count - 1)).Where(i => i != KeyCol && i != ValueCol && ColumnName(i).Length > 0).ToList();
+
+        /// <summary>Строка этой фамилии (или её написания без казахских букв); нет — null.</summary>
+        public List<string> RowOf(string name)
+        {
+            var ru = SignNames.ToRussian(name);
+            return Rows.FirstOrDefault(r => r[KeyCol].Trim() == name) ?? Rows.FirstOrDefault(r => r[KeyCol].Trim() == ru);
         }
 
         public bool HasKazakh => Rows.Any(r => SignNames.HasKazakh(r[KeyCol]));

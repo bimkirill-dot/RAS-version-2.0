@@ -4,10 +4,11 @@ using System.Windows.Media;
 namespace RASv2.Core
 {
     /// <summary>
-    /// Общие кисти окон модулей (PRINCIPLES.md, раздел 12: «цвета — только через общие кисти»): светлая или тёмная тема — как
-    /// интерфейс Revit (в Revit 2023 — всегда светлая). Окно берёт их через {DynamicResource Bg} и т. п.:
-    /// Bg — фон, Fg — текст, Muted — подсказки, Field — поля ввода, Line — рамки, Row — фон строки при наведении,
-    /// Accent — главная кнопка и выделение, Error — ошибка.
+    /// Общие кисти и образцы окон модулей (PRINCIPLES.md, раздел 12: «цвета — только через общие кисти», «окна строятся по
+    /// общим образцам ядра»): светлая или тёмная тема — как интерфейс Revit (в Revit 2023 — всегда светлая). Окно берёт кисти
+    /// через {DynamicResource Bg} и т. п.: Bg — фон, Fg — текст, Muted — подсказки, Field — поля ввода, Line — рамки, Row — фон
+    /// строки и выбранного, Hover / Pressed — кнопка под мышью и нажатая, Accent — главная кнопка и выделение, AccentFg — текст
+    /// на акценте, Error — ошибка. Образцы кнопок и полей — WindowStyles (обычная, PrimaryButton, IconButton).
     /// </summary>
     public static class WindowTheme
     {
@@ -21,8 +22,12 @@ namespace RASv2.Core
             r["Field"] = Brush(dark ? "#1F2329" : "#FFFFFF");
             r["Line"] = Brush(dark ? "#4A525E" : "#C9CED6");
             r["Row"] = Brush(dark ? "#353A42" : "#F3F5F8");
+            r["Hover"] = Brush(dark ? "#3A4049" : "#EEF1F5");
+            r["Pressed"] = Brush(dark ? "#454C57" : "#E2E6EC");
             r["Accent"] = Brush(dark ? "#5B8DEF" : "#2F6FED");
+            r["AccentFg"] = Brush("#FFFFFF");
             r["Error"] = Brush(dark ? "#FF6B6F" : "#E5484D");
+            r.MergedDictionaries.Add(new WindowStyles());
         }
 
         public static SolidColorBrush Brush(string hex)

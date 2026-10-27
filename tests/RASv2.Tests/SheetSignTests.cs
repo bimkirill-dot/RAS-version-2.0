@@ -149,8 +149,7 @@ namespace RASv2.Tests
                 Check(P("Кж_Подпись_Иванов.dwg").Contains("заглавными"), "отдел — заглавными");
                 Check(P("ГИП_Подпись_Иванов.dwg").Contains("«!»") && P("!КЖ_Подпись_Иванов.dwg").Contains("«!»"), "«!» — только и обязательно у ГИП и ГАП");
                 Check(P("КЖ_Подпись_иванов.dwg") != null && P("КЖ_Подпись_Иванов_2.dwg") != null && P("КЖ_Подпись_Сидоровdwg.dwg").Contains("смешаны"), "фамилия");
-                s.Departments = "КЖ, ОВ";
-                Check(P("ЭЛ_Подпись_Иванов.dwg").Contains("нет в списке") && P("КЖ_Подпись_Иванов.dwg") == null && P("!ГИП_Подпись_Иванов.dwg") == null, "список отделов; ГИП — вне списка");
+                Check(P("ЭЛ_Подпись_Иванов.dwg") == null && P("АПТ_Подпись_Иванов.dwg") == null, "любой отдел заглавными");
             });
             yield return Case("формула и таблица выбора", () =>
             {
@@ -233,22 +232,32 @@ namespace RASv2.Tests
 
         public static IEnumerable<KeyValuePair<string, Action>> Settings()
         {
-            yield return Case("настройки: по умолчанию, запись и чтение, ГИП, испорченное", () =>
+            yield return Case("настройки: по умолчанию, запись и чтение, испорченное; поля прежних версий не мешают", () =>
             {
                 var s = new SignSettings();
-                Check(s.Height == 7 && s.MaxWidth == 22 && s.Tolerance == 0.02 && SignSettings.Rgb(s.Color).SequenceEqual(new byte[] { 0, 0, 255 }), "по умолчанию — как dwg_clean");
-                s.Height = 9; s.Table = "Т";
+                Check(s.Height == 7 && s.MaxWidth == 22 && s.Tolerance == 0.02 && SignSettings.SignColor.SequenceEqual(new byte[] { 0, 0, 255 }), "по умолчанию — как dwg_clean, цвет — синий");
+                s.Height = 9;
                 var back = SignSettings.FromJson(s.ToJson());
-                Check(back.Height == 9 && back.Table == "Т" && back.KeyParam == "Фамилия", "туда и обратно");
-                Check(SignSettings.FromJson("{\"height\": -3, \"color\": \"синий\"}").Height == 7 && SignSettings.FromJson("{\"color\": \"x\"}").Color == "0,0,255", "вне пределов — по умолчанию");
+                Check(back.Height == 9 && back.FileWord == "Подпись" && back.Leaders == "ГИП, ГАП", "туда и обратно");
+                Check(SignSettings.FromJson("{\"height\": -3}").Height == 7, "вне пределов — по умолчанию");
                 Check(SignSettings.FromJson("{ испорчен") == null, "не разобрать — null");
-                Check(new SignSettings().TableFor("RAS_Фамилия_ГИП") == "RAS_Таблица выбора ГИП" && new SignSettings().TableFor("RAS_Фамилия") == "RAS_Таблица выбора фамилий", "таблица ГИПов");
-                var r = SignSettings.FromJson(new SignSettings { Departments = " КЖ ,ОВ,, ", Leaders = "ГИП" }.ToJson());
-                Check(r.Departments == "КЖ, ОВ" && r.Leaders == "ГИП" && SignSettings.FromJson("{}").Leaders == "ГИП, ГАП", "регламент в настройках");
-                var rules = SignRegulation.Rules(r);
-                Check(SignRegulation.Pattern(r) == "[Отдел]_Подпись_Фамилия.dwg" && rules.Any(x => x.Contains("КЖ, ОВ")) && rules.Any(x => x.Contains("Инициал") && x.Contains("двое")) &&
-                      SignRegulation.Examples(r).All(e => r.CheckName(e.Split(' ')[0] + (e.Contains("Ким") ? " И.dwg" : "")).Problem == null), "текст регламента — из настроек, примеры проходят проверку");
+                var old = SignSettings.FromJson("{\"height\": 8, \"table\": \"Т\", \"color\": \"1,2,3\", \"departments\": \"КЖ\", \"keyParam\": \"Ф\"}");
+                Check(old != null && old.Height == 8, "файл прежней версии (таблица, цвет, отделы) читается — лишнее пропускается");
+                var rules = SignRegulation.Rules(s);
+                Check(SignRegulation.Pattern(s) == "[Отдел]_Подпись_Фамилия.dwg" && rules.Any(x => x.Contains("Инициал") && x.Contains("двое")) && rules.Any(x => x.Contains("актуализации")) &&
+                      SignRegulation.Examples(s).All(e => s.CheckName(e.Split(' ')[0] + (e.Contains("Ким") ? " И.dwg" : "")).Problem == null), "текст регламента; примеры проходят проверку");
                 Check(new SignSettings().Clean.Key != new SignSettings { Height = 8 }.Clean.Key && new SignSettings().Clean.Key == new SignSettings().Clean.Key, "чем очищена — меняется вместе с настройками");
+            });
+            yield return Case("таблица: свои столбцы (у ГИП), строка с ними, убрать строки", () =>
+            {
+                var t = SizeTable.Parse(",Фамилия##other##,Да/Нет##number##general,Номер##number##general,Инициалы##other##\r\n,,0,0,\r\nИванов,Иванов,1,5,И.И.\r\nАбилов,Абилов,2,6,\r\n", "Фамилия", "Номер");
+                Check(t.KeyCol == 1 && t.ValueCol == 3 && t.NumberColumns().SequenceEqual(new[] { "Да/Нет", "Номер" }), "номер — из столбца формулы (у ГИП — свой)");
+                Check(t.ExtraColumns().Select(t.ColumnName).SequenceEqual(new[] { "Да/Нет", "Инициалы" }), "остальные столбцы");
+                t.AddRow("Петров", 7, new Dictionary<int, string> { [4] = "П.П.", [3] = "999" });
+                var row = t.RowOf("Петров");
+                Check(row[3] == "7" && row[4] == "П.П." && t.RowOf("Әбілов") != null, "новая строка: номер — свой, остальные — вписанные; казахская — по написанию без казахских букв");
+                Check(t.RemoveRows(new[] { "Иванов", "Әбілов" }) == 2 && t.RowOf("Иванов") == null && t.RowOf("Абилов") == null && t.RowOf("Петров") != null, "убрать строки");
+                Check(t.Text(TableEncodings.Utf8).StartsWith(",Фамилия##other##,Да/Нет##number##general,Номер##number##general,Инициалы##other##"), "заголовок — как был");
             });
         }
     }

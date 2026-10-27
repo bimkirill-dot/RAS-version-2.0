@@ -1,49 +1,30 @@
 <Window x:Class="RASv2.SheetManager.UI.SignWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Подпись" Width="1020" Height="700" MinWidth="820" MinHeight="480"
+        Title="Подпись" Width="1100" Height="740" MinWidth="900" MinHeight="520"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="CanResizeWithGrip"
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Fg}" FontFamily="Segoe UI" FontSize="13">
-    <!-- «Подпись» (DECISIONS.md модуля): папка → очистка новых → список с картинками → «Добавить». Цвета — кисти ядра (WindowTheme). -->
+    <!-- «Подпись» (DECISIONS.md модуля): папка → очистка новых → список с картинками → «Добавить». Кнопки, поля, кисти —
+         общие образцы ядра (WindowTheme, WindowStyles — подключаются до разметки); свои стили — с ключами, не совпадающими
+         с ключами кистей. -->
     <Window.Resources>
-        <BooleanToVisibilityConverter x:Key="Vis" />
         <Style x:Key="MutedText" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource Muted}" />
             <Setter Property="FontSize" Value="12" />
         </Style>
-        <Style x:Key="Label" TargetType="TextBlock">
+        <Style x:Key="FormLabel" TargetType="TextBlock">
             <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="Margin" Value="0,0,10,0" />
+            <Setter Property="Margin" Value="0,0,12,0" />
         </Style>
-        <Style TargetType="TextBox">
-            <Setter Property="Background" Value="{DynamicResource Field}" />
-            <Setter Property="Foreground" Value="{DynamicResource Fg}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
-            <Setter Property="Padding" Value="4,2" />
-            <Setter Property="VerticalContentAlignment" Value="Center" />
-            <Setter Property="MinHeight" Value="26" />
-        </Style>
-        <Style TargetType="CheckBox">
-            <Setter Property="Foreground" Value="{DynamicResource Fg}" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-        </Style>
-        <Style TargetType="RadioButton">
-            <Setter Property="Foreground" Value="{DynamicResource Fg}" />
-            <Setter Property="Margin" Value="0,0,16,0" />
-        </Style>
-        <Style TargetType="Button">
-            <Setter Property="MinWidth" Value="100" />
-            <Setter Property="MinHeight" Value="26" />
-            <Setter Property="Padding" Value="12,3" />
-        </Style>
-        <Style x:Key="Head" TargetType="TextBlock">
+        <Style x:Key="ColHead" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource Muted}" />
             <Setter Property="FontSize" Value="12" />
             <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="8,0" />
         </Style>
     </Window.Resources>
 
-    <Grid Margin="20,14,20,16">
+    <Grid Margin="20,12,20,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -51,109 +32,143 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- семейство и шестерёнка -->
-        <DockPanel Grid.Row="0" Margin="0,0,0,12">
-            <Button x:Name="SettingsButton" DockPanel.Dock="Right" MinWidth="32" Width="32" Height="28" Padding="0" Click="Settings_Click"
-                    ToolTip="Настройки: размер подписей, очистка, таблица выбора, AutoCAD">
-                <Path Width="16" Height="16" Stretch="Uniform" Stroke="{DynamicResource Fg}" StrokeThickness="1.6" StrokeLineJoin="Round"
-                      Data="M13.85 7.05 L14.50 4.09 L17.50 4.09 L18.15 7.05 L20.81 8.16 L23.35 6.52 L25.48 8.65 L23.84 11.19 L24.95 13.85 L27.91 14.50 L27.91 17.50 L24.95 18.15 L23.84 20.81 L25.48 23.35 L23.35 25.48 L20.81 23.84 L18.15 24.95 L17.50 27.91 L14.50 27.91 L13.85 24.95 L11.19 23.84 L8.65 25.48 L6.52 23.35 L8.16 20.81 L7.05 18.15 L4.09 17.50 L4.09 14.50 L7.05 13.85 L8.16 11.19 L6.52 8.65 L8.65 6.52 L11.19 8.16 Z M16 12 A4 4 0 1 0 16 20 A4 4 0 1 0 16 12 Z" />
-            </Button>
-            <TextBlock VerticalAlignment="Center">
-                <Run Text="Семейство:" Foreground="{DynamicResource Muted}" />
+        <!-- семейство и настройки -->
+        <DockPanel Grid.Row="0" Margin="0,0,0,10">
+            <Button x:Name="SettingsButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE713;" Click="Settings_Click"
+                    ToolTip="Настройки: папка, размер подписей, очистка, регламент наименования" />
+            <TextBlock VerticalAlignment="Center" FontSize="14">
+                <Run Text="Семейство" Foreground="{DynamicResource Muted}" />
                 <Run x:Name="FamilyName" FontWeight="SemiBold" />
             </TextBlock>
         </DockPanel>
 
-        <!-- папка -->
+        <!-- папка, таблица выбора, формула -->
         <Grid Grid.Row="1" Margin="0,0,0,10">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="130" />
+                <ColumnDefinition Width="140" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBlock Style="{StaticResource Label}" Text="Папка с подписями" />
-            <TextBox x:Name="FolderBox" Grid.Column="1" KeyDown="Folder_KeyDown" LostKeyboardFocus="Folder_LostFocus" />
-            <Button Grid.Column="2" Content="Обзор…" Margin="8,0,0,0" Click="Browse_Click" />
-        </Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
-        <!-- таблица выбора и масштаб -->
-        <Grid Grid.Row="2" Margin="0,0,0,10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="130" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <TextBlock Style="{StaticResource Label}" Text="Таблица выбора" />
-            <StackPanel Grid.Column="1" Orientation="Horizontal">
-                <ComboBox x:Name="TableBox" MinWidth="320" MinHeight="26" SelectionChanged="Table_Changed" />
-                <TextBox x:Name="NewTableBox" Width="260" Margin="8,0,0,0" Visibility="Collapsed" LostKeyboardFocus="NewTable_LostFocus"
+            <TextBlock Style="{StaticResource FormLabel}" Text="Папка с подписями" />
+            <DockPanel Grid.Column="1" Margin="0,0,0,6">
+                <Button DockPanel.Dock="Right" Content="Обзор…" Margin="8,0,0,0" Click="Browse_Click" />
+                <TextBox x:Name="FolderBox" KeyDown="Folder_KeyDown" LostKeyboardFocus="Folder_LostFocus" />
+            </DockPanel>
+
+            <TextBlock Grid.Row="1" Style="{StaticResource FormLabel}" Text="Таблица выбора" />
+            <DockPanel Grid.Row="1" Grid.Column="1" Margin="0,0,0,6">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <TextBlock Text="Масштаб подписи" VerticalAlignment="Center" Margin="16,0,8,0" />
+                    <TextBox x:Name="ScaleBox" Width="64" HorizontalContentAlignment="Right"
+                             ToolTip="1 — как очищена; 1,5 — в полтора раза крупнее (например, в семействе подписей ГИП). Запоминается для этого семейства." />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                <ComboBox x:Name="TableBox" Width="400" MinHeight="28" VerticalContentAlignment="Center" SelectionChanged="Table_Changed"
+                          ToolTip="Таблицы выбора, которые есть в семействе (сколько формул на неё ссылается), или новая" />
+                <TextBox x:Name="NewTableBox" Width="300" Margin="8,0,0,0" Visibility="Collapsed" LostKeyboardFocus="NewTable_LostFocus"
                          ToolTip="Имя новой таблицы выбора — так она будет называться в семействе" />
-            </StackPanel>
-            <TextBlock Grid.Column="2" Style="{StaticResource Label}" Margin="16,0,8,0" Text="Масштаб" />
-            <TextBox x:Name="ScaleBox" Grid.Column="3" Width="70" HorizontalContentAlignment="Right"
-                     ToolTip="1 — как очищена; 1,5 — в полтора раза крупнее (например, в семействе подписей ГИПов). Запоминается для этого семейства." />
+                </StackPanel>
+            </DockPanel>
+
+            <!-- форма формулы — из самого семейства; у семейства ГИП номер — из своего столбца -->
+            <TextBlock Grid.Row="2" Style="{StaticResource FormLabel}" Text="Формула" />
+            <WrapPanel Grid.Row="2" Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Text="номер — из столбца" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <ComboBox x:Name="ColumnBox" Width="140" MinHeight="28" IsEditable="True" VerticalContentAlignment="Center"
+                          ToolTip="Числовой столбец таблицы, из которого формула берёт номер человека" />
+                <TextBlock Text="по параметру" VerticalAlignment="Center" Margin="10,0,8,0" />
+                <ComboBox x:Name="KeyBox" Width="140" MinHeight="28" IsEditable="True" VerticalContentAlignment="Center"
+                          ToolTip="Текстовый параметр, куда на листе вписывают фамилию" />
+                <TextBlock Text="; если фамилии нет —" VerticalAlignment="Center" Margin="8,0,8,0" />
+                <TextBox x:Name="DefaultBox" Width="70" HorizontalContentAlignment="Right" />
+                <TextBlock x:Name="FormNote" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="12,0,0,0" />
+            </WrapPanel>
         </Grid>
 
-        <!-- ход очистки и фильтр -->
-        <StackPanel Grid.Row="3">
-        <!-- не по регламенту: такие подписи не добавляются (разработчик, 27.10.2026) -->
-        <Border x:Name="NamingBanner" Visibility="Collapsed" Margin="0,0,0,8" Padding="10,6" CornerRadius="3"
+        <!-- предупреждение: файлы не по регламенту -->
+        <Border Grid.Row="2" x:Name="NamingBanner" Visibility="Collapsed" Margin="0,0,0,10" Padding="12,8" CornerRadius="4"
                 BorderBrush="{DynamicResource Error}" BorderThickness="1">
             <TextBlock TextWrapping="Wrap">
-                <Run x:Name="NamingText" Foreground="{DynamicResource Error}" />
+                <Run x:Name="NamingText" Foreground="{DynamicResource Error}" FontWeight="SemiBold" />
+                <LineBreak />
                 <Hyperlink Click="Regulation_Click" Foreground="{DynamicResource Accent}">Регламент наименования подписей</Hyperlink>
             </TextBlock>
         </Border>
-        <DockPanel Margin="0,2,0,6">
-            <CheckBox x:Name="ShowAdded" DockPanel.Dock="Right" Checked="ShowAdded_Changed" Unchecked="ShowAdded_Changed" />
-            <!-- поиск по фамилии или имени файла (разработчик, 27.10.2026) -->
-            <Grid DockPanel.Dock="Left" Width="240" Margin="0,0,12,0">
-                <TextBox x:Name="SearchBox" TextChanged="Search_Changed" ToolTip="Найти подпись по фамилии или имени файла" />
-                <TextBlock x:Name="SearchHint" Text="Найти: фамилия или файл" IsHitTestVisible="False" Margin="7,0,0,0"
+
+        <!-- над списком: поиск и показ — слева, действия с папкой — справа -->
+        <DockPanel Grid.Row="3" Margin="0,0,0,8">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button x:Name="RefreshButton" Click="Refresh_Click" IsEnabled="False"
+                        ToolTip="Очистить подписи заново по текущим настройкам (если поменяли размер, точность…): все или отмеченные. Уже добавленные в семейство — отметятся, чтобы заменить DWG.">
+                    <Button.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem x:Name="RefreshAll" Click="RefreshAll_Click" />
+                            <MenuItem x:Name="RefreshChecked" Click="RefreshChecked_Click" />
+                        </ContextMenu>
+                    </Button.ContextMenu>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,7,0" />
+                        <TextBlock Text="Обновить" VerticalAlignment="Center" />
+                        <TextBlock Text="&#xE70D;" FontFamily="Segoe MDL2 Assets" FontSize="9" VerticalAlignment="Center" Margin="7,1,0,0" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="ActualizeButton" Margin="8,0,0,0" Click="Actualize_Click" IsEnabled="False"
+                        ToolTip="Найти в семействе подписи, файлов которых нет в папке, и вставленные вручную (не очищенные) — и убрать их отовсюду: из семейства, таблицы выбора и папки «clean»">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE895;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,7,0" />
+                        <TextBlock Text="Актуализировать…" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+            <Grid Width="280" Margin="0,0,16,0">
+                <TextBox x:Name="SearchBox" Padding="28,3,5,3" TextChanged="Search_Changed" ToolTip="Найти подпись по фамилии или имени файла" />
+                <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" Foreground="{DynamicResource Muted}" IsHitTestVisible="False"
+                           VerticalAlignment="Center" Margin="9,0,0,0" />
+                <TextBlock x:Name="SearchHint" Text="Найти: фамилия или файл" IsHitTestVisible="False" Margin="29,0,0,0"
                            VerticalAlignment="Center" Foreground="{DynamicResource Muted}" />
             </Grid>
-            <Button x:Name="RefreshButton" DockPanel.Dock="Right" Margin="0,0,16,0" Click="Refresh_Click" IsEnabled="False"
-                    ToolTip="Очистить подписи заново по текущим настройкам (если поменяли размер, точность…): все или отмеченные. Уже добавленные в семейство — отметятся, чтобы заменить DWG.">
-                <Button.ContextMenu>
-                    <ContextMenu>
-                        <MenuItem x:Name="RefreshAll" Click="RefreshAll_Click" />
-                        <MenuItem x:Name="RefreshChecked" Click="RefreshChecked_Click" />
-                    </ContextMenu>
-                </Button.ContextMenu>
-                <TextBlock Text="Обновить ▾" />
-            </Button>
-            <ProgressBar x:Name="Progress" Width="160" Height="6" Margin="0,0,10,0" Visibility="Collapsed" VerticalAlignment="Center" />
-            <TextBlock x:Name="StatusText" Style="{StaticResource MutedText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <CheckBox x:Name="ShowAdded" Checked="ShowAdded_Changed" Unchecked="ShowAdded_Changed" />
         </DockPanel>
-        </StackPanel>
 
         <!-- список подписей -->
-        <Border Grid.Row="4" BorderBrush="{DynamicResource Line}" BorderThickness="1">
-            <DockPanel>
-                <Grid DockPanel.Dock="Top" Background="{DynamicResource Row}" Height="28">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="36" />
-                        <ColumnDefinition Width="136" />
-                        <ColumnDefinition Width="180" />
-                        <ColumnDefinition Width="56" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="110" />
-                        <ColumnDefinition Width="130" />
-                    </Grid.ColumnDefinitions>
-                    <CheckBox x:Name="AllBox" HorizontalAlignment="Center" Click="All_Click" ToolTip="Отметить все, которые можно" />
-                    <TextBlock Grid.Column="1" Style="{StaticResource Head}" Text="Подпись" Margin="6,0" />
-                    <TextBlock Grid.Column="2" Style="{StaticResource Head}" Text="Фамилия" Margin="6,0" />
-                    <TextBlock Grid.Column="3" Style="{StaticResource Head}" Text="Номер" Margin="6,0" />
-                    <TextBlock Grid.Column="4" Style="{StaticResource Head}" Text="Что будет" Margin="6,0" />
-                    <TextBlock Grid.Column="5" Style="{StaticResource Head}" Text="Размер" Margin="6,0" />
-                    <TextBlock Grid.Column="6" Style="{StaticResource Head}" Text="DWG: исходный → очищенный" Margin="6,0" TextWrapping="Wrap" FontSize="11" />
-                </Grid>
+        <Border Grid.Row="4" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="4">
+            <DockPanel Grid.IsSharedSizeScope="True">
+                <!-- заголовок; справа — место под полосу прокрутки списка (она видна всегда), чтобы столбцы совпадали -->
+                <Border DockPanel.Dock="Top" Background="{DynamicResource Row}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1">
+                    <Grid x:Name="HeaderGrid" Height="30">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="40" />
+                            <ColumnDefinition Width="140" />
+                            <ColumnDefinition Width="190" />
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="Extra" />
+                            <ColumnDefinition Width="64" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="110" />
+                            <ColumnDefinition Width="120" />
+                        </Grid.ColumnDefinitions>
+                        <CheckBox x:Name="AllBox" HorizontalAlignment="Center" Click="All_Click" ToolTip="Отметить все видимые, которые можно" />
+                        <TextBlock Grid.Column="1" Style="{StaticResource ColHead}" Text="Подпись" />
+                        <TextBlock Grid.Column="2" Style="{StaticResource ColHead}" Text="Фамилия в семействе"
+                                   ToolTip="Её вписывают на листе в параметр с фамилией; так же называется параметр Да/Нет подписи и строка таблицы выбора. Берётся из имени файла; можно поправить — файл не меняется." />
+                        <TextBlock Grid.Column="3" x:Name="ExtraHeader" Style="{StaticResource ColHead}" Visibility="Collapsed"
+                                   ToolTip="Остальные столбцы таблицы выбора: у новой строки — вписать, у существующей — как в таблице" />
+                        <TextBlock Grid.Column="4" Style="{StaticResource ColHead}" Text="Номер" />
+                        <TextBlock Grid.Column="5" Style="{StaticResource ColHead}" Text="Что будет" />
+                        <TextBlock Grid.Column="6" Style="{StaticResource ColHead}" Text="Размер" />
+                        <TextBlock Grid.Column="7" Style="{StaticResource ColHead}" Text="Вес DWG" ToolTip="Вес исходного файла → очищенного" />
+                    </Grid>
+                </Border>
                 <ListBox x:Name="List" Background="{DynamicResource Bg}" BorderThickness="0" HorizontalContentAlignment="Stretch"
                          VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.ScrollUnit="Pixel"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Visible">
                     <ListBox.ItemContainerStyle>
                         <Style TargetType="ListBoxItem">
                             <Setter Property="Padding" Value="0" />
@@ -175,24 +190,39 @@
                     </ListBox.ItemContainerStyle>
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <Grid Height="48" ToolTip="{Binding FileTip}">
+                            <Grid Height="50" ToolTip="{Binding FileTip}">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="36" />
-                                    <ColumnDefinition Width="136" />
-                                    <ColumnDefinition Width="180" />
-                                    <ColumnDefinition Width="56" />
+                                    <ColumnDefinition Width="40" />
+                                    <ColumnDefinition Width="140" />
+                                    <ColumnDefinition Width="190" />
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="Extra" />
+                                    <ColumnDefinition Width="64" />
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="110" />
-                                    <ColumnDefinition Width="130" />
+                                    <ColumnDefinition Width="120" />
                                 </Grid.ColumnDefinitions>
                                 <CheckBox HorizontalAlignment="Center" IsChecked="{Binding Checked, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                           IsEnabled="{Binding CanCheck}" />
-                                <Border Grid.Column="1" Margin="6,4" Background="{DynamicResource Field}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="2">
+                                <Border Grid.Column="1" Margin="8,5" Background="{DynamicResource Field}" BorderBrush="{DynamicResource Line}"
+                                        BorderThickness="1" CornerRadius="3">
                                     <Image Source="{Binding Preview}" Stretch="Uniform" Margin="4,2" />
                                 </Border>
-                                <TextBox Grid.Column="2" Margin="6,0" Text="{Binding Name, UpdateSourceTrigger=LostFocus}" />
-                                <TextBlock Grid.Column="3" Margin="6,0" VerticalAlignment="Center" Text="{Binding NumberText}" Foreground="{DynamicResource Muted}" />
-                                <TextBlock Grid.Column="4" Margin="6,0" VerticalAlignment="Center" Text="{Binding Status}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis">
+                                <TextBox Grid.Column="2" Margin="8,0" Height="30" Padding="6,0" Text="{Binding Name, UpdateSourceTrigger=LostFocus}" />
+                                <ItemsControl Grid.Column="3" ItemsSource="{Binding Extras}" Margin="8,0,2,0" VerticalAlignment="Center">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBox Width="110" Height="30" Padding="6,0" Margin="0,0,6,0" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
+                                                     IsReadOnly="{Binding ReadOnly, Mode=OneWay}" ToolTip="{Binding Header}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Grid.Column="4" Margin="8,0" VerticalAlignment="Center" Text="{Binding NumberText}" Foreground="{DynamicResource Muted}" />
+                                <TextBlock Grid.Column="5" Margin="8,0" VerticalAlignment="Center" Text="{Binding Status}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
                                             <Style.Triggers>
@@ -203,8 +233,8 @@
                                         </Style>
                                     </TextBlock.Style>
                                 </TextBlock>
-                                <TextBlock Grid.Column="5" Margin="6,0" VerticalAlignment="Center" Text="{Binding SizeText}" />
-                                <TextBlock Grid.Column="6" Margin="6,0" VerticalAlignment="Center" Text="{Binding BytesText}" Foreground="{DynamicResource Muted}" />
+                                <TextBlock Grid.Column="6" Margin="8,0" VerticalAlignment="Center" Text="{Binding SizeText}" />
+                                <TextBlock Grid.Column="7" Margin="8,0" VerticalAlignment="Center" Text="{Binding BytesText}" Foreground="{DynamicResource Muted}" />
                             </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
@@ -212,24 +242,30 @@
             </DockPanel>
         </Border>
 
-        <!-- точка вставки, таблицы, кнопки -->
-        <Grid Grid.Row="5" Margin="0,12,0,0">
+        <!-- ход очистки -->
+        <DockPanel Grid.Row="5" Margin="0,6,0,0">
+            <ProgressBar x:Name="Progress" Width="160" Height="6" Margin="0,0,10,0" Visibility="Collapsed" VerticalAlignment="Center" />
+            <TextBlock x:Name="StatusText" Style="{StaticResource MutedText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        </DockPanel>
+
+        <!-- куда и как вставить; кнопки -->
+        <Grid Grid.Row="6" Margin="0,12,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <StackPanel VerticalAlignment="Center">
-                <TextBlock x:Name="AnchorText" />
-                <StackPanel x:Name="PointChoice" Orientation="Horizontal" Visibility="Collapsed">
-                    <TextBlock Text="Центр подписи:" Margin="0,0,10,0" />
-                    <RadioButton x:Name="PointOrigin" GroupName="point" Content="в начало координат семейства" IsChecked="True" />
+                <WrapPanel>
+                    <TextBlock Text="Центр подписи" VerticalAlignment="Center" Margin="0,0,12,0" />
+                    <RadioButton x:Name="PointSame" GroupName="point" Margin="0,0,16,0" />
+                    <RadioButton x:Name="PointOrigin" GroupName="point" Content="в начало координат" Margin="0,0,16,0" />
                     <RadioButton x:Name="PointPick" GroupName="point" Content="указать на виде после «Добавить»" />
-                </StackPanel>
-                <CheckBox x:Name="RemoveUnused" Margin="0,6,0,0" Visibility="Collapsed" />
+                </WrapPanel>
+                <CheckBox x:Name="RemoveUnused" Margin="0,8,0,0" Visibility="Collapsed" />
                 <TextBlock x:Name="ErrorText" Foreground="{DynamicResource Error}" TextWrapping="Wrap" Margin="0,6,0,0" Visibility="Collapsed" />
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom">
-                <Button x:Name="AddButton" IsDefault="True" Click="Add_Click" FontWeight="SemiBold" />
+                <Button x:Name="AddButton" Style="{StaticResource PrimaryButton}" MinWidth="130" IsDefault="True" Click="Add_Click" />
                 <Button Content="Отмена" IsCancel="True" Margin="8,0,0,0" />
             </StackPanel>
         </Grid>

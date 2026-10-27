@@ -86,9 +86,9 @@ namespace RASv2.SheetManager
             new WindowInteropHelper(window).Owner = app.MainWindowHandle;
             if (window.ShowDialog() != true || session.Jobs.Count == 0) return;
 
-            // точка: как у остальных подписей; подписей нет — начало координат или указать на виде
-            var point = session.Anchor ?? XYZ.Zero;
-            if (session.Anchor == null && session.PickPoint)
+            // точка: как у остальных подписей, в начало координат или указать на виде (можно и когда подписи уже есть)
+            var point = session.Point == SignPoint.Same && session.Anchor != null ? session.Anchor : XYZ.Zero;
+            if (session.Point == SignPoint.Pick)
             {
                 try { point = uidoc.Selection.PickPoint("Укажите центр подписи"); }
                 catch (Autodesk.Revit.Exceptions.OperationCanceledException) { return; }

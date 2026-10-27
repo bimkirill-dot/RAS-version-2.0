@@ -6,6 +6,9 @@ using RASv2.SheetManager.Signing;
 
 namespace RASv2.SheetManager
 {
+    /// <summary>Центр подписи: как у остальных подписей, в начало координат или указать на виде.</summary>
+    public enum SignPoint { Same, Origin, Pick }
+
     /// <summary>
     /// Одно нажатие «Подпись»: что окно получает от команды (семейство, таблицы, настройки, папки) и что возвращает (выбранные
     /// подписи, таблица, масштаб, точка). Окно открыто внутри команды — читать семейство (Revit API) из него можно.
@@ -33,7 +36,8 @@ namespace RASv2.SheetManager
         public string Backup;
         public List<SignJob> Jobs = new List<SignJob>();
         public double Scale = 1;
-        public bool PickPoint;
+        /// <summary>Центр подписи: как у остальных подписей, в начало координат или указать на виде.</summary>
+        public SignPoint Point = SignPoint.Same;
         public bool RemoveUnused;
         /// <summary>Сколько в папке уже очищено сейчас — для отчёта.</summary>
         public int CleanedNow;

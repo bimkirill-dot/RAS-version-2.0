@@ -9,7 +9,8 @@ namespace RASv2.SheetManager.UI
 {
     /// <summary>
     /// Общие настройки кнопки «Подпись» — шестерёнка в окне (DECISIONS.md модуля). Разделы — слева: «Папка и размер»,
-    /// «Очистка», «Регламент наименования», «Семейство подписей».
+    /// «Очистка», «Регламент наименования» (только для чтения). Таблица выбора и формула — в окне «Подпись» (из семейства),
+    /// цвет подписей — всегда синий (разработчик, 27.10.2026).
     /// </summary>
     public partial class SignSettingsWindow : Window
     {
@@ -17,13 +18,12 @@ namespace RASv2.SheetManager.UI
 
         public SignSettings Result { get; private set; }
 
-        private bool _ready;
-
         /// <param name="showRegulation">Открыть сразу на регламенте наименования (ссылка из окна «Подпись»).</param>
         public SignSettingsWindow(SignSettings settings, bool offline, string acadFound, bool showRegulation = false)
         {
-            InitializeComponent();
+            // кисти и образцы ядра — до разметки: на них ссылаются стили окна
             RASv2.Core.WindowTheme.Apply(this);
+            InitializeComponent();
             Nav.SelectedIndex = showRegulation ? 2 : 0;
             var s = settings.Copy();
             Result = s;
@@ -31,6 +31,25 @@ namespace RASv2.SheetManager.UI
                            (string.IsNullOrEmpty(s.ChangedBy) ? "" : " Изменены: " + s.ChangedBy + ", " + s.ChangedAt + ".") +
                            (offline ? " Сервер не ответил — показаны последние известные; сохранить сейчас не получится." : "");
             Folder.Text = s.Folder;
+            ShowSize(s);
+            Tolerance.Text = N(s.Tolerance);
+            HatchOutline.IsChecked = s.Hatch != HatchModes.Drop;
+            HatchDrop.IsChecked = s.Hatch == HatchModes.Drop;
+            Acad.Text = s.Acad;
+            AcadFound.Text = acadFound != null ? "Пусто — найти самому. Сейчас: " + acadFound : "Пусто — найти самому. AutoCAD не найден: новые подписи не очистить.";
+            // регламент — только для чтения (разработчик, 27.10.2026)
+            RegulationPattern.Text = SignRegulation.Pattern(s);
+            RegulationRules.ItemsSource = SignRegulation.Rules(s);
+            RegulationExamples.ItemsSource = SignRegulation.Examples(s);
+            FileWordText.Text = s.FileWord;
+            LeadersText.Text = s.Leaders;
+            SaveButton.IsEnabled = !offline;
+        }
+
+        private static string N(double v) => v.ToString("0.###", Ru);
+
+        private void ShowSize(SignSettings s)
+        {
             ModeHeight.IsChecked = s.SizeMode == SizeModes.Height;
             ModeWidth.IsChecked = s.SizeMode == SizeModes.Width;
             ModeBox.IsChecked = s.SizeMode == SizeModes.Box;
@@ -38,23 +57,9 @@ namespace RASv2.SheetManager.UI
             HeightBox.Text = N(s.Height); MaxWidthBox.Text = N(s.MaxWidth);
             WidthBox.Text = N(s.Width); MaxHeightBox.Text = N(s.MaxHeight);
             BoxWidth.Text = N(s.BoxWidth); BoxHeight.Text = N(s.BoxHeight);
-            Tolerance.Text = N(s.Tolerance);
-            HatchOutline.IsChecked = s.Hatch != HatchModes.Drop;
-            HatchDrop.IsChecked = s.Hatch == HatchModes.Drop;
-            Acad.Text = s.Acad;
-            AcadFound.Text = acadFound != null ? "Пусто — найти самому. Сейчас: " + acadFound : "Пусто — найти самому. AutoCAD не найден: новые подписи не очистить.";
-            Table.Text = s.Table; GipTable.Text = s.GipTable; GipMarker.Text = s.GipMarker;
-            KeyParam.Text = s.KeyParam; Column.Text = s.Column; DefaultValue.Text = s.DefaultValue;
-            FileWord.Text = s.FileWord; ColorBox.Text = s.Color;
-            Departments.Text = s.Departments; Leaders.Text = s.Leaders;
-            _ready = true;
-            ShowRegulation();
-            SaveButton.IsEnabled = !offline;
         }
 
-        private static string N(double v) => v.ToString("0.###", Ru);
-
-        private Panel[] Sections => new Panel[] { SectionSize, SectionClean, SectionNaming, SectionFamily };
+        private Panel[] Sections => new Panel[] { SectionSize, SectionClean, SectionNaming };
 
         private void Nav_Changed(object sender, SelectionChangedEventArgs e)
         {
@@ -74,34 +79,8 @@ namespace RASv2.SheetManager.UI
             }
         }
 
-        /// <summary>Регламент — из полей окна (слово, отделы, кто с «!»): меняются поля — меняется и текст.</summary>
-        private void ShowRegulation()
-        {
-            var s = Result.Copy();
-            s.FileWord = FileWord.Text; s.Departments = Departments.Text; s.Leaders = Leaders.Text; s.KeyParam = KeyParam.Text;
-            s.Normalize();
-            RegulationPattern.Text = SignRegulation.Pattern(s);
-            RegulationRules.ItemsSource = SignRegulation.Rules(s);
-            RegulationExamples.ItemsSource = SignRegulation.Examples(s);
-        }
-
-        private void Naming_Changed(object sender, TextChangedEventArgs e)
-        {
-            if (_ready) ShowRegulation();
-        }
-
         /// <summary>Размеры — как изначально (dwg_clean.bat): одной высоты 7 мм, ширина не больше 22 мм и т. д.</summary>
-        private void SizeDefaults_Click(object sender, RoutedEventArgs e)
-        {
-            var d = new SignSettings();
-            ModeHeight.IsChecked = d.SizeMode == SizeModes.Height;
-            ModeWidth.IsChecked = d.SizeMode == SizeModes.Width;
-            ModeBox.IsChecked = d.SizeMode == SizeModes.Box;
-            ModeKeep.IsChecked = d.SizeMode == SizeModes.Keep;
-            HeightBox.Text = N(d.Height); MaxWidthBox.Text = N(d.MaxWidth);
-            WidthBox.Text = N(d.Width); MaxHeightBox.Text = N(d.MaxHeight);
-            BoxWidth.Text = N(d.BoxWidth); BoxHeight.Text = N(d.BoxHeight);
-        }
+        private void SizeDefaults_Click(object sender, RoutedEventArgs e) => ShowSize(new SignSettings());
 
         private void Browse_Click(object sender, RoutedEventArgs e)
         {
@@ -127,16 +106,6 @@ namespace RASv2.SheetManager.UI
                 Fail("Нет файла «" + s.Acad.Trim() + "» — укажите accoreconsole.exe или оставьте поле пустым.", Acad);
                 return;
             }
-            s.Table = Table.Text; s.GipTable = GipTable.Text; s.GipMarker = GipMarker.Text;
-            s.KeyParam = KeyParam.Text; s.Column = Column.Text; s.DefaultValue = DefaultValue.Text;
-            s.FileWord = FileWord.Text;
-            s.Departments = Departments.Text; s.Leaders = Leaders.Text;
-            if (SignSettings.Rgb(ColorBox.Text) == null)
-            {
-                Fail("Цвет — три числа от 0 до 255 через запятую, например «0,0,255».", ColorBox);
-                return;
-            }
-            s.Color = ColorBox.Text.Trim();
             Result = s.Normalize();
             DialogResult = true;
         }

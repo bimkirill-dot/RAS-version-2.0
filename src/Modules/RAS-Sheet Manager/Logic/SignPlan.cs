@@ -26,6 +26,23 @@ namespace RASv2.SheetManager.Logic
         public string Formula;
     }
 
+    /// <summary>
+    /// Форма формулы подписи: из какого столбца таблицы номер, по какому параметру (ключу) ищется фамилия, что — если фамилии
+    /// нет. Берётся из формул самого семейства (у семейства ГИП столбец свой), в окне её можно поменять.
+    /// </summary>
+    public sealed class SignForm
+    {
+        public string Column = "Да/Нет", Default = "1000", Key = "Фамилия";
+    }
+
+    /// <summary>Подпись в семействе, которую пора убрать («Актуализировать»).</summary>
+    public sealed class SignStale
+    {
+        public string Name, Reason;
+        public int? Number;
+        public List<string> Dwg = new List<string>();
+    }
+
     /// <summary>Семейство подписей — как оно есть сейчас (читает Revit-часть модуля, план — без Revit API).</summary>
     public sealed class SignFamilyState
     {
