@@ -30,7 +30,7 @@ namespace RASv2.SheetManager.Logic
         LeftoverType,
         /// <summary>Очищенный файл новее подписи в семействе (перечистили «Обновить») — заменить (отмечается в списке окна).</summary>
         OutdatedDwg,
-        /// <summary>Текст для штампа (столбец «Фамилия И.» у ГИП) пустой или не с этой фамилии — вписать из справочника инициалов.</summary>
+        /// <summary>Текст для штампа (столбец «Фамилия И.» у ГИП) пустой или не с этой фамилии — вписать по инициалу, который введут в окне.</summary>
         Display,
         /// <summary>Очищенный файл в «clean», исходного для которого в папке нет, — удалить файл.</summary>
         CleanOrphan,
@@ -80,7 +80,7 @@ namespace RASv2.SheetManager.Logic
     public static class SignAudit
     {
         public static List<SignIssue> Check(SizeTable table, List<SignPerson> people, List<SignSource> folder, int orphanDwg, int leftoverTypes,
-            int displayColumn, IDictionary<string, string> initials)
+            int displayColumn)
         {
             var issues = new List<SignIssue>();
             var inFolder = folder.GroupBy(f => SignNames.ToRussian(f.Name)).ToDictionary(g => g.Key, g => g.First());
@@ -146,13 +146,12 @@ namespace RASv2.SheetManager.Logic
                     var ok = shown.Length > 0 && shown.StartsWith(key + " ", StringComparison.CurrentCulture);
                     if (!ok)
                     {
-                        initials.TryGetValue(key, out var ini);
-                        var value = ini != null ? Display(key, ini) : null;
+                        // исправить — когда впишут инициал (окно «Актуализировать»)
                         issues.Add(new SignIssue
                         {
-                            Kind = SignIssueKind.Display, Name = key, Row = i, Value = value, Fixable = value != null,
+                            Kind = SignIssueKind.Display, Name = key, Row = i,
                             Text = (shown.Length == 0 ? "нет текста для штампа" : "текст для штампа «" + shown + "» — не с этой фамилии") +
-                                   (value != null ? " — вписать «" + value + "»" : " — инициал неизвестен: впишите его справа"),
+                                   " — впишите инициал справа",
                         });
                     }
                 }
@@ -172,15 +171,6 @@ namespace RASv2.SheetManager.Logic
             return surname + " " + i + ".";
         }
 
-        /// <summary>Инициал из текста для штампа: «Байгараева Д.» и фамилия «Байгараева» → «Д.»; не с этой фамилии — null.</summary>
-        public static string Initial(string surname, string shown)
-        {
-            shown = (shown ?? "").Trim();
-            if (!shown.StartsWith(surname + " ", StringComparison.CurrentCulture)) return null;
-            var rest = shown.Substring(surname.Length).Trim();
-            return rest.Length == 0 ? null : rest;
-        }
-
         /// <summary>
         /// Столбец «текст для штампа» (у таблицы ГИП — «Инициалы»: «Байгараева Д.»): текстовый столбец, кроме ключа, где у
         /// большинства заполненных строк текст начинается с фамилии и пробела. Нет такого — -1.
@@ -196,49 +186,6 @@ namespace RASv2.SheetManager.Logic
                 if (like * 2 >= filled.Count) return c;
             }
             return -1;
-        }
-    }
-
-    /// <summary>
-    /// Справочник инициалов (фамилия → инициал, «Д.») — общий для всех семейств подписей ГИП: инициал вписывают один раз,
-    /// дальше он подставляется сам. Пополняется из таблиц ГИП (у кого текст для штампа уже есть) и из окна. Файл — рядом с
-    /// общими настройками на сервере. Без Revit API — проверяется тестами.
-    /// </summary>
-    public static class SignInitials
-    {
-        public static Dictionary<string, string> Parse(string text)
-        {
-            var d = new Dictionary<string, string>();
-            foreach (var line in (text ?? "").Replace("\r\n", "\n").Split('\n'))
-            {
-                var eq = line.IndexOf('=');
-                if (line.TrimStart().StartsWith("#") || eq <= 0) continue;
-                var k = line.Substring(0, eq).Trim();
-                var v = line.Substring(eq + 1).Trim();
-                if (k.Length > 0 && v.Length > 0) d[k] = v;
-            }
-            return d;
-        }
-
-        public static string Write(IDictionary<string, string> d) =>
-            "# Справочник инициалов для подписей ГИП: фамилия = инициал (RAS-Sheet Manager, «Подпись»)\r\n" +
-            string.Join("\r\n", d.OrderBy(kv => kv.Key, StringComparer.Create(CultureInfo.GetCultureInfo("ru-RU"), true)).Select(kv => kv.Key + " = " + kv.Value)) + "\r\n";
-
-        /// <summary>Взять инициалы из таблицы (столбец текста для штампа). Сколько новых.</summary>
-        public static int Learn(IDictionary<string, string> d, SizeTable t, int displayColumn)
-        {
-            if (displayColumn < 0) return 0;
-            var added = 0;
-            foreach (var r in t.Rows)
-            {
-                var key = r[t.KeyCol].Trim();
-                if (key.Length == 0 || displayColumn >= r.Count) continue;
-                var ini = SignAudit.Initial(key, r[displayColumn]);
-                if (ini == null || d.ContainsKey(key)) continue;
-                d[key] = ini;
-                added++;
-            }
-            return added;
         }
     }
 }

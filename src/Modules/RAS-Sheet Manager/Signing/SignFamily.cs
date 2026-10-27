@@ -614,10 +614,10 @@ namespace RASv2.SheetManager.Signing
             return new FilteredElementCollector(_doc).OfClass(typeof(CADLinkType)).Select(t => t.Id).Where(id => !used.Contains(id)).ToList();
         }
 
-        /// <summary>Что не так в семействе (SignAudit) — по выбранной таблице, папке подписей и справочнику инициалов.</summary>
-        public List<SignIssue> Audit(SignFamilyState state, List<SignSource> folder, IDictionary<string, string> initials) =>
+        /// <summary>Что не так в семействе (SignAudit) — по выбранной таблице и папке подписей.</summary>
+        public List<SignIssue> Audit(SignFamilyState state, List<SignSource> folder) =>
             SignAudit.Check(state.Rows, People(state).Select(x => x.Person).ToList(), folder, OrphanImports().Count, LeftoverTypes().Count,
-                SignAudit.DisplayColumn(state.Rows), initials);
+                SignAudit.DisplayColumn(state.Rows));
 
         /// <summary>
         /// Исправить отмеченные находки — одной группой (одно Ctrl+Z): убрать людей (DWG с типом, параметр, строку), строки

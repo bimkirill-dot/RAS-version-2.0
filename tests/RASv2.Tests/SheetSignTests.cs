@@ -244,17 +244,13 @@ namespace RASv2.Tests
 
         public static IEnumerable<KeyValuePair<string, Action>> Audit()
         {
-            yield return Case("ГИП: столбец текста для штампа, инициалы — в справочник", () =>
+            yield return Case("ГИП: столбец текста для штампа, текст из инициала", () =>
             {
                 var t = SizeTable.Parse(Gip, "Фамилия", "Да/Нет");
                 var c = SignAudit.DisplayColumn(t);
                 Check(c == 3, "столбец «Инициалы»: " + c);
                 Check(SignAudit.DisplayColumn(SizeTable.Parse(",Фамилия##other##,Да/Нет##number##general\r\nИванов,Иванов,1\r\n", "Фамилия", "Да/Нет")) == -1, "у обычной таблицы — нет");
-                var d = new Dictionary<string, string>();
-                Check(SignInitials.Learn(d, t, c) == 4 && d["Байгараева"] == "Д." && !d.ContainsKey("Серикбаева") && !d.ContainsKey("Каюпов"), "выучено: с этой фамилии и не пусто");
                 Check(SignAudit.Display("Каюпов", "е") == "Каюпов е." && SignAudit.Display("Каюпов", " Е. ") == "Каюпов Е." && SignAudit.Display("Каюпов", "") == null, "текст для штампа из инициала");
-                var back = SignInitials.Parse(SignInitials.Write(d));
-                Check(back.Count == d.Count && back["Хапина"] == "Л.", "справочник: запись и чтение");
             });
             yield return Case("актуализация: что не так в семействе", () =>
             {
@@ -275,7 +271,7 @@ namespace RASv2.Tests
                     new SignSource { Name = "Серикбаева" }, new SignSource { Name = "Абдукахаров" }, new SignSource { Name = "Каюпов" },
                     new SignSource { Name = "Хапина" }, new SignSource { Name = "Двойник" },
                 };
-                var issues = SignAudit.Check(t, people, folder, 2, 3, 3, new Dictionary<string, string> { ["Абдукахаров"] = "Р." });
+                var issues = SignAudit.Check(t, people, folder, 2, 3, 3);
                 bool Has(SignIssueKind k, string n) => issues.Any(i => i.Kind == k && i.Name == n);
                 Check(Has(SignIssueKind.NoFile, "Нетфайла") && Has(SignIssueKind.Manual, "Хапина"), "нет в папке; вставлена вручную — по имени файла вставки, а не «Импорт в семействах»");
                 Check(!Has(SignIssueKind.NoFile, "Байгараева") && !Has(SignIssueKind.Manual, "Байгараева") && !Has(SignIssueKind.Manual, "Серикбаева"), "очищенные — актуальны (и «… 2» после повторной вставки)");
@@ -286,7 +282,8 @@ namespace RASv2.Tests
                 Check(fm.Number == 9 && fm.Fixable, "номер в формуле не как в таблице — переписать на табличный");
                 var sk = issues.First(i => i.Kind == SignIssueKind.Display && i.Name == "Серикбаева");
                 var ab = issues.First(i => i.Kind == SignIssueKind.Display && i.Name == "Абдукахаров");
-                Check(!sk.Fixable && ab.Fixable && ab.Value == "Абдукахаров Р." && Has(SignIssueKind.Display, "Каюпов"), "текст для штампа: опечатка, пусто; из справочника — исправить");
+                Check(!sk.Fixable && !ab.Fixable && ab.Value == null && Has(SignIssueKind.Display, "Каюпов") && !Has(SignIssueKind.Display, "Байгараева"),
+                    "текст для штампа: опечатка, пусто — исправить, когда впишут инициал");
                 Check(issues.Any(i => i.Kind == SignIssueKind.OrphanDwg) && issues.Any(i => i.Kind == SignIssueKind.LeftoverType), "лишние вставки и типы");
             });
         }

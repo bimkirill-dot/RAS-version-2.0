@@ -20,7 +20,7 @@ namespace RASv2.SheetManager.UI
     /// «Подпись» (DECISIONS.md модуля): папка с подписями → новые очищаются (AutoCAD Core Console, в фоне, несколько сразу),
     /// очищенные не трогаются → список с картинками, фамилией (можно поправить), что будет, размерами → «Добавить».
     /// Таблица выбора и форма формулы — из самого семейства. «Актуализировать» проверяет семейство и исправляет отмеченное
-    /// (окно SignAuditWindow). У таблицы ГИП текст для штампа («Фамилия И.») складывается из инициала (справочник на сервере).
+    /// (окно SignAuditWindow). У таблицы ГИП текст для штампа («Фамилия И.») складывается из вписанного в списке инициала.
     /// Добавляет команда (SignApp) после закрытия окна — одной группой действий.
     /// </summary>
     public partial class SignWindow : Window
@@ -116,9 +116,8 @@ namespace RASv2.SheetManager.UI
                 _s.Table = table;
                 _s.State = _s.Family.State(table, f, out _s.SourceEncoding, out _s.Backup);
                 _s.TableExisted = _s.Backup != null; // таблица есть в семействе — её выгрузили
-                // таблица ГИП: инициалы, уже вписанные в неё, — в справочник (дальше подставляются сами)
+                // таблица ГИП: столбец текста для штампа — у новых строк спрашивается инициал
                 _display = SignAudit.DisplayColumn(_s.State.Rows);
-                if (SignInitials.Learn(_s.Initials, _s.State.Rows, _display) > 0) _s.InitialsChanged = true;
                 var unused = _s.Family.UnusedTables(table);
                 RemoveUnused.Visibility = unused.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
                 RemoveUnused.Content = "Удалить таблицы выбора, на которые не ссылается ни одна формула: " + string.Join(", ", unused);
@@ -311,7 +310,7 @@ namespace RASv2.SheetManager.UI
                 CleanTimeUtc = r.File.Clean != null && File.Exists(r.File.Clean) ? File.GetLastWriteTimeUtc(r.File.Clean) : (DateTime?)null,
             }).ToList();
             List<SignIssue> issues;
-            try { issues = _s.Family.Audit(_s.State, folder, _s.Initials); }
+            try { issues = _s.Family.Audit(_s.State, folder); }
             catch (Autodesk.Revit.Exceptions.ApplicationException ex)
             {
                 ShowError("Не удалось проверить семейство: " + ex.Message);
@@ -352,12 +351,6 @@ namespace RASv2.SheetManager.UI
                         MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
-            }
-            // вписанные инициалы — в справочник
-            foreach (var d in inFamily.Where(i => i.Kind == SignIssueKind.Display && i.Value != null))
-            {
-                var ini = SignAudit.Initial(d.Name, d.Value);
-                if (ini != null && (!_s.Initials.TryGetValue(d.Name, out var was) || was != ini)) { _s.Initials[d.Name] = ini; _s.InitialsChanged = true; }
             }
             var deleted = 0;
             foreach (var f in chosen.Where(i => i.Kind == SignIssueKind.CleanOrphan))
@@ -402,7 +395,7 @@ namespace RASv2.SheetManager.UI
                 for (var i = 0; i < _rows.Count; i++)
                 {
                     _rows[i].SetPlan(items[i]);
-                    _rows[i].SetExtras(_s.State.Rows, _display, _s.Initials);
+                    _rows[i].SetExtras(_s.State.Rows, _display);
                 }
                 SignPlan.Number(_rows.Where(r => r.Checked).Select(r => r.Item), _s.State);
                 foreach (var r in _rows) r.RefreshNumber();
@@ -507,13 +500,6 @@ namespace RASv2.SheetManager.UI
             if (noInitial.Count > 0 && MessageBox.Show(this, "Не вписан инициал для штампа: " + string.Join(", ", noInitial.Take(10)) + (noInitial.Count > 10 ? " и ещё " + (noInitial.Count - 10) : "") +
                     "." + Environment.NewLine + "В штампе у них будет пусто. Добавить так?", "Подпись", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
                 return;
-            // вписанные инициалы — в справочник
-            foreach (var r in chosen)
-                foreach (var x in r.Extras.Where(x => x.Editable && x.Initial && !string.IsNullOrWhiteSpace(x.Value)))
-                {
-                    var ini = SignAudit.Initial(r.Name.Trim(), SignAudit.Display(r.Name.Trim(), x.Value));
-                    if (ini != null && (!_s.Initials.TryGetValue(r.Name.Trim(), out var was) || was != ini)) { _s.Initials[r.Name.Trim()] = ini; _s.InitialsChanged = true; }
-                }
             _s.Jobs = chosen.Select(r => new SignJob { Item = r.Item, CleanPath = r.File.Clean, Extra = r.ExtraValues() }).ToList();
             DialogResult = true;
         }
