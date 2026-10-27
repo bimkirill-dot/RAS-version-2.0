@@ -66,7 +66,7 @@ namespace RASv2.SheetManager.Logic
             {
                 var work = Path.Combine(workRoot, "w" + Interlocked.Increment(ref counter).ToString("0000", CultureInfo.InvariantCulture));
                 Directory.CreateDirectory(work);
-                try { One(f, options, acad, work, cacheDir); }
+                try { One(f, options, acad, work, cacheDir, cancel); }
                 catch (Exception ex) { f.Error = ex.Message; }
                 finally
                 {
@@ -77,20 +77,20 @@ namespace RASv2.SheetManager.Logic
             return files;
         }
 
-        private static void One(SignFile f, CleanOptions options, string acad, string work, string cacheDir)
+        private static void One(SignFile f, CleanOptions options, string acad, string work, string cacheDir, CancellationToken cancel)
         {
             f.SourceBytes = new FileInfo(f.Source).Length;
             if (!File.Exists(f.Clean))
             {
                 if (acad == null) { f.Error = "не очищена: нет AutoCAD"; return; }
-                var dxf = f.Source.EndsWith(".dxf", StringComparison.OrdinalIgnoreCase) ? f.Source : AcadConsole.ToDxf(acad, f.Source, work, "in");
+                var dxf = f.Source.EndsWith(".dxf", StringComparison.OrdinalIgnoreCase) ? f.Source : AcadConsole.ToDxf(acad, f.Source, work, "in", cancel);
                 if (dxf == null) { f.Error = "AutoCAD не открыл файл"; return; }
                 var sign = SignCleaner.Clean(DxfDocument.Load(dxf), options, out var reason);
                 if (sign == null) { f.Error = reason; return; }
                 var outDxf = Path.Combine(work, "out.dxf");
                 File.WriteAllText(outDxf, DxfWriter.Write(sign), Encoding.ASCII);
                 Directory.CreateDirectory(Path.GetDirectoryName(f.Clean) ?? "");
-                if (!AcadConsole.ToDwg(acad, outDxf, f.Clean, work, "out")) { f.Error = "AutoCAD не сохранил очищенный DWG"; return; }
+                if (!AcadConsole.ToDwg(acad, outDxf, f.Clean, work, "out", cancel)) { f.Error = "AutoCAD не сохранил очищенный DWG"; return; }
                 f.CleanedNow = true;
                 f.Lines = sign.Lines;
                 f.WidthMm = sign.WidthMm;
@@ -103,7 +103,7 @@ namespace RASv2.SheetManager.Logic
             f.CleanBytes = new FileInfo(f.Clean).Length;
             if (LoadPreview(cacheDir, f)) return;
             if (acad == null) { f.Error = "картинки нет: нет AutoCAD"; return; }
-            var cleanDxf = AcadConsole.ToDxf(acad, f.Clean, work, "clean");
+            var cleanDxf = AcadConsole.ToDxf(acad, f.Clean, work, "clean", cancel);
             if (cleanDxf == null) { f.Error = "AutoCAD не открыл очищенный файл"; return; }
             var doc = DxfDocument.Load(cleanDxf);
             var geo = new SignGeometry(doc, 0.005 / doc.ToMillimetres);
@@ -180,12 +180,23 @@ namespace RASv2.SheetManager.Logic
             }
         }
 
-        /// <summary>Рабочая папка для AutoCAD: путь — только латиница (сценарий .scr не понимает кириллицу).</summary>
+        /// <summary>
+        /// Рабочая папка для AutoCAD: путь — только латиница и без пробелов (AcadConsole). Первая подходящая: предложенная, временная
+        /// папка пользователя (…\Temp\RASv2_sign), общая (C:\ProgramData\RAS_v_2.0\work).
+        /// </summary>
         public static string WorkRoot(string preferred)
         {
-            if (!string.IsNullOrEmpty(preferred) && preferred.All(ch => ch < 128)) return preferred;
-            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "RAS_v_2.0", "work");
+            var candidates = new[]
+            {
+                preferred,
+                Path.Combine(Path.GetTempPath(), "RASv2_sign"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "RAS_v_2.0", "work"),
+            };
+            return candidates.FirstOrDefault(c => !string.IsNullOrEmpty(c) && ScriptSafe(c)) ?? candidates[2];
         }
+
+        /// <summary>Путь можно писать в сценарий AutoCAD: только латиница, без пробелов.</summary>
+        public static bool ScriptSafe(string path) => (path ?? "").All(ch => ch > ' ' && ch < 128);
 
         /// <summary>«1,2 МБ», «340 КБ».</summary>
         public static string Bytes(long b) =>

@@ -107,6 +107,12 @@ namespace RASv2.Tests
                 var s = SignCleaner.Clean(doc, new CleanOptions(), out _);
                 Check(s.Lines.Count == 1 && s.Lines[0].Count == 3, "ломаных " + s.Lines.Count + ", точек " + s.Lines[0].Count);
             });
+            yield return Case("рабочая папка AutoCAD — без пробелов и кириллицы (пробел в сценарии — Enter, AutoCAD ждал вечно)", () =>
+            {
+                Check(!SignFolder.ScriptSafe(@"C:\Users\u\AppData\Local\RAS_v_2.0\RAS-Sheet Manager\work") && !SignFolder.ScriptSafe(@"C:\Users\Иванов\Temp") && SignFolder.ScriptSafe(@"C:\Temp\RASv2_sign"), "проверка пути");
+                var root = SignFolder.WorkRoot(@"C:\Users\u\AppData\Local\RAS_v_2.0\RAS-Sheet Manager\work");
+                Check(SignFolder.ScriptSafe(root) && SignFolder.WorkRoot(@"C:\RAS\work") == @"C:\RAS\work", "запасная папка: " + root);
+            });
             yield return Case("пустая подпись — причина; чистый DXF читается обратно", () =>
             {
                 Check(SignCleaner.Clean(DxfDocument.Parse(Entities(0, "TEXT", 8, "0", 1, "Иванов")), new CleanOptions(), out var why) == null && why != null, "нет линий");
