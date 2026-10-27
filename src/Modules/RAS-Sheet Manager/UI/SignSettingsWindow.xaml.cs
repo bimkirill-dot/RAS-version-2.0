@@ -7,7 +7,10 @@ using RASv2.SheetManager.Logic;
 
 namespace RASv2.SheetManager.UI
 {
-    /// <summary>Общие настройки кнопки «Подпись» — шестерёнка в окне (DECISIONS.md модуля).</summary>
+    /// <summary>
+    /// Общие настройки кнопки «Подпись» — шестерёнка в окне (DECISIONS.md модуля). Разделы — слева: «Папка и размер»,
+    /// «Очистка», «Регламент наименования», «Семейство подписей».
+    /// </summary>
     public partial class SignSettingsWindow : Window
     {
         private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
@@ -21,9 +24,7 @@ namespace RASv2.SheetManager.UI
         {
             InitializeComponent();
             RASv2.Core.WindowTheme.Apply(this);
-            // по высоте содержимого, но не выше экрана — дальше прокрутка
-            MaxHeight = SystemParameters.WorkArea.Height * 0.9;
-            if (showRegulation) Loaded += (o, e) => RegulationHead.BringIntoView(new Rect(0, 0, 1, Scroll.ViewportHeight * 0.9));
+            Nav.SelectedIndex = showRegulation ? 2 : 0;
             var s = settings.Copy();
             Result = s;
             Changed.Text = "Настройки общие для всех, кто добавляет подписи." +
@@ -52,6 +53,26 @@ namespace RASv2.SheetManager.UI
         }
 
         private static string N(double v) => v.ToString("0.###", Ru);
+
+        private Panel[] Sections => new Panel[] { SectionSize, SectionClean, SectionNaming, SectionFamily };
+
+        private void Nav_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            var sections = Sections;
+            for (var i = 0; i < sections.Length; i++) sections[i].Visibility = i == Nav.SelectedIndex ? Visibility.Visible : Visibility.Collapsed;
+            Scroll.ScrollToTop();
+        }
+
+        /// <summary>Раздел, в котором поле, — открыть (ошибка в поле другого раздела).</summary>
+        private void ShowSectionOf(DependencyObject field)
+        {
+            var sections = Sections;
+            for (var e = field; e != null; e = LogicalTreeHelper.GetParent(e))
+            {
+                var i = Array.IndexOf(sections, e as Panel);
+                if (i >= 0) { Nav.SelectedIndex = i; return; }
+            }
+        }
 
         /// <summary>Регламент — из полей окна (слово, отделы, кто с «!»): меняются поля — меняется и текст.</summary>
         private void ShowRegulation()
@@ -131,7 +152,9 @@ namespace RASv2.SheetManager.UI
         {
             Error.Text = text;
             Error.Visibility = Visibility.Visible;
-            field.Focus();
+            ShowSectionOf(field);
+            // раздел только что показан — фокус, когда он разложится
+            Dispatcher.BeginInvoke(new Action(() => field.Focus()), System.Windows.Threading.DispatcherPriority.Input);
         }
     }
 }

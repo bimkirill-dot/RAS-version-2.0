@@ -39,7 +39,7 @@ namespace RASv2.SheetManager.UI
             _s = session;
             FamilyName.Text = session.Family.Title;
             List.ItemsSource = _rows;
-            CollectionViewSource.GetDefaultView(_rows).Filter = o => ShowAdded.IsChecked == true || !((SignRow)o).IsAdded;
+            CollectionViewSource.GetDefaultView(_rows).Filter = o => Visible((SignRow)o);
             ScaleBox.Text = session.Personal.ScaleFor(session.Family.Title).ToString("0.###", Ru);
             FillTables();
             if (session.Anchor != null)
@@ -293,6 +293,25 @@ namespace RASv2.SheetManager.UI
             Counts();
         }
 
+        /// <summary>
+        /// Строка в списке: уже добавленные — только с галочкой «Показать уже добавленные»; поиск — по фамилии и имени файла
+        /// (найденные показываются и уже добавленные — искали именно их).
+        /// </summary>
+        private bool Visible(SignRow r)
+        {
+            var q = (SearchBox?.Text ?? "").Trim();
+            if (q.Length == 0) return ShowAdded.IsChecked == true || !r.IsAdded;
+            return (r.Name ?? "").IndexOf(q, StringComparison.CurrentCultureIgnoreCase) >= 0 ||
+                   Path.GetFileName(r.File.Source).IndexOf(q, StringComparison.CurrentCultureIgnoreCase) >= 0;
+        }
+
+        private void Search_Changed(object sender, TextChangedEventArgs e)
+        {
+            SearchHint.Visibility = SearchBox.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+            CollectionViewSource.GetDefaultView(_rows).Refresh();
+            Counts();
+        }
+
         private void Counts()
         {
             var chosen = _rows.Count(r => r.Checked);
@@ -302,7 +321,7 @@ namespace RASv2.SheetManager.UI
             AddButton.Content = chosen > 0 ? "Добавить (" + chosen + ")" : "Добавить";
             AddButton.IsEnabled = chosen > 0 && !_busy && _s.State != null;
             RefreshButton.IsEnabled = !_busy && _rows.Any(r => r.File.NameProblem == null);
-            var can = _rows.Where(r => r.CanCheck && (ShowAdded.IsChecked == true || !r.IsAdded)).ToList();
+            var can = _rows.Where(r => r.CanCheck && Visible(r)).ToList();
             AllBox.IsChecked = can.Count > 0 && can.All(r => r.Checked) ? true : can.Any(r => r.Checked) ? (bool?)null : false;
         }
 
@@ -316,7 +335,7 @@ namespace RASv2.SheetManager.UI
         {
             var on = AllBox.IsChecked == true;
             _replanning = true;
-            foreach (var r in _rows.Where(r => r.CanCheck && (ShowAdded.IsChecked == true || !r.IsAdded))) r.Checked = on;
+            foreach (var r in _rows.Where(r => r.CanCheck && Visible(r))) r.Checked = on;
             _replanning = false;
             Replan();
         }
