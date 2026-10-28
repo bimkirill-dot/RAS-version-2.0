@@ -47,9 +47,16 @@ namespace RASv2.ClashAnalysis.Navisworks.Logic
         public const int FirstRound = 8;
 
         public static bool Good(int first, int firstAll, int second, int secondAll, int total) =>
-            total > 0 && firstAll > 0 && secondAll > 0 &&
-            Math.Min(first / (double)firstAll, second / (double)secondAll) >= GoodOpen &&
-            Math.Min(first, second) >= GoodSize * total;
+            Open(first, firstAll, second, secondAll, total) >= GoodOpen;
+
+        /// <summary>
+        /// Открытость вида: какая доля хуже открытого элемента не закрыта другим (0…1); элемента нет в кадре или он крошечный
+        /// (меньше GoodSize кадра) — 0.
+        /// </summary>
+        public static double Open(int first, int firstAll, int second, int secondAll, int total) =>
+            total <= 0 || firstAll <= 0 || secondAll <= 0 || Math.Min(first, second) < GoodSize * total
+                ? 0
+                : Math.Min(first / (double)firstAll, second / (double)secondAll);
 
         /// <summary>
         /// Направления: наискось сверху (8 сторон), круче сверху, почти горизонтально, сверху и чуть снизу (плита над стеной или

@@ -48,6 +48,29 @@ namespace RASv2.Tests
                 Check(ViewPick.FirstRound == 8 && ViewPick.Candidates().Take(ViewPick.FirstRound).All(c => Math.Abs(c.Elevation - 35) < 1e-9),
                     "первый круг — 8 привычных ракурсов, 35° сверху");
             });
+            yield return Case("виды: память проверки — сначала учимся, потом пробуем победившие направления", () =>
+            {
+                var m = new ViewMemory();
+                Check(m.Learning && double.IsPositiveInfinity(m.Bar) && m.Favourites().Count == 0, "пусто — учимся, планки нет");
+                m.Remember(18, 0.80);
+                m.Remember(18, 0.82);
+                Check(m.Learning, "две коллизии — ещё учимся");
+                m.Remember(13, 0.78);
+                Check(!m.Learning, "три — хватит");
+                Check(Math.Abs(m.Bar - (0.80 - ViewMemory.Tolerance)) < 1e-9, "планка — медиана минус допуск: " + m.Bar);
+                m.Remember(20, 0.81);
+                m.Remember(13, 0.79);
+                m.Remember(5, 0.9);
+                var f = m.Favourites();
+                Check(f.Count == ViewMemory.Top && f[0] == 13 && f[1] == 18 && f[2] == 5, "чаще побеждали — первыми, при равенстве — по порядку: " + string.Join(",", f));
+                m.Remember(-1, 0.85);
+                Check(m.Favourites().Count == ViewMemory.Top && Math.Abs(m.Bar - (0.81 - ViewMemory.Tolerance)) < 1e-9, "свой вид — без направления, только открытость");
+                var blind = new ViewMemory();
+                for (var i = 0; i < 5; i++) blind.Remember(1, 0);
+                Check(blind.Learning, "в проверке элементы обычно не видны — планки нет, полный перебор");
+                Check(Math.Abs(ViewPick.Open(800, 1000, 450, 500, 19200) - 0.8) < 1e-9 && ViewPick.Open(800, 800, 50, 50, 19200) == 0,
+                    "открытость — хуже открытого; крошечный — 0");
+            });
             yield return Case("виды: при равной видимости побеждает привычный ракурс", () =>
             {
                 Check(ViewPick.Score(300, 300, 300, 300, 19200, 1.0) > ViewPick.Score(300, 300, 300, 300, 19200, 0.6), "35° сверху лучше, чем сверху");

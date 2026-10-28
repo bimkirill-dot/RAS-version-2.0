@@ -111,6 +111,7 @@ namespace RASv2.ClashAnalysis.Navisworks
             // направление на экране при запуске — так Clash Detective покажет коллизию без сохранённого вида
             var launch = doc.CurrentViewpoint.CreateCopy();
             _stats = new Stats();
+            var memory = new Dictionary<string, ViewMemory>(); // по проверкам
 
             doc.CurrentSelection.Clear();
             // подобранные виды — ещё раз в конце: пока камера ходит по коллизиям, Clash Detective («Автообновление» вида) переписывает
@@ -135,7 +136,8 @@ namespace RASv2.ClashAnalysis.Navisworks
                         var dump = debugDir != null && i < DebugClashes ? Path.Combine(debugDir, $"{i + 1:00} {Safe(result.DisplayName)}") : null;
                         // свой вид — сохранённый у коллизии (выбрано «Все заново»)
                         var own = result.HasSavedViewpoint && before.TryGetValue(Key(test.DisplayName, result.DisplayName), out var saved) ? saved : null;
-                        if (!FitOne(doc, name, result, candidates, target, own, launch, dump, out var view, out var first, out var second, out var how)) { skipped++; continue; }
+                        if (!memory.TryGetValue(test.DisplayName, out var learned)) memory[test.DisplayName] = learned = new ViewMemory();
+                        if (!FitOne(doc, name, result, candidates, target, own, launch, learned, dump, out var view, out var first, out var second, out var how)) { skipped++; continue; }
                         fitted++;
                         _stats.Count(how);
                         if (how == HowOwn) kept++;
@@ -315,20 +317,24 @@ namespace RASv2.ClashAnalysis.Navisworks
             }
         }
 
-        private const string HowOwn = "свой вид", HowLaunch = "вид с экрана", HowFirst = "привычные ракурсы", HowAll = "все направления";
+        private const string HowOwn = "свой вид", HowLaunch = "вид с экрана", HowLearned = "как у соседних", HowFirst = "привычные ракурсы",
+            HowAll = "все направления";
 
         /// <summary>
         /// Подобрать вид одной коллизии и записать его в коллизию (target, через COM) — пока остальное скрыто: Clash Detective
         /// сохраняет в виде и видимость (без этого на видах была вся модель — проверка разработчика 23.10.2026). Быстрее
         /// (разработчик, 28.10.2026: «изначально анализировать вид; проходит проверку — пропускать»): сначала — вид, который у
         /// коллизии уже есть (own — сохранённый; нет его — как покажет Clash Detective: направление с экрана при запуске, место
-        /// коллизии); оба элемента и так видны (ViewPick.Good) — направления не перебираются, сохранённый вид не трогается. Иначе —
-        /// 8 привычных ракурсов; лучший годится — остальные не смотрятся. На каждый вид — четыре картинки: оба элемента, только
+        /// коллизии); оба элемента и так видны (ViewPick.Good, а после первых коллизий проверки — не хуже обычного для неё, ViewMemory)
+        /// — направления не перебираются, сохранённый вид не трогается. Иначе — направления, которые в проверке чаще побеждали
+        /// (memory; вид не хуже обычного — остальные не смотрятся); не помогло или ещё учимся — 8 привычных ракурсов (лучший
+        /// годится — остальные не смотрятся), затем остальные. На каждый вид — четыре картинки: оба элемента, только
         /// первый, только второй, ни одного (ViewPick.Visible); без перекраски: подсветка Clash Detective и оси модели её
         /// перебивали. how — чем кончилось (HowOwn — вид оставлен как был, не записан). Нет элементов — false.
         /// </summary>
         private static bool FitOne(Document doc, string name, ClashResult result, List<ViewCandidate> candidates, InwOclTestResult target,
-            InwNvViewPoint own, Viewpoint launch, string dump, out InwNvViewPoint saved, out ModelItem first, out ModelItem second, out string how)
+            InwNvViewPoint own, Viewpoint launch, ViewMemory memory, string dump, out InwNvViewPoint saved, out ModelItem first, out ModelItem second,
+            out string how)
         {
             saved = null;
             how = null;
@@ -365,10 +371,11 @@ namespace RASv2.ClashAnalysis.Navisworks
                     doc.CurrentViewpoint.CopyFrom(start);
                 }
                 var look = Measure(doc, hide, dump == null ? null : Path.Combine(dump, "00 свой"));
-                if (look.Good)
+                if (look.Good || (!memory.Learning && look.Open >= memory.Bar))
                 {
                     how = own != null ? HowOwn : HowLaunch;
-                    Log.Write($"{name}: {how} годится — {look}");
+                    Log.Write($"{name}: {how} годится — {look}" + (memory.Learning ? "" : $", планка проверки {memory.Bar:0.00}"));
+                    memory.Remember(-1, look.Open);
                     if (own == null) Save(target, out saved);
                     return true;
                 }
@@ -377,13 +384,16 @@ namespace RASv2.ClashAnalysis.Navisworks
                 var bestScore = double.NegativeInfinity;
                 var bestIndex = -1;
                 var bestGood = false;
+                var bestOpen = 0.0;
+                var maxOpen = 0.0;
+                var done = new HashSet<int>();
                 var scores = new StringBuilder($" свой:{look}");
-                for (var k = 0; k < candidates.Count; k++)
+                var origin = doc.CurrentViewpoint.CreateCopy();
+                void Try(int k)
                 {
-                    // привычные ракурсы посмотрены, лучший годится — остальные не нужны
-                    if (k == ViewPick.FirstRound && bestGood) { how = HowFirst; break; }
+                    done.Add(k);
                     var c = candidates[k];
-                    var vp = doc.CurrentViewpoint.CreateCopy();
+                    var vp = origin.CreateCopy();
                     vp.AlignDirection(new Vector3D(c.X, c.Y, c.Z));
                     vp.AlignUp(c.Elevation > 80 ? new Vector3D(0, 1, 0) : new Vector3D(0, 0, 1));
                     vp.ZoomBox(zoom);
@@ -391,10 +401,27 @@ namespace RASv2.ClashAnalysis.Navisworks
                     var m = Measure(doc, hide, dump == null ? null : Path.Combine(dump, $"{k + 1:00} {c.Elevation:0}°"));
                     var score = ViewPick.Score(m.FirstSeen, m.FirstAll, m.SecondSeen, m.SecondAll, m.Total, c.Preference);
                     scores.Append($" {k + 1}:{m}={score:0.00}");
-                    if (score > bestScore) { bestScore = score; best = vp; bestIndex = k; bestGood = m.Good; }
+                    maxOpen = Math.Max(maxOpen, m.Open);
+                    if (score > bestScore) { bestScore = score; best = vp; bestIndex = k; bestGood = m.Good; bestOpen = m.Open; }
                 }
+                // направления, которые в проверке чаще побеждали: вид не хуже обычного — остальные не нужны
+                if (!memory.Learning)
+                    foreach (var k in memory.Favourites())
+                    {
+                        Try(k);
+                        if (maxOpen >= memory.Bar) { how = HowLearned; break; }
+                    }
+                if (how == null)
+                    for (var k = 0; k < candidates.Count; k++)
+                    {
+                        // привычные ракурсы посмотрены, лучший годится — остальные не нужны
+                        if (k == ViewPick.FirstRound && bestGood) { how = HowFirst; break; }
+                        if (!done.Contains(k)) Try(k);
+                    }
                 how = how ?? HowAll;
-                Log.Write($"{name}: лучший — {bestIndex + 1} ({candidates[bestIndex].Elevation:0}°), {how}; видно из своих точек первого·второго = оценка:{scores}");
+                Log.Write($"{name}: лучший — {bestIndex + 1} ({candidates[bestIndex].Elevation:0}°), {how}" +
+                          (memory.Learning ? "" : $", планка проверки {memory.Bar:0.00}") + $"; видно из своих точек первого·второго = оценка:{scores}");
+                memory.Remember(bestIndex, bestOpen);
                 doc.CurrentViewpoint.CopyFrom(best);
                 Save(target, out saved);
                 return true;
@@ -429,6 +456,7 @@ namespace RASv2.ClashAnalysis.Navisworks
         {
             public int FirstSeen, FirstAll, SecondSeen, SecondAll, Total;
             public bool Good => ViewPick.Good(FirstSeen, FirstAll, SecondSeen, SecondAll, Total);
+            public double Open => ViewPick.Open(FirstSeen, FirstAll, SecondSeen, SecondAll, Total);
             public override string ToString() => $"{FirstSeen}/{FirstAll}·{SecondSeen}/{SecondAll}";
         }
 
@@ -466,7 +494,7 @@ namespace RASv2.ClashAnalysis.Navisworks
 
         /// <summary>
         /// На что ушло время (замер, разработчик 28.10.2026) — в журнал: «скрыть остальное», картинки, запись видов, завершение;
-        /// чем кончился подбор (свой вид, вид с экрана, привычные ракурсы, все направления).
+        /// чем кончился подбор (свой вид, вид с экрана, как у соседних, привычные ракурсы, все направления).
         /// </summary>
         private sealed class Stats
         {
