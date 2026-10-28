@@ -108,13 +108,16 @@ namespace RASv2.ClashAnalysis.Navisworks
                 return 0;
             }
             var debugDir = debug ? Path.Combine(RasPaths.Local, "Navisworks", "Разбор", DateTime.Now.ToString("yyyy-MM-dd HHmmss")) : null;
+            // направление на экране при запуске — так Clash Detective покажет коллизию без сохранённого вида
+            var launch = doc.CurrentViewpoint.CreateCopy();
+            _stats = new Stats();
 
             doc.CurrentSelection.Clear();
             // подобранные виды — ещё раз в конце: пока камера ходит по коллизиям, Clash Detective («Автообновление» вида) переписывает
             // выбранную в нём коллизию каждым её движением (разработчик, 23.10.2026: «не обрабатывает вид, на котором сейчас сидишь»)
             var chosen = new Dictionary<string, (InwOclTestResult Target, InwNvViewPoint View, ModelItem First, ModelItem Second)>();
             var candidates = ViewPick.Candidates();
-            int fitted = 0, written = 0, skipped = 0;
+            int fitted = 0, written = 0, skipped = 0, kept = 0;
             var watch = Stopwatch.StartNew();
             var progress = NwApp.BeginProgress(Entry.Title, "Подбираю виды коллизий…");
             try
@@ -130,8 +133,12 @@ namespace RASv2.ClashAnalysis.Navisworks
                             Log.Write($"Коллизия не найдена через COM: «{test.DisplayName}» / «{result.DisplayName}»");
                         var name = $"«{test.DisplayName}» / «{result.DisplayName}»";
                         var dump = debugDir != null && i < DebugClashes ? Path.Combine(debugDir, $"{i + 1:00} {Safe(result.DisplayName)}") : null;
-                        if (!FitOne(doc, name, result, candidates, target, dump, out var view, out var first, out var second)) { skipped++; continue; }
+                        // свой вид — сохранённый у коллизии (выбрано «Все заново»)
+                        var own = result.HasSavedViewpoint && before.TryGetValue(Key(test.DisplayName, result.DisplayName), out var saved) ? saved : null;
+                        if (!FitOne(doc, name, result, candidates, target, own, launch, dump, out var view, out var first, out var second, out var how)) { skipped++; continue; }
                         fitted++;
+                        _stats.Count(how);
+                        if (how == HowOwn) kept++;
                         if (view != null) { written++; chosen[Key(test.DisplayName, result.DisplayName)] = (target, view, first, second); }
                     }
                     catch (Exception ex)
@@ -144,14 +151,21 @@ namespace RASv2.ClashAnalysis.Navisworks
             finally
             {
                 NwApp.EndProgress();
-                if (com != null) Finish(doc, com, all, chosen, before, onScreen);
+                if (com != null)
+                {
+                    _stats.Finish.Start();
+                    Finish(doc, com, all, chosen, before, onScreen);
+                    _stats.Finish.Stop();
+                }
             }
             watch.Stop();
             var perClash = fitted > 0 ? watch.Elapsed.TotalSeconds / fitted : 0;
             Log.Write($"Подстроено {fitted} из {results.Count}, записано в коллизии {written}, пропущено {skipped}; " +
                       $"{watch.Elapsed.TotalSeconds:0.0} с, {perClash:0.00} с на коллизию, направлений {candidates.Count}, картинка {ImageWidth}×{ImageHeight}");
+            Log.Write("Время: " + _stats.Text(watch.Elapsed));
             var text = new StringBuilder();
             text.AppendLine($"Подстроено видов: {fitted} из {results.Count}.");
+            if (kept > 0) text.AppendLine($"Вид уже был хороший — оставлен: {kept}.");
             if (com == null) text.AppendLine("Записать виды в коллизии не удалось: " + comProblem);
             else text.AppendLine($"Записано в коллизии: {written}.");
             if (skipped > 0) text.AppendLine($"Пропущено: {skipped} (подробности — в журнале).");
@@ -173,7 +187,8 @@ namespace RASv2.ClashAnalysis.Navisworks
         /// <summary>
         /// Завершение — из-за «Автообновления» вида Clash Detective: в коллизию, выбранную в нём, он записывает каждое изменение
         /// камеры и видимости (проверки разработчика 23.10.2026: «не обрабатывает вид, на котором сидишь», «где-то скрывает остальное,
-        /// где-то нет»). Поэтому: (1) найти выбранную — сдвинуть камеру и посмотреть, в какую коллизию сдвиг записан; (2) всем
+        /// где-то нет»). Поэтому: (1) найти выбранную — сдвинуть камеру и посмотреть, в какую коллизию сдвиг записан; нет такой —
+        /// всё (обычно так: запуск — с вкладки «Правила»); (2) всем
         /// остальным — вид ещё раз, со «скрыть остальное» каждой (запись через COM камеру не двигает; при записи сохраняется и
         /// скрытое); (3) выбранную — последней: её «скрыть остальное», её вид и камера — и так и оставить на экране. Её не подбирали —
         /// вернуть ей прежний вид.
@@ -183,7 +198,10 @@ namespace RASv2.ClashAnalysis.Navisworks
             Dictionary<string, InwNvViewPoint> before, InwNvViewPoint onScreen)
         {
             var selected = FindSelected(doc, com, null, null);
-            if (selected != null) Log.Write("Выбранная в Clash Detective коллизия (в конце): " + selected.Replace("\u001f", " / "));
+            // никакая не выбрана — «Автообновление» ничего не переписывало: виды уже записаны при подборе, второй раз не нужно
+            // (ускорение, 28.10.2026: «скрыть остальное» на каждую коллизию — второй раз)
+            if (selected == null) return;
+            Log.Write("Выбранная в Clash Detective коллизия (в конце): " + selected.Replace("\u001f", " / "));
 
             foreach (var kv in chosen)
             {
@@ -197,7 +215,6 @@ namespace RASv2.ClashAnalysis.Navisworks
                 catch (Exception ex) { Log.Write("Вид не записан повторно", ex); }
             }
 
-            if (selected == null) return;
             try
             {
                 var state = ComApiBridge.State;
@@ -298,16 +315,23 @@ namespace RASv2.ClashAnalysis.Navisworks
             }
         }
 
+        private const string HowOwn = "свой вид", HowLaunch = "вид с экрана", HowFirst = "привычные ракурсы", HowAll = "все направления";
+
         /// <summary>
         /// Подобрать вид одной коллизии и записать его в коллизию (target, через COM) — пока остальное скрыто: Clash Detective
-        /// сохраняет в виде и видимость (без этого на видах была вся модель — проверка разработчика 23.10.2026). На каждое
-        /// направление — четыре картинки: оба элемента, только первый, только второй, ни одного (ViewPick.Visible); без перекраски:
-        /// подсветка Clash Detective и оси модели её перебивали. Нет элементов — false.
+        /// сохраняет в виде и видимость (без этого на видах была вся модель — проверка разработчика 23.10.2026). Быстрее
+        /// (разработчик, 28.10.2026: «изначально анализировать вид; проходит проверку — пропускать»): сначала — вид, который у
+        /// коллизии уже есть (own — сохранённый; нет его — как покажет Clash Detective: направление с экрана при запуске, место
+        /// коллизии); оба элемента и так видны (ViewPick.Good) — направления не перебираются, сохранённый вид не трогается. Иначе —
+        /// 8 привычных ракурсов; лучший годится — остальные не смотрятся. На каждый вид — четыре картинки: оба элемента, только
+        /// первый, только второй, ни одного (ViewPick.Visible); без перекраски: подсветка Clash Detective и оси модели её
+        /// перебивали. how — чем кончилось (HowOwn — вид оставлен как был, не записан). Нет элементов — false.
         /// </summary>
         private static bool FitOne(Document doc, string name, ClashResult result, List<ViewCandidate> candidates, InwOclTestResult target,
-            string dump, out InwNvViewPoint saved, out ModelItem first, out ModelItem second)
+            InwNvViewPoint own, Viewpoint launch, string dump, out InwNvViewPoint saved, out ModelItem first, out ModelItem second, out string how)
         {
             saved = null;
+            how = null;
             // элемент коллизии: Item — сам элемент; нет его — составной элемент или первый из выбора
             first = ItemOf(result.Item1, result.CompositeItem1, result.Selection1);
             second = ItemOf(result.Item2, result.CompositeItem2, result.Selection2);
@@ -321,65 +345,152 @@ namespace RASv2.ClashAnalysis.Navisworks
             if (dump != null) Directory.CreateDirectory(dump);
             var zone = ViewPick.Zone(BoxOf(first.BoundingBox()), BoxOf(second.BoundingBox()));
             var zoom = new BoundingBox3D(new Point3D(zone.MinX, zone.MinY, zone.MinZ), new Point3D(zone.MaxX, zone.MaxY, zone.MaxZ));
-            var onlyFirst = new ModelItemCollection { second };   // скрыть, чтобы остался первый
-            var onlySecond = new ModelItemCollection { first };
-            var none = new ModelItemCollection { first, second };
+            var hide = new[]
+            {
+                new ModelItemCollection { second },        // скрыть, чтобы остался первый
+                new ModelItemCollection { first },
+                new ModelItemCollection { first, second },
+            };
+            _stats.Isolate.Start();
             var isolation = Isolate(doc, first, second);
+            _stats.Isolate.Stop();
             try
             {
+                // свой вид
+                if (own != null) ComApiBridge.State.CurrentView.ViewPoint = (InwNvViewPoint)own.Copy();
+                else
+                {
+                    var start = launch.CreateCopy();
+                    start.ZoomBox(zoom);
+                    doc.CurrentViewpoint.CopyFrom(start);
+                }
+                var look = Measure(doc, hide, dump == null ? null : Path.Combine(dump, "00 свой"));
+                if (look.Good)
+                {
+                    how = own != null ? HowOwn : HowLaunch;
+                    Log.Write($"{name}: {how} годится — {look}");
+                    if (own == null) Save(target, out saved);
+                    return true;
+                }
+
                 Viewpoint best = null;
                 var bestScore = double.NegativeInfinity;
                 var bestIndex = -1;
-                var scores = new StringBuilder();
+                var bestGood = false;
+                var scores = new StringBuilder($" свой:{look}");
                 for (var k = 0; k < candidates.Count; k++)
                 {
+                    // привычные ракурсы посмотрены, лучший годится — остальные не нужны
+                    if (k == ViewPick.FirstRound && bestGood) { how = HowFirst; break; }
                     var c = candidates[k];
                     var vp = doc.CurrentViewpoint.CreateCopy();
                     vp.AlignDirection(new Vector3D(c.X, c.Y, c.Z));
                     vp.AlignUp(c.Elevation > 80 ? new Vector3D(0, 1, 0) : new Vector3D(0, 0, 1));
                     vp.ZoomBox(zoom);
                     doc.CurrentViewpoint.CopyFrom(vp);
-                    var both = Render(doc, null, dump, k, c, "оба");
-                    var a = Render(doc, onlyFirst, dump, k, c, "первый");
-                    var b = Render(doc, onlySecond, dump, k, c, "второй");
-                    var empty = Render(doc, none, dump, k, c, "пусто");
-                    ViewPick.Visible(both, a, b, empty, out var firstSeen, out var secondSeen, out var firstAll, out var secondAll);
-                    var score = ViewPick.Score(firstSeen, firstAll, secondSeen, secondAll, both.Length, c.Preference);
-                    scores.Append($" {k + 1}:{firstSeen}/{firstAll}·{secondSeen}/{secondAll}={score:0.00}");
-                    if (score > bestScore) { bestScore = score; best = vp; bestIndex = k; }
+                    var m = Measure(doc, hide, dump == null ? null : Path.Combine(dump, $"{k + 1:00} {c.Elevation:0}°"));
+                    var score = ViewPick.Score(m.FirstSeen, m.FirstAll, m.SecondSeen, m.SecondAll, m.Total, c.Preference);
+                    scores.Append($" {k + 1}:{m}={score:0.00}");
+                    if (score > bestScore) { bestScore = score; best = vp; bestIndex = k; bestGood = m.Good; }
                 }
-                Log.Write($"{name}: лучший — {bestIndex + 1} ({candidates[bestIndex].Elevation:0}°); видно из своих точек первого·второго = оценка:{scores}");
+                how = how ?? HowAll;
+                Log.Write($"{name}: лучший — {bestIndex + 1} ({candidates[bestIndex].Elevation:0}°), {how}; видно из своих точек первого·второго = оценка:{scores}");
                 doc.CurrentViewpoint.CopyFrom(best);
-                if (target != null)
-                {
-                    saved = (InwNvViewPoint)ComApiBridge.State.CurrentView.ViewPoint.Copy();
-                    target.ViewPoint = saved;
-                }
+                Save(target, out saved);
                 return true;
             }
             finally
             {
+                _stats.Isolate.Start();
                 isolation.Undo(doc);
+                _stats.Isolate.Stop();
             }
         }
 
-        /// <summary>Картинка вида (на время — скрыть hide); пиксели — 0xRRGGBB. Сборка разработчика — сохранить для разбора.</summary>
-        private static int[] Render(Document doc, ModelItemCollection hide, string dump, int k, ViewCandidate c, string what)
+        /// <summary>Записать вид с экрана в коллизию (через COM; нет её — ничего).</summary>
+        private static void Save(InwOclTestResult target, out InwNvViewPoint saved)
         {
+            saved = null;
+            if (target == null) return;
+            _stats.Write.Start();
+            try
+            {
+                saved = (InwNvViewPoint)ComApiBridge.State.CurrentView.ViewPoint.Copy();
+                target.ViewPoint = saved;
+            }
+            finally
+            {
+                _stats.Write.Stop();
+            }
+        }
+
+        /// <summary>Сколько видно каждого элемента на виде с экрана (ViewPick.Visible).</summary>
+        private sealed class Look
+        {
+            public int FirstSeen, FirstAll, SecondSeen, SecondAll, Total;
+            public bool Good => ViewPick.Good(FirstSeen, FirstAll, SecondSeen, SecondAll, Total);
+            public override string ToString() => $"{FirstSeen}/{FirstAll}·{SecondSeen}/{SecondAll}";
+        }
+
+        /// <summary>Четыре картинки вида с экрана — оба, только первый, только второй, ни одного (hide — что скрыть) — и что видно.</summary>
+        private static Look Measure(Document doc, ModelItemCollection[] hide, string dump)
+        {
+            var both = Render(doc, null, dump == null ? null : dump + " оба.png");
+            var a = Render(doc, hide[0], dump == null ? null : dump + " первый.png");
+            var b = Render(doc, hide[1], dump == null ? null : dump + " второй.png");
+            var empty = Render(doc, hide[2], dump == null ? null : dump + " пусто.png");
+            ViewPick.Visible(both, a, b, empty, out var firstSeen, out var secondSeen, out var firstAll, out var secondAll);
+            return new Look { FirstSeen = firstSeen, FirstAll = firstAll, SecondSeen = secondSeen, SecondAll = secondAll, Total = both.Length };
+        }
+
+        /// <summary>Картинка вида (на время — скрыть hide); пиксели — 0xRRGGBB. Сборка разработчика — сохранить для разбора (file).</summary>
+        private static int[] Render(Document doc, ModelItemCollection hide, string file)
+        {
+            _stats.Render.Start();
+            _stats.Images++;
             if (hide != null) doc.Models.SetHidden(hide, true);
             try
             {
                 using (var image = doc.ActiveView.GenerateImage(ImageGenerationStyle.Scene, ImageWidth, ImageHeight))
                 {
-                    if (dump != null) image.Save(Path.Combine(dump, $"{k + 1:00} {c.Elevation:0}° {what}.png"), ImageFormat.Png);
+                    if (file != null) image.Save(file, ImageFormat.Png);
                     return Pixels(image);
                 }
             }
             finally
             {
                 if (hide != null) doc.Models.SetHidden(hide, false);
+                _stats.Render.Stop();
             }
         }
+
+        /// <summary>
+        /// На что ушло время (замер, разработчик 28.10.2026) — в журнал: «скрыть остальное», картинки, запись видов, завершение;
+        /// чем кончился подбор (свой вид, вид с экрана, привычные ракурсы, все направления).
+        /// </summary>
+        private sealed class Stats
+        {
+            public readonly Stopwatch Isolate = new Stopwatch(), Render = new Stopwatch(), Write = new Stopwatch(), Finish = new Stopwatch();
+            public int Images;
+            private readonly Dictionary<string, int> _how = new Dictionary<string, int>();
+
+            public void Count(string how)
+            {
+                if (how == null) return;
+                _how[how] = _how.TryGetValue(how, out var n) ? n + 1 : 1;
+            }
+
+            public string Text(TimeSpan total)
+            {
+                var other = total - Isolate.Elapsed - Render.Elapsed - Write.Elapsed - Finish.Elapsed;
+                return $"скрыть остальное {Isolate.Elapsed.TotalSeconds:0.0} с, картинки {Render.Elapsed.TotalSeconds:0.0} с ({Images} шт., " +
+                       $"{(Images > 0 ? Render.Elapsed.TotalMilliseconds / Images : 0):0} мс), запись видов {Write.Elapsed.TotalSeconds:0.0} с, " +
+                       $"завершение {Finish.Elapsed.TotalSeconds:0.0} с, прочее (камера и др.) {other.TotalSeconds:0.0} с; " +
+                       string.Join(", ", _how.Select(kv => kv.Key + " — " + kv.Value));
+            }
+        }
+
+        private static Stats _stats = new Stats();
 
         private static ModelItem ItemOf(ModelItem item, ModelItem composite, ModelItemCollection selection) =>
             item ?? composite ?? selection?.FirstOrDefault();

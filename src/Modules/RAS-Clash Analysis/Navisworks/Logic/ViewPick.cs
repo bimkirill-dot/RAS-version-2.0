@@ -38,6 +38,20 @@ namespace RASv2.ClashAnalysis.Navisworks.Logic
     public static class ViewPick
     {
         /// <summary>
+        /// Вид годится без перебора (ускорение, 28.10.2026): каждый элемент открыт (не закрыт другим) не меньше чем на GoodOpen
+        /// и занимает в кадре не меньше GoodSize (у картинки 160×120 — около 100 точек).
+        /// </summary>
+        public const double GoodOpen = 0.9, GoodSize = 0.005;
+
+        /// <summary>Сколько направлений смотреть сначала — привычные (наискось сверху с 8 сторон): лучший из них годится — остальные не нужны.</summary>
+        public const int FirstRound = 8;
+
+        public static bool Good(int first, int firstAll, int second, int secondAll, int total) =>
+            total > 0 && firstAll > 0 && secondAll > 0 &&
+            Math.Min(first / (double)firstAll, second / (double)secondAll) >= GoodOpen &&
+            Math.Min(first, second) >= GoodSize * total;
+
+        /// <summary>
         /// Направления: наискось сверху (8 сторон), круче сверху, почти горизонтально, сверху и чуть снизу (плита над стеной или
         /// колонной: сверху плита закрывает её при любом взгляде).
         /// </summary>
