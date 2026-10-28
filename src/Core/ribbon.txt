@@ -32,7 +32,7 @@
 # (Revit помнит кнопку по вкладке и панели).
 
 {Модули}
-ModelHistory = работает
+ModelHistory = только тест
 ClashAnalysis = работает
 SheetManager = работает
 
