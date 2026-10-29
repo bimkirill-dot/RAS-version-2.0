@@ -43,13 +43,6 @@
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="Margin" Value="8,0,0,0" />
         </Style>
-        <Style x:Key="Dimmed" TargetType="Border">
-            <Style.Triggers>
-                <Trigger Property="IsEnabled" Value="False">
-                    <Setter Property="Opacity" Value="0.45" />
-                </Trigger>
-            </Style.Triggers>
-        </Style>
     </Window.Resources>
 
     <StackPanel Margin="20,14,20,18">
@@ -61,7 +54,7 @@
         <TextBlock Style="{StaticResource Hint}" Text="Перекрытие или фундаментная плита — план, стена — разрез, остальное — 3D." />
 
         <TextBlock Style="{StaticResource Head}" Text="Отображение пересечения" />
-        <CheckBox x:Name="Isolate" Content="Изолировать элементы коллизии" Checked="Isolate_Changed" Unchecked="Isolate_Changed" />
+        <CheckBox x:Name="Isolate" Content="Изолировать элементы коллизии" />
 
         <TextBlock Style="{StaticResource Head}" Text="Обрезка вида" />
         <RadioButton x:Name="CropAuto" GroupName="crop" Content="Авто — по размеру места коллизии" />
@@ -76,7 +69,7 @@
         <CheckBox x:Name="Paint" Content="Покраска" />
         <TextBlock Style="{StaticResource Hint}" Text="Как в Navisworks: первый элемент — красный, второй — зелёный." />
 
-        <Border x:Name="TransparencyPanel" Style="{StaticResource Dimmed}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
+        <Border BorderBrush="{DynamicResource Line}" BorderThickness="1"
                 CornerRadius="4" Padding="12,8,12,10" Margin="0,8,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>

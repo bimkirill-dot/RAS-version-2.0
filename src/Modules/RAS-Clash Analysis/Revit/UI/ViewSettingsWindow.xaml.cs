@@ -8,7 +8,7 @@ namespace RASv2.ClashAnalysis.UI
 {
     /// <summary>
     /// «Настройки вида»: личные настройки вида коллизии. Кнопки, поля, кисти — общие образцы ядра (WindowTheme), по теме Revit.
-    /// «Границы вида» — только у 3D-вида, прозрачность — не при «Изолировать».
+    /// «Границы вида» — только у 3D-вида.
     /// </summary>
     public partial class ViewSettingsWindow : Window
     {
@@ -40,7 +40,6 @@ namespace RASv2.ClashAnalysis.UI
             WarnMissingLink.IsChecked = s.WarnMissingLink;
             Result = s;
             Kind_Changed(null, null);
-            Isolate_Changed(null, null);
         }
 
         /// <summary>«Границы вида» — только у 3D-вида; выбраны, а тип уже другой — «Авто».</summary>
@@ -49,13 +48,6 @@ namespace RASv2.ClashAnalysis.UI
             if (CropView == null) return; // во время InitializeComponent
             CropView.IsEnabled = Kind3D.IsChecked == true;
             if (!CropView.IsEnabled && CropView.IsChecked == true) CropAuto.IsChecked = true;
-        }
-
-        /// <summary>При «Изолировать» остальное скрыто — прозрачность не нужна.</summary>
-        private void Isolate_Changed(object sender, RoutedEventArgs e)
-        {
-            if (TransparencyPanel == null) return;
-            TransparencyPanel.IsEnabled = Isolate.IsChecked != true;
         }
 
         private void Save_Click(object sender, RoutedEventArgs e)
@@ -79,12 +71,9 @@ namespace RASv2.ClashAnalysis.UI
                 s.MarginMeters = m;
             }
             s.Paint = Paint.IsChecked == true;
-            if (!s.Isolate)
-            {
-                if (!Percent(ClashTransparency, out var clash) || !Percent(OtherTransparency, out var other)) return;
-                s.ClashTransparency = clash;
-                s.OtherTransparency = other;
-            }
+            if (!Percent(ClashTransparency, out var clash) || !Percent(OtherTransparency, out var other)) return;
+            s.ClashTransparency = clash;
+            s.OtherTransparency = other;
             s.Style = StyleOrder[Math.Max(0, StyleBox.SelectedIndex)];
             s.WarnUnloaded = WarnUnloaded.IsChecked == true;
             s.WarnMissingLink = WarnMissingLink.IsChecked == true;

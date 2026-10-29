@@ -115,7 +115,7 @@ namespace RASv2.Tests
                 Check(ViewRules.CropToView(s, ViewSettings.Kind3D) && !ViewRules.CropToView(s, ViewSettings.KindPlan) && !ViewRules.CropToView(s, ViewSettings.KindSection),
                     "«Границы вида» — только у 3D-вида");
             });
-            yield return Case("прозрачность: не при «Изолировать»; остальные прозрачны — у элементов коллизии не меньше 1 %", () =>
+            yield return Case("прозрачность: и при «Изолировать»; остальные прозрачны — у элементов коллизии не меньше 1 %", () =>
             {
                 var s = new ViewSettings();
                 Check(ViewRules.Transparency(s) == (0, 0), "по умолчанию — нет");
@@ -127,7 +127,7 @@ namespace RASv2.Tests
                 s.ClashTransparency = 25;
                 Check(ViewRules.Transparency(s) == (25, 60), "обе заданы — как заданы");
                 s.Isolate = true;
-                Check(ViewRules.Transparency(s) == (0, 0), "«Изолировать» — без прозрачности");
+                Check(ViewRules.Transparency(s) == (25, 60), "«Изолировать» — так же");
             });
             yield return Case("место коллизии по габаритам: общая часть, промежуток, вложенный", () =>
             {

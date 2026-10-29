@@ -35,7 +35,10 @@ namespace RASv2.ClashAnalysis.Logic
         [DataMember(Name = "cropToView")] public bool CropToView { get; set; }
         [DataMember(Name = "style")] public string Style { get; set; }
         [DataMember(Name = "paint")] public bool Paint { get; set; }
-        /// <summary>Прозрачность элементов коллизии и остальных, % (разработчик, 29.10.2026); при «Изолировать» — нет.</summary>
+        /// <summary>
+        /// Прозрачность элементов коллизии и остальных, % (разработчик, 29.10.2026); и при «Изолировать» (разработчик, в тот же
+        /// день): остаются видны обобщённые модели (отверстия) и элементы связи тех же категорий.
+        /// </summary>
         [DataMember(Name = "clashTransparency")] public int ClashTransparency { get; set; }
         [DataMember(Name = "otherTransparency")] public int OtherTransparency { get; set; }
         [DataMember(Name = "warnUnloaded")] public bool WarnUnloaded { get; set; }
@@ -127,13 +130,11 @@ namespace RASv2.ClashAnalysis.Logic
         public static bool CropToView(ViewSettings settings, string kind) => settings.CropToView && kind == ViewSettings.Kind3D;
 
         /// <summary>
-        /// Прозрачность, которую ставить в виде, %. При «Изолировать» — никакой: остальное и так скрыто. Остальные прозрачны —
-        /// у элементов коллизии не меньше 1 %: 0 в настройке элемента Revit может принять за «не задано», и элемент взял бы
-        /// прозрачность своей категории; 1 % на глаз не отличить от 0.
+        /// Прозрачность, которую ставить в виде, %. Остальные прозрачны — у элементов коллизии не меньше 1 %: 0 в настройке
+        /// элемента Revit может принять за «не задано», и элемент взял бы прозрачность своей категории; 1 % на глаз не отличить от 0.
         /// </summary>
         public static (int Clash, int Other) Transparency(ViewSettings settings)
         {
-            if (settings.Isolate) return (0, 0);
             var other = settings.OtherTransparency;
             return (other > 0 ? Math.Max(1, settings.ClashTransparency) : settings.ClashTransparency, other);
         }
