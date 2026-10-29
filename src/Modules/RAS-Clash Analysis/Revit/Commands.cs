@@ -26,6 +26,17 @@ namespace RASv2.ClashAnalysis
         }
     }
 
+    /// <summary>«ID элемента связи»: номера выделенных элементов (и в связях) — окном.</summary>
+    [Transaction(TransactionMode.ReadOnly)]
+    public sealed class ElementIdCommand : IExternalCommand
+    {
+        public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
+        {
+            BridgeApp.Instance?.ShowElementIds(commandData.Application);
+            return Result.Succeeded;
+        }
+    }
+
     /// <summary>
     /// Кнопка доступна и без открытой модели. Свой класс у модуля: Revit ищет его в сборке команды кнопки (CLAUDE.md,
     /// «Правила, о которые уже спотыкались»).

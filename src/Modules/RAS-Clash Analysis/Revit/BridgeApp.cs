@@ -61,6 +61,11 @@ namespace RASv2.ClashAnalysis
             clashes.LongDescription = "Выделите элемент — в модели или в связи (Tab) — и нажмите: браузер откроет его коллизии во всех статусах. " +
                                       "Коллизий нет — сайт так и напишет.";
 
+            var ids = context.AddButton("LinkedId", "ID элемента\nсвязи", typeof(ElementIdCommand),
+                "Показать номер (ID) выделенного элемента связи — выделите его клавишей Tab; номер можно скопировать", icon: "LinkedId");
+            ids.LongDescription = "«ID выбранного» Revit не показывает номер элемента в связи. Выделите элемент в связи (Tab) и нажмите — " +
+                                  "откроется окно с номером. Выделено несколько — номера всех; элемент самой модели — тоже.";
+
             var settings = context.AddButton("ViewSettings", "Настройки\nвида", typeof(ViewSettingsCommand),
                 "Как открывать коллизию по «Показать в Revit»: тип вида, категории элементов, обрезка, покраска, прозрачность, стиль, предупреждения", icon: "ViewSettings");
             settings.AvailabilityClassName = typeof(AlwaysAvailable).FullName;
@@ -95,6 +100,37 @@ namespace RASv2.ClashAnalysis
             {
                 _log.Error("Коллизии элемента: сайт не открыт", ex);
                 TaskDialog.Show("Коллизии элемента", "Не удалось открыть сайт коллизий — подробности в журнале плагина («О плагине» → «Показать журнал ошибок»).");
+            }
+        }
+
+        /// <summary>«ID элемента связи»: номера выделенного — окном; ничего не выделено — подсказка.</summary>
+        internal void ShowElementIds(UIApplication app)
+        {
+            const string title = "ID элемента связи";
+            try
+            {
+                var uidoc = app.ActiveUIDocument;
+                if (uidoc == null)
+                {
+                    TaskDialog.Show(title, "Откройте модель и выделите элемент.");
+                    return;
+                }
+                var items = ElementIds.Selected(uidoc, out var wholeLinks);
+                if (items.Count == 0)
+                {
+                    TaskDialog.Show(title, wholeLinks > 0
+                        ? "Выделена связь целиком. Выделите элемент внутри связи: наведите на него и нажимайте Tab, пока он не подсветится, затем щёлкните."
+                        : "Выделите элемент в связи (клавишей Tab) и нажмите «ID элемента связи» ещё раз.");
+                    return;
+                }
+                var window = new ElementIdWindow(items);
+                new WindowInteropHelper(window).Owner = app.MainWindowHandle;
+                window.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                _log.Error("ID элемента связи: окно не открылось", ex);
+                TaskDialog.Show(title, "Не удалось показать номер — подробности в журнале плагина («О плагине» → «Показать журнал ошибок»).");
             }
         }
 

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- ID элемента связи: ярлык с решёткой — номер элемента -->
+  <polygon points="3,16 10,7 29,7 29,25 10,25" fill="#FFFFFF" stroke="#39424E" stroke-width="2" stroke-linejoin="round"/>
+  <line x1="17" y1="11" x2="17" y2="21" stroke="#2F6FED" stroke-width="2" stroke-linecap="round"/>
+  <line x1="23" y1="11" x2="23" y2="21" stroke="#2F6FED" stroke-width="2" stroke-linecap="round"/>
+  <line x1="14" y1="13" x2="26" y2="13" stroke="#2F6FED" stroke-width="2" stroke-linecap="round"/>
+  <line x1="14" y1="19" x2="26" y2="19" stroke="#2F6FED" stroke-width="2" stroke-linecap="round"/>
+</svg>

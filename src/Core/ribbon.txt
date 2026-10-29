@@ -53,6 +53,7 @@ ModelHistory.Settings подпись="Настройки" доступна="BIM"
 (
 ClashAnalysis.ViewSettings подпись="Настройки вида"
 ClashAnalysis.ElementClashes подпись="Коллизии элемента"
+ClashAnalysis.LinkedId подпись="ID элемента связи"
 )
 [Менеджер листов]
 SheetManager.Sign подпись="Подпись" доступна="BIM"
