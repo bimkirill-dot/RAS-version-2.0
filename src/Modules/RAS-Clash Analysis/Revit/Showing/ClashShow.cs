@@ -13,8 +13,9 @@ namespace RASv2.ClashAnalysis.Showing
     /// <summary>
     /// «Показать в Revit» (DECISIONS.md, «Мост в Revit…»): в открытой модели найти модели коллизии (саму модель или связи) и
     /// оба элемента, открыть личный вид по настройкам («Настройки вида» на ленте): 3D с рамкой, план на уровне коллизии, разрез
-    /// через неё или «Авто» по элементам; с обрезкой или изолировать; скрыть в виде связи, которые в коллизии не участвуют;
-    /// выделить элементы (и в связях) и покрасить цветами Navisworks: элемент модели — сам, элемент связи — фильтром вида.
+    /// через неё или «Авто» по элементам; обрезка вокруг места коллизии или рамкой 3D-вида человека; изолировать; скрыть в виде
+    /// связи, которые в коллизии не участвуют; выделить элементы (и в связях) и покрасить цветами Navisworks: элемент модели —
+    /// сам, элемент связи — фильтром вида; прозрачность элементов коллизии и остальных.
     /// Только в контексте Revit API.
     /// </summary>
     internal static class ClashShow
@@ -101,6 +102,19 @@ namespace RASv2.ClashAnalysis.Showing
             var size = max - min;
             var margin = ViewRules.MarginMeters(settings, Math.Max(size.X, Math.Max(size.Y, size.Z)) / Metre) * Metre;
             var kind = ViewRules.KindFor(settings.Kind, found.Select(f => f.Element.Category?.BuiltInCategory.ToString()));
+            BoundingBoxXYZ bounds = null;
+            if (ViewRules.CropToView(settings, kind))
+            {
+                bounds = views.Bounds(doc, uidoc.ActiveView);
+                if (bounds == null)
+                    warnings.Add("«Границы вида»: ещё не был открыт ваш 3D-вид с рамкой — вид обрезан вокруг места коллизии. Откройте 3D-вид с рамкой и покажите коллизию снова.");
+                else if (!Inside(bounds, (min + max) / 2))
+                {
+                    warnings.Add("Место коллизии — за рамкой вашего 3D-вида: вид обрезан вокруг места коллизии.");
+                    bounds = null;
+                }
+            }
+            var (clashTransparency, otherTransparency) = ViewRules.Transparency(settings);
 
             View view;
             using (var t = new Transaction(doc, ClashViews.TransactionPrefix + "показать коллизию " + request.Clash))
@@ -108,13 +122,14 @@ namespace RASv2.ClashAnalysis.Showing
                 t.Start();
                 view = kind == ViewSettings.KindPlan ? Plan(doc, views, min, max, margin)
                      : kind == ViewSettings.KindSection ? Section(doc, views, found, min, max, margin)
-                     : Box3D(doc, views, min, max, margin);
+                     : Box3D(doc, views, min, max, margin, bounds);
                 if (view.ViewTemplateId != ElementId.InvalidElementId) view.ViewTemplateId = ElementId.InvalidElementId;
                 view.DisplayStyle = Style(settings.Style);
                 view.DetailLevel = ViewDetailLevel.Fine;
                 ShowOnlyUsedLinks(view, instances, found);
-                PaintOwn(doc, view, views, settings.Paint ? found : new List<Found>());
-                PaintLinked(doc, view, views, settings.Paint ? found : new List<Found>());
+                Transparent(doc, view, otherTransparency);
+                PaintOwn(doc, view, views, found, settings.Paint, clashTransparency);
+                PaintLinked(doc, view, views, found, settings.Paint, clashTransparency);
                 Isolate(doc, view, found, settings.Isolate);
                 t.Commit();
             }
@@ -129,12 +144,20 @@ namespace RASv2.ClashAnalysis.Showing
 
         private static XYZ Pad(double m) => new XYZ(m, m, m);
 
-        /// <summary>3D: рамка вокруг пары с запасом.</summary>
-        private static View Box3D(Document doc, ClashViews views, XYZ min, XYZ max, double margin)
+        /// <summary>Точка внутри рамки (у рамки бывает поворот — свои оси).</summary>
+        private static bool Inside(BoundingBoxXYZ box, XYZ p)
+        {
+            var q = box.Transform.Inverse.OfPoint(p);
+            return q.X >= box.Min.X && q.X <= box.Max.X && q.Y >= box.Min.Y && q.Y <= box.Max.Y && q.Z >= box.Min.Z && q.Z <= box.Max.Z;
+        }
+
+        /// <summary>3D: рамка вокруг пары с запасом или «Границы вида» — рамка 3D-вида человека (bounds).</summary>
+        private static View Box3D(Document doc, ClashViews views, XYZ min, XYZ max, double margin, BoundingBoxXYZ bounds)
         {
             var view = views.Prepare3D(doc);
-            view.SetSectionBox(new BoundingBoxXYZ { Min = min - Pad(margin), Max = max + Pad(margin) });
+            view.SetSectionBox(bounds ?? new BoundingBoxXYZ { Min = min - Pad(margin), Max = max + Pad(margin) });
             view.IsSectionBoxActive = true;
+            views.SetViewBounds(doc, view, bounds != null);
             ShowSectionBox(doc, view);
             return view;
         }
@@ -373,18 +396,39 @@ namespace RASv2.ClashAnalysis.Showing
             if (hide.Count > 0) view.HideElements(hide);
         }
 
-        /// <summary>Элементы самой модели — переопределением графики в нашем виде; прежние покрашенные — как были.</summary>
-        private static void PaintOwn(Document doc, View view, ClashViews views, List<Found> found)
+        /// <summary>
+        /// Прозрачность остальных элементов (разработчик, 29.10.2026) — настройкой категорий модели в нашем виде: на связь «по
+        /// основному виду» она действует так же. Элементы коллизии — своей настройкой поверх (PaintOwn, PaintLinked). 0 — снять.
+        /// </summary>
+        private static void Transparent(Document doc, View view, int transparency)
+        {
+            var links = new ElementId(BuiltInCategory.OST_RvtLinks);
+            foreach (Category c in doc.Settings.Categories)
+            {
+                if (c.CategoryType != CategoryType.Model || c.Id == links || !view.IsCategoryOverridable(c.Id)) continue;
+                if (view.GetCategoryOverrides(c.Id).Transparency == transparency) continue;
+                var o = new OverrideGraphicSettings();
+                if (transparency > 0) o.SetSurfaceTransparency(transparency);
+                view.SetCategoryOverrides(c.Id, o);
+            }
+        }
+
+        /// <summary>
+        /// Элементы самой модели — переопределением графики в нашем виде: покраска и прозрачность элементов коллизии; прежние
+        /// покрашенные — как были.
+        /// </summary>
+        private static void PaintOwn(Document doc, View view, ClashViews views, List<Found> found, bool paint, int transparency)
         {
             foreach (var id in views.Painted(doc, view.Id))
                 if (doc.GetElement(id) != null) view.SetElementOverrides(id, new OverrideGraphicSettings());
             var solid = SolidFill(doc);
             var painted = new List<ElementId>();
-            foreach (var f in found.Where(x => x.Link == null))
-            {
-                view.SetElementOverrides(f.Element.Id, Paint(f.Color, solid));
-                painted.Add(f.Element.Id);
-            }
+            if (paint || transparency > 0)
+                foreach (var f in found.Where(x => x.Link == null))
+                {
+                    view.SetElementOverrides(f.Element.Id, Paint(paint ? f.Color : null, solid, transparency));
+                    painted.Add(f.Element.Id);
+                }
             views.SetPainted(doc, view.Id, painted);
         }
 
@@ -392,12 +436,14 @@ namespace RASv2.ClashAnalysis.Showing
         /// Элементы связи — фильтром нашего вида (разработчик, 19.10.2026: «через видимость графики можно перекрасить категорию
         /// связанной модели»): Revit API не перекрашивает элемент внутри связи и не даёт перекрасить категорию в «своих» настройках
         /// связи, а фильтр вида на элементы связи действует. Фильтр — категория элемента и, где Revit позволяет, его тип: красятся
-        /// не все воздуховоды связи, а этого типоразмера, и только в рамке вокруг места коллизии. Прежние свои фильтры — сняты.
+        /// не все воздуховоды связи, а этого типоразмера, и только в рамке вокруг места коллизии. Тем же фильтром — прозрачность
+        /// элементов коллизии. Прежние свои фильтры — сняты.
         /// </summary>
-        private static void PaintLinked(Document doc, View view, ClashViews views, List<Found> found)
+        private static void PaintLinked(Document doc, View view, ClashViews views, List<Found> found, bool paint, int transparency)
         {
             var old = views.Filters(doc);
             if (old.Count > 0) doc.Delete(old);
+            if (!paint && transparency == 0) return;
             var solid = SolidFill(doc);
             var typeName = new ElementId(BuiltInParameter.ALL_MODEL_TYPE_NAME);
             foreach (var f in found.Where(x => x.Link != null))
@@ -413,7 +459,7 @@ namespace RASv2.ClashAnalysis.Showing
                         rule = new ElementParameterFilter(ParameterFilterRuleFactory.CreateEqualsRule(typeName, type));
                     var filter = views.NewFilter(doc, f.Index, categories, rule);
                     view.AddFilter(filter.Id);
-                    view.SetFilterOverrides(filter.Id, Paint(f.Color, solid));
+                    view.SetFilterOverrides(filter.Id, Paint(paint ? f.Color : null, solid, transparency));
                     view.SetFilterVisibility(filter.Id, true);
                 }
                 catch (Autodesk.Revit.Exceptions.ApplicationException)
@@ -426,14 +472,19 @@ namespace RASv2.ClashAnalysis.Showing
         private static FillPatternElement SolidFill(Document doc) =>
             new FilteredElementCollector(doc).OfClass(typeof(FillPatternElement)).Cast<FillPatternElement>().FirstOrDefault(p => p.GetFillPattern().IsSolidFill);
 
-        private static OverrideGraphicSettings Paint(Color color, FillPatternElement solid)
+        /// <summary>Покраска (color; null — без покраски) и прозрачность (0 — без неё).</summary>
+        private static OverrideGraphicSettings Paint(Color color, FillPatternElement solid, int transparency)
         {
-            var o = new OverrideGraphicSettings()
-                .SetProjectionLineColor(Darker(color))
-                .SetSurfaceForegroundPatternColor(color)
-                .SetCutForegroundPatternColor(color)
-                .SetCutLineColor(Darker(color));
-            if (solid != null) o.SetSurfaceForegroundPatternId(solid.Id).SetCutForegroundPatternId(solid.Id);
+            var o = new OverrideGraphicSettings();
+            if (color != null)
+            {
+                o.SetProjectionLineColor(Darker(color))
+                    .SetSurfaceForegroundPatternColor(color)
+                    .SetCutForegroundPatternColor(color)
+                    .SetCutLineColor(Darker(color));
+                if (solid != null) o.SetSurfaceForegroundPatternId(solid.Id).SetCutForegroundPatternId(solid.Id);
+            }
+            if (transparency > 0) o.SetSurfaceTransparency(transparency);
             return o;
         }
 

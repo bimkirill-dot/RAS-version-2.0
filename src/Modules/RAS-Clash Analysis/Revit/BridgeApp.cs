@@ -61,7 +61,7 @@ namespace RASv2.ClashAnalysis
                                       "Коллизий нет — сайт так и напишет.";
 
             var settings = context.AddButton("ViewSettings", "Настройки\nвида", typeof(ViewSettingsCommand),
-                "Как открывать коллизию по «Показать в Revit»: тип вида, обрезка, стиль, покраска, предупреждения", icon: "ViewSettings");
+                "Как открывать коллизию по «Показать в Revit»: тип вида, обрезка, покраска, прозрачность, стиль, предупреждения", icon: "ViewSettings");
             settings.AvailabilityClassName = typeof(AlwaysAvailable).FullName;
             settings.LongDescription = "Настройки — ваши, у коллег свои. На сайте коллизий «Показать в Revit» открывает личный вид: " +
                                        "3D, план, разрез или «Авто» по элементам; закрыли вкладку вида — он удаляется из модели.";

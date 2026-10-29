@@ -8,8 +8,8 @@ namespace RASv2.ClashAnalysis.Logic
 {
     /// <summary>
     /// Личные настройки вида коллизии — кнопка «Настройки вида» на ленте (DECISIONS.md, «Мост в Revit…»): у каждого свои,
-    /// файл — в личной папке модуля. По умолчанию: 3D, обрезка по размеру элементов, «Тонированный», красить — да,
-    /// изолировать — нет, предупреждения — включены. Незнакомое и испорченное — значения по умолчанию.
+    /// файл — в личной папке модуля. По умолчанию: 3D, обрезка «Авто» (по размеру места коллизии), «Тонированный», красить — да,
+    /// изолировать — нет, прозрачность — нет, предупреждения — включены. Незнакомое и испорченное — значения по умолчанию.
     /// </summary>
     [DataContract]
     public sealed class ViewSettings
@@ -20,14 +20,24 @@ namespace RASv2.ClashAnalysis.Logic
         public const string StyleWireframe = "wireframe", StyleHidden = "hidden", StyleShaded = "shaded", StyleConsistent = "consistent", StyleRealistic = "realistic";
         public static readonly string[] Styles = { StyleWireframe, StyleHidden, StyleShaded, StyleConsistent, StyleRealistic };
         public const double MinMargin = 0.1, MaxMargin = 20;
+        /// <summary>Наибольшая прозрачность, %: у Revit — 100 (элемент не виден совсем).</summary>
+        public const int MaxTransparency = 100;
 
         [DataMember(Name = "kind")] public string Kind { get; set; }
         [DataMember(Name = "isolate")] public bool Isolate { get; set; }
         /// <summary>Запас обрезки — по размеру элементов; иначе — MarginMeters.</summary>
         [DataMember(Name = "marginBySize")] public bool MarginBySize { get; set; }
         [DataMember(Name = "marginMeters")] public double MarginMeters { get; set; }
+        /// <summary>
+        /// «Границы вида»: 3D-вид обрезается рамкой 3D-вида человека, а не вокруг места коллизии (разработчик, 29.10.2026);
+        /// сильнее MarginBySize. Только для 3D-вида — план и разрез обрезаются, как задано MarginBySize.
+        /// </summary>
+        [DataMember(Name = "cropToView")] public bool CropToView { get; set; }
         [DataMember(Name = "style")] public string Style { get; set; }
         [DataMember(Name = "paint")] public bool Paint { get; set; }
+        /// <summary>Прозрачность элементов коллизии и остальных, % (разработчик, 29.10.2026); при «Изолировать» — нет.</summary>
+        [DataMember(Name = "clashTransparency")] public int ClashTransparency { get; set; }
+        [DataMember(Name = "otherTransparency")] public int OtherTransparency { get; set; }
         [DataMember(Name = "warnUnloaded")] public bool WarnUnloaded { get; set; }
         [DataMember(Name = "warnMissingLink")] public bool WarnMissingLink { get; set; }
 
@@ -43,19 +53,24 @@ namespace RASv2.ClashAnalysis.Logic
             Isolate = false;
             MarginBySize = true;
             MarginMeters = 1;
+            CropToView = false;
             Style = StyleShaded;
             Paint = true;
+            ClashTransparency = 0;
+            OtherTransparency = 0;
             WarnUnloaded = true;
             WarnMissingLink = true;
         }
 
-        /// <summary>Незнакомый тип или стиль — по умолчанию, запас — в разумных пределах.</summary>
+        /// <summary>Незнакомый тип или стиль — по умолчанию, запас и прозрачность — в разумных пределах.</summary>
         public ViewSettings Normalize()
         {
             if (!Kinds.Contains(Kind)) Kind = Kind3D;
             if (!Styles.Contains(Style)) Style = StyleShaded;
             if (double.IsNaN(MarginMeters) || double.IsInfinity(MarginMeters)) MarginMeters = 1;
             MarginMeters = Math.Max(MinMargin, Math.Min(MaxMargin, MarginMeters));
+            ClashTransparency = Math.Max(0, Math.Min(MaxTransparency, ClashTransparency));
+            OtherTransparency = Math.Max(0, Math.Min(MaxTransparency, OtherTransparency));
             return this;
         }
 
@@ -107,5 +122,20 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>Запас вокруг места коллизии, м: «по размеру» — половина наибольшего размера места коллизии, не меньше 0,5 м; иначе — заданный.</summary>
         public static double MarginMeters(ViewSettings settings, double pairSizeMeters) =>
             settings.MarginBySize ? Math.Max(0.5, 0.5 * pairSizeMeters) : settings.MarginMeters;
+
+        /// <summary>«Границы вида» — только у 3D-вида (у плана и разреза — обрезка, как задано).</summary>
+        public static bool CropToView(ViewSettings settings, string kind) => settings.CropToView && kind == ViewSettings.Kind3D;
+
+        /// <summary>
+        /// Прозрачность, которую ставить в виде, %. При «Изолировать» — никакой: остальное и так скрыто. Остальные прозрачны —
+        /// у элементов коллизии не меньше 1 %: 0 в настройке элемента Revit может принять за «не задано», и элемент взял бы
+        /// прозрачность своей категории; 1 % на глаз не отличить от 0.
+        /// </summary>
+        public static (int Clash, int Other) Transparency(ViewSettings settings)
+        {
+            if (settings.Isolate) return (0, 0);
+            var other = settings.OtherTransparency;
+            return (other > 0 ? Math.Max(1, settings.ClashTransparency) : settings.ClashTransparency, other);
+        }
     }
 }

@@ -30,12 +30,16 @@ namespace RASv2.ClashAnalysis.Showing
             public bool SeenOpen;
             /// <summary>Свои элементы модели, перекрашенные в виде, — снять покраску при следующей коллизии.</summary>
             public List<ElementId> Painted = new List<ElementId>();
+            /// <summary>3D-вид обрезан «Границами вида» — его рамку человек мог подвинуть: она и есть его границы.</summary>
+            public bool ViewBounds;
         }
 
         private readonly string _user;
         private readonly ModuleLog _log;
         private readonly List<Tracked> _views = new List<Tracked>();
         private readonly List<Document> _opened = new List<Document>();
+        /// <summary>Рамки 3D-видов человека для «Границ вида» — по моделям (путь файла), пока Revit не закрыт.</summary>
+        private readonly Dictionary<string, BoundingBoxXYZ> _bounds = new Dictionary<string, BoundingBoxXYZ>(StringComparer.OrdinalIgnoreCase);
 
         public ClashViews(string user, ModuleLog log)
         {
@@ -69,6 +73,26 @@ namespace RASv2.ClashAnalysis.Showing
             }
             Track(doc, view);
             return view;
+        }
+
+        /// <summary>
+        /// «Границы вида» (разработчик, 29.10.2026: «это рамка обрезки 3D-вида»): открыт 3D-вид человека с рамкой — его рамка,
+        /// она запоминается для модели; открыт наш 3D-вид, обрезанный границами, — его рамка (человек мог её подвинуть); иначе —
+        /// запомненная. Ни разу не был открыт 3D-вид с рамкой — null.
+        /// </summary>
+        public BoundingBoxXYZ Bounds(Document doc, View active)
+        {
+            var key = string.IsNullOrEmpty(doc.PathName) ? doc.Title : doc.PathName;
+            if (active is View3D v && !v.IsTemplate && v.IsSectionBoxActive && (!IsOurs(v) || Find(doc, v.Id)?.ViewBounds == true))
+                _bounds[key] = v.GetSectionBox();
+            return _bounds.TryGetValue(key, out var box) ? box : null;
+        }
+
+        /// <summary>Наш 3D-вид обрезан «Границами вида» или вокруг места коллизии.</summary>
+        public void SetViewBounds(Document doc, View view, bool on)
+        {
+            var t = Find(doc, view.Id);
+            if (t != null) t.ViewBounds = on;
         }
 
         /// <summary>Новый план на уровне (внутри транзакции); прежний план коллизии — в сторону.</summary>

@@ -64,25 +64,29 @@ namespace RASv2.Tests
             yield return Case("настройки вида: по умолчанию, запись и чтение, испорченный файл", () =>
             {
                 var d = new ViewSettings();
-                Check(d.Kind == ViewSettings.Kind3D && !d.Isolate && d.MarginBySize && d.Style == ViewSettings.StyleShaded && d.Paint
-                      && d.WarnUnloaded && d.WarnMissingLink, "по умолчанию: 3D, по размеру, «Тонированный», красить, предупреждения");
+                Check(d.Kind == ViewSettings.Kind3D && !d.Isolate && d.MarginBySize && !d.CropToView && d.Style == ViewSettings.StyleShaded && d.Paint
+                      && d.ClashTransparency == 0 && d.OtherTransparency == 0 && d.WarnUnloaded && d.WarnMissingLink,
+                      "по умолчанию: 3D, по размеру, «Тонированный», красить, без прозрачности, предупреждения");
                 var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "rasv2-tests-" + Guid.NewGuid().ToString("N"));
                 var path = System.IO.Path.Combine(dir, "view.json");
                 try
                 {
                     Check(ViewSettings.Load(path).Kind == ViewSettings.Kind3D, "файла нет — по умолчанию");
-                    var s = new ViewSettings { Kind = ViewSettings.KindAuto, Isolate = true, MarginBySize = false, MarginMeters = 2.5, Style = ViewSettings.StyleHidden, Paint = false, WarnUnloaded = false };
+                    var s = new ViewSettings { Kind = ViewSettings.KindAuto, Isolate = true, MarginBySize = false, MarginMeters = 2.5, CropToView = true,
+                        Style = ViewSettings.StyleHidden, Paint = false, ClashTransparency = 20, OtherTransparency = 70, WarnUnloaded = false };
                     s.Save(path);
                     s.Save(path); // повторная запись — заменой
                     var r = ViewSettings.Load(path);
-                    Check(r.Kind == ViewSettings.KindAuto && r.Isolate && !r.MarginBySize && r.MarginMeters == 2.5 && r.Style == ViewSettings.StyleHidden
-                          && !r.Paint && !r.WarnUnloaded && r.WarnMissingLink, "записано — прочитано так же");
+                    Check(r.Kind == ViewSettings.KindAuto && r.Isolate && !r.MarginBySize && r.MarginMeters == 2.5 && r.CropToView && r.Style == ViewSettings.StyleHidden
+                          && !r.Paint && r.ClashTransparency == 20 && r.OtherTransparency == 70 && !r.WarnUnloaded && r.WarnMissingLink, "записано — прочитано так же");
                     System.IO.File.WriteAllText(path, "{\"kind\":\"plan\"}");
                     r = ViewSettings.Load(path);
-                    Check(r.Kind == ViewSettings.KindPlan && r.Paint && r.MarginBySize && r.WarnUnloaded, "старый файл без новых полей — новые по умолчанию");
-                    System.IO.File.WriteAllText(path, "{\"kind\":\"cube\",\"style\":\"neon\",\"marginMeters\":500}");
+                    Check(r.Kind == ViewSettings.KindPlan && r.Paint && r.MarginBySize && !r.CropToView && r.OtherTransparency == 0 && r.WarnUnloaded,
+                        "старый файл без новых полей — новые по умолчанию");
+                    System.IO.File.WriteAllText(path, "{\"kind\":\"cube\",\"style\":\"neon\",\"marginMeters\":500,\"clashTransparency\":-5,\"otherTransparency\":300}");
                     r = ViewSettings.Load(path);
-                    Check(r.Kind == ViewSettings.Kind3D && r.Style == ViewSettings.StyleShaded && r.MarginMeters == ViewSettings.MaxMargin, "незнакомое — по умолчанию, запас — в пределах");
+                    Check(r.Kind == ViewSettings.Kind3D && r.Style == ViewSettings.StyleShaded && r.MarginMeters == ViewSettings.MaxMargin
+                          && r.ClashTransparency == 0 && r.OtherTransparency == ViewSettings.MaxTransparency, "незнакомое — по умолчанию, запас и прозрачность — в пределах");
                     System.IO.File.WriteAllText(path, "не JSON");
                     Check(ViewSettings.Load(path).Kind == ViewSettings.Kind3D, "испорченный файл — по умолчанию");
                 }
@@ -107,6 +111,23 @@ namespace RASv2.Tests
                 s.MarginBySize = false;
                 s.MarginMeters = 1.5;
                 Check(ViewRules.MarginMeters(s, 6) == 1.5, "заданный");
+                s.CropToView = true;
+                Check(ViewRules.CropToView(s, ViewSettings.Kind3D) && !ViewRules.CropToView(s, ViewSettings.KindPlan) && !ViewRules.CropToView(s, ViewSettings.KindSection),
+                    "«Границы вида» — только у 3D-вида");
+            });
+            yield return Case("прозрачность: не при «Изолировать»; остальные прозрачны — у элементов коллизии не меньше 1 %", () =>
+            {
+                var s = new ViewSettings();
+                Check(ViewRules.Transparency(s) == (0, 0), "по умолчанию — нет");
+                s.ClashTransparency = 30;
+                Check(ViewRules.Transparency(s) == (30, 0), "только элементы коллизии");
+                s.ClashTransparency = 0;
+                s.OtherTransparency = 60;
+                Check(ViewRules.Transparency(s) == (1, 60), "остальные — элементы коллизии 1 %, а не «не задано»");
+                s.ClashTransparency = 25;
+                Check(ViewRules.Transparency(s) == (25, 60), "обе заданы — как заданы");
+                s.Isolate = true;
+                Check(ViewRules.Transparency(s) == (0, 0), "«Изолировать» — без прозрачности");
             });
             yield return Case("место коллизии по габаритам: общая часть, промежуток, вложенный", () =>
             {
