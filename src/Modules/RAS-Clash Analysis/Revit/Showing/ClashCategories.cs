@@ -40,12 +40,15 @@ namespace RASv2.ClashAnalysis.Showing
         }
 
         /// <summary>
-        /// Видимость категорий в виде (внутри транзакции, до временной изоляции): «Категории элементов» и «Изолировать» — при нём
-        /// скрыты и все категории, кроме категорий элементов коллизии и обобщённых моделей (ими сделаны отверстия, их правят на
-        /// том же виде — разработчик, 23.10.2026).
+        /// Видимость категорий в виде (внутри транзакции, до временной изоляции): «Категории элементов» — без «Изолировать»;
+        /// при нём категории не действуют (разработчик, 29.10.2026: кнопка доступна только без «Изолировать»), скрыты все
+        /// категории, кроме категорий элементов коллизии и обобщённых моделей (ими сделаны отверстия, их правят на том же виде —
+        /// разработчик, 23.10.2026).
         /// </summary>
         public static void Apply(Document doc, View view, ClashViews views, List<ClashShow.Found> found, ViewSettings settings)
         {
+            if (settings.Isolate)
+                settings = settings.Copy().With(s => { s.HiddenHost.Clear(); s.HiddenLink.Clear(); });
             var clash = new HashSet<ElementId>(found.Select(f => (f.Element.Category?.Parent ?? f.Element.Category)?.Id).Where(id => id != null));
             var keep = new HashSet<ElementId>(clash) { new ElementId(BuiltInCategory.OST_GenericModel) };
             var hostOnly = new List<Category>();

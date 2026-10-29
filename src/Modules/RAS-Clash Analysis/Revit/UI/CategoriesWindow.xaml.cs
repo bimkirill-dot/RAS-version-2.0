@@ -14,7 +14,7 @@ namespace RASv2.ClashAnalysis.UI
 {
     /// <summary>
     /// «Категории элементов»: галочки категорий модели (и подкатегорий) для исходного файла и для связанного; поиск, «Показать
-    /// отмеченные», «Выбрать все» / «Снять выделение» / «Обратить выбор» у каждого списка, импорт и экспорт (CategoryFile),
+    /// отмеченные» / «Показать скрытые», «Выбрать все» / «Снять выделение» / «Обратить выбор» у каждого списка, импорт и экспорт (CategoryFile),
     /// «вернуть по умолчанию». Скрытые категории, которых нет в этой модели, сохраняются как были. Подкатегория — одна галочка на
     /// оба списка (Revit скрывает её сразу везде). Кнопки, поля, кисти — общие образцы ядра.
     /// </summary>
@@ -107,7 +107,6 @@ namespace RASv2.ClashAnalysis.UI
             HostList.ItemsSource = _hostView;
             LinkList.ItemsSource = _linkView;
             Counts();
-            Loaded += (s, e) => Search.Focus();
         }
 
         /// <summary>Галочки по спискам скрытых; подкатегория скрыта хоть в одном — снята в обоих.</summary>
@@ -133,7 +132,7 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>
         /// Строка в списке: поиск — категория, если нашлась она или её подкатегория; подкатегория — если нашлась она (или
         /// нашлась категория и она раскрыта). Без поиска подкатегории — у раскрытой категории. «Показать отмеченные» — только с
-        /// галочкой в этом списке.
+        /// галочкой в этом списке, «Показать скрытые» — только без неё.
         /// </summary>
         private bool Show(Row row, bool host)
         {
@@ -144,7 +143,10 @@ namespace RASv2.ClashAnalysis.UI
                 if (q.Length > 0 && !Match(row) && !row.Children.Any(Match)) return false;
             }
             else if (q.Length > 0 ? !(Match(row) || (Match(row.Parent) && row.Parent.Expanded)) : !row.Parent.Expanded) return false;
-            return OnlyChecked.IsChecked != true || (host ? row.Host : row.Link);
+            var visible = host ? row.Host : row.Link;
+            if (OnlyChecked.IsChecked == true) return visible;
+            if (OnlyHidden.IsChecked == true) return !visible;
+            return true;
         }
 
         private void Refresh()
@@ -171,8 +173,17 @@ namespace RASv2.ClashAnalysis.UI
         private void Filter_Changed(object sender, RoutedEventArgs e)
         {
             if (SearchHint == null || _hostView == null) return; // во время InitializeComponent
-            SearchHint.Visibility = string.IsNullOrEmpty(Search.Text) ? Visibility.Visible : Visibility.Collapsed;
+            SearchHint.Visibility = string.IsNullOrEmpty(Search.Text) && !Search.IsKeyboardFocused ? Visibility.Visible : Visibility.Collapsed;
             Refresh();
+        }
+
+        /// <summary>«Показать отмеченные» и «Показать скрытые» — одно из двух.</summary>
+        private void Show_Changed(object sender, RoutedEventArgs e)
+        {
+            if (OnlyHidden == null || OnlyChecked == null) return; // во время InitializeComponent
+            if (sender == OnlyChecked) OnlyHidden.IsChecked = false;
+            else OnlyChecked.IsChecked = false;
+            Filter_Changed(sender, e);
         }
 
         private IEnumerable<Row> Shown(object sender, out bool host)

@@ -85,6 +85,13 @@ namespace RASv2.ClashAnalysis.Logic
             return this;
         }
 
+        /// <summary>Поменять и вернуть себя — для копии с поправкой.</summary>
+        public ViewSettings With(Action<ViewSettings> change)
+        {
+            change(this);
+            return this;
+        }
+
         public ViewSettings Copy()
         {
             var copy = (ViewSettings)MemberwiseClone();

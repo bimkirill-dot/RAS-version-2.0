@@ -49,6 +49,15 @@ namespace RASv2.ClashAnalysis.UI
             CategoriesSummary.Text = CategoryChoice.Summary(s);
             Result = s;
             Kind_Changed(null, null);
+            Isolate_Changed(null, null);
+        }
+
+        /// <summary>«Категории элементов» — только без «Изолировать»: при нём категории не действуют.</summary>
+        private void Isolate_Changed(object sender, RoutedEventArgs e)
+        {
+            if (CategoriesRow == null) return; // во время InitializeComponent
+            CategoriesRow.IsEnabled = Isolate.IsChecked != true;
+            CategoriesRow.Opacity = CategoriesRow.IsEnabled ? 1 : 0.45;
         }
 
         /// <summary>«Категории элементов»: список — из открытой модели; выбранное сохраняется вместе с остальным («Сохранить»).</summary>

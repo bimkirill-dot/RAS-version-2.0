@@ -113,12 +113,15 @@
 
         <TextBlock Text="Категории элементов" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10" />
 
-        <!-- поиск и «Показать отмеченные» -->
+        <!-- поиск, «Показать отмеченные», «Показать скрытые» (одно из двух) -->
         <DockPanel Grid.Row="1" Margin="0,0,0,10">
+            <CheckBox x:Name="OnlyHidden" DockPanel.Dock="Right" Content="Показать скрытые" Margin="16,0,0,0"
+                      Checked="Show_Changed" Unchecked="Filter_Changed" />
             <CheckBox x:Name="OnlyChecked" DockPanel.Dock="Right" Content="Показать отмеченные" Margin="16,0,0,0"
-                      Checked="Filter_Changed" Unchecked="Filter_Changed" />
+                      Checked="Show_Changed" Unchecked="Filter_Changed" />
             <Grid>
-                <TextBox x:Name="Search" TextChanged="Filter_Changed" />
+                <!-- подсказка — пока поле пустое и не в фокусе: иначе курсор стоит перед её текстом, будто не в начале строки -->
+                <TextBox x:Name="Search" TextChanged="Filter_Changed" GotKeyboardFocus="Filter_Changed" LostKeyboardFocus="Filter_Changed" />
                 <TextBlock x:Name="SearchHint" Text="Поиск по категории" Foreground="{DynamicResource Muted}" Margin="9,0,0,0"
                            VerticalAlignment="Center" IsHitTestVisible="False" />
             </Grid>
