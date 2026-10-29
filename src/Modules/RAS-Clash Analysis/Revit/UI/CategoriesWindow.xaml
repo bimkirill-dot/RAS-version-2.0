@@ -1,0 +1,187 @@
+<Window x:Class="RASv2.ClashAnalysis.UI.CategoriesWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:sys="clr-namespace:System;assembly=mscorlib"
+        Title="Категории элементов" Width="760" Height="680" MinWidth="620" MinHeight="420" ResizeMode="CanResizeWithGrip"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="{DynamicResource Bg}" Foreground="{DynamicResource Fg}" FontFamily="Segoe UI" FontSize="13">
+    <!-- «Категории элементов» из «Настроек вида» (DECISIONS.md модуля): раскладка — по рисунку разработчика (29.10.2026): поиск,
+         два списка с галочками — исходный файл и связанный, между ними — черта. Кнопки, поля, кисти — общие образцы ядра. -->
+    <Window.Resources>
+        <sys:String x:Key="ShownTip">Для категорий, которые сейчас в списке (с поиском — только для найденных)</sys:String>
+        <Style x:Key="Hint" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Muted}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="ColumnHead" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,8,0,2" />
+        </Style>
+        <Style x:Key="SmallLink" TargetType="Button" BasedOn="{StaticResource LinkButton}">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Margin" Value="0,0,14,0" />
+        </Style>
+        <!-- ▸ / ▾ у категории с подкатегориями; у остальных — пустое место той же ширины -->
+        <Style x:Key="Expander" TargetType="ToggleButton">
+            <Setter Property="Width" Value="18" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border Background="Transparent">
+                            <TextBlock x:Name="G" Text="&#xE76C;" FontFamily="Segoe MDL2 Assets" FontSize="9" Foreground="{DynamicResource Muted}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="G" Property="Text" Value="&#xE70D;" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding HasChildren}" Value="False">
+                    <Setter Property="Visibility" Value="Hidden" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <!-- строка списка: без выделения, как у списка галочек -->
+        <Style x:Key="Row" TargetType="ListBoxItem">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="B" Background="Transparent" Padding="6,2">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="B" Property="Background" Value="{DynamicResource Row}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="List" TargetType="ListBox">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="ItemContainerStyle" Value="{StaticResource Row}" />
+            <Setter Property="VirtualizingPanel.IsVirtualizing" Value="True" />
+            <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling" />
+            <Setter Property="ScrollViewer.CanContentScroll" Value="True" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+        </Style>
+        <Style x:Key="SubIndent" TargetType="StackPanel">
+            <Setter Property="Orientation" Value="Horizontal" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsSub}" Value="True">
+                    <Setter Property="Margin" Value="22,0,0,0" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <DataTemplate x:Key="HostRow">
+            <StackPanel Style="{StaticResource SubIndent}">
+                <ToggleButton Style="{StaticResource Expander}" IsChecked="{Binding Expanded}" />
+                <CheckBox IsChecked="{Binding Host}" Margin="4,2,0,2" ToolTip="{Binding Tip}">
+                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                </CheckBox>
+            </StackPanel>
+        </DataTemplate>
+        <DataTemplate x:Key="LinkRow">
+            <StackPanel Style="{StaticResource SubIndent}">
+                <ToggleButton Style="{StaticResource Expander}" IsChecked="{Binding Expanded}" />
+                <CheckBox IsChecked="{Binding Link}" Margin="4,2,0,2" ToolTip="{Binding Tip}">
+                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                </CheckBox>
+            </StackPanel>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid Margin="20,14,20,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="Категории элементов" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10" />
+
+        <!-- поиск и «Показать отмеченные» -->
+        <DockPanel Grid.Row="1" Margin="0,0,0,10">
+            <CheckBox x:Name="OnlyChecked" DockPanel.Dock="Right" Content="Показать отмеченные" Margin="16,0,0,0"
+                      Checked="Filter_Changed" Unchecked="Filter_Changed" />
+            <Grid>
+                <TextBox x:Name="Search" TextChanged="Filter_Changed" />
+                <TextBlock x:Name="SearchHint" Text="Поиск по категории" Foreground="{DynamicResource Muted}" Margin="9,0,0,0"
+                           VerticalAlignment="Center" IsHitTestVisible="False" />
+            </Grid>
+        </DockPanel>
+
+        <!-- два списка: исходный файл | связанный файл -->
+        <Border Grid.Row="2" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="4">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Background="{DynamicResource Row}" Padding="10,0,10,8">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource ColumnHead}" Text="Исходный файл" />
+                            <TextBlock x:Name="HostCount" Style="{StaticResource Hint}" HorizontalAlignment="Center" Margin="0,0,0,6" />
+                            <WrapPanel HorizontalAlignment="Center">
+                                <Button Style="{StaticResource SmallLink}" Content="Выбрать все" Tag="host" Click="All_Click" ToolTip="{StaticResource ShownTip}" />
+                                <Button Style="{StaticResource SmallLink}" Content="Снять выделение" Tag="host" Click="None_Click" ToolTip="{StaticResource ShownTip}" />
+                                <Button Style="{StaticResource SmallLink}" Content="Обратить выбор" Tag="host" Click="Invert_Click" Margin="0" ToolTip="{StaticResource ShownTip}" />
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+                    <ListBox x:Name="HostList" Style="{StaticResource List}" ItemTemplate="{StaticResource HostRow}" />
+                </DockPanel>
+
+                <Border Grid.Column="1" Width="3" Background="{DynamicResource Muted}" />
+
+                <DockPanel Grid.Column="2">
+                    <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Background="{DynamicResource Row}" Padding="10,0,10,8">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource ColumnHead}" Text="Связанный файл" />
+                            <TextBlock x:Name="LinkCount" Style="{StaticResource Hint}" HorizontalAlignment="Center" Margin="0,0,0,6" />
+                            <WrapPanel HorizontalAlignment="Center">
+                                <Button Style="{StaticResource SmallLink}" Content="Выбрать все" Tag="link" Click="All_Click" ToolTip="{StaticResource ShownTip}" />
+                                <Button Style="{StaticResource SmallLink}" Content="Снять выделение" Tag="link" Click="None_Click" ToolTip="{StaticResource ShownTip}" />
+                                <Button Style="{StaticResource SmallLink}" Content="Обратить выбор" Tag="link" Click="Invert_Click" Margin="0" ToolTip="{StaticResource ShownTip}" />
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+                    <ListBox x:Name="LinkList" Style="{StaticResource List}" ItemTemplate="{StaticResource LinkRow}" />
+                </DockPanel>
+            </Grid>
+        </Border>
+
+        <!-- внизу: импорт, экспорт, по умолчанию, ошибка, кнопки -->
+        <DockPanel Grid.Row="4" Margin="0,12,0,0">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Bottom">
+                <Button Content="Готово" Style="{StaticResource PrimaryButton}" IsDefault="True" Click="Done_Click" />
+                <Button Content="Отмена" IsCancel="True" Margin="8,0,0,0" />
+            </StackPanel>
+            <StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="Импорт…" Click="Import_Click" ToolTip="Взять настройку категорий из файла — например, от коллеги" />
+                    <Button Content="Экспорт…" Margin="8,0,0,0" Click="Export_Click" ToolTip="Сохранить настройку категорий в файл — передать коллеге" />
+                    <Button Style="{StaticResource LinkButton}" Content="вернуть по умолчанию" Margin="16,0,0,0" Click="Defaults_Click"
+                            ToolTip="Все категории видны" />
+                </StackPanel>
+                <TextBlock x:Name="Error" Foreground="{DynamicResource Error}" TextWrapping="Wrap" Margin="0,6,16,0" Visibility="Collapsed" />
+            </StackPanel>
+        </DockPanel>
+    </Grid>
+</Window>

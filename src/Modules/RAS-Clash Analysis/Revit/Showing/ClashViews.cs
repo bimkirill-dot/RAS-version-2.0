@@ -31,6 +31,8 @@ namespace RASv2.ClashAnalysis.Showing
             public bool SeenOpen;
             /// <summary>Свои элементы модели, перекрашенные в виде, — снять покраску при следующей коллизии.</summary>
             public List<ElementId> Painted = new List<ElementId>();
+            /// <summary>Свои элементы модели, скрытые в виде по «Категориям элементов», — снова показать при следующей коллизии.</summary>
+            public List<ElementId> Hidden = new List<ElementId>();
             /// <summary>3D-вид обрезан «Границами вида» — его рамку человек мог подвинуть: она и есть его границы.</summary>
             public bool ViewBounds;
         }
@@ -153,6 +155,14 @@ namespace RASv2.ClashAnalysis.Showing
             if (t != null) t.Painted = ids;
         }
 
+        public List<ElementId> Hidden(Document doc, ElementId view) => Find(doc, view)?.Hidden ?? new List<ElementId>();
+
+        public void SetHidden(Document doc, ElementId view, List<ElementId> ids)
+        {
+            var t = Find(doc, view);
+            if (t != null) t.Hidden = ids;
+        }
+
         /// <summary>Модель открыта: оставшиеся виды — убрать в ближайший простой.</summary>
         public void Opened(Document doc)
         {
@@ -215,6 +225,8 @@ namespace RASv2.ClashAnalysis.Showing
         /// </summary>
         public ParameterFilterElement NewFilter(Document doc, string what, ICollection<ElementId> categories, ElementFilter rule)
         {
+            // в именах элементов Revit не принимает \ : { } [ ] | ; < > ? ` ~ — у названий категорий они бывают
+            what = new string(what.Where(ch => "\\:{}[]|;<>?`~".IndexOf(ch) < 0).ToArray());
             var name = NamePrefix + ", " + what + " (" + _user + ")";
             var old = new FilteredElementCollector(doc).OfClass(typeof(ParameterFilterElement)).Where(f => f.Name == name).Select(f => f.Id).ToList();
             if (old.Count > 0) doc.Delete(old);

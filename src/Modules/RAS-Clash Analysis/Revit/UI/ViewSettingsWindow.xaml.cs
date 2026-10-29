@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -17,8 +18,13 @@ namespace RASv2.ClashAnalysis.UI
 
         public ViewSettings Result { get; private set; }
 
-        public ViewSettingsWindow(ViewSettings settings)
+        // категории открытой модели для «Категорий элементов»; null — модель не открыта
+        private readonly Func<List<CategoryItem>> _categories;
+        private List<string> _hiddenHost, _hiddenLink;
+
+        public ViewSettingsWindow(ViewSettings settings, Func<List<CategoryItem>> categories)
         {
+            _categories = categories;
             RASv2.Core.WindowTheme.Apply(this);
             InitializeComponent();
             var s = settings.Copy();
@@ -38,8 +44,28 @@ namespace RASv2.ClashAnalysis.UI
             StyleBox.SelectedIndex = Math.Max(0, Array.IndexOf(StyleOrder, s.Style));
             WarnUnloaded.IsChecked = s.WarnUnloaded;
             WarnMissingLink.IsChecked = s.WarnMissingLink;
+            _hiddenHost = s.HiddenHost;
+            _hiddenLink = s.HiddenLink;
+            CategoriesSummary.Text = CategoryChoice.Summary(s);
             Result = s;
             Kind_Changed(null, null);
+        }
+
+        /// <summary>«Категории элементов»: список — из открытой модели; выбранное сохраняется вместе с остальным («Сохранить»).</summary>
+        private void Categories_Click(object sender, RoutedEventArgs e)
+        {
+            var items = _categories?.Invoke();
+            if (items == null || items.Count == 0)
+            {
+                Fail("Откройте модель — список категорий берётся из неё.", (Control)sender);
+                return;
+            }
+            Error.Visibility = Visibility.Collapsed;
+            var window = new CategoriesWindow(items, _hiddenHost, _hiddenLink) { Owner = this };
+            if (window.ShowDialog() != true) return;
+            _hiddenHost = window.HiddenHost;
+            _hiddenLink = window.HiddenLink;
+            CategoriesSummary.Text = CategoryChoice.Summary(new ViewSettings { HiddenHost = _hiddenHost, HiddenLink = _hiddenLink });
         }
 
         /// <summary>«Границы вида» — только у 3D-вида; выбраны, а тип уже другой — «Авто».</summary>
@@ -77,6 +103,8 @@ namespace RASv2.ClashAnalysis.UI
             s.Style = StyleOrder[Math.Max(0, StyleBox.SelectedIndex)];
             s.WarnUnloaded = WarnUnloaded.IsChecked == true;
             s.WarnMissingLink = WarnMissingLink.IsChecked == true;
+            s.HiddenHost = _hiddenHost;
+            s.HiddenLink = _hiddenLink;
             Result = s.Normalize();
             DialogResult = true;
         }

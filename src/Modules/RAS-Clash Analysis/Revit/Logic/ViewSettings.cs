@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.Serialization;
@@ -41,6 +42,9 @@ namespace RASv2.ClashAnalysis.Logic
         /// </summary>
         [DataMember(Name = "clashTransparency")] public int ClashTransparency { get; set; }
         [DataMember(Name = "otherTransparency")] public int OtherTransparency { get; set; }
+        /// <summary>Скрытые категории — окно «Категории элементов» (CategoryChoice): в исходном файле и в связанном.</summary>
+        [DataMember(Name = "hiddenHost")] public List<string> HiddenHost { get; set; }
+        [DataMember(Name = "hiddenLink")] public List<string> HiddenLink { get; set; }
         [DataMember(Name = "warnUnloaded")] public bool WarnUnloaded { get; set; }
         [DataMember(Name = "warnMissingLink")] public bool WarnMissingLink { get; set; }
 
@@ -61,6 +65,8 @@ namespace RASv2.ClashAnalysis.Logic
             Paint = true;
             ClashTransparency = 0;
             OtherTransparency = 0;
+            HiddenHost = new List<string>();
+            HiddenLink = new List<string>();
             WarnUnloaded = true;
             WarnMissingLink = true;
         }
@@ -74,10 +80,18 @@ namespace RASv2.ClashAnalysis.Logic
             MarginMeters = Math.Max(MinMargin, Math.Min(MaxMargin, MarginMeters));
             ClashTransparency = Math.Max(0, Math.Min(MaxTransparency, ClashTransparency));
             OtherTransparency = Math.Max(0, Math.Min(MaxTransparency, OtherTransparency));
+            HiddenHost = CategoryChoice.Clean(HiddenHost);
+            HiddenLink = CategoryChoice.Clean(HiddenLink);
             return this;
         }
 
-        public ViewSettings Copy() => (ViewSettings)MemberwiseClone();
+        public ViewSettings Copy()
+        {
+            var copy = (ViewSettings)MemberwiseClone();
+            copy.HiddenHost = new List<string>(HiddenHost ?? new List<string>());
+            copy.HiddenLink = new List<string>(HiddenLink ?? new List<string>());
+            return copy;
+        }
 
         /// <summary>Прочитать; файла нет или он испорчен — значения по умолчанию.</summary>
         public static ViewSettings Load(string path)

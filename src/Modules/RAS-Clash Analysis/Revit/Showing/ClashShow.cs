@@ -24,7 +24,7 @@ namespace RASv2.ClashAnalysis.Showing
         /// <summary>Цвета Navisworks по умолчанию: первый элемент — красный, второй — зелёный.</summary>
         private static readonly Color[] Colors = { new Color(255, 0, 0), new Color(0, 255, 0) };
 
-        private sealed class Found
+        internal sealed class Found
         {
             public Element Element;
             /// <summary>Связь, в которой элемент; null — элемент самой модели.</summary>
@@ -130,7 +130,7 @@ namespace RASv2.ClashAnalysis.Showing
                 Transparent(doc, view, otherTransparency);
                 PaintOwn(doc, view, views, found, settings.Paint, clashTransparency);
                 PaintLinked(doc, view, views, found, settings.Paint, clashTransparency);
-                Isolate(doc, view, views, found, settings.Isolate);
+                Isolate(doc, view, views, found, settings);
                 t.Commit();
             }
 
@@ -249,98 +249,20 @@ namespace RASv2.ClashAnalysis.Showing
         }
 
         /// <summary>
-        /// «Изолировать»: в самой модели — временно только элементы пары, обобщённые модели (отверстия) и рамка 3D-вида; в связях —
-        /// только категории элементов коллизии (элемент связи по отдельности Revit не изолирует), обобщённых моделей связей не видно.
+        /// Категории (ClashCategories: «Категории элементов» и «Изолировать») и «Изолировать»: в самой модели — временно только
+        /// элементы пары, обобщённые модели (отверстия) и рамка 3D-вида; в связях — только категории элементов коллизии и
+        /// обобщённые модели (элемент связи по отдельности Revit не изолирует).
         /// </summary>
-        private static void Isolate(Document doc, View view, ClashViews views, List<Found> found, bool isolate)
+        private static void Isolate(Document doc, View view, ClashViews views, List<Found> found, ViewSettings settings)
         {
             if (view.IsInTemporaryViewMode(TemporaryViewMode.TemporaryHideIsolate)) view.DisableTemporaryViewMode(TemporaryViewMode.TemporaryHideIsolate);
-            HideOtherCategories(doc, view, found, isolate);
-            if (!isolate) return;
-            var generic = new FilteredElementCollector(doc, view.Id).OfCategory(BuiltInCategory.OST_GenericModel).WhereElementIsNotElementType().ToElementIds();
+            ClashCategories.Apply(doc, view, views, found, settings);
+            if (!settings.Isolate) return;
             var ids = found.Select(f => f.Link == null ? f.Element.Id : f.Link.Id)
-                .Concat(generic)
+                .Concat(new FilteredElementCollector(doc, view.Id).OfCategory(BuiltInCategory.OST_GenericModel).WhereElementIsNotElementType().ToElementIds())
                 .Concat(view is View3D ? new FilteredElementCollector(doc, view.Id).OfCategory(BuiltInCategory.OST_SectionBox).ToElementIds() : new List<ElementId>())
                 .Distinct().ToList();
             view.IsolateElementsTemporary(ids);
-            HideLinkedGeneric(doc, view, views, found, generic);
-        }
-
-        /// <summary>
-        /// «Изолировать»: обобщённые модели связей не видны (разработчик, 29.10.2026) — видны только обобщённые модели открытой
-        /// модели (отверстия правят в ней). Скрыть категорию только в связи Revit API не умеет («Покраска элемента связи — фильтром
-        /// вида», DECISIONS.md): связь «по основному виду» берёт видимость категорий нашего вида, а там обобщённые модели нужны.
-        /// Поэтому — фильтр нашего вида «обобщённые модели, тип — не из этих», скрытый: типы своих обобщённых моделей вида и
-        /// элемента коллизии, если он сам обобщённая модель связи, — исключения. Тип — по номеру («Тип», «Семейство и типоразмер»
-        /// — какой Revit позволит в фильтре); номер типа в связи может случайно совпасть с номером своего — такая обобщённая модель
-        /// связи останется видна (редкость). Номер не позволен — по имени типа: останутся видны обобщённые модели связи с тем же
-        /// именем типа, что у своих (те же семейства отверстий). Что выбрано — в журнале.
-        /// </summary>
-        private static void HideLinkedGeneric(Document doc, View view, ClashViews views, List<Found> found, ICollection<ElementId> own)
-        {
-            var category = new ElementId(BuiltInCategory.OST_GenericModel);
-            var categories = new List<ElementId> { category };
-            try
-            {
-                var types = own.Select(id => doc.GetElement(id)?.GetTypeId())
-                    .Where(id => id != null && id != ElementId.InvalidElementId)
-                    .Select(id => (Id: id, Name: doc.GetElement(id)?.Name))
-                    .Concat(found.Where(f => f.Link != null && category.Equals(f.Element.Category?.Id))
-                        .Select(f => (Id: f.Element.GetTypeId(), Name: f.Element.Document.GetElement(f.Element.GetTypeId())?.Name)))
-                    .ToList();
-                var filterable = ParameterFilterUtilities.GetFilterableParametersInCommon(doc, categories);
-                var idParam = new[] { BuiltInParameter.ELEM_TYPE_PARAM, BuiltInParameter.ELEM_FAMILY_AND_TYPE_PARAM }
-                    .Where(p => filterable.Contains(new ElementId(p))).Select(p => (BuiltInParameter?)p).FirstOrDefault();
-                var byName = new ElementId(BuiltInParameter.ALL_MODEL_TYPE_NAME);
-                List<FilterRule> rules;
-                string how;
-                if (idParam != null)
-                {
-                    var byId = new ElementId(idParam.Value);
-                    rules = types.Select(t => t.Id).Distinct().Select(id => ParameterFilterRuleFactory.CreateNotEqualsRule(byId, id)).ToList();
-                    how = "по номеру типа (" + idParam.Value + ")";
-                }
-                else if (filterable.Contains(byName))
-                {
-                    rules = types.Select(t => t.Name).Where(n => !string.IsNullOrEmpty(n)).Distinct()
-                        .Select(n => ParameterFilterRuleFactory.CreateNotEqualsRule(byName, n)).ToList();
-                    how = "по имени типа";
-                }
-                else
-                {
-                    views.Log.Info("Изолировать: обобщённые модели связей не скрыты — Revit не позволяет фильтр по типу обобщённых моделей");
-                    return;
-                }
-                var filter = views.NewFilter(doc, "обобщённые модели связей", categories, rules.Count == 0 ? null : new ElementParameterFilter(rules));
-                view.AddFilter(filter.Id);
-                view.SetFilterVisibility(filter.Id, false);
-                views.Log.Info($"Изолировать: обобщённые модели связей скрыты фильтром {how}, своих типов — {rules.Count}");
-            }
-            catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException || ex is ArgumentException || ex is InvalidOperationException)
-            {
-                views.Log.Error("Изолировать: обобщённые модели связей не скрыты", ex);
-            }
-        }
-
-        /// <summary>
-        /// «Изолировать» и в связях — по категориям (разработчик, 19.10.2026: «так же, как покраску, — по категории скрывать то,
-        /// что к коллизии не относится»): в нашем виде скрыты все категории модели, кроме категорий элементов коллизии и
-        /// обобщённых моделей — ими сделаны отверстия, их правят на том же виде (разработчик, 23.10.2026); связь — «по основному
-        /// виду», и в ней скрывается то же. Связи как таковые не скрываются. Без «Изолировать» — всё видно.
-        /// </summary>
-        private static void HideOtherCategories(Document doc, View view, List<Found> found, bool isolate)
-        {
-            var keep = new HashSet<ElementId>(found.Select(f => (f.Element.Category?.Parent ?? f.Element.Category)?.Id).Where(id => id != null))
-            {
-                new ElementId(BuiltInCategory.OST_GenericModel)
-            };
-            var links = new ElementId(BuiltInCategory.OST_RvtLinks);
-            foreach (Category c in doc.Settings.Categories)
-            {
-                if (c.CategoryType != CategoryType.Model || c.Id == links || !c.get_AllowsVisibilityControl(view)) continue;
-                var hide = isolate && !keep.Contains(c.Id);
-                if (view.GetCategoryHidden(c.Id) != hide) view.SetCategoryHidden(c.Id, hide);
-            }
         }
 
         private static DisplayStyle Style(string style) => style switch

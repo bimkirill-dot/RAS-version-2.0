@@ -115,6 +115,47 @@ namespace RASv2.Tests
                 Check(ViewRules.CropToView(s, ViewSettings.Kind3D) && !ViewRules.CropToView(s, ViewSettings.KindPlan) && !ViewRules.CropToView(s, ViewSettings.KindSection),
                     "«Границы вида» — только у 3D-вида");
             });
+            yield return Case("категории элементов: хранятся скрытые, подкатегории — везде, копия не делит списки", () =>
+            {
+                var s = new ViewSettings();
+                Check(s.HiddenHost.Count == 0 && s.HiddenLink.Count == 0 && CategoryChoice.Summary(s) == "Все категории видны", "по умолчанию видно всё");
+                var sub = CategoryChoice.SubKey("OST_Walls", "Отделка");
+                Check(sub == "OST_Walls|Отделка" && CategoryChoice.IsSub(sub) && !CategoryChoice.IsSub("OST_Walls"), "ключ подкатегории");
+                s.HiddenLink = new List<string> { "OST_GenericModel", " ", "OST_GenericModel", sub };
+                s.HiddenHost = new List<string> { "OST_Walls" };
+                s.Normalize();
+                Check(s.HiddenLink.Count == 2 && CategoryChoice.SubHidden(s, sub) && !CategoryChoice.SubHidden(s, "OST_Walls|Несущий слой"),
+                    "пустые и повторы — прочь; подкатегория скрыта хоть в одном — скрыта");
+                Check(CategoryChoice.Summary(s) == "Скрыто: в исходном файле — 1, в связанном — 2", "подпись у кнопки: " + CategoryChoice.Summary(s));
+                var copy = s.Copy();
+                copy.HiddenHost.Add("OST_Floors");
+                Check(s.HiddenHost.Count == 1, "копия — свои списки (окно «Отмена» не меняет настройки)");
+                var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "rasv2-tests-" + Guid.NewGuid().ToString("N"));
+                System.IO.Directory.CreateDirectory(dir);
+                try
+                {
+                    var path = System.IO.Path.Combine(dir, "view.json");
+                    s.Save(path);
+                    var r = ViewSettings.Load(path);
+                    Check(r.HiddenHost.SequenceEqual(s.HiddenHost) && r.HiddenLink.SequenceEqual(s.HiddenLink), "настройки — записаны и прочитаны");
+                    var file = System.IO.Path.Combine(dir, "Категории вида.json");
+                    CategoryFile.Save(file, new[] { "OST_Walls" }, new[] { "OST_GenericModel", "OST_GenericModel" });
+                    var f = CategoryFile.Load(file);
+                    Check(f.HiddenHost.SequenceEqual(new[] { "OST_Walls" }) && f.HiddenLink.SequenceEqual(new[] { "OST_GenericModel" }), "экспорт — импорт");
+                    Check(System.IO.File.ReadAllText(file).Contains(CategoryFile.Mark), "в файле — пометка, что это за файл");
+                    var thrown = false;
+                    try { CategoryFile.Load(path); } catch (System.IO.InvalidDataException) { thrown = true; }
+                    Check(thrown, "чужой файл (настройки вида) — не импортируется");
+                    System.IO.File.WriteAllText(file, "не JSON");
+                    thrown = false;
+                    try { CategoryFile.Load(file); } catch (System.IO.InvalidDataException) { thrown = true; }
+                    Check(thrown, "испорченный файл — понятная ошибка");
+                }
+                finally
+                {
+                    System.IO.Directory.Delete(dir, true);
+                }
+            });
             yield return Case("прозрачность: и при «Изолировать»; остальные прозрачны — у элементов коллизии не меньше 1 %", () =>
             {
                 var s = new ViewSettings();

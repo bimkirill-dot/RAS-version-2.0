@@ -10,7 +10,7 @@ namespace RASv2.ClashAnalysis
     {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            BridgeApp.Instance?.ShowSettings(commandData.Application.MainWindowHandle);
+            BridgeApp.Instance?.ShowSettings(commandData.Application.MainWindowHandle, commandData.Application.ActiveUIDocument?.Document);
             return Result.Succeeded;
         }
     }

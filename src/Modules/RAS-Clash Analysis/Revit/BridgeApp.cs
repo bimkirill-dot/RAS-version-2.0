@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Windows.Interop;
@@ -61,7 +62,7 @@ namespace RASv2.ClashAnalysis
                                       "Коллизий нет — сайт так и напишет.";
 
             var settings = context.AddButton("ViewSettings", "Настройки\nвида", typeof(ViewSettingsCommand),
-                "Как открывать коллизию по «Показать в Revit»: тип вида, обрезка, покраска, прозрачность, стиль, предупреждения", icon: "ViewSettings");
+                "Как открывать коллизию по «Показать в Revit»: тип вида, категории элементов, обрезка, покраска, прозрачность, стиль, предупреждения", icon: "ViewSettings");
             settings.AvailabilityClassName = typeof(AlwaysAvailable).FullName;
             settings.LongDescription = "Настройки — ваши, у коллег свои. На сайте коллизий «Показать в Revit» открывает личный вид: " +
                                        "3D, план, разрез или «Авто» по элементам; закрыли вкладку вида — он удаляется из модели.";
@@ -98,11 +99,12 @@ namespace RASv2.ClashAnalysis
         }
 
         /// <summary>Окно «Настройки вида»; сохранённое действует со следующего «Показать в Revit».</summary>
-        internal void ShowSettings(IntPtr owner)
+        internal void ShowSettings(IntPtr owner, Document doc)
         {
             try
             {
-                var window = new ViewSettingsWindow(_settings);
+                // список категорий — из открытой модели, в контексте команды (окно модальное)
+                var window = new ViewSettingsWindow(_settings, doc == null || doc.IsFamilyDocument ? null : (Func<List<CategoryItem>>)(() => ClashCategories.List(doc)));
                 if (owner != IntPtr.Zero) new WindowInteropHelper(window).Owner = owner;
                 if (window.ShowDialog() != true) return;
                 window.Result.Save(_settingsPath);

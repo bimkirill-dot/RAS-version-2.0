@@ -55,6 +55,11 @@
 
         <TextBlock Style="{StaticResource Head}" Text="Отображение пересечения" />
         <CheckBox x:Name="Isolate" Content="Изолировать элементы коллизии" />
+        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+            <Button Content="Категории элементов…" Click="Categories_Click"
+                    ToolTip="Какие категории видны в исходном файле и в связанном" />
+            <TextBlock x:Name="CategoriesSummary" Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center" Margin="12,0,0,0" />
+        </StackPanel>
 
         <TextBlock Style="{StaticResource Head}" Text="Обрезка вида" />
         <RadioButton x:Name="CropAuto" GroupName="crop" Content="Авто — по размеру места коллизии" />
