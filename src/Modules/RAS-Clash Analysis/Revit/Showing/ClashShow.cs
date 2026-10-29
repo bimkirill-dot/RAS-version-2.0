@@ -271,30 +271,54 @@ namespace RASv2.ClashAnalysis.Showing
         /// модели (отверстия правят в ней). Скрыть категорию только в связи Revit API не умеет («Покраска элемента связи — фильтром
         /// вида», DECISIONS.md): связь «по основному виду» берёт видимость категорий нашего вида, а там обобщённые модели нужны.
         /// Поэтому — фильтр нашего вида «обобщённые модели, тип — не из этих», скрытый: типы своих обобщённых моделей вида и
-        /// элемента коллизии, если он сам обобщённая модель связи, — исключения. Номер типа в связи может случайно совпасть с номером
-        /// типа своей обобщённой модели — такая обобщённая модель связи останется видна (редкость).
+        /// элемента коллизии, если он сам обобщённая модель связи, — исключения. Тип — по номеру («Тип», «Семейство и типоразмер»
+        /// — какой Revit позволит в фильтре); номер типа в связи может случайно совпасть с номером своего — такая обобщённая модель
+        /// связи останется видна (редкость). Номер не позволен — по имени типа: останутся видны обобщённые модели связи с тем же
+        /// именем типа, что у своих (те же семейства отверстий). Что выбрано — в журнале.
         /// </summary>
         private static void HideLinkedGeneric(Document doc, View view, ClashViews views, List<Found> found, ICollection<ElementId> own)
         {
             var category = new ElementId(BuiltInCategory.OST_GenericModel);
             var categories = new List<ElementId> { category };
-            var type = new ElementId(BuiltInParameter.ELEM_TYPE_PARAM);
             try
             {
-                if (!ParameterFilterUtilities.GetFilterableParametersInCommon(doc, categories).Contains(type)) return;
-                var keep = own.Select(id => doc.GetElement(id)?.GetTypeId())
-                    .Concat(found.Where(f => f.Link != null && category.Equals(f.Element.Category?.Id)).Select(f => f.Element.GetTypeId()))
+                var types = own.Select(id => doc.GetElement(id)?.GetTypeId())
                     .Where(id => id != null && id != ElementId.InvalidElementId)
-                    .Distinct().ToList();
-                ElementFilter rule = keep.Count == 0 ? null
-                    : new ElementParameterFilter(keep.Select(id => ParameterFilterRuleFactory.CreateNotEqualsRule(type, id)).ToList());
-                var filter = views.NewFilter(doc, "обобщённые модели связей", categories, rule);
+                    .Select(id => (Id: id, Name: doc.GetElement(id)?.Name))
+                    .Concat(found.Where(f => f.Link != null && category.Equals(f.Element.Category?.Id))
+                        .Select(f => (Id: f.Element.GetTypeId(), Name: f.Element.Document.GetElement(f.Element.GetTypeId())?.Name)))
+                    .ToList();
+                var filterable = ParameterFilterUtilities.GetFilterableParametersInCommon(doc, categories);
+                var idParam = new[] { BuiltInParameter.ELEM_TYPE_PARAM, BuiltInParameter.ELEM_FAMILY_AND_TYPE_PARAM }
+                    .Where(p => filterable.Contains(new ElementId(p))).Select(p => (BuiltInParameter?)p).FirstOrDefault();
+                var byName = new ElementId(BuiltInParameter.ALL_MODEL_TYPE_NAME);
+                List<FilterRule> rules;
+                string how;
+                if (idParam != null)
+                {
+                    var byId = new ElementId(idParam.Value);
+                    rules = types.Select(t => t.Id).Distinct().Select(id => ParameterFilterRuleFactory.CreateNotEqualsRule(byId, id)).ToList();
+                    how = "по номеру типа (" + idParam.Value + ")";
+                }
+                else if (filterable.Contains(byName))
+                {
+                    rules = types.Select(t => t.Name).Where(n => !string.IsNullOrEmpty(n)).Distinct()
+                        .Select(n => ParameterFilterRuleFactory.CreateNotEqualsRule(byName, n)).ToList();
+                    how = "по имени типа";
+                }
+                else
+                {
+                    views.Log.Info("Изолировать: обобщённые модели связей не скрыты — Revit не позволяет фильтр по типу обобщённых моделей");
+                    return;
+                }
+                var filter = views.NewFilter(doc, "обобщённые модели связей", categories, rules.Count == 0 ? null : new ElementParameterFilter(rules));
                 view.AddFilter(filter.Id);
                 view.SetFilterVisibility(filter.Id, false);
+                views.Log.Info($"Изолировать: обобщённые модели связей скрыты фильтром {how}, своих типов — {rules.Count}");
             }
-            catch (Autodesk.Revit.Exceptions.ApplicationException)
+            catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException || ex is ArgumentException || ex is InvalidOperationException)
             {
-                // Revit не дал такой фильтр — обобщённые модели связей остаются видны, как раньше
+                views.Log.Error("Изолировать: обобщённые модели связей не скрыты", ex);
             }
         }
 

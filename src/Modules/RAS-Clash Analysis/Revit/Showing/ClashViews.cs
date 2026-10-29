@@ -37,6 +37,7 @@ namespace RASv2.ClashAnalysis.Showing
 
         private readonly string _user;
         private readonly ModuleLog _log;
+        public ModuleLog Log => _log;
         private readonly List<Tracked> _views = new List<Tracked>();
         private readonly List<Document> _opened = new List<Document>();
         /// <summary>Рамки 3D-видов человека для «Границ вида» — по моделям (путь файла), пока Revit не закрыт.</summary>
