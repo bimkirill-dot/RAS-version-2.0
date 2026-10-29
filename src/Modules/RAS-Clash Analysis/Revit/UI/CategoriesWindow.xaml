@@ -49,8 +49,8 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
-        <!-- строка списка: без выделения, как у списка галочек -->
-        <Style x:Key="Row" TargetType="ListBoxItem">
+        <!-- строка списка: без выделения, как у списка галочек; ключ — не «Row»: так называется кисть ядра -->
+        <Style x:Key="ListRow" TargetType="ListBoxItem">
             <Setter Property="Focusable" Value="False" />
             <Setter Property="Template">
                 <Setter.Value>
@@ -70,7 +70,7 @@
         <Style x:Key="List" TargetType="ListBox">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="ItemContainerStyle" Value="{StaticResource Row}" />
+            <Setter Property="ItemContainerStyle" Value="{StaticResource ListRow}" />
             <Setter Property="VirtualizingPanel.IsVirtualizing" Value="True" />
             <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling" />
             <Setter Property="ScrollViewer.CanContentScroll" Value="True" />

@@ -92,8 +92,9 @@ namespace RASv2.ClashAnalysis.UI
             foreach (var item in items)
             {
                 if (_byKey.ContainsKey(item.Key)) continue;
-                var parent = item.Parent != null && _byKey.TryGetValue(item.Parent, out var p) ? p : null;
-                if (item.Parent != null && parent == null) continue;
+                var sub = !string.IsNullOrEmpty(item.Parent);
+                var parent = sub && _byKey.TryGetValue(item.Parent, out var p) ? p : null;
+                if (sub && parent == null) continue;
                 var row = new Row { Key = item.Key, Name = item.Name, Parent = parent };
                 parent?.Children.Add(row);
                 row.PropertyChanged += Row_Changed;

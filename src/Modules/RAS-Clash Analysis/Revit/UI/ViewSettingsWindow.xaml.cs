@@ -54,18 +54,27 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>«Категории элементов»: список — из открытой модели; выбранное сохраняется вместе с остальным («Сохранить»).</summary>
         private void Categories_Click(object sender, RoutedEventArgs e)
         {
-            var items = _categories?.Invoke();
-            if (items == null || items.Count == 0)
+            // ошибка не должна уйти из обработчика: сквозь ShowDialog окон она оставляет их сломанными, и Revit падает (29.10.2026)
+            try
             {
-                Fail("Откройте модель — список категорий берётся из неё.", (Control)sender);
-                return;
+                var items = _categories?.Invoke();
+                if (items == null || items.Count == 0)
+                {
+                    Fail("Откройте модель — список категорий берётся из неё.", (Control)sender);
+                    return;
+                }
+                Error.Visibility = Visibility.Collapsed;
+                var window = new CategoriesWindow(items, _hiddenHost, _hiddenLink) { Owner = this };
+                if (window.ShowDialog() != true) return;
+                _hiddenHost = window.HiddenHost;
+                _hiddenLink = window.HiddenLink;
+                CategoriesSummary.Text = CategoryChoice.Summary(new ViewSettings { HiddenHost = _hiddenHost, HiddenLink = _hiddenLink });
             }
-            Error.Visibility = Visibility.Collapsed;
-            var window = new CategoriesWindow(items, _hiddenHost, _hiddenLink) { Owner = this };
-            if (window.ShowDialog() != true) return;
-            _hiddenHost = window.HiddenHost;
-            _hiddenLink = window.HiddenLink;
-            CategoriesSummary.Text = CategoryChoice.Summary(new ViewSettings { HiddenHost = _hiddenHost, HiddenLink = _hiddenLink });
+            catch (Exception ex)
+            {
+                RASv2.Core.Log.Write("ClashAnalysis", "Категории элементов: окно не открылось", ex);
+                Fail("Окно «Категории элементов» не открылось — подробности в журнале плагина.", (Control)sender);
+            }
         }
 
         /// <summary>«Границы вида» — только у 3D-вида; выбраны, а тип уже другой — «Авто».</summary>
