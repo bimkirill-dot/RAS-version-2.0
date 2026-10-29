@@ -135,7 +135,30 @@ namespace RASv2.ClashAnalysis.Showing
             var view = views.Prepare3D(doc);
             view.SetSectionBox(new BoundingBoxXYZ { Min = min - Pad(margin), Max = max + Pad(margin) });
             view.IsSectionBoxActive = true;
+            ShowSectionBox(doc, view);
             return view;
+        }
+
+        /// <summary>
+        /// Рамка 3D-вида — видна (разработчик, 29.10.2026: «рамку обрезки не видно»): её прячут категория «Рамки 3D-вида»
+        /// (аннотации), выключенные аннотации вида целиком — тогда включаются только рамки, остальные аннотации скрыты, как
+        /// и были, — и скрытие самой рамки в виде. Всё это могло прийти из шаблона вида по умолчанию или остаться с прошлого раза.
+        /// </summary>
+        private static void ShowSectionBox(Document doc, View3D view)
+        {
+            var box = new ElementId(BuiltInCategory.OST_SectionBox);
+            if (view.AreAnnotationCategoriesHidden)
+            {
+                view.AreAnnotationCategoriesHidden = false;
+                foreach (Category c in doc.Settings.Categories)
+                    if (c.CategoryType == CategoryType.Annotation && c.Id != box && c.get_AllowsVisibilityControl(view) && !view.GetCategoryHidden(c.Id))
+                        view.SetCategoryHidden(c.Id, true);
+            }
+            if (view.CanCategoryBeHidden(box) && view.GetCategoryHidden(box)) view.SetCategoryHidden(box, false);
+            doc.Regenerate();
+            var hidden = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_SectionBox).WhereElementIsNotElementType()
+                .Where(e => e.IsHidden(view)).Select(e => e.Id).ToList();
+            if (hidden.Count > 0) view.UnhideElements(hidden);
         }
 
         /// <summary>
@@ -203,8 +226,8 @@ namespace RASv2.ClashAnalysis.Showing
         }
 
         /// <summary>
-        /// «Изолировать»: в самой модели — временно только элементы пары и обобщённые модели (отверстия) в виде; в связях — только
-        /// категории элементов коллизии и обобщённые модели (элемент связи по отдельности Revit не изолирует).
+        /// «Изолировать»: в самой модели — временно только элементы пары, обобщённые модели (отверстия) и рамка 3D-вида; в связях —
+        /// только категории элементов коллизии и обобщённые модели (элемент связи по отдельности Revit не изолирует).
         /// </summary>
         private static void Isolate(Document doc, View view, List<Found> found, bool isolate)
         {
@@ -213,6 +236,7 @@ namespace RASv2.ClashAnalysis.Showing
             if (!isolate) return;
             var ids = found.Select(f => f.Link == null ? f.Element.Id : f.Link.Id)
                 .Concat(new FilteredElementCollector(doc, view.Id).OfCategory(BuiltInCategory.OST_GenericModel).WhereElementIsNotElementType().ToElementIds())
+                .Concat(view is View3D ? new FilteredElementCollector(doc, view.Id).OfCategory(BuiltInCategory.OST_SectionBox).ToElementIds() : new List<ElementId>())
                 .Distinct().ToList();
             view.IsolateElementsTemporary(ids);
         }
