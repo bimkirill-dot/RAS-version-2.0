@@ -14,7 +14,8 @@ namespace RASv2.ClashAnalysis.Showing
     /// создаются заново (уровень плана и направление разреза у вида не меняются), прежний — переименовывается и закрывается.
     /// Закрыли вкладку — вид удаляется из модели; оставшийся (Revit закрыли с открытым видом, сбой) — при следующем открытии
     /// модели. Поведение — как у вида изменений RAS-Model History, код — свой (разработчик, 19.10.2026). Фильтры покраски элементов
-    /// связи («…, первый (логин)», «…, второй (логин)») — служебные, как и вид: уходят вместе с последним своим видом модели.
+    /// связи («…, первый (логин)», «…, второй (логин)») и скрытия обобщённых моделей связей при «Изолировать» («…, обобщённые
+    /// модели связей (логин)») — служебные, как и вид: уходят вместе с последним своим видом модели.
     /// Только в контексте Revit API.
     /// </summary>
     internal sealed class ClashViews
@@ -206,19 +207,20 @@ namespace RASv2.ClashAnalysis.Showing
         }
 
         /// <summary>
-        /// Фильтр покраски элемента связи (внутри транзакции; index 0 — первый элемент, 1 — второй): Revit API не перекрашивает
+        /// Свой фильтр вида (внутри транзакции; what — «первый», «второй», «обобщённые модели связей») — покраски элемента связи и
+        /// скрытия обобщённых моделей связей: Revit API не перекрашивает
         /// элемент внутри связи, а фильтр вида действует и на элементы связи (связь — «по основному виду», как по умолчанию).
         /// Прежний такой фильтр удаляется (и с вида) — правила у нового свои.
         /// </summary>
-        public ParameterFilterElement NewFilter(Document doc, int index, ICollection<ElementId> categories, ElementFilter rule)
+        public ParameterFilterElement NewFilter(Document doc, string what, ICollection<ElementId> categories, ElementFilter rule)
         {
-            var name = NamePrefix + (index == 0 ? ", первый" : ", второй") + " (" + _user + ")";
+            var name = NamePrefix + ", " + what + " (" + _user + ")";
             var old = new FilteredElementCollector(doc).OfClass(typeof(ParameterFilterElement)).Where(f => f.Name == name).Select(f => f.Id).ToList();
             if (old.Count > 0) doc.Delete(old);
             return rule == null ? ParameterFilterElement.Create(doc, name, categories) : ParameterFilterElement.Create(doc, name, categories, rule);
         }
 
-        /// <summary>Свои фильтры покраски в модели.</summary>
+        /// <summary>Свои фильтры в модели (покраски и скрытия).</summary>
         public List<ElementId> Filters(Document doc) =>
             new FilteredElementCollector(doc).OfClass(typeof(ParameterFilterElement))
                 .Where(f => f.Name.StartsWith(NamePrefix, StringComparison.Ordinal) && f.Name.EndsWith("(" + _user + ")", StringComparison.Ordinal))

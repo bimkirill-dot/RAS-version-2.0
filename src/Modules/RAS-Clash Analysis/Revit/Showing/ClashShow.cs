@@ -130,7 +130,7 @@ namespace RASv2.ClashAnalysis.Showing
                 Transparent(doc, view, otherTransparency);
                 PaintOwn(doc, view, views, found, settings.Paint, clashTransparency);
                 PaintLinked(doc, view, views, found, settings.Paint, clashTransparency);
-                Isolate(doc, view, found, settings.Isolate);
+                Isolate(doc, view, views, found, settings.Isolate);
                 t.Commit();
             }
 
@@ -250,18 +250,52 @@ namespace RASv2.ClashAnalysis.Showing
 
         /// <summary>
         /// «Изолировать»: в самой модели — временно только элементы пары, обобщённые модели (отверстия) и рамка 3D-вида; в связях —
-        /// только категории элементов коллизии и обобщённые модели (элемент связи по отдельности Revit не изолирует).
+        /// только категории элементов коллизии (элемент связи по отдельности Revit не изолирует), обобщённых моделей связей не видно.
         /// </summary>
-        private static void Isolate(Document doc, View view, List<Found> found, bool isolate)
+        private static void Isolate(Document doc, View view, ClashViews views, List<Found> found, bool isolate)
         {
             if (view.IsInTemporaryViewMode(TemporaryViewMode.TemporaryHideIsolate)) view.DisableTemporaryViewMode(TemporaryViewMode.TemporaryHideIsolate);
             HideOtherCategories(doc, view, found, isolate);
             if (!isolate) return;
+            var generic = new FilteredElementCollector(doc, view.Id).OfCategory(BuiltInCategory.OST_GenericModel).WhereElementIsNotElementType().ToElementIds();
             var ids = found.Select(f => f.Link == null ? f.Element.Id : f.Link.Id)
-                .Concat(new FilteredElementCollector(doc, view.Id).OfCategory(BuiltInCategory.OST_GenericModel).WhereElementIsNotElementType().ToElementIds())
+                .Concat(generic)
                 .Concat(view is View3D ? new FilteredElementCollector(doc, view.Id).OfCategory(BuiltInCategory.OST_SectionBox).ToElementIds() : new List<ElementId>())
                 .Distinct().ToList();
             view.IsolateElementsTemporary(ids);
+            HideLinkedGeneric(doc, view, views, found, generic);
+        }
+
+        /// <summary>
+        /// «Изолировать»: обобщённые модели связей не видны (разработчик, 29.10.2026) — видны только обобщённые модели открытой
+        /// модели (отверстия правят в ней). Скрыть категорию только в связи Revit API не умеет («Покраска элемента связи — фильтром
+        /// вида», DECISIONS.md): связь «по основному виду» берёт видимость категорий нашего вида, а там обобщённые модели нужны.
+        /// Поэтому — фильтр нашего вида «обобщённые модели, тип — не из этих», скрытый: типы своих обобщённых моделей вида и
+        /// элемента коллизии, если он сам обобщённая модель связи, — исключения. Номер типа в связи может случайно совпасть с номером
+        /// типа своей обобщённой модели — такая обобщённая модель связи останется видна (редкость).
+        /// </summary>
+        private static void HideLinkedGeneric(Document doc, View view, ClashViews views, List<Found> found, ICollection<ElementId> own)
+        {
+            var category = new ElementId(BuiltInCategory.OST_GenericModel);
+            var categories = new List<ElementId> { category };
+            var type = new ElementId(BuiltInParameter.ELEM_TYPE_PARAM);
+            try
+            {
+                if (!ParameterFilterUtilities.GetFilterableParametersInCommon(doc, categories).Contains(type)) return;
+                var keep = own.Select(id => doc.GetElement(id)?.GetTypeId())
+                    .Concat(found.Where(f => f.Link != null && category.Equals(f.Element.Category?.Id)).Select(f => f.Element.GetTypeId()))
+                    .Where(id => id != null && id != ElementId.InvalidElementId)
+                    .Distinct().ToList();
+                ElementFilter rule = keep.Count == 0 ? null
+                    : new ElementParameterFilter(keep.Select(id => ParameterFilterRuleFactory.CreateNotEqualsRule(type, id)).ToList());
+                var filter = views.NewFilter(doc, "обобщённые модели связей", categories, rule);
+                view.AddFilter(filter.Id);
+                view.SetFilterVisibility(filter.Id, false);
+            }
+            catch (Autodesk.Revit.Exceptions.ApplicationException)
+            {
+                // Revit не дал такой фильтр — обобщённые модели связей остаются видны, как раньше
+            }
         }
 
         /// <summary>
@@ -457,7 +491,7 @@ namespace RASv2.ClashAnalysis.Showing
                 {
                     if (!string.IsNullOrEmpty(type) && ParameterFilterUtilities.GetFilterableParametersInCommon(doc, categories).Contains(typeName))
                         rule = new ElementParameterFilter(ParameterFilterRuleFactory.CreateEqualsRule(typeName, type));
-                    var filter = views.NewFilter(doc, f.Index, categories, rule);
+                    var filter = views.NewFilter(doc, f.Index == 0 ? "первый" : "второй", categories, rule);
                     view.AddFilter(filter.Id);
                     view.SetFilterOverrides(filter.Id, Paint(paint ? f.Color : null, solid, transparency));
                     view.SetFilterVisibility(filter.Id, true);
