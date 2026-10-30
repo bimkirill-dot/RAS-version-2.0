@@ -35,11 +35,23 @@ namespace RASv2.ClashAnalysis.Site.Logic
         }
 
         /// <summary>
-        /// Статус каждой коллизии на день (только те, что к этому дню уже встречались); filter — проверки (null — все).
-        /// Последний день прогонов — нынешние статусы.
+        /// Дни, когда на сайте меняли статусы коллизий проверок (filter; null — все), по порядку — для «Динамики»: даты отчётов
+        /// и отметок вместе (30.10.2026).
         /// </summary>
-        public Dictionary<long, ClashState> StatesAt(DateTime day, Func<long, bool> filter = null) =>
-            Snapshot(day, filter).ToDictionary(x => x.Key, x => x.Value.State);
+        public List<DateTime> MarkDays(Func<long, bool> filter = null)
+        {
+            var test = Clashes.ToDictionary(c => c.Id, c => c.TestId);
+            return ManualStates.Where(m => test.TryGetValue(m.ClashId, out var t) && (filter == null || filter(t)))
+                .Select(m => m.Time.Date).Distinct().OrderBy(d => d).ToList();
+        }
+
+        /// <summary>
+        /// Статус каждой коллизии на день (только те, что к этому дню уже встречались); filter — проверки (null — все).
+        /// Последний день прогонов — нынешние статусы; now — другой день, с которого статусы нынешние (для «Динамики» — последний
+        /// из дней отчётов и отметок: после последнего отчёта ещё меняли статусы).
+        /// </summary>
+        public Dictionary<long, ClashState> StatesAt(DateTime day, Func<long, bool> filter = null, DateTime? now = null) =>
+            Snapshot(day, filter, now).ToDictionary(x => x.Key, x => x.Value.State);
 
         /// <summary>
         /// Коллизии, которые на день есть в последнем отчёте своей проверки: «Исправлена» у такой — отмечена на сайте и ещё
@@ -48,11 +60,11 @@ namespace RASv2.ClashAnalysis.Site.Logic
         public HashSet<long> PresentAt(DateTime day, Func<long, bool> filter = null) =>
             new HashSet<long>(Snapshot(day, filter).Where(x => x.Value.Present).Select(x => x.Key));
 
-        private Dictionary<long, (ClashState State, bool Present)> Snapshot(DateTime day, Func<long, bool> filter)
+        private Dictionary<long, (ClashState State, bool Present)> Snapshot(DateTime day, Func<long, bool> filter, DateTime? now = null)
         {
             day = day.Date;
             var reportDay = Reports.ToDictionary(r => r.Id, r => r.Day.Date);
-            var last = Days(filter).DefaultIfEmpty(DateTime.MinValue).Max();
+            var last = now?.Date ?? Days(filter).DefaultIfEmpty(DateTime.MinValue).Max();
             // у проверки — последний отчёт не позже дня
             var testReport = new Dictionary<long, (DateTime Day, long Id)>();
             foreach (var (reportId, testId) in ReportTests)

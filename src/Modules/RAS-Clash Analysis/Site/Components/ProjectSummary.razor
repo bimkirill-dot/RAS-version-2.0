@@ -1,10 +1,11 @@
 @inject ClashStore Store
+@inject UserStore Users
 @inject IJSRuntime JS
 
 @* Сводка проекта (DECISIONS.md модуля, «Сводка проекта»). Три подраздела «Сводки» на боковой панели, у каждой цифры — одно место
    (19.10.2026, разработчик: «тренд в нескольких местах… в Дашборде и Аналитике повторяющиеся данные»):
    «Дашборд» — сводно, на выбранную дату: плитки, тренд коллизий (только здесь), по категориям;
-   «Аналитика» — подробно, вкладки: по проверкам (таблица), по блокам, динамика (% исправлено по датам), рекуррентность, качество
+   «Аналитика» — подробно, вкладки: по проверкам (таблица), по блокам, динамика (% исправлено или работа отделов — по датам отчётов и отметок, 30.10.2026), рекуррентность, качество
    данных; «Сравнение отчётов» — две даты. Действуют отборы боковой панели (блок, тип проверки / категория). Деление — уровнем
    ниже выбранного: весь проект — по категориям, выбрана категория — по её подкатегориям, выбрана подкатегория (или у категории
    их нет) — по типам проверок; категорий нет — по блокам. Состояние на дату — по отчётам и журналу статусов сайта
@@ -26,6 +27,30 @@
                     <button class="@(CurrentTab == tab ? "on" : "")" @onclick="() => TabChanged.InvokeAsync(tab)">@title</button>
                 }
             </nav>
+            @* отборы «Динамики» — только на ней (30.10.2026, место — по рисунку разработчика); «Отдел» — только при линиях по отделам *@
+            @if (CurrentTab == "dynamics" && _dynAll.Count > 1)
+            {
+                <div class="dyn-bar no-print">
+                    <label class="dd">
+                        <span>Линии</span>
+                        <select @bind="_dynMode" @bind:after="BuildDynamics">
+                            <option value="level">по @LevelDative</option>
+                            <option value="dept">по отделам</option>
+                        </select>
+                    </label>
+                    <span class="@(_dynMode == "dept" ? "" : "off")"><FacetMenu Title="Отдел" Values="_dynDeptValues" Selected="_dynDepts" Changed="BuildDynamics" /></span>
+                    <span class="dyn-period">
+                    <label class="dd">
+                        <span>Период: с</span>
+                        <select @bind="_dynFrom" @bind:after="BuildDynamics">@foreach (var d in _dynAll) { <option value="@d.ToString("yyyy-MM-dd")">@Fmt.Day(d)</option> }</select>
+                    </label>
+                    <label class="dd">
+                        <span>по</span>
+                        <select @bind="_dynTo" @bind:after="BuildDynamics">@foreach (var d in _dynAll) { <option value="@d.ToString("yyyy-MM-dd")">@Fmt.Day(d)</option> }</select>
+                    </label>
+                    </span>
+                </div>
+            }
             <button class="btn small no-print" @onclick="ExportAnalytics" title="Таблица этой вкладки — файлом для Excel">Excel</button>
         </div>
 
@@ -43,9 +68,18 @@
         else if (CurrentTab == "dynamics")
         {
             <section class="sum-block">
-                <h3>Динамика исправления по @LevelDative <span class="muted small">— % исправлено на каждую дату отчётов</span></h3>
-                @if (_days.Count < 2) { <p class="muted">Нужны отчёты хотя бы двух дат — сейчас одна.</p> }
-                else { <LineChart Title="% исправлено по датам отчётов" Labels="_dayLabels" Series="_progressLines" Height="260" /> }
+                @if (_dynMode == "dept")
+                {
+                    <h3>Динамика исправления по отделам <span class="muted small">— сколько коллизий отдел отметил «Исправлена» или «Допущена», нарастающим итогом</span></h3>
+                }
+                else
+                {
+                    <h3>Динамика исправления по @LevelDative <span class="muted small">— % исправлено на даты отчётов и смены статусов</span></h3>
+                }
+                @if (_dynAll.Count < 2) { <p class="muted">Нужны хотя бы две даты — сейчас одна.</p> }
+                else if (_dynMode != "dept") { <LineChart Title="% исправлено по датам" Labels="_dynLabels" Series="_progressLines" Height="260" /> }
+                else if (_deptLines.Count == 0) { <p class="muted">За эти даты отделы не отмечали коллизии.</p> }
+                else { <LineChart Title="Коллизии, отмеченные отделами" Labels="_dynLabels" Series="_deptLines" Max="_deptMax" Unit="" PointTitle="DeptPointTitle" Height="260" /> }
             </section>
         }
         else if (CurrentTab == "recur")
@@ -315,7 +349,7 @@
     private List<DateTime> _days = new();
     private RunHistory _history;
     private Func<long, bool> _filter;
-    private List<string> _categories = new(), _matrixRows = new(), _matrixCols = new(), _dayLabels = new();
+    private List<string> _categories = new(), _matrixRows = new(), _matrixCols = new();
 
     // дашборд
     private string _dashDate;
@@ -340,7 +374,17 @@
     /// <summary>Сколько коллизий встречалось 1, 2, 3 и больше раз; сколько возвращалось после исправления.</summary>
     private List<(string Title, int Count, string Hint)> _recurDist = new();
     private List<QualityItem> _quality = new();
-    private List<(string, string, List<double?>)> _progressLines = new();
+
+    // динамика (30.10.2026): даты — отчётов и смены статусов на сайте; линии — по уровню сводки или по отделам, период — с … по
+    private List<DateTime> _dynAll = new(), _dynDays = new();
+    private List<string> _dynLabels = new();
+    private string _dynMode = "level", _dynFrom, _dynTo;
+    private HashSet<string> _dynDepts = new();
+    private List<FacetValue> _dynDeptValues = new();
+    private DepartmentWork _work;
+    private List<(string, string, List<double?>)> _progressLines = new(), _deptLines = new();
+    private List<List<DepartmentWork.Point>> _deptPoints = new();
+    private double _deptMax = 4;
     private HashSet<long> _explained = new();
 
     // сравнение
@@ -368,13 +412,14 @@
         _filter = testIds.Contains;
         _history = Store.RunHistory(ProjectId);
         _explained = Store.ExplainedClashes(ProjectId);
+        _work = Store.DepartmentWork(ProjectId);
         _days = _history.Days(_filter);
+        _dynAll = _days.Union(_history.MarkDays(_filter)).OrderBy(d => d).ToList();
         if (_days.Count == 0) return;
         _categories = Categories.Where(c => (Tests ?? new()).Any(t => CategoryOf(t.Name) == c)).ToList();
         _by = Category != null
             ? (Subcategory == null && Category != "" && (Tests ?? new()).Any(t => SubOf(t.Name) != "") ? By.Sub : By.Type)
             : _categories.Count > 0 ? By.Category : By.Block;
-        _dayLabels = _days.Select(d => d.ToString("dd.MM")).ToList();
         _matrixRows = _rows.Select(r => r.Block).Distinct().OrderBy(ReportPath.BlockOrder).ThenBy(b => b, StringComparer.CurrentCultureIgnoreCase).ToList();
         _matrixCols = LevelOrder();
 
@@ -516,26 +561,7 @@
         _blocks = _rows.GroupBy(r => r.Block).Select(g => GroupOf(g.Key, BlockTitle(g.Key), null, g))
             .OrderBy(g => _matrixRows.IndexOf(g.Key)).ToList();
 
-        // динамика: % исправлено по датам — по группам уровня
-        Func<ClashRow, string> groupOf = _by == By.Block ? r => r.Block : r => KeyOf(r.TestName, r.Type);
-        var order = _by == By.Block ? _matrixRows : _matrixCols;
-        _groups = _rows.GroupBy(groupOf).Select(g => GroupOf(g.Key, GroupTitle(g.Key), GroupColor(g.Key), g)).OrderBy(g => order.IndexOf(g.Key)).ToList();
-        var testGroup = (Tests ?? new()).ToDictionary(t => t.Id, t => _by == By.Block ? t.Block : KeyOf(t.Name, t.Type));
-        // свой цвет у группы — только когда цвета всех линий разные (категории); иначе (типы одной подкатегории, блоки) —
-        // разные цвета по порядку, чтобы линии различались
-        var own = _groups.Select(g => g.Color).ToList();
-        var ownColors = own.All(c => c != null) && own.Distinct().Count() == own.Count;
-        _progressLines = _days.Count < 2 ? new() : _groups.Select((g, i) =>
-        {
-            var color = ownColors ? "--cat-" + g.Color : LinePalette[i % LinePalette.Length];
-            var values = _days.Select(day =>
-            {
-                var cnt = new Counts();
-                foreach (var s in _history.StatesAt(day, id => _filter(id) && testGroup.TryGetValue(id, out var k) && k == g.Key).Values) cnt.Add(s);
-                return cnt.Total == 0 ? (double?)null : cnt.Percent;
-            }).ToList();
-            return (g.Title, color, values);
-        }).ToList();
+        BuildDynamics();
 
         // рекуррентность: были в отчётах двух дат и больше
         _recur = _rows.Where(r => r.Repeats >= 2)
@@ -820,11 +846,92 @@
         return Download("Дашборд", text);
     }
 
+    /// <summary>
+    /// «Динамика»: даты периода (отчёты и смены статусов); по уровню — % исправлено на каждую (статусы — на тот день, нынешние —
+    /// с последней из всех дат); по отделам — сколько отдел отметил «Исправлена» или «Допущена» нарастающим итогом (DepartmentWork).
+    /// </summary>
+    private void BuildDynamics()
+    {
+        _progressLines = new();
+        _deptLines = new();
+        _deptPoints = new();
+        _dynDeptValues = new();
+        if (_dynAll.Count < 2) return;
+        if (_dynFrom == null || !_dynAll.Any(d => d.ToString("yyyy-MM-dd") == _dynFrom)) _dynFrom = _dynAll[0].ToString("yyyy-MM-dd");
+        if (_dynTo == null || !_dynAll.Any(d => d.ToString("yyyy-MM-dd") == _dynTo)) _dynTo = _dynAll[^1].ToString("yyyy-MM-dd");
+        var from = DateTime.Parse(_dynFrom);
+        var to = DateTime.Parse(_dynTo);
+        if (from > to) (from, to) = (to, from);
+        _dynDays = _dynAll.Where(d => d >= from && d <= to).ToList();
+        _dynLabels = _dynDays.Select(d => d.ToString("dd.MM")).ToList();
+        var now = _dynAll[^1];
+
+        // по уровню: % исправлено — по группам уровня
+        Func<ClashRow, string> groupOf = _by == By.Block ? r => r.Block : r => KeyOf(r.TestName, r.Type);
+        var order = _by == By.Block ? _matrixRows : _matrixCols;
+        _groups = _rows.GroupBy(groupOf).Select(g => GroupOf(g.Key, GroupTitle(g.Key), GroupColor(g.Key), g)).OrderBy(g => order.IndexOf(g.Key)).ToList();
+        var testGroup = (Tests ?? new()).ToDictionary(t => t.Id, t => _by == By.Block ? t.Block : KeyOf(t.Name, t.Type));
+        // свой цвет у группы — только когда цвета всех линий разные (категории); иначе (типы одной подкатегории, блоки) —
+        // разные цвета по порядку, чтобы линии различались
+        var own = _groups.Select(g => g.Color).ToList();
+        var ownColors = own.All(c => c != null) && own.Distinct().Count() == own.Count;
+        if (_dynMode != "dept")
+            _progressLines = _groups.Select((g, i) =>
+            {
+                var color = ownColors ? "--cat-" + g.Color : LinePalette[i % LinePalette.Length];
+                var values = _dynDays.Select(day =>
+                {
+                    var cnt = new Counts();
+                    foreach (var s in _history.StatesAt(day, id => _filter(id) && testGroup.TryGetValue(id, out var k) && k == g.Key, now).Values) cnt.Add(s);
+                    return cnt.Total == 0 ? (double?)null : cnt.Percent;
+                }).ToList();
+                return (g.Title, color, values);
+            }).ToList();
+
+        // по отделам: все отделы списка (цвет — по месту в нём), «Без отдела» — последним, если были такие отметки
+        var lines = _work.Lines(_dynDays, _filter);
+        var names = Users.Departments().Select(d => d.Name).Union(lines.Keys.Where(k => k != DepartmentWork.NoDepartment))
+            .OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase).ToList();
+        if (lines.ContainsKey(DepartmentWork.NoDepartment)) names.Add(DepartmentWork.NoDepartment);
+        _dynDepts.IntersectWith(names);
+        _dynDeptValues = names.Select(n => new FacetValue { Key = n, Title = DeptTitle(n), Count = lines.TryGetValue(n, out var l) ? l[^1].Total : 0 }).ToList();
+        // не выбрано ни одного — отделы, которые отмечали; выбраны — они, даже если не отмечали (линия по нулям)
+        var shown = names.Where(n => _dynDepts.Count > 0 ? _dynDepts.Contains(n) : lines.ContainsKey(n)).ToList();
+        foreach (var n in shown)
+        {
+            var points = lines.TryGetValue(n, out var l) ? l : _dynDays.Select(_ => new DepartmentWork.Point()).ToList();
+            var color = n == DepartmentWork.NoDepartment ? "--cat-gray" : LinePalette[names.IndexOf(n) % LinePalette.Length];
+            _deptLines.Add((DeptTitle(n), color, points.Select(p => (double?)p.Total).ToList()));
+            _deptPoints.Add(points);
+        }
+        _deptMax = NiceMax(_deptPoints.SelectMany(p => p).Select(p => p.Total).DefaultIfEmpty(0).Max());
+    }
+
+    private static string DeptTitle(string name) => name == DepartmentWork.NoDepartment ? "Без отдела" : name;
+
+    /// <summary>Подсказка точки линии отдела: дата, отдел, сколько отмечено в этот день и сколько всего.</summary>
+    private string DeptPointTitle(int line, int index)
+    {
+        var p = _deptPoints[line][index];
+        return $"{Fmt.Day(_dynDays[index])} — {_deptLines[line].Item1}\nВ этот день: исправлено {p.Fixed}, допущено {p.Accepted}\nВсего: {p.Total}";
+    }
+
+    /// <summary>Верх оси для четырёх делений: деление — 1, 2, 5, 10, 20, 50…</summary>
+    private static double NiceMax(int max)
+    {
+        var step = 1.0;
+        while (step * 4 < max) step = step.ToString()[0] == '2' ? step * 2.5 : step * 2;
+        return step * 4;
+    }
+
     private Task ExportAnalytics() => CurrentTab switch
     {
         "blocks" => Download("По блокам", Csv(new[] { "Блок", "Всего", "Активные", "Исправлены", "Допущены", "Исправлено, %" }, GroupRows(_blocks))),
-        "dynamics" => Download("Динамика", Csv(new[] { LevelHead }.Concat(_days.Select(d => Fmt.Day(d) + ", %")),
-            _progressLines.Select(l => new[] { l.Item1 }.Concat(l.Item3.Select(v => v?.ToString() ?? "")).ToArray()))),
+        "dynamics" => _dynMode == "dept"
+            ? Download("Динамика по отделам", Csv(new[] { "Отдел" }.Concat(_dynDays.Select(Fmt.Day)),
+                _deptLines.Select(l => new[] { l.Item1 }.Concat(l.Item3.Select(v => v?.ToString() ?? "")).ToArray())))
+            : Download("Динамика", Csv(new[] { LevelHead }.Concat(_dynDays.Select(d => Fmt.Day(d) + ", %")),
+                _progressLines.Select(l => new[] { l.Item1 }.Concat(l.Item3.Select(v => v?.ToString() ?? "")).ToArray()))),
         "recur" => Download("Рекуррентность", Csv(new[] { "Блок", "Проверка", "Элемент 1", "Номер 1", "Элемент 2", "Номер 2", "Повторы", "Вернулась", "Первый", "Последний", "Статус" },
             _recur.Select(x => new[] { x.Block, x.Type, Fmt.Element(x.A), x.A?.ElementId?.ToString(), Fmt.Element(x.B), x.B?.ElementId?.ToString(), x.Repeats.ToString(), x.ReturnCount.ToString(), Fmt.Day(x.FirstSeen), Fmt.Day(x.LastSeen), Fmt.State(x.State) }))),
         "quality" => Download("Качество данных", Csv(new[] { "Замечание", "Что сделать" }, _quality.Select(q => new[] { q.Text, q.Hint }))),

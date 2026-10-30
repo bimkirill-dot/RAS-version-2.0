@@ -22,7 +22,7 @@
                 @if (points.Count > 1) { <polyline points="@string.Join(" ", points)" style="stroke: var(@color)" class="line" /> }
                 @foreach (var p in values.Select((v, i) => (v, i)).Where(p => p.v.HasValue))
                 {
-                    <circle cx="@F(X(p.i))" cy="@F(Y(p.v.Value))" r="3.5" style="stroke: var(@color)" class="dot" />
+                    <circle cx="@F(X(p.i))" cy="@F(Y(p.v.Value))" r="3.5" style="stroke: var(@color)" class="dot">@if (PointTitle != null) { <title>@PointTitle(index, p.i)</title> }</circle>
                 }
             </g>
         }
@@ -44,6 +44,8 @@
     [Parameter] public string Unit { get; set; } = "%";
     [Parameter] public string Title { get; set; }
     [Parameter] public int Height { get; set; } = 220;
+    /// <summary>Подсказка точки (линия, номер подписи); нет — у точки подсказка линии.</summary>
+    [Parameter] public Func<int, int, string> PointTitle { get; set; }
 
     private const int W = 900, Left = 46, Right = 24, Top = 14, Bottom = 30, Ticks = 4;
 

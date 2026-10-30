@@ -236,6 +236,12 @@ a.head-btn + .head-btn { margin-left: 8px; }
 .ana-tabs button { border: 0; background: none; color: var(--text); padding: 8px 2px; font: inherit; font-size: 14px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .ana-tabs button:hover { color: var(--accent); }
 .ana-tabs button.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+/* отборы «Динамики» — в строке вкладок, до «Excel» (30.10.2026); «Отдел» при линиях по категориям — бледный */
+.dyn-bar { display: flex; flex: 1 1 560px; align-items: center; justify-content: flex-end; gap: 6px 14px; flex-wrap: wrap; }
+.dyn-bar .dd { white-space: nowrap; }
+.dyn-bar .dd select { min-width: 0; }
+.dyn-period { display: inline-flex; align-items: center; gap: 8px; }
+.dyn-bar .off { opacity: .38; pointer-events: none; }
 .cmp-info { background: color-mix(in srgb, var(--cat-blue) 10%, var(--panel)); border: 1px solid color-mix(in srgb, var(--cat-blue) 35%, var(--line)); border-radius: var(--radius); padding: 12px 18px; display: flex; flex-direction: column; gap: 4px; font-size: 14.5px; }
 .warn-text { color: var(--pending); font-weight: 600; }
 .sum-help { font-size: 13px; color: var(--muted); padding: 0 4px; }

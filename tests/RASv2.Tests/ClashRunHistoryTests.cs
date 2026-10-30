@@ -131,6 +131,40 @@ namespace RASv2.Tests
                 var a = Marked().Change(D1, D2);
                 Check(a.Was == 4 && a.Fixed == 1 && a.Now == 3 && a.Returned == 0, $"01→08: 5 исправлена отчётом, 4 активна в обе даты: {a.Was}→{a.Now}");
             });
+            yield return Case("«Динамика»: дни смены статусов и нынешние статусы — с последней из всех дат", () =>
+            {
+                var h = Marked();
+                Check(string.Join(",", h.MarkDays().Select(d => d.Day)) == "3,9,15", "дни отметок: 03, 09, 15");
+                var now = new DateTime(2026, 10, 15);
+                var s3 = h.StatesAt(D3, null, now);
+                Check(s3[2] == ClashState.Active && s3[3] == ClashState.Active && s3[1] == ClashState.Accepted,
+                      "14 — уже не «сейчас»: 2 и 3 отмечены только 15.10 — " + string.Join(" ", s3));
+                var s4 = h.StatesAt(now, null, now);
+                Check(s4[2] == ClashState.Fixed && s4[3] == ClashState.Accepted, "15 — сейчас: 2 исправлена, 3 допущена");
+            });
+            yield return Case("работа отделов: нарастающим итогом, коллизия — одна, своя отмена снимает", () =>
+            {
+                var w = new DepartmentWork();
+                DateTime T(int day, int hour = 10) => new DateTime(2026, 10, day, hour, 0, 0);
+                w.Marks.AddRange(new[]
+                {
+                    (1L, 1L, T(2), ClashState.Fixed, "ОВ"),
+                    (1L, 1L, T(4), ClashState.Accepted, "ОВ"),     // та же коллизия — не вторая
+                    (2L, 1L, T(2), ClashState.Fixed, "ОВ"),
+                    (2L, 1L, T(4, 12), ClashState.Active, "ОВ"),   // вернул сам — снята
+                    (2L, 1L, T(4, 13), ClashState.Active, "КЖ"),   // чужая отметка ОВ не трогает
+                    (3L, 1L, T(4), ClashState.Fixed, "КЖ"),
+                    (1L, 1L, T(5), ClashState.Active, "КЖ"),       // КЖ вернул коллизию ОВ — у ОВ остаётся
+                    (4L, 2L, T(4), ClashState.Fixed, ""),          // проверка 2
+                });
+                var days = new[] { new DateTime(2026, 10, 1), new DateTime(2026, 10, 2), new DateTime(2026, 10, 4), new DateTime(2026, 10, 5) };
+                var lines = w.Lines(days);
+                string Line(string d) => string.Join(" ", lines[d].Select(p => $"{p.Total}/{p.Fixed}/{p.Accepted}"));
+                Check(Line("ОВ") == "0/0/0 2/2/0 1/0/1 1/0/0", "ОВ: " + Line("ОВ"));
+                Check(Line("КЖ") == "0/0/0 0/0/0 1/1/0 1/0/0", "КЖ: " + Line("КЖ"));
+                Check(lines.ContainsKey(DepartmentWork.NoDepartment), "без отдела — своя линия");
+                Check(!w.Lines(days, t => t == 1).ContainsKey(DepartmentWork.NoDepartment), "отбор проверок");
+            });
             yield return Case("мост через прогон: появившаяся в промежуточном — новая, а не «в новых проверках»", () =>
             {
                 var c = Sample().Change(D1, D3);

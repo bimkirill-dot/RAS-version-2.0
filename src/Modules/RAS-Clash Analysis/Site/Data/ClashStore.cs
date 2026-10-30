@@ -929,6 +929,26 @@ public sealed class ClashStore
     }
 
     /// <summary>
+    /// Отметки статусов на сайте с отделом автора — для «Динамики» по отделам (Logic.DepartmentWork). Автор в журнале — имя
+    /// учётной записи; не найдена, без отдела или автора нет (до входа на сайт, 20.10.2026) — «Без отдела».
+    /// </summary>
+    public Logic.DepartmentWork DepartmentWork(long projectId)
+    {
+        var w = new Logic.DepartmentWork();
+        using var c = _db.Open();
+        using var r = Query(c, $"""
+            SELECT ev.ClashId, cl.TestId, ev.Time, ev.NewState,
+                   (SELECT d.Name FROM Users u JOIN Departments d ON d.Id = u.DepartmentId WHERE u.Name = ev.Author ORDER BY u.Active DESC, u.Id LIMIT 1)
+            FROM Events ev JOIN Clashes cl ON cl.Id = ev.ClashId
+            WHERE cl.ProjectId = $p AND ev.Kind = 'status' AND ev.NewState IS NOT NULL AND {NotSystemEvent}
+            """, ("$p", projectId));
+        while (r.Read())
+            w.Marks.Add((r.GetInt64(0), r.GetInt64(1), Database.Time(r.GetString(2)), (ClashState)r.GetInt32(3),
+                r.IsDBNull(4) ? Logic.DepartmentWork.NoDepartment : r.GetString(4)));
+        return w;
+    }
+
+    /// <summary>
     /// Записи «смена статуса», которые сделал не человек, а сам сайт при обновлении базы: склейка результатов одной пары, склейка
     /// переименованных моделей, «Ждёт проверки» → «Исправлена». В истории статусов и в сводке не считаются (19.10.2026).
     /// </summary>
