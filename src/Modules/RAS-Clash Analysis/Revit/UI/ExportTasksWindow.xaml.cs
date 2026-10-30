@@ -10,7 +10,7 @@ namespace RASv2.ClashAnalysis.UI
     /// <summary>
     /// «Задачи выгрузки»: дерево задач выгрузки NWC (DECISIONS.md модуля). Строка — номер, название, краткая информация,
     /// «Запустить», «+» (подзадача), карандаш (настройки узла), корзина. Перенос — перетаскиванием строки внутри своего
-    /// уровня. Пока — дерево в памяти: хранение на сервере, окно настроек узла и общие настройки — следующими шагами.
+    /// уровня. Пока — дерево и общие настройки в памяти: хранение на сервере и окно настроек узла — следующими шагами.
     /// </summary>
     public partial class ExportTasksWindow : Window
     {
@@ -33,6 +33,9 @@ namespace RASv2.ClashAnalysis.UI
             // узел уже идёт у коллеги — запускать нельзя; место кнопки остаётся, чтобы значки не прыгали
             public Visibility RunVisibility => Task.RunningBy == null ? Visibility.Visible : Visibility.Hidden;
         }
+
+        /// <summary>Общие настройки — шестерёнка (пока в памяти).</summary>
+        public ExportSettings Settings { get; set; } = new ExportSettings();
 
         private readonly List<ExportTask> _roots;
         private readonly HashSet<ExportTask> _collapsed = new HashSet<ExportTask>();
@@ -95,10 +98,14 @@ namespace RASv2.ClashAnalysis.UI
             return w == "модель" ? "подзадачу" : w == "модели" ? "подзадачи" : "подзадач";
         }
 
-        // окно настроек узла и общие настройки — по рисункам разработчика, следующим шагом; выгрузка — после них
+        // окно настроек узла — по рисунку разработчика, следующим шагом; выгрузка — после него
         private void Edit_Click(object sender, RoutedEventArgs e) { }
 
-        private void Settings_Click(object sender, RoutedEventArgs e) { }
+        private void Settings_Click(object sender, RoutedEventArgs e)
+        {
+            new ExportSettingsWindow(Settings) { Owner = this }.ShowDialog();
+            Refresh();
+        }
 
         private void Run_Click(object sender, RoutedEventArgs e) { }
 

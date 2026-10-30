@@ -5,7 +5,7 @@ using RASv2.ClashAnalysis.Logic;
 
 namespace RASv2.Tests
 {
-    /// <summary>RAS-Clash Analysis: дерево «Задачи выгрузки» (ExportTask) — номера, перенос, краткая информация.</summary>
+    /// <summary>RAS-Clash Analysis: «Задачи выгрузки» — дерево (ExportTask): номера, перенос, краткая информация; имя NWC и папки с метками (ExportNames).</summary>
     internal static class ClashExportTaskTests
     {
         private static KeyValuePair<string, Action> Case(string name, Action body) => new KeyValuePair<string, Action>(name, body);
@@ -72,6 +72,35 @@ namespace RASv2.Tests
             {
                 var words = string.Join(" ", new[] { 1, 2, 4, 5, 11, 12, 14, 21, 22, 25, 111 }.Select(n => n + " " + ExportTask.ModelsWord(n)));
                 Check(words == "1 модель 2 модели 4 модели 5 моделей 11 моделей 12 моделей 14 моделей 21 модель 22 модели 25 моделей 111 моделей", words);
+            });
+            yield return Case("имя NWC: первые 7 частей, в последней — до пробела; частей меньше — как есть", () =>
+            {
+                string Nwc(string file, bool trim = true, int parts = 7) => ExportNames.NwcName(file, trim, parts, out _);
+                Check(Nwc("0000_01_01_S6_KJ01_01_M3 еще текст.rvt") == "0000_01_01_S6_KJ01_01_M3", Nwc("0000_01_01_S6_KJ01_01_M3 еще текст.rvt"));
+                Check(Nwc("0000_01_01_S6_KJ01_01_M3_еще текст.rvt") == "0000_01_01_S6_KJ01_01_M3", Nwc("0000_01_01_S6_KJ01_01_M3_еще текст.rvt"));
+                Check(Nwc(@"\server\Проект\0000_01_01_S6_KJ01_01_Р3.rvt") == "0000_01_01_S6_KJ01_01_Р3", "кириллица и путь");
+                Check(Nwc("0000_01_01_S6_KJ01_01_M3 еще текст.rvt", trim: false) == "0000_01_01_S6_KJ01_01_M3 еще текст", "без обрезки");
+                Check(Nwc("0000_01_01_S6_KJ01_01_M3_x.rvt", parts: 6) == "0000_01_01_S6_KJ01_01", "6 частей");
+                var short_ = ExportNames.NwcName("Модель АР.rvt", true, 7, out var matches);
+                Check(short_ == "Модель АР" && !matches, "не по шаблону: " + short_);
+                ExportNames.NwcName("0000_01_01_S6_KJ01_01_M3.rvt", true, 7, out matches);
+                Check(matches, "по шаблону");
+            });
+            yield return Case("раздел и отдел из имени модели", () =>
+            {
+                Check(ExportNames.Section("0000_01_01_S6_KJ01_01_M3 еще текст.rvt", 5) == "KJ01", "раздел");
+                Check(ExportNames.Section("0000_01.rvt", 5) == "", "нет такой части");
+                Check(ExportNames.Department("KJ01") == "KJ" && ExportNames.Department("AR") == "AR" && ExportNames.Department("ОВ2") == "ОВ",
+                    "отдел — буквы до цифр");
+                Check(ExportNames.Department("") == "", "пусто");
+            });
+            yield return Case("папка — строка с метками: подставить известные, неизвестные — как есть", () =>
+            {
+                var values = new Dictionary<string, string> { ["Проект"] = "Арман Кала", ["Блок"] = "Блок 1", ["Отдел"] = "" };
+                var folder = ExportNames.Fill(@"{Шифр}_{Проект}\{ Блок }\{Отдел}\NWC", values);
+                Check(folder == @"{Шифр}_Арман Кала\Блок 1\{Отдел}\NWC", folder);
+                var labels = string.Join(",", ExportNames.LabelsIn(@"{Шифр}_{Проект}\{Проект}\{Дата}"));
+                Check(labels == "Шифр,Проект,Дата", labels);
             });
             yield return Case("удаление: вложенных на всех уровнях", () =>
             {
