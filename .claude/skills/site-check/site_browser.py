@@ -1,6 +1,6 @@
 """Помощники для прохода по пробному сайту коллизий в Edge без окна (Selenium). Подключение из своего скрипта:
 
-    import sys; sys.path.insert(0, r'D:\\Code\\RAS_v_2.0\\.claude\\skills\\site-check')
+    import sys; sys.path.insert(0, r'<репозиторий>\\.claude\\skills\\site-check')
     from site_browser import *
     d = browser(1560); base = 'http://localhost:5099'
     login(d, base); open_project(d, base, 4); side(d, 'Сводка'); sub(d, 'Аналитика'); tab(d, 'Динамика')
@@ -35,7 +35,8 @@ def click(d, el, wait=1.5):
     time.sleep(wait)
 
 
-def login(d, base, user='egor', password='secret1'):
+def login(d, base, user, password='secret1'):
+    """Вход на пробный сайт: логин — из списка, что напечатал site_data.py copy (у копии всем задан один пароль)."""
     d.get(base + '/login')
     time.sleep(1)
     d.find_element(By.NAME, 'login').send_keys(user)

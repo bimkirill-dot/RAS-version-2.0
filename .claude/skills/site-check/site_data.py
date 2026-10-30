@@ -23,6 +23,9 @@ def password_hash(password):
 def copy(folder, password):
     if os.path.normcase(os.path.abspath(folder)) == os.path.normcase(os.path.dirname(REAL)):
         sys.exit('Это папка его сайта — копию нужно класть во временную папку.')
+    if not os.path.isfile(REAL):
+        # сайт коллизий стоит только у ведущего разработчика; у остальных — пробный сайт на пустой папке
+        sys.exit('Базы сайта на этом компьютере нет (%s). Запустите пробный сайт на пустой папке данных — он создаст базу сам.' % REAL)
     shutil.rmtree(folder, ignore_errors=True)
     os.makedirs(folder)
     dst = os.path.join(folder, 'clashes.db')

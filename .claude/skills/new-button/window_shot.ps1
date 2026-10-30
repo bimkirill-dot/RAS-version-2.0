@@ -1,7 +1,7 @@
 ﻿# Окно WPF модуля — вне Revit: создать, показать, снять PNG. Подключать из своего скрипта (scratchpad, файл с BOM):
 #   powershell -NoProfile -STA -ExecutionPolicy Bypass -File мой-снимок.ps1
 # В нём:
-#   . 'D:\Code\RAS_v_2.0\.claude\skills\new-button\window_shot.ps1'
+#   . '<репозиторий>\.claude\skills\new-button\window_shot.ps1'
 #   $asm = Use-Parts 'RASv2.ClashAnalysis.dll'            # сборка модуля из out\bin\2023\parts, ссылки — оттуда и из Revit 2023
 #   $w = New-Window $asm 'RASv2.ClashAnalysis.UI.ElementIdWindow' @(,$items)  # список — с запятой: @($items) PowerShell развернёт в элементы
 #   Save-WindowPng $w 'C:\...\scratchpad\id.png'
@@ -9,8 +9,10 @@
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName PresentationFramework
 
-$script:Parts = 'D:\Code\RAS_v_2.0\out\bin\2023\parts'
-$script:RevitDir = 'C:\Program Files\Autodesk\Revit 2023'
+# сборка — из out репозитория, где лежит этот файл (у проверки ветки — из её рабочей папки); Revit не в стандартной папке —
+# задать $env:RAS_REVIT2023 до подключения
+$script:Parts = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..\..\out\bin\2023\parts'))
+$script:RevitDir = if ($env:RAS_REVIT2023) { $env:RAS_REVIT2023 } else { 'C:\Program Files\Autodesk\Revit 2023' }
 
 function Use-Parts([string]$dll) {
     [AppDomain]::CurrentDomain.add_AssemblyResolve({
