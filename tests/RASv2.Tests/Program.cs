@@ -31,6 +31,7 @@ namespace RASv2.Tests
             Run("RAS-Clash Analysis: категории проверок", ClashCategoryTests.All);
             Run("RAS-Clash Analysis: состояние на прогоны", ClashRunHistoryTests.All);
             Run("RAS-Clash Analysis: мост в Revit — модель элемента", ClashBridgeTests.All);
+            Run("RAS-Clash Analysis: «Задачи выгрузки» — дерево задач", ClashExportTaskTests.All);
             Run("RAS-Clash Analysis: сайт — вход, пароли", SiteAuthTests.All);
             Run("RAS-Clash Analysis: сайт — копии базы", SiteBackupTests.All);
             Run("RAS-Clash Analysis: сайт — документы на странице", SiteMarkdownTests.All);
