@@ -18,6 +18,8 @@ LEAD = 'Poletayev_BIM'
 
 RELEASE = re.compile(r'(revit|navisworks)\.cmd["\']?\s+(publish|promote|rollback|setup)\b|'
                      r'(Release|Navisworks)\.ps1["\']?.*-Action\s+["\']?(publish|promote|rollback|setup)\b', re.I)
+# git — только как команда (начало строки, после ; && || | или скобки), а не слова в тексте сообщения или скрипта
+GIT_START = r'(?:^|[;&|(\n])\s*git\s+(?:-C\s+\S+\s+)?'
 SITE_DB = re.compile(r'RAS-Clash Analysis[\\/]+Site[\\/]+clashes\.db', re.I)
 
 
@@ -27,14 +29,14 @@ def branch():
 
 
 def reason(cmd):
-    if re.search(r'\bgit\s+push\b', cmd):
+    if re.search(GIT_START + r'push\b', cmd):
         return 'git push делает человек сам — подскажите ему команду.'
     if RELEASE.search(cmd):
         return 'Выпуск запускает человек сам (по его решению) — подскажите команду и текст «что нового».'
     if SITE_DB.search(cmd) and 'mode=ro' not in cmd:
         return 'База сайта коллизий на этом компьютере — только чтение (mode=ro); пробовать — на копии (навык site-check).'
     lead = os.environ.get('USERNAME', '').lower() == LEAD.lower()
-    if not lead and re.search(r'\bgit\s+(commit|merge|rebase|cherry-pick)\b', cmd) and branch() in ('main', 'master'):
+    if not lead and re.search(GIT_START + r'(commit|merge|rebase|cherry-pick)\b', cmd) and branch() in ('main', 'master'):
         return ('Сейчас ветка main: коммиты и слияния в main делает только ведущий разработчик. '
                 'Создайте свою ветку (навык start-task) и работайте в ней.')
     return None
