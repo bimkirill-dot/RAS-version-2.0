@@ -250,8 +250,8 @@ namespace RASv2.ClashAnalysis.Showing
 
         /// <summary>
         /// Категории (ClashCategories: «Категории элементов» и «Изолировать») и «Изолировать»: в самой модели — временно только
-        /// элементы пары, обобщённые модели (отверстия) и рамка 3D-вида; в связях — только категории элементов коллизии и
-        /// обобщённые модели (элемент связи по отдельности Revit не изолирует).
+        /// элементы пары и рамка 3D-вида; в связях — только категории элементов коллизии (элемент связи по отдельности Revit не
+        /// изолирует). Обобщённые модели (отверстия) больше не оставляются (разработчик, 30.10.2026).
         /// </summary>
         private static void Isolate(Document doc, View view, ClashViews views, List<Found> found, ViewSettings settings)
         {
@@ -259,7 +259,6 @@ namespace RASv2.ClashAnalysis.Showing
             ClashCategories.Apply(doc, view, views, found, settings);
             if (!settings.Isolate) return;
             var ids = found.Select(f => f.Link == null ? f.Element.Id : f.Link.Id)
-                .Concat(new FilteredElementCollector(doc, view.Id).OfCategory(BuiltInCategory.OST_GenericModel).WhereElementIsNotElementType().ToElementIds())
                 .Concat(view is View3D ? new FilteredElementCollector(doc, view.Id).OfCategory(BuiltInCategory.OST_SectionBox).ToElementIds() : new List<ElementId>())
                 .Distinct().ToList();
             view.IsolateElementsTemporary(ids);

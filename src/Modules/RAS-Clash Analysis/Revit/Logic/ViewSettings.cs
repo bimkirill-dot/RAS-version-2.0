@@ -38,7 +38,7 @@ namespace RASv2.ClashAnalysis.Logic
         [DataMember(Name = "paint")] public bool Paint { get; set; }
         /// <summary>
         /// Прозрачность элементов коллизии и остальных, % (разработчик, 29.10.2026); и при «Изолировать» (разработчик, в тот же
-        /// день): остаются видны обобщённые модели (отверстия) и элементы связи тех же категорий.
+        /// день): остаются видны элементы связи тех же категорий, что элементы коллизии.
         /// </summary>
         [DataMember(Name = "clashTransparency")] public int ClashTransparency { get; set; }
         [DataMember(Name = "otherTransparency")] public int OtherTransparency { get; set; }
