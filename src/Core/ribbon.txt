@@ -55,5 +55,6 @@ ClashAnalysis.ViewSettings подпись="Настройки вида"
 ClashAnalysis.ElementClashes подпись="Коллизии элемента"
 ClashAnalysis.LinkedId подпись="ID элемента связи"
 )
+ClashAnalysis.ExportTasks подпись="Задачи выгрузки" доступна="Poletayev_BIM"
 [Менеджер листов]
 SheetManager.Sign подпись="Подпись" доступна="BIM"

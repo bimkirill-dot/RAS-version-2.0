@@ -39,6 +39,9 @@ namespace RASv2.ClashAnalysis
         private ClashViews _views;
         private volatile byte[] _status;
         private DateTime _statusAt;
+        // «Задачи выгрузки» — пока в памяти до закрытия Revit (хранение на сервере — следующим шагом)
+        private readonly List<ExportTask> _exportTasks = new List<ExportTask>();
+        private readonly ExportSettings _exportSettings = new ExportSettings();
 
         internal void Start(IModuleContext context)
         {
@@ -71,6 +74,13 @@ namespace RASv2.ClashAnalysis
             settings.AvailabilityClassName = typeof(AlwaysAvailable).FullName;
             settings.LongDescription = "Настройки — ваши, у коллег свои. На сайте коллизий «Показать в Revit» открывает личный вид: " +
                                        "3D, план, разрез или «Авто» по элементам; закрыли вкладку вида — он удаляется из модели.";
+
+            // «Задачи выгрузки» (DECISIONS.md модуля): нужна и в пустом Revit — модели выгрузка открывает сама
+            var export = context.AddButton("ExportTasks", "Задачи\nвыгрузки", typeof(ExportTasksCommand),
+                "Задачи выгрузки NWC: проекты, блоки, критичность — папки, вид, модели", icon: "ExportTasks");
+            export.AvailabilityClassName = typeof(AlwaysAvailable).FullName;
+            export.LongDescription = "Создайте задачу (проект) и подзадачи (блоки) — выгрузка NWC пройдёт сама: копия модели без связей, " +
+                                     "вид по шаблону отдела, NWC в папку по общим правилам. Открытый проект не нужен.";
 
             var events = context.Events;
             events.Idling(OnIdling);
@@ -150,6 +160,22 @@ namespace RASv2.ClashAnalysis
             {
                 _log.Error("Настройки вида не сохранены", ex);
                 TaskDialog.Show("RAS-Clash Analysis", "Настройки вида не сохранены — подробности в журнале плагина («О плагине» → «Показать журнал ошибок»).");
+            }
+        }
+
+        /// <summary>«Задачи выгрузки» — окно дерева задач.</summary>
+        internal void ShowExportTasks(IntPtr owner)
+        {
+            try
+            {
+                var window = new ExportTasksWindow(_exportTasks) { Settings = _exportSettings };
+                if (owner != IntPtr.Zero) new WindowInteropHelper(window).Owner = owner;
+                window.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                _log.Error("Задачи выгрузки: окно не открылось", ex);
+                TaskDialog.Show("Задачи выгрузки", "Окно не открылось — подробности в журнале плагина («О плагине» → «Показать журнал ошибок»).");
             }
         }
 

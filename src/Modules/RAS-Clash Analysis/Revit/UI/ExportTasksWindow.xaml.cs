@@ -103,8 +103,18 @@ namespace RASv2.ClashAnalysis.UI
 
         private void Settings_Click(object sender, RoutedEventArgs e)
         {
-            new ExportSettingsWindow(Settings) { Owner = this }.ShowDialog();
-            Refresh();
+            try
+            {
+                new ExportSettingsWindow(Settings) { Owner = this }.ShowDialog();
+                Refresh();
+            }
+            catch (System.Exception ex)
+            {
+                // исключение сквозь вложенный ShowDialog роняет Revit (CLAUDE.md, «Правила, о которые уже спотыкались»)
+                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: общие настройки не открылись", ex);
+                MessageBox.Show(this, "Общие настройки не открылись — подробности в журнале плагина («О плагине» → «Показать журнал ошибок»).",
+                    Title, MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void Run_Click(object sender, RoutedEventArgs e) { }

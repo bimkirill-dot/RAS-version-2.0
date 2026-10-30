@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Задачи выгрузки: список задач с подзадачами (отступ) и стрелка — выгрузка -->
+  <rect x="4" y="4" width="17" height="24" rx="2" fill="#FFFFFF" stroke="#39424E" stroke-width="2"/>
+  <line x1="8" y1="9" x2="17" y2="9" stroke="#39424E" stroke-width="2" stroke-linecap="round"/>
+  <line x1="11" y1="14" x2="17" y2="14" stroke="#39424E" stroke-width="2" stroke-linecap="round"/>
+  <line x1="11" y1="19" x2="17" y2="19" stroke="#39424E" stroke-width="2" stroke-linecap="round"/>
+  <line x1="14" y1="24" x2="28" y2="24" stroke="#2F6FED" stroke-width="2" stroke-linecap="round"/>
+  <polyline points="24,20 28,24 24,28" fill="none" stroke="#2F6FED" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
