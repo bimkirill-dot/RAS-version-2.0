@@ -274,6 +274,58 @@ namespace RASv2.Tests
                 try { ExportFiles.Load(Path.Combine(dir, "не json.json")); } catch (InvalidDataException) { refused = true; }
                 Check(refused, "не JSON — понятный отказ");
             });
+            yield return Case("общее хранилище: все видят все проекты; правку коллеги не затирает молча; копия .prev; удаление", () =>
+            {
+                var dir = Path.Combine(Path.GetTempPath(), "RASv2.Tests", "export-store-" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    var ivanov = new ExportStore(dir, "Иванов");
+                    var petrov = new ExportStore(dir, "Петров");
+                    Check(ivanov.LoadProjects().Count == 0 && ivanov.LoadCommon().BlockPrefix == "S", "пусто — по умолчанию");
+
+                    var common = new ExportSettings { BlockPrefix = "C" };
+                    ivanov.SaveCommon(common);
+                    Check(petrov.LoadCommon().BlockPrefix == "C", "общие настройки — у всех");
+
+                    var mine = new ExportTask { Name = "Жк Нурлы" };
+                    mine.Add(new ExportTask { Name = "S1", ModelFiles = Models(2, "S1") });
+                    Check(ivanov.SaveProject(mine, false, out _, out _) == SaveResult.Saved && mine.StoreId != null, "новый проект записан");
+                    ivanov.SaveProject(new ExportTask { Name = "ArmanQala" }, false, out _, out _);
+                    var seen = petrov.LoadProjects();
+                    // по алфавиту текущей культуры: в .NET 8 по-русски кириллица идёт раньше латиницы, в .NET 4.8 — позже
+                    var names = seen.Select(x => x.Name).ToList();
+                    Check(names.Count == 2 && names.SequenceEqual(names.OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase)),
+                        "у коллеги — оба, по алфавиту: " + string.Join(",", names));
+                    var his = seen.Single(x => x.Name == "Жк Нурлы");
+                    Check(his.StoreId == mine.StoreId && his.Children.Single().Models == 2, "тот же проект с задачами");
+
+                    System.Threading.Thread.Sleep(30);
+                    his.Add(new ExportTask { Name = "S2" });
+                    Check(petrov.SaveProject(his, false, out _, out _) == SaveResult.Saved, "коллега сохранил своё");
+                    mine.Children[0].Name = "S1 высокая";
+                    Check(ivanov.SaveProject(mine, false, out var who, out var when) == SaveResult.Conflict && who == "Петров" &&
+                          (DateTime.Now - when).TotalMinutes < 5, "моё не затирает его молча: " + who);
+                    var fresh = ivanov.Reload(mine);
+                    Check(fresh.Children.Count == 2 && fresh.Children[0].Name == "S1", "открыть заново — его версия");
+                    Check(ivanov.SaveProject(mine, true, out _, out _) == SaveResult.Saved, "поверх — по согласию");
+                    Check(petrov.Reload(his).Children.Single().Name == "S1 высокая", "у коллеги — моя");
+                    var path = Path.Combine(ivanov.ProjectsDir, mine.StoreId + ".json");
+                    Check(File.Exists(path + ".prev") && !File.Exists(path + ".tmp"), "копия прежнего и без временного");
+                    Check(ExportFiles.Load(path).ProjectData.ChangedBy == "Иванов", "кто записал");
+
+                    File.WriteAllText(Path.Combine(ivanov.ProjectsDir, "битый.json"), "не json");
+                    var broken = new List<string>();
+                    Check(petrov.LoadProjects(broken).Count == 2 && broken.Single() == "битый.json", "битый файл — мимо, остальные читаются");
+
+                    ivanov.DeleteProject(mine);
+                    Check(!File.Exists(path) && File.Exists(path + ".prev") && petrov.LoadProjects().Count == 1, "удалён, копия осталась");
+                    Check(ivanov.Reload(mine) == null, "удалённый — заново не открыть");
+                }
+                finally
+                {
+                    try { Directory.Delete(dir, true); } catch (IOException) { }
+                }
+            });
             yield return Case("Revit Server: серверы из RSN.ini, адрес папки, путь RSN://, ответ службы", () =>
             {
                 var hosts = RevitServers.ParseRsn("10.10.1.88\r\n; старый\r\n\r\n26.219.177.116\n10.10.1.88 ");

@@ -23,6 +23,9 @@ namespace RASv2.ClashAnalysis.Logic
         public ProjectSettings Project { get; } = new ProjectSettings();
         /// <summary>Файлы проверок задачи; null — как у проекта (два NWF на блок — две задачи со своими файлами).</summary>
         public List<string> TestsFiles { get; set; }
+        /// <summary>Проект в общем хранилище: ключ файла (null — ещё не записан) и время файла, когда прочитан или записан (ExportStore).</summary>
+        public string StoreId { get; set; }
+        public DateTime StoreStamp { get; set; }
         /// <summary>Последняя выгрузка узла; null — не выгружался.</summary>
         public DateTime? LastRun { get; set; }
         /// <summary>Моделей, не вышедших в последней выгрузке.</summary>

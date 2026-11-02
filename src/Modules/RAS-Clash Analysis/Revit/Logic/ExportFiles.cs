@@ -32,6 +32,9 @@ namespace RASv2.ClashAnalysis.Logic
         [DataMember(Order = 1)] public string Name { get; set; }
         [DataMember(Order = 2)] public ProjectSettings Settings { get; set; }
         [DataMember(Order = 3)] public List<TaskFile> Tasks { get; set; } = new List<TaskFile>();
+        /// <summary>Кто и когда записал проект в общее хранилище — для «изменил Иванов в 14:20» (ExportStore).</summary>
+        [DataMember(Order = 4, EmitDefaultValue = false)] public string ChangedBy { get; set; }
+        [DataMember(Order = 5, EmitDefaultValue = false)] public DateTime? Changed { get; set; }
     }
 
     [DataContract]

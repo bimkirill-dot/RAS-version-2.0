@@ -43,7 +43,10 @@
     </Window.Resources>
 
     <DockPanel Margin="20,14,20,16">
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,12">
+        <!-- сервер недоступен или файл проекта не прочитан — строкой сверху -->
+        <TextBlock x:Name="Banner" DockPanel.Dock="Top" Foreground="{DynamicResource Error}" TextWrapping="Wrap" Margin="0,0,0,8"
+                   Visibility="Collapsed" />
+        <StackPanel x:Name="Toolbar" DockPanel.Dock="Top" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,12">
             <!-- импорт проекта с задачами из файла коллеги (02.11.2026); Segoe MDL2: E8B5 — импорт -->
             <Button Style="{StaticResource IconButton}" Content="&#xE8B5;" Click="Import_Click" ToolTip="Импорт проекта…" />
             <Button Style="{StaticResource IconButton}" Content="&#xE710;" Margin="4,0,0,0" Click="AddTask_Click" ToolTip="Новый проект" />

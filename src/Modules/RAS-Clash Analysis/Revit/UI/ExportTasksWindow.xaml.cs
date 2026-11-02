@@ -39,26 +39,86 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Версия Revit — для выбора моделей с Revit Server (настройки серверов — свои у каждой версии).</summary>
         public int RevitYear { get; set; } = 2026;
 
-        /// <summary>Общие настройки — шестерёнка (пока в памяти).</summary>
-        public ExportSettings Settings { get; set; } = new ExportSettings();
+        /// <summary>Общие настройки — шестерёнка (из общего хранилища).</summary>
+        public ExportSettings Settings { get; private set; } = new ExportSettings();
 
-        private readonly List<ExportTask> _roots;
+        private readonly ExportStore _store;
+        private readonly List<ExportTask> _roots = new List<ExportTask>();
         private readonly HashSet<ExportTask> _collapsed = new HashSet<ExportTask>();
         private Point _dragStart;
         private bool _dragArmed;
 
-        public ExportTasksWindow(List<ExportTask> roots)
+        /// <summary>Задачи и общие настройки — из общего хранилища на сервере: открыли окно — видно свежее у всех.</summary>
+        public ExportTasksWindow(ExportStore store)
         {
             RASv2.Core.WindowTheme.Apply(this);
             InitializeComponent();
-            _roots = roots;
+            _store = store;
+            try
+            {
+                var broken = new List<string>();
+                Settings = store.LoadCommon();
+                _roots.AddRange(store.LoadProjects(broken));
+                if (broken.Count > 0) ShowBanner("Не прочитаны файлы проектов: " + string.Join(", ", broken) + " — подробности в журнале плагина.");
+            }
+            catch (System.Exception ex)
+            {
+                // сервер недоступен — смотреть можно нечего, править нельзя: правки не дошли бы до коллег
+                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: общее хранилище не прочитано — " + store.ProjectsDir, ex);
+                ShowBanner("Сервер недоступен — задачи не загрузились. Проверьте сеть и откройте окно снова.");
+                Toolbar.Visibility = Visibility.Collapsed;
+                RowsList.IsEnabled = false;
+            }
             Refresh();
         }
 
-        private void Refresh() =>
+        private void ShowBanner(string text)
+        {
+            Banner.Text = text;
+            Banner.Visibility = Visibility.Visible;
+        }
+
+        // проекты — по алфавиту: общий порядок перетаскиванием пришлось бы делить между всеми
+        private void Refresh()
+        {
+            _roots.Sort((a, b) => string.Compare(a.Name, b.Name, System.StringComparison.CurrentCultureIgnoreCase));
             RowsList.ItemsSource = ExportTask.Rows(_roots, _collapsed)
                 .Select(r => new RowItem { Task = r.Task, Number = r.Number, Level = r.Level, Collapsed = _collapsed.Contains(r.Task) })
                 .ToList();
+        }
+
+        /// <summary>
+        /// Проект — на сервер. Коллега сохранил его после того, как окно его прочитало, — спросить: записать поверх или открыть
+        /// заново. false — не записан (ошибка или «открыть заново»).
+        /// </summary>
+        private bool SaveProject(ExportTask project)
+        {
+            try
+            {
+                if (_store.SaveProject(project, false, out var who, out var when) == SaveResult.Saved) return true;
+                var text = "Проект «" + project.Name + "» изменил " + (who ?? "коллега") + " в " + when.ToString("HH:mm") +
+                           ", пока он был открыт у вас.\n\nДа — записать ваши правки поверх.\nНет — открыть проект с сервера заново " +
+                           "(ваши правки пропадут).";
+                if (MessageBox.Show(this, text, Title, MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes)
+                    return _store.SaveProject(project, true, out _, out _) == SaveResult.Saved;
+                var fresh = _store.Reload(project);
+                var at = _roots.IndexOf(project);
+                if (at >= 0)
+                {
+                    if (fresh != null) _roots[at] = fresh;
+                    else _roots.RemoveAt(at);
+                }
+                Refresh();
+                return false;
+            }
+            catch (System.Exception ex)
+            {
+                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: проект не записан на сервер — " + project.Name, ex);
+                MessageBox.Show(this, "Проект «" + project.Name + "» не сохранён на сервере: " + ex.Message +
+                                      "\n\nПравки остались в этом окне — закроете его, и они пропадут.", Title, MessageBoxButton.OK, MessageBoxImage.Error);
+                return false;
+            }
+        }
 
         private static RowItem RowOf(object sender) => (RowItem)((FrameworkElement)sender).DataContext;
 
@@ -70,7 +130,8 @@ namespace RASv2.ClashAnalysis.UI
         {
             var project = new ExportTask { Name = "Новый проект" };
             _roots.Add(project);
-            if (!OpenSettings(project)) _roots.Remove(project);
+            if (OpenSettings(project)) SaveProject(project);
+            else _roots.Remove(project);
             Refresh();
         }
 
@@ -92,6 +153,7 @@ namespace RASv2.ClashAnalysis.UI
                 }
                 var project = ExportFiles.ToProject(file.ProjectData, _roots.Select(r => r.Name));
                 _roots.Add(project);
+                SaveProject(project);
                 Refresh();
             }
             catch (System.Exception ex)
@@ -107,7 +169,8 @@ namespace RASv2.ClashAnalysis.UI
             var project = RowOf(sender).Task;
             var task = project.Add(new ExportTask { Name = "S" + (project.Children.Count + 1) });
             _collapsed.Remove(project);
-            if (!OpenSettings(task)) project.Remove(task);
+            if (OpenSettings(task)) SaveProject(project);
+            else project.Remove(task);
             Refresh();
         }
 
@@ -125,20 +188,50 @@ namespace RASv2.ClashAnalysis.UI
             var text = "Удалить «" + task.Name + "»" + (inner > 0 ? " и " + inner + " " + ExportTask.TasksWord(inner) : "") + "?";
             if (MessageBox.Show(this, text, Title, MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No)
                 != MessageBoxResult.Yes) return;
-            if (task.Parent != null) task.Parent.Remove(task);
-            else _roots.Remove(task);
+            if (task.Parent != null)
+            {
+                var project = task.Parent;
+                project.Remove(task);
+                SaveProject(project);
+            }
+            else
+            {
+                try
+                {
+                    _store.DeleteProject(task);
+                    _roots.Remove(task);
+                }
+                catch (System.Exception ex)
+                {
+                    RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: проект не удалён с сервера — " + task.Name, ex);
+                    MessageBox.Show(this, "Проект «" + task.Name + "» не удалён с сервера: " + ex.Message, Title, MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                }
+            }
             Refresh();
         }
 
         private void Edit_Click(object sender, RoutedEventArgs e)
         {
-            OpenSettings(RowOf(sender).Task);
+            var task = RowOf(sender).Task;
+            if (OpenSettings(task)) SaveProject(ExportNodes.Root(task));
             Refresh();
         }
 
         private void Settings_Click(object sender, RoutedEventArgs e)
         {
-            Nested(() => new ExportSettingsWindow(Settings) { Owner = this }.ShowDialog(), "Общие настройки");
+            if (Nested(() => new ExportSettingsWindow(Settings) { Owner = this }.ShowDialog(), "Общие настройки"))
+            {
+                try
+                {
+                    _store.SaveCommon(Settings);
+                }
+                catch (System.Exception ex)
+                {
+                    RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: общие настройки не записаны на сервер", ex);
+                    MessageBox.Show(this, "Общие настройки не сохранены на сервере: " + ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
             Refresh();
         }
 
@@ -187,7 +280,10 @@ namespace RASv2.ClashAnalysis.UI
         {
             var item = e.Data.GetData(typeof(ExportTask)) as ExportTask;
             var target = RowOf(sender).Task;
-            e.Effects = item != null && item != target && item.Parent == target.Parent ? DragDropEffects.Move : DragDropEffects.None;
+            // переносятся задачи внутри своего проекта; проекты — по алфавиту
+            e.Effects = item != null && item != target && item.Parent != null && item.Parent == target.Parent
+                ? DragDropEffects.Move
+                : DragDropEffects.None;
             e.Handled = true;
         }
 
@@ -195,8 +291,10 @@ namespace RASv2.ClashAnalysis.UI
         {
             var item = e.Data.GetData(typeof(ExportTask)) as ExportTask;
             var target = RowOf(sender).Task;
-            if (item == null || item.Parent != target.Parent) return;
-            if (ExportTask.MoveTo(SiblingsOf(item), item, target)) Refresh();
+            if (item?.Parent == null || item.Parent != target.Parent) return;
+            if (!ExportTask.MoveTo(SiblingsOf(item), item, target)) return;
+            SaveProject(item.Parent);
+            Refresh();
         }
 
         private static bool FindButton(DependencyObject d)

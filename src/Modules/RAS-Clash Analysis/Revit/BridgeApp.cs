@@ -39,9 +39,8 @@ namespace RASv2.ClashAnalysis
         private ClashViews _views;
         private volatile byte[] _status;
         private DateTime _statusAt;
-        // «Задачи выгрузки» — пока в памяти до закрытия Revit (хранение на сервере — следующим шагом)
-        private readonly List<ExportTask> _exportTasks = new List<ExportTask>();
-        private readonly ExportSettings _exportSettings = new ExportSettings();
+        // «Задачи выгрузки» — общее хранилище на сервере (Data\RAS-Clash Analysis\Задачи выгрузки): видят все специалисты
+        private string _exportDir;
 
         internal void Start(IModuleContext context)
         {
@@ -51,6 +50,7 @@ namespace RASv2.ClashAnalysis
             _year = context.RevitYear;
             _settingsPath = Path.Combine(context.UserDataDir, "view-settings.json");
             _settings = ViewSettings.Load(_settingsPath);
+            _exportDir = Path.Combine(context.SharedDataDir, "Задачи выгрузки");
             var window = IntPtr.Zero;
             try { window = context.Application.MainWindowHandle; }
             catch (Exception) { /* окна ещё нет — Revit вперёд выходить не будет, остальное работает */ }
@@ -168,7 +168,7 @@ namespace RASv2.ClashAnalysis
         {
             try
             {
-                var window = new ExportTasksWindow(_exportTasks) { Settings = _exportSettings, RevitYear = _year };
+                var window = new ExportTasksWindow(new ExportStore(_exportDir, Environment.UserName)) { RevitYear = _year };
                 if (owner != IntPtr.Zero) new WindowInteropHelper(window).Owner = owner;
                 window.ShowDialog();
             }
