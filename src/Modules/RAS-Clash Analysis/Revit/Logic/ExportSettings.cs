@@ -41,6 +41,8 @@ namespace RASv2.ClashAnalysis.Logic
         public string ViewName { get; set; } = "3D_Navisworks";
         public bool RoomGeometry { get; set; }
 
+        public ExportSettings Clone() => (ExportSettings)MemberwiseClone();
+
         /// <summary>Коэффициент фасетизации из текста: «1», «0,5», «0.5»; больше нуля.</summary>
         public static bool TryFaceting(string text, out double value) =>
             double.TryParse((text ?? "").Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out value) && value > 0;

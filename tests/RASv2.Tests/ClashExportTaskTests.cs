@@ -12,15 +12,18 @@ namespace RASv2.Tests
 
         private static void Check(bool condition, string what) => Program.Check(condition, what);
 
+        private static List<ExportModel> Models(int n) =>
+            Enumerable.Range(1, n).Select(i => new ExportModel { Path = "0000_01_01_S6_KJ0" + i + "_01_M3.rvt" }).ToList();
+
         // Арман Кала → Блок 1 (6 моделей: Высокая, Средняя), Блок 2 (5); ЖК Нурлы (12)
         private static List<ExportTask> Sample(out ExportTask block1, out ExportTask high)
         {
             var project = new ExportTask { Name = "Арман Кала" };
-            block1 = project.Add(new ExportTask { Name = "Блок 1", Models = 6 });
+            block1 = project.Add(new ExportTask { Name = "Блок 1", ModelFiles = Models(6) });
             high = block1.Add(new ExportTask { Name = "Высокая критичность" });
             block1.Add(new ExportTask { Name = "Средняя критичность" });
-            project.Add(new ExportTask { Name = "Блок 2", Models = 5 });
-            return new List<ExportTask> { project, new ExportTask { Name = "ЖК Нурлы", Models = 12 } };
+            project.Add(new ExportTask { Name = "Блок 2", ModelFiles = Models(5) });
+            return new List<ExportTask> { project, new ExportTask { Name = "ЖК Нурлы", ModelFiles = Models(12) } };
         }
 
         public static IEnumerable<KeyValuePair<string, Action>> All()
@@ -56,7 +59,7 @@ namespace RASv2.Tests
             });
             yield return Case("краткая информация: модели, выгрузка, не вышедшие, идёт у коллеги", () =>
             {
-                var t = new ExportTask { Models = 6 };
+                var t = new ExportTask { ModelFiles = Models(6) };
                 Check(t.Summary() == "6 моделей · не выгружалось", t.Summary());
                 t.LastRun = new DateTime(2026, 10, 28, 14, 20, 0);
                 Check(t.Summary() == "6 моделей · выгружено 28.10 14:20", t.Summary());
@@ -114,6 +117,47 @@ namespace RASv2.Tests
                 Check(ExportSettings.TryFaceting(" 2.5 ", out f) && f == 2.5, "точка");
                 Check(!ExportSettings.TryFaceting("0", out _) && !ExportSettings.TryFaceting("-1", out _) &&
                       !ExportSettings.TryFaceting("абв", out _) && !ExportSettings.TryFaceting("", out _), "не число или не больше нуля");
+            });
+            yield return Case("настройки узла: своё — у узла, не заданное — от ближайшего выше; нигде — null", () =>
+            {
+                var roots = Sample(out var block1, out var high);
+                var project = roots[0];
+                project.Own.Folders = new FolderSettings { NwcFolder = @"\\srv\ArmanQala\NWC\{Блок}" };
+                block1.Own.Names = new NameSettings { Parts = 6 };
+                var (folders, from) = ExportNodes.Inherited(high, s => s.Folders);
+                Check(from == project && folders.NwcFolder.EndsWith("{Блок}"), "папки — от проекта");
+                Check(ExportNodes.Effective(high, s => s.Names).Parts == 6, "имя — от блока");
+                Check(ExportNodes.Effective(project, s => s.Names) == null && ExportNodes.Inherited(project, s => s.Names).From == null,
+                    "у проекта своего нет, выше никого");
+                high.Own.Folders = new FolderSettings { NwcFolder = "своя" };
+                Check(ExportNodes.Effective(high, s => s.Folders).NwcFolder == "своя", "своё сильнее");
+                Check(ExportNodes.Inherited(high, s => s.Folders).From == project, "унаследованное — по-прежнему от проекта");
+            });
+            yield return Case("{Блок}: у блока — он сам, у критичности — её блок, у задачи — первый блок", () =>
+            {
+                var roots = Sample(out var block1, out var high);
+                Check(ExportNodes.BlockName(block1) == "Блок 1" && ExportNodes.BlockName(high) == "Блок 1", "блок и критичность");
+                Check(ExportNodes.BlockName(roots[0]) == "Блок 1", "задача — пример по первому блоку");
+                Check(ExportNodes.BlockName(roots[1]) == null, "блоков нет");
+                Check(ExportNodes.Level(high) == 2 && ExportNodes.Level(roots[0]) == 0, "уровни");
+            });
+            yield return Case("модели узла: имя NWC руками или из имени; Revit Server; проверка имён и папок", () =>
+            {
+                var names = new NameSettings();
+                var m = new ExportModel { Path = @"\\srv\Проект\0000_01_01_S6_KJ01_01_M3 еще текст.rvt" };
+                Check(ExportNodes.NwcNameOf(m, names) == "0000_01_01_S6_KJ01_01_M3", "из имени");
+                m.NwcName = " КЖ_свой ";
+                Check(ExportNodes.NwcNameOf(m, names) == "КЖ_свой", "руками");
+                var rsn = new ExportModel { Path = "RSN://10.10.1.5/Проекты/0000_01_01_S6_AR01_01_M3.rvt" };
+                Check(ExportNodes.NwcNameOf(rsn, names) == "0000_01_01_S6_AR01_01_M3", "Revit Server: " + ExportNodes.NwcNameOf(rsn, names));
+                Check(ExportNodes.IsServerPath(rsn.Path) && !ExportNodes.IsServerPath(@"\\srv\m.rvt") && !ExportNodes.IsServerPath("RSN://srv/папка"),
+                    "путь Revit Server");
+                Check(ExportNodes.CheckNwcNames(new[] { "a", "b" }) == null, "верные имена");
+                Check(ExportNodes.CheckNwcNames(new[] { "a", "A" }) != null, "повтор без учёта регистра");
+                Check(ExportNodes.CheckNwcNames(new[] { "a:b" }) != null && ExportNodes.CheckNwcNames(new[] { " " }) != null, "знаки и пусто");
+                Check(ExportNodes.CheckFolder(@"\\srv\{Дата}\Высокая критичность\XML\{ блок }", "Папка") == null, "метки известны");
+                var bad = ExportNodes.CheckFolder(@"\\srv\{Проект}", "Папка отчётов");
+                Check(bad != null && bad.Contains("{Проект}"), "неизвестная метка: " + bad);
             });
             yield return Case("удаление: вложенных на всех уровнях", () =>
             {

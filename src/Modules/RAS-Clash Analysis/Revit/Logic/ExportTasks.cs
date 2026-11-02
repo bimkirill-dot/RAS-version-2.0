@@ -7,7 +7,7 @@ namespace RASv2.ClashAnalysis.Logic
     /// <summary>
     /// Узел дерева «Задачи выгрузки» (DECISIONS.md модуля, «„Задачи выгрузки“ — выгрузка NWC и проверки в Navisworks»):
     /// задача — проект («Арман Кала»), подзадача — блок, под ней при необходимости — критичность; глубина любая. Пока —
-    /// только то, что видно в главном окне; настройки узла (папки, вид, модели, метки) — со своим окном. Без Revit API.
+    /// строка главного окна и свои настройки узла (карандаш, ExportNode.cs). Без Revit API.
     /// </summary>
     public sealed class ExportTask
     {
@@ -15,8 +15,12 @@ namespace RASv2.ClashAnalysis.Logic
         public ExportTask Parent { get; private set; }
         public List<ExportTask> Children { get; } = new List<ExportTask>();
 
-        /// <summary>Моделей у самого узла (без вложенных).</summary>
-        public int Models { get; set; }
+        /// <summary>Модели самого узла (без вложенных) — обычно у блока.</summary>
+        public List<ExportModel> ModelFiles { get; set; } = new List<ExportModel>();
+        /// <summary>Моделей у самого узла.</summary>
+        public int Models => ModelFiles.Count;
+        /// <summary>Свои настройки узла; не заданное — от узлов выше.</summary>
+        public NodeSettings Own { get; } = new NodeSettings();
         /// <summary>Последняя выгрузка узла; null — не выгружался.</summary>
         public DateTime? LastRun { get; set; }
         /// <summary>Моделей, не вышедших в последней выгрузке.</summary>

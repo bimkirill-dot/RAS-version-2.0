@@ -1,0 +1,242 @@
+<Window x:Class="RASv2.ClashAnalysis.UI.ExportNodeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Настройки узла" Width="900" Height="780" MinWidth="720" MinHeight="400"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="{DynamicResource Bg}" Foreground="{DynamicResource Fg}" FontFamily="Segoe UI" FontSize="13">
+    <!-- Настройки узла «Задач выгрузки» (карандаш, DECISIONS.md модуля). Примерное окно по списку настроек (разработчик,
+         02.11.2026: «давай попробуем, дальше будем редактировать»); рисунка нет. Разделы, кроме названия и моделей, — с
+         галочкой «Своё»: снята — значение узла выше, бледным. Кнопки, поля, кисти — общие образцы ядра (подключаются до
+         разметки); ключи своих стилей не совпадают с кистями ядра. -->
+    <Window.Resources>
+        <Style x:Key="Head" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="HeadBar" TargetType="DockPanel">
+            <Setter Property="Margin" Value="0,20,0,8" />
+        </Style>
+        <Style x:Key="FromText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Muted}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="12,0,0,0" />
+        </Style>
+        <Style x:Key="Caption" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,12,0" />
+        </Style>
+        <Style x:Key="Example" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Muted}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,4,0,8" />
+        </Style>
+        <Style x:Key="Num" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="Width" Value="56" />
+            <Setter Property="HorizontalContentAlignment" Value="Right" />
+        </Style>
+        <Style x:Key="ColHead" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Muted}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Margin" Value="0,0,8,4" />
+        </Style>
+        <!-- раздел без «Своё» — бледный: значения узла выше -->
+        <Style x:Key="Section" TargetType="StackPanel">
+            <Style.Triggers>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.5" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
+            <Setter Property="Margin" Value="0,3,24,3" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+    </Window.Resources>
+
+    <DockPanel>
+        <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="20,12">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Content="Сохранить" Style="{StaticResource PrimaryButton}" IsDefault="True" Click="Save_Click" />
+                    <Button Content="Отмена" IsCancel="True" Margin="8,0,0,0" />
+                </StackPanel>
+                <TextBlock x:Name="Error" Foreground="{DynamicResource Error}" TextWrapping="Wrap" VerticalAlignment="Center" />
+            </DockPanel>
+        </Border>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="20,0,20,16">
+
+                <DockPanel Style="{StaticResource HeadBar}">
+                    <TextBlock Style="{StaticResource Head}" Text="Название" />
+                </DockPanel>
+                <TextBox x:Name="NodeName" TextChanged="Any_Changed" />
+
+                <!-- Модели -->
+                <DockPanel Style="{StaticResource HeadBar}">
+                    <TextBlock Style="{StaticResource Head}" Text="Модели" />
+                    <TextBlock x:Name="ModelsFrom" Style="{StaticResource FromText}" />
+                </DockPanel>
+                <Grid x:Name="ModelsHead" Margin="0,0,40,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="260" />
+                        <ColumnDefinition Width="60" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource ColHead}" Text="Модель" />
+                    <TextBlock Grid.Column="1" Style="{StaticResource ColHead}" Text="Имя NWC" />
+                    <TextBlock Grid.Column="2" Style="{StaticResource ColHead}" Text="Отдел" />
+                </Grid>
+                <ItemsControl x:Name="ModelsList">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="260" />
+                                    <ColumnDefinition Width="60" />
+                                    <ColumnDefinition Width="40" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding Path}" ToolTip="{Binding Path}" TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                                    <TextBox Text="{Binding Name}" ToolTip="Пусто — имя из имени модели" />
+                                    <TextBlock Text="не по шаблону — имя как есть" Visibility="{Binding MismatchVisibility}"
+                                               Foreground="{DynamicResource Muted}" FontSize="12" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Text="{Binding Department}" VerticalAlignment="Center" />
+                                <Button Grid.Column="3" Style="{StaticResource IconButton}" Content="&#xE74D;" HorizontalAlignment="Right"
+                                        VerticalAlignment="Top" Click="DeleteModel_Click" ToolTip="Убрать модель" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <DockPanel Margin="0,2,0,0">
+                    <Button DockPanel.Dock="Left" Content="Добавить модели…" Click="AddFiles_Click" />
+                    <Button DockPanel.Dock="Right" Content="Добавить с Revit Server" Margin="8,0,0,0" Click="AddServer_Click" />
+                    <TextBox x:Name="ServerPath" Margin="16,0,0,0" ToolTip="RSN://сервер/папка/модель.rvt" />
+                </DockPanel>
+
+                <!-- Папки -->
+                <DockPanel Style="{StaticResource HeadBar}">
+                    <TextBlock Style="{StaticResource Head}" Text="Папки" />
+                    <CheckBox x:Name="FoldersOwn" Content="Своё" Margin="16,0,0,0" Checked="Own_Changed" Unchecked="Own_Changed" />
+                    <TextBlock x:Name="FoldersFrom" Style="{StaticResource FromText}" />
+                </DockPanel>
+                <StackPanel x:Name="FoldersPanel" Style="{StaticResource Section}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="130" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Style="{StaticResource Caption}" Text="Папка NWC" />
+                        <TextBox Grid.Column="1" x:Name="NwcFolder" TextChanged="Any_Changed" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" x:Name="NwcExample" Style="{StaticResource Example}" />
+                        <TextBlock Grid.Row="2" Style="{StaticResource Caption}" Text="Папка отчётов" />
+                        <TextBox Grid.Row="2" Grid.Column="1" x:Name="ReportFolder" TextChanged="Any_Changed" />
+                        <TextBlock Grid.Row="3" Grid.Column="1" x:Name="ReportExample" Style="{StaticResource Example}" />
+                        <TextBlock Grid.Row="4" Style="{StaticResource Caption}" Text="Формат даты" />
+                        <ComboBox Grid.Row="4" Grid.Column="1" x:Name="DateFormat" Width="200" HorizontalAlignment="Left" MinHeight="28"
+                                  VerticalContentAlignment="Center" SelectionChanged="Any_Changed" />
+                    </Grid>
+                </StackPanel>
+
+                <!-- Имя NWC -->
+                <DockPanel Style="{StaticResource HeadBar}">
+                    <TextBlock Style="{StaticResource Head}" Text="Имя NWC" />
+                    <CheckBox x:Name="NamesOwn" Content="Своё" Margin="16,0,0,0" Checked="Own_Changed" Unchecked="Own_Changed" />
+                    <TextBlock x:Name="NamesFrom" Style="{StaticResource FromText}" />
+                </DockPanel>
+                <StackPanel x:Name="NamesPanel" Style="{StaticResource Section}">
+                    <CheckBox x:Name="TrimName" Content="Обрезать по шаблону" Checked="Any_Changed" Unchecked="Any_Changed" />
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <TextBlock Style="{StaticResource Caption}" Text="Частей через «_»" />
+                        <TextBox x:Name="NameParts" Style="{StaticResource Num}" TextChanged="Any_Changed" />
+                        <TextBlock Style="{StaticResource Caption}" Text="Раздел — часть №" Margin="28,0,12,0" />
+                        <TextBox x:Name="SectionPart" Style="{StaticResource Num}" TextChanged="Any_Changed" />
+                    </StackPanel>
+                    <TextBlock x:Name="NameExample" Style="{StaticResource Example}" Margin="0,8,0,0" />
+                </StackPanel>
+
+                <!-- Отделы -->
+                <DockPanel Style="{StaticResource HeadBar}">
+                    <TextBlock Style="{StaticResource Head}" Text="Отделы" />
+                    <CheckBox x:Name="DepartmentsOwn" Content="Своё" Margin="16,0,0,0" Checked="Own_Changed" Unchecked="Own_Changed" />
+                    <TextBlock x:Name="DepartmentsFrom" Style="{StaticResource FromText}" />
+                </DockPanel>
+                <StackPanel x:Name="DepartmentsPanel" Style="{StaticResource Section}">
+                    <Grid Margin="0,0,40,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="90" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="200" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource ColHead}" Text="Отдел" />
+                        <TextBlock Grid.Column="1" Style="{StaticResource ColHead}" Text="Эталон (.rte)" />
+                        <TextBlock Grid.Column="2" Style="{StaticResource ColHead}" Text="Шаблон вида" />
+                    </Grid>
+                    <ItemsControl x:Name="DepartmentsList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="90" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="200" />
+                                        <ColumnDefinition Width="40" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Text="{Binding Department, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,0" />
+                                    <DockPanel Grid.Column="1" Margin="0,0,8,0">
+                                        <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE8E5;" Margin="4,0,0,0"
+                                                Click="BrowseEtalon_Click" ToolTip="Выбрать файл" />
+                                        <TextBox Text="{Binding Etalon, UpdateSourceTrigger=PropertyChanged}" />
+                                    </DockPanel>
+                                    <TextBox Grid.Column="2" Text="{Binding ViewTemplate, UpdateSourceTrigger=PropertyChanged}" />
+                                    <Button Grid.Column="3" Style="{StaticResource IconButton}" Content="&#xE74D;" HorizontalAlignment="Right"
+                                            Click="DeleteDepartment_Click" ToolTip="Удалить отдел" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button Content="Добавить отдел" HorizontalAlignment="Left" Click="AddDepartment_Click" />
+                </StackPanel>
+
+                <!-- Удалить перед выгрузкой -->
+                <DockPanel Style="{StaticResource HeadBar}">
+                    <TextBlock Style="{StaticResource Head}" Text="Удалить из модели перед выгрузкой" />
+                    <CheckBox x:Name="RemoveOwn" Content="Своё" Margin="16,0,0,0" Checked="Own_Changed" Unchecked="Own_Changed" />
+                    <TextBlock x:Name="RemoveFrom" Style="{StaticResource FromText}" />
+                </DockPanel>
+                <StackPanel x:Name="RemovePanel" Style="{StaticResource Section}">
+                    <WrapPanel>
+                        <CheckBox x:Name="RemoveRevitLinks" Content="Связи Revit" />
+                        <CheckBox x:Name="RemoveCad" Content="DWG и другие CAD" />
+                        <CheckBox x:Name="RemovePointClouds" Content="Облака точек" />
+                        <CheckBox x:Name="RemoveIfc" Content="IFC" />
+                    </WrapPanel>
+                </StackPanel>
+
+                <!-- Параметры выгрузки NWC -->
+                <DockPanel Style="{StaticResource HeadBar}">
+                    <TextBlock Style="{StaticResource Head}" Text="Параметры выгрузки NWC" />
+                    <CheckBox x:Name="NwcOwn" Content="Своё" Margin="16,0,0,0" Checked="Own_Changed" Unchecked="Own_Changed" />
+                    <TextBlock x:Name="NwcFrom" Style="{StaticResource FromText}" />
+                </DockPanel>
+                <StackPanel x:Name="NwcPanel" Style="{StaticResource Section}" Orientation="Horizontal">
+                    <Button Content="Параметры выгрузки…" Click="NwcOptions_Click" />
+                    <TextBlock x:Name="NwcSummary" Style="{StaticResource FromText}" />
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

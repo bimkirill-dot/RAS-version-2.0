@@ -98,21 +98,24 @@ namespace RASv2.ClashAnalysis.UI
             return w == "модель" ? "подзадачу" : w == "модели" ? "подзадачи" : "подзадач";
         }
 
-        // окно настроек узла — по рисунку разработчика, следующим шагом; выгрузка — после него
-        private void Edit_Click(object sender, RoutedEventArgs e) { }
+        private void Edit_Click(object sender, RoutedEventArgs e) =>
+            Nested(() => new ExportNodeWindow(RowOf(sender).Task, Settings) { Owner = this }.ShowDialog(), "Настройки узла");
 
-        private void Settings_Click(object sender, RoutedEventArgs e)
+        private void Settings_Click(object sender, RoutedEventArgs e) =>
+            Nested(() => new ExportSettingsWindow(Settings) { Owner = this }.ShowDialog(), "Общие настройки");
+
+        /// <summary>Вложенное окно; исключение сквозь вложенный ShowDialog роняет Revit (CLAUDE.md, «Правила, о которые уже спотыкались»).</summary>
+        private void Nested(System.Action show, string what)
         {
             try
             {
-                new ExportSettingsWindow(Settings) { Owner = this }.ShowDialog();
+                show();
                 Refresh();
             }
             catch (System.Exception ex)
             {
-                // исключение сквозь вложенный ShowDialog роняет Revit (CLAUDE.md, «Правила, о которые уже спотыкались»)
-                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: общие настройки не открылись", ex);
-                MessageBox.Show(this, "Общие настройки не открылись — подробности в журнале плагина («О плагине» → «Показать журнал ошибок»).",
+                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: " + what + " — окно не открылось", ex);
+                MessageBox.Show(this, what + " не открылись — подробности в журнале плагина («О плагине» → «Показать журнал ошибок»).",
                     Title, MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
