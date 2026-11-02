@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
 
 namespace RASv2.ClashAnalysis.Logic
@@ -15,13 +14,11 @@ namespace RASv2.ClashAnalysis.Logic
     public enum NwcParameters { None, Elements, All }
 
     /// <summary>
-    /// Общие настройки «Задач выгрузки» — шестерёнка главного окна: параметры выгрузки NWC, те же, что в окне экспортёра Navisworks
-    /// (разработчик, 02.11.2026: «главные настройки — те же самые, что открываются при экспорте в NWC стандартным экспортёром»;
-    /// значения по умолчанию — с его снимка окна) и что удалить из модели перед выгрузкой. Папки, имя NWC, отделы — в
-    /// настройках узла (карандаш). Пока — в памяти; хранение на сервере — следующим шагом. Без Revit API: в NavisworksExportOptions —
-    /// при выгрузке.
+    /// Параметры выгрузки NWC — те же, что в окне экспортёра Navisworks (разработчик, 02.11.2026: «главные настройки — те же самые,
+    /// что открываются при экспорте в NWC стандартным экспортёром»; значения по умолчанию — с его снимка окна). Без Revit API:
+    /// в NavisworksExportOptions — при выгрузке.
     /// </summary>
-    public sealed class ExportSettings
+    public sealed class NwcOptions
     {
         public bool ConvertElementIds => true;   // всегда: по номерам элементов работают «Показать в Revit» и «Коллизии элемента»
         public NwcParameters Parameters { get; set; } = NwcParameters.All;
@@ -38,58 +35,74 @@ namespace RASv2.ClashAnalysis.Logic
         public bool FindMissingMaterials { get; set; }
         public bool DivideIntoLevels { get; set; } = true;
         public NwcScope Scope { get; set; } = NwcScope.View;
-        /// <summary>Вид для выгрузки (при «Экспорт: вид»); нет в модели — создаётся.</summary>
+        /// <summary>Вид для выгрузки (при «Экспорт: Вид») по умолчанию; задача может задать свой. Нет в модели — создаётся.</summary>
         public string ViewName { get; set; } = "3D_Navisworks";
         public bool RoomGeometry { get; set; }
 
-        // что удалить из копии модели перед выгрузкой — одно правило для всех задач (разработчик, 02.11.2026: «можно вынести
-        // в общие настройки»); связанное в NWC и так не попадёт, импортированный DWG — попадёт
-        public bool RemoveRevitLinks { get; set; } = true;
-        public bool RemoveCad { get; set; } = true;
-        public bool RemovePointClouds { get; set; } = true;
-        public bool RemoveIfc { get; set; } = true;
-
-        /// <summary>
-        /// Формат метки {Дата} (.NET); как в папках отчётов сейчас — «01.10.2026». Метки — в общих (разработчик, 02.11.2026:
-        /// «настройки меток тоже добавь в общие настройки»).
-        /// </summary>
-        public string DateFormat { get; set; } = "dd.MM.yyyy";
-
-        /// <summary>
-        /// {Блок} — часть имени модели с этим номером (с 1): «S6» в «0000_01_01_S6_KJ01_01_M3» (разработчик, 02.11.2026: «метка
-        /// блок и отдел — просто из названия файла»).
-        /// </summary>
-        public int BlockPart { get; set; } = 4;
-        /// <summary>{Отдел} — буквы до цифр части с этим номером: «KJ01» → «KJ»; по отделу же — эталон и шаблон вида.</summary>
-        public int DepartmentPart { get; set; } = 5;
-
-        /// <summary>Форматы {Дата} на выбор.</summary>
-        public static readonly string[] DateFormats = { "dd.MM.yyyy", "yyyy-MM-dd", "yyyyMMdd", "yyyy.MM.dd" };
-
-        public ExportSettings Clone() => (ExportSettings)MemberwiseClone();
+        public NwcOptions Clone() => (NwcOptions)MemberwiseClone();
 
         /// <summary>Коэффициент фасетизации из текста: «1», «0,5», «0.5»; больше нуля.</summary>
         public static bool TryFaceting(string text, out double value) =>
             double.TryParse((text ?? "").Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out value) && value > 0;
     }
 
+    /// <summary>Отдел: код в имени модели («KJ» — в «…_KJ01_…») → эталон → шаблон вида для выгрузки.</summary>
+    public sealed class DepartmentTemplate
+    {
+        public string Department { get; set; }
+        /// <summary>Путь к файлу шаблона проекта отдела (.rte).</summary>
+        public string Etalon { get; set; }
+        /// <summary>Имя шаблона вида для выгрузки в эталоне.</summary>
+        public string ViewTemplate { get; set; }
+        public DepartmentTemplate Clone() => (DepartmentTemplate)MemberwiseClone();
+    }
+
+    /// <summary>
+    /// Общие настройки «Задач выгрузки» — шестерёнка главного окна: всё, что одно на компанию (разбор настроек, 02.11.2026):
+    /// параметры выгрузки NWC, что удалить из модели перед выгрузкой, правило имени модели и метки, отделы. У задач — только
+    /// своё: модели, папки, вид (ExportNode.cs). Пока — в памяти; хранение на сервере — следующим шагом.
+    /// </summary>
+    public sealed class ExportSettings
+    {
+        public NwcOptions Nwc { get; set; } = new NwcOptions();
+
+        // что удалить из копии модели перед выгрузкой (разработчик, 02.11.2026: «можно вынести в общие настройки»); связанное
+        // в NWC и так не попадёт, импортированный DWG — попадёт
+        public bool RemoveRevitLinks { get; set; } = true;
+        public bool RemoveCad { get; set; } = true;
+        public bool RemovePointClouds { get; set; } = true;
+        public bool RemoveIfc { get; set; } = true;
+
+        /// <summary>Обрезать имя NWC: первые NameParts частей через «_», в последней — до пробела.</summary>
+        public bool TrimName { get; set; } = true;
+        public int NameParts { get; set; } = 7;
+
+        /// <summary>{Блок} — часть имени модели вида «буква и цифры»: «S6», «S10» (разработчик, 02.11.2026: «зачем по частям делить»).</summary>
+        public string BlockPrefix { get; set; } = "S";
+
+        /// <summary>{Дата} — формат (.NET); как в папках отчётов сейчас — «01.10.2026».</summary>
+        public string DateFormat { get; set; } = "dd.MM.yyyy";
+
+        /// <summary>Отделы — их коды ищутся в имени модели ({Отдел}), по ним же эталон и шаблон вида.</summary>
+        public List<DepartmentTemplate> Departments { get; set; } = new List<DepartmentTemplate>();
+
+        /// <summary>Форматы {Дата} на выбор.</summary>
+        public static readonly string[] DateFormats = { "dd.MM.yyyy", "yyyy-MM-dd", "yyyyMMdd", "yyyy.MM.dd" };
+
+        public ExportSettings Clone()
+        {
+            var copy = (ExportSettings)MemberwiseClone();
+            copy.Nwc = Nwc.Clone();
+            copy.Departments = Departments.Select(d => d.Clone()).ToList();
+            return copy;
+        }
+    }
+
     /// <summary>Метки в строке папки и имя NWC из имени модели.</summary>
     public static class ExportNames
     {
-        /// <summary>
-        /// Метки строки папки: блок и отдел — из имени модели, дата — день выгрузки (разработчик, 02.11.2026); остальное пишется
-        /// текстом.
-        /// </summary>
+        /// <summary>Метки строки папки: блок и отдел — из имени модели, дата — день выгрузки; остальное пишется текстом.</summary>
         public static readonly string[] BuiltInLabels = { "Блок", "Отдел", "Дата" };
-
-        /// <summary>Значения меток для модели: {Блок} и {Отдел} — из её имени (нет такой части — пусто), {Дата} — date.</summary>
-        public static Dictionary<string, string> LabelValues(string modelFile, ExportSettings common, DateTime date) =>
-            new Dictionary<string, string>
-            {
-                ["Блок"] = Section(modelFile, common.BlockPart),
-                ["Отдел"] = Department(Section(modelFile, common.DepartmentPart)),
-                ["Дата"] = date.ToString(common.DateFormat),
-            };
 
         private static readonly Regex LabelRx = new Regex(@"\{([^{}]+)\}");
 
@@ -101,6 +114,44 @@ namespace RASv2.ClashAnalysis.Logic
         public static string Fill(string template, IDictionary<string, string> values) =>
             LabelRx.Replace(template ?? "", m =>
                 values.TryGetValue(m.Groups[1].Value.Trim(), out var v) && !string.IsNullOrEmpty(v) ? v : m.Value);
+
+        /// <summary>Значения меток для модели: {Блок} и {Отдел} — найденные в её имени (не нашлось — пусто), {Дата} — date.</summary>
+        public static Dictionary<string, string> LabelValues(string modelFile, ExportSettings common, DateTime date) =>
+            new Dictionary<string, string>
+            {
+                ["Блок"] = Block(modelFile, common.BlockPrefix),
+                ["Отдел"] = Department(modelFile, common.Departments.Select(d => d.Department)),
+                ["Дата"] = date.ToString(common.DateFormat),
+            };
+
+        /// <summary>Части имени модели через «_», каждая — до пробела: «…_M3 еще текст» → «M3».</summary>
+        private static IEnumerable<string> Parts(string modelFile) =>
+            Path.GetFileNameWithoutExtension(modelFile ?? "").Split('_').Select(p =>
+            {
+                var space = p.IndexOf(' ');
+                return (space >= 0 ? p.Substring(0, space) : p).Trim();
+            });
+
+        /// <summary>Блок — первая часть имени вида «префикс и цифры»: «S6», «S10», «S01»; нет — пусто.</summary>
+        public static string Block(string modelFile, string prefix)
+        {
+            if (string.IsNullOrWhiteSpace(prefix)) return "";
+            var rx = new Regex("^" + Regex.Escape(prefix.Trim()) + @"\d+$", RegexOptions.IgnoreCase);
+            return Parts(modelFile).FirstOrDefault(p => rx.IsMatch(p)) ?? "";
+        }
+
+        /// <summary>
+        /// Отдел — первый слева код из списка, найденный частью имени: сам код или код с цифрами («KJ», «KJ01»); подстрока не
+        /// считается («AR» в «ArmanQala» — не отдел). Возвращается код, как в списке; не нашлось — пусто.
+        /// </summary>
+        public static string Department(string modelFile, IEnumerable<string> codes)
+        {
+            var list = codes.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()).ToList();
+            foreach (var part in Parts(modelFile))
+                foreach (var code in list)
+                    if (Regex.IsMatch(part, "^" + Regex.Escape(code) + @"\d*$", RegexOptions.IgnoreCase)) return code;
+            return "";
+        }
 
         /// <summary>
         /// Имя NWC из имени модели. trim — первые parts частей через «_», в последней — до первого пробела:
@@ -118,28 +169,6 @@ namespace RASv2.ClashAnalysis.Logic
             var space = last.IndexOf(' ');
             if (space >= 0) kept[parts - 1] = last.Substring(0, space);
             return string.Join("_", kept);
-        }
-
-        /// <summary>Часть имени модели с номером part (с 1), до пробела: «S6», «KJ01»; нет такой части — пусто.</summary>
-        public static string Section(string modelFile, int part)
-        {
-            var split = Path.GetFileNameWithoutExtension(modelFile ?? "").Split('_');
-            if (part < 1 || part > split.Length) return "";
-            var s = split[part - 1];
-            var space = s.IndexOf(' ');
-            return (space >= 0 ? s.Substring(0, space) : s).Trim();
-        }
-
-        /// <summary>Отдел — буквы раздела до первой цифры: «KJ01» → «KJ», «AR» → «AR».</summary>
-        public static string Department(string section)
-        {
-            var sb = new StringBuilder();
-            foreach (var c in section ?? "")
-            {
-                if (char.IsDigit(c)) break;
-                sb.Append(c);
-            }
-            return sb.ToString();
         }
     }
 }

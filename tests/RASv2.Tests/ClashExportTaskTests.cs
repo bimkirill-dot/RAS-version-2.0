@@ -12,8 +12,9 @@ namespace RASv2.Tests
 
         private static void Check(bool condition, string what) => Program.Check(condition, what);
 
-        private static List<ExportModel> Models(int n) =>
-            Enumerable.Range(1, n).Select(i => new ExportModel { Path = "0000_01_01_S6_KJ0" + i + "_01_M3.rvt" }).ToList();
+        // пути — свои у каждого блока: одна модель — один раз на проект
+        private static List<ExportModel> Models(int n, string block = "S6") =>
+            Enumerable.Range(1, n).Select(i => new ExportModel { Path = "0000_01_01_" + block + "_KJ0" + i + "_01_M3.rvt" }).ToList();
 
         // Арман Кала → Блок 1 (6 моделей: Высокая, Средняя), Блок 2 (5); ЖК Нурлы (12)
         private static List<ExportTask> Sample(out ExportTask block1, out ExportTask high)
@@ -22,8 +23,8 @@ namespace RASv2.Tests
             block1 = project.Add(new ExportTask { Name = "Блок 1", ModelFiles = Models(6) });
             high = block1.Add(new ExportTask { Name = "Высокая критичность" });
             block1.Add(new ExportTask { Name = "Средняя критичность" });
-            project.Add(new ExportTask { Name = "Блок 2", ModelFiles = Models(5) });
-            return new List<ExportTask> { project, new ExportTask { Name = "ЖК Нурлы", ModelFiles = Models(12) } };
+            project.Add(new ExportTask { Name = "Блок 2", ModelFiles = Models(5, "S7") });
+            return new List<ExportTask> { project, new ExportTask { Name = "ЖК Нурлы", ModelFiles = Models(12, "S1") } };
         }
 
         public static IEnumerable<KeyValuePair<string, Action>> All()
@@ -89,13 +90,18 @@ namespace RASv2.Tests
                 ExportNames.NwcName("0000_01_01_S6_KJ01_01_M3.rvt", true, 7, out matches);
                 Check(matches, "по шаблону");
             });
-            yield return Case("раздел и отдел из имени модели", () =>
+            yield return Case("{Блок} и {Отдел} — найденные в имени модели, не по номеру части", () =>
             {
-                Check(ExportNames.Section("0000_01_01_S6_KJ01_01_M3 еще текст.rvt", 5) == "KJ01", "раздел");
-                Check(ExportNames.Section("0000_01.rvt", 5) == "", "нет такой части");
-                Check(ExportNames.Department("KJ01") == "KJ" && ExportNames.Department("AR") == "AR" && ExportNames.Department("ОВ2") == "ОВ",
-                    "отдел — буквы до цифр");
-                Check(ExportNames.Department("") == "", "пусто");
+                var codes = new[] { "AR", "KJ", "OV" };
+                Check(ExportNames.Block("0000_01_01_S6_KJ01_01_M3 еще текст.rvt", "S") == "S6", "блок S6");
+                Check(ExportNames.Block("0000_S10_KJ01.rvt", "s") == "S10", "S10, буква без учёта регистра");
+                Check(ExportNames.Block("0000_SX_KJ01.rvt", "S") == "" && ExportNames.Block("Модель АР.rvt", "S") == "", "нет блока");
+                Check(ExportNames.Department("0000_01_01_S6_KJ01_01_M3.rvt", codes) == "KJ", "KJ01 → KJ");
+                Check(ExportNames.Department("0000_S6_OV_вент.rvt", codes) == "OV", "код без цифр");
+                Check(ExportNames.Department("ArmanQala_S6_X01.rvt", codes) == "", "«AR» в «ArmanQala» — не отдел");
+                Check(ExportNames.Department("0000_S6_ARX01.rvt", codes) == "", "код с буквами после — не отдел");
+                Check(ExportNames.Department("0000_KJ01_AR02.rvt", codes) == "KJ", "два кода — первый слева");
+                Check(ExportNames.Department("0000_kj01.rvt", codes) == "KJ", "без учёта регистра — код как в таблице");
             });
             yield return Case("папка — строка с метками: подставить известные, неизвестные — как есть", () =>
             {
@@ -105,66 +111,85 @@ namespace RASv2.Tests
                 var labels = string.Join(",", ExportNames.LabelsIn(@"{Шифр}_{Проект}\{Проект}\{Дата}"));
                 Check(labels == "Шифр,Проект,Дата", labels);
             });
-            yield return Case("общие настройки: по умолчанию — как на снимке окна экспортёра; коэффициент фасетизации", () =>
+            yield return Case("общие настройки: экспортёр — как на снимке; удаление, имя, дата; коэффициент фасетизации", () =>
             {
                 var s = new ExportSettings();
-                Check(s.ConvertElementIds && s.Parameters == NwcParameters.All && s.SharedCoordinates && s.FacetingFactor == 1 &&
-                      s.ConvertElementProperties && s.RoomAsAttribute && s.ConvertParts && s.DivideIntoLevels &&
-                      s.Scope == NwcScope.View && s.ViewName == "3D_Navisworks", "включённое");
-                Check(!s.ConvertUrls && !s.ConvertLights && !s.ConvertLinkedCad && !s.ConvertLinkedFiles && !s.FindMissingMaterials &&
-                      !s.RoomGeometry, "выключенное");
+                var n = s.Nwc;
+                Check(n.ConvertElementIds && n.Parameters == NwcParameters.All && n.SharedCoordinates && n.FacetingFactor == 1 &&
+                      n.ConvertElementProperties && n.RoomAsAttribute && n.ConvertParts && n.DivideIntoLevels &&
+                      n.Scope == NwcScope.View && n.ViewName == "3D_Navisworks", "включённое");
+                Check(!n.ConvertUrls && !n.ConvertLights && !n.ConvertLinkedCad && !n.ConvertLinkedFiles && !n.FindMissingMaterials &&
+                      !n.RoomGeometry, "выключенное");
                 Check(s.RemoveRevitLinks && s.RemoveCad && s.RemovePointClouds && s.RemoveIfc, "перед выгрузкой удаляется всё внешнее");
-                Check(s.DateFormat == "dd.MM.yyyy", "дата — как в папках отчётов: 01.10.2026");
-                Check(ExportSettings.TryFaceting("0,5", out var f) && f == 0.5, "запятая");
-                Check(ExportSettings.TryFaceting(" 2.5 ", out f) && f == 2.5, "точка");
-                Check(!ExportSettings.TryFaceting("0", out _) && !ExportSettings.TryFaceting("-1", out _) &&
-                      !ExportSettings.TryFaceting("абв", out _) && !ExportSettings.TryFaceting("", out _), "не число или не больше нуля");
+                Check(s.TrimName && s.NameParts == 7 && s.BlockPrefix == "S" && s.DateFormat == "dd.MM.yyyy", "имя модели и дата");
+                Check(NwcOptions.TryFaceting("0,5", out var f) && f == 0.5, "запятая");
+                Check(NwcOptions.TryFaceting(" 2.5 ", out f) && f == 2.5, "точка");
+                Check(!NwcOptions.TryFaceting("0", out _) && !NwcOptions.TryFaceting("-1", out _) &&
+                      !NwcOptions.TryFaceting("абв", out _) && !NwcOptions.TryFaceting("", out _), "не число или не больше нуля");
+                s.Departments.Add(new DepartmentTemplate { Department = "KJ" });
+                var copy = s.Clone();
+                copy.Nwc.ViewName = "другой";
+                copy.Departments[0].Department = "AR";
+                Check(s.Nwc.ViewName == "3D_Navisworks" && s.Departments[0].Department == "KJ", "копия не трогает исходные");
+                Check(ExportNodes.CheckDepartmentCodes(new[] { "KJ", "AR", "" }) == null, "коды верные");
+                Check(ExportNodes.CheckDepartmentCodes(new[] { "KJ01" }) != null && ExportNodes.CheckDepartmentCodes(new[] { "KJ", "kj" }) != null,
+                    "цифры в коде и повтор");
             });
-            yield return Case("настройки узла: своё — у узла, не заданное — от ближайшего выше; нигде — null", () =>
+            yield return Case("строка: папки и вид — каждая своя или от ближайшей строки выше", () =>
             {
                 var roots = Sample(out var block1, out var high);
                 var project = roots[0];
-                project.Own.Folders = new FolderSettings { NwcFolder = @"\\srv\ArmanQala\NWC\{Блок}" };
-                block1.Own.Names = new NameSettings { Parts = 6 };
-                var (folders, from) = ExportNodes.Inherited(high, s => s.Folders);
-                Check(from == project && folders.NwcFolder.EndsWith("{Блок}"), "папки — от проекта");
-                Check(ExportNodes.Effective(high, s => s.Names).Parts == 6, "имя — от блока");
-                Check(ExportNodes.Effective(project, s => s.Names) == null && ExportNodes.Inherited(project, s => s.Names).From == null,
-                    "у проекта своего нет, выше никого");
-                high.Own.Folders = new FolderSettings { NwcFolder = "своя" };
-                Check(ExportNodes.Effective(high, s => s.Folders).NwcFolder == "своя", "своё сильнее");
-                Check(ExportNodes.Inherited(high, s => s.Folders).From == project, "унаследованное — по-прежнему от проекта");
+                project.Own.NwcFolder = @"\\srv\ArmanQala\NWC\{Блок}";
+                project.Own.ReportFolder = @"\\srv\ArmanQala\{Дата}\XML\{Блок}";
+                high.Own.ReportFolder = @"\\srv\ArmanQala\{Дата}\Высокая критичность\XML\{Блок}";
+                var (nwc, from) = ExportNodes.Inherited(high, s => s.NwcFolder);
+                Check(from == project && nwc.EndsWith("{Блок}"), "папка NWC у критичности — от задачи");
+                Check(ExportNodes.Effective(high, s => s.ReportFolder).Contains("Высокая"), "своя папка отчётов");
+                project.Own.NwcFolder = @"\\srv2\NWC\{Блок}";
+                Check(ExportNodes.Effective(high, s => s.NwcFolder).StartsWith(@"\\srv2"), "поменяли у задачи — критичность следом");
+                Check(ExportNodes.Effective(block1, s => s.ViewName) == null, "вид нигде не задан — из общих");
+                block1.Own.ViewName = "3D_NW_Блок";
+                Check(ExportNodes.Effective(high, s => s.ViewName) == "3D_NW_Блок", "вид — от блока");
             });
-            yield return Case("метки {Блок} и {Отдел} — из имени модели, {Дата} — по формату общих", () =>
+            yield return Case("модели — у одной строки на ветке; папка NWC — не ниже неё; модель — один раз на проект", () =>
+            {
+                var roots = Sample(out var block1, out var high);
+                var project = roots[0];
+                Check(ExportNodes.CanHaveModels(block1) && !ExportNodes.CanHaveModels(high) && !ExportNodes.CanHaveModels(project),
+                    "у блока — да, у критичности и задачи — нет");
+                Check(ExportNodes.ModelsAbove(high) == block1, "у критичности модели — блока");
+                Check(string.Join(",", ExportNodes.ModelsBelow(project).Select(t => t.Name)) == "Блок 1,Блок 2", "у задачи — модели блоков");
+                Check(ExportNodes.HasNwcFolder(block1) && ExportNodes.HasNwcFolder(project) && !ExportNodes.HasNwcFolder(high),
+                    "папка NWC — у блока и выше, у критичности — нет");
+                var empty = new ExportTask { Name = "Новый проект" };
+                Check(ExportNodes.CanHaveModels(empty) && ExportNodes.HasNwcFolder(empty), "проект без блоков держит модели сам");
+                var path = block1.ModelFiles[0].Path;
+                Check(ExportNodes.FindModel(project, path.ToUpperInvariant(), project.Children[1]) == block1, "модель уже в блоке 1");
+                Check(ExportNodes.FindModel(project, path, block1) == null, "у себя — не повтор");
+            });
+            yield return Case("модели: имя NWC руками или из имени; Revit Server; имена и папки", () =>
             {
                 var common = new ExportSettings();
-                var v = ExportNames.LabelValues(@"\\srv\Проект\0000_01_01_S6_KJ01_01_M3 еще текст.rvt", common, new DateTime(2026, 10, 1));
-                Check(v["Блок"] == "S6" && v["Отдел"] == "KJ" && v["Дата"] == "01.10.2026", string.Join(" ", v.Values));
-                var folder = ExportNames.Fill(@"\\srv\ArmanQala\NWC\{Блок}\{Отдел}", v);
-                Check(folder == @"\\srv\ArmanQala\NWC\S6\KJ", folder);
-                v = ExportNames.LabelValues("Модель АР.rvt", common, new DateTime(2026, 10, 1));
-                Check(v["Блок"] == "" && v["Отдел"] == "", "не по шаблону — пусто");
-                common.BlockPart = 1;
-                Check(ExportNames.LabelValues("S9_KJ01.rvt", common, DateTime.Today)["Блок"] == "S9", "номер части — из настройки");
-                Check(ExportNodes.CheckFolder(@"\\srv\{Отдел}\{Блок}\{Дата}", "Папка") == null, "три метки известны");
-            });
-            yield return Case("модели узла: имя NWC руками или из имени; Revit Server; проверка имён и папок", () =>
-            {
-                var names = new NameSettings();
                 var m = new ExportModel { Path = @"\\srv\Проект\0000_01_01_S6_KJ01_01_M3 еще текст.rvt" };
-                Check(ExportNodes.NwcNameOf(m, names) == "0000_01_01_S6_KJ01_01_M3", "из имени");
+                Check(ExportNodes.NwcNameOf(m, common) == "0000_01_01_S6_KJ01_01_M3", "из имени");
                 m.NwcName = " КЖ_свой ";
-                Check(ExportNodes.NwcNameOf(m, names) == "КЖ_свой", "руками");
+                Check(ExportNodes.NwcNameOf(m, common) == "КЖ_свой", "руками");
                 var rsn = new ExportModel { Path = "RSN://10.10.1.5/Проекты/0000_01_01_S6_AR01_01_M3.rvt" };
-                Check(ExportNodes.NwcNameOf(rsn, names) == "0000_01_01_S6_AR01_01_M3", "Revit Server: " + ExportNodes.NwcNameOf(rsn, names));
+                Check(ExportNodes.NwcNameOf(rsn, common) == "0000_01_01_S6_AR01_01_M3", "Revit Server: " + ExportNodes.NwcNameOf(rsn, common));
                 Check(ExportNodes.IsServerPath(rsn.Path) && !ExportNodes.IsServerPath(@"\\srv\m.rvt") && !ExportNodes.IsServerPath("RSN://srv/папка"),
                     "путь Revit Server");
                 Check(ExportNodes.CheckNwcNames(new[] { "a", "b" }) == null, "верные имена");
                 Check(ExportNodes.CheckNwcNames(new[] { "a", "A" }) != null, "повтор без учёта регистра");
                 Check(ExportNodes.CheckNwcNames(new[] { "a:b" }) != null && ExportNodes.CheckNwcNames(new[] { " " }) != null, "знаки и пусто");
-                Check(ExportNodes.CheckFolder(@"\\srv\{Дата}\Высокая критичность\XML\{ блок }", "Папка") == null, "метки известны");
-                var bad = ExportNodes.CheckFolder(@"\\srv\{Проект}", "Папка отчётов");
+                Check(ExportNodes.CheckNwcFolder(@"\\srv\NWC\{ блок }\{Отдел}") == null, "папка NWC — блок и отдел");
+                Check(ExportNodes.CheckNwcFolder(@"\\srv\NWC\{Дата}") != null, "{Дата} в папке NWC — нельзя");
+                Check(ExportNodes.CheckReportFolder(@"\\srv\{Дата}\Высокая критичность\XML\{Блок}") == null, "папка отчётов — дата и блок");
+                Check(ExportNodes.CheckReportFolder(@"\\srv\{Отдел}") != null, "{Отдел} в папке отчётов — нельзя");
+                var bad = ExportNodes.CheckReportFolder(@"\\srv\{Проект}");
                 Check(bad != null && bad.Contains("{Проект}"), "неизвестная метка: " + bad);
+                var v = ExportNames.LabelValues(m.Path, new ExportSettings { Departments = { new DepartmentTemplate { Department = "KJ" } } },
+                    new DateTime(2026, 10, 1));
+                Check(ExportNames.Fill(@"\\srv\NWC\{Блок}\{Отдел}\{Дата}", v) == @"\\srv\NWC\S6\KJ\01.10.2026", "метки по модели");
             });
             yield return Case("удаление: вложенных на всех уровнях", () =>
             {

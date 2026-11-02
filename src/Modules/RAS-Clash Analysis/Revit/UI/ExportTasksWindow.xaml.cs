@@ -62,17 +62,21 @@ namespace RASv2.ClashAnalysis.UI
 
         private List<ExportTask> SiblingsOf(ExportTask task) => task.Parent?.Children ?? _roots;
 
+        // «+» — сразу настройки новой строки (разбор настроек, 02.11.2026: без поиска строки и карандаша); «Отмена» — строки нет
         private void AddTask_Click(object sender, RoutedEventArgs e)
         {
-            _roots.Add(new ExportTask { Name = "Новая задача" });
+            var task = new ExportTask { Name = "Новая задача" };
+            _roots.Add(task);
+            if (!OpenSettings(task)) _roots.Remove(task);
             Refresh();
         }
 
         private void AddChild_Click(object sender, RoutedEventArgs e)
         {
-            var task = RowOf(sender).Task;
-            task.Add(new ExportTask { Name = "Новая подзадача" });
-            _collapsed.Remove(task);
+            var parent = RowOf(sender).Task;
+            var task = parent.Add(new ExportTask { Name = "Новая подзадача" });
+            _collapsed.Remove(parent);
+            if (!OpenSettings(task)) parent.Remove(task);
             Refresh();
         }
 
@@ -101,25 +105,35 @@ namespace RASv2.ClashAnalysis.UI
             return w == "модель" ? "подзадачу" : w == "модели" ? "подзадачи" : "подзадач";
         }
 
-        private void Edit_Click(object sender, RoutedEventArgs e) =>
-            Nested(() => new ExportNodeWindow(RowOf(sender).Task, Settings) { Owner = this, PickModels = PickModels }.ShowDialog(), "Настройки узла");
+        private void Edit_Click(object sender, RoutedEventArgs e)
+        {
+            OpenSettings(RowOf(sender).Task);
+            Refresh();
+        }
 
-        private void Settings_Click(object sender, RoutedEventArgs e) =>
+        private void Settings_Click(object sender, RoutedEventArgs e)
+        {
             Nested(() => new ExportSettingsWindow(Settings) { Owner = this }.ShowDialog(), "Общие настройки");
+            Refresh();
+        }
+
+        /// <summary>Настройки строки (карандаш); true — сохранены.</summary>
+        private bool OpenSettings(ExportTask task) =>
+            Nested(() => new ExportNodeWindow(task, Settings) { Owner = this, PickModels = PickModels }.ShowDialog(), "Настройки");
 
         /// <summary>Вложенное окно; исключение сквозь вложенный ShowDialog роняет Revit (CLAUDE.md, «Правила, о которые уже спотыкались»).</summary>
-        private void Nested(System.Action show, string what)
+        private bool Nested(System.Func<bool?> show, string what)
         {
             try
             {
-                show();
-                Refresh();
+                return show() == true;
             }
             catch (System.Exception ex)
             {
                 RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: " + what + " — окно не открылось", ex);
                 MessageBox.Show(this, what + " не открылись — подробности в журнале плагина («О плагине» → «Показать журнал ошибок»).",
                     Title, MessageBoxButton.OK, MessageBoxImage.Error);
+                return false;
             }
         }
 
