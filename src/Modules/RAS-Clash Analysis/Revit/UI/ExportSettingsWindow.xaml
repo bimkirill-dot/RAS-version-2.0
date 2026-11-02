@@ -1,7 +1,7 @@
 <Window x:Class="RASv2.ClashAnalysis.UI.ExportSettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Общие настройки выгрузки NWC" Width="680" SizeToContent="Height" ResizeMode="NoResize"
+        Title="Общие настройки выгрузки NWC" Width="750" SizeToContent="Height" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Fg}" FontFamily="Segoe UI" FontSize="13">
     <!-- Общие настройки «Задач выгрузки» (шестерёнка главного окна, DECISIONS.md модуля): параметры окна экспортёра Navisworks
@@ -166,18 +166,15 @@
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="380" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Style="{StaticResource OptionName}" Text="Экспорт" />
-                    <ComboBox Grid.Column="1" x:Name="Scope" Width="200" SelectionChanged="Scope_Changed">
-                        <ComboBoxItem Content="Целый проект" />
-                        <ComboBoxItem Content="Текущий вид" />
-                    </ComboBox>
-                </Grid>
-            </Border>
-            <!-- своя строка (в окне экспортёра её нет): «Текущий вид» — модель открывает плагин, вид — по имени; «Выбор» не нужен -->
-            <Border Style="{StaticResource OptionRow}">
-                <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="380" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                    <TextBlock Style="{StaticResource OptionName}" Text="Вид для выгрузки" />
-                    <TextBox Grid.Column="1" x:Name="ViewName" Width="200" />
+                    <!-- «Текущий вид» — вид с этим именем: модель открывает плагин (разработчик, 02.11.2026: имя вида — в этой же
+                         строке, без отдельной); «Выбор» не нужен -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <ComboBox x:Name="Scope" Width="130" SelectionChanged="Scope_Changed">
+                            <ComboBoxItem Content="Целый проект" />
+                            <ComboBoxItem Content="Текущий вид" />
+                        </ComboBox>
+                        <TextBox x:Name="ViewName" Width="160" Margin="8,0,0,0" ToolTip="Имя вида для выгрузки" />
+                    </StackPanel>
                 </Grid>
             </Border>
             <Border Style="{StaticResource OptionRow}" BorderThickness="0">
