@@ -23,4 +23,10 @@
     <EmbeddedResource Include="Icons\*.png" LogicalName="Icons.%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <!-- HttpClient (Export\RevitServerClient — папки и модели Revit Server): в .NET Framework 4.8 — своя сборка самого .NET,
+       в .NET 8 — уже в составе -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <Reference Include="System.Net.Http" />
+  </ItemGroup>
+
 </Project>

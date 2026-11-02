@@ -1,0 +1,87 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Runtime.Serialization;
+using System.Runtime.Serialization.Json;
+using System.Text;
+
+namespace RASv2.ClashAnalysis.Logic
+{
+    /// <summary>Содержимое папки Revit Server: вложенные папки и модели (ответ службы администрирования, …/contents).</summary>
+    [DataContract]
+    public sealed class ServerContents
+    {
+        [DataMember] public List<ServerFolder> Folders { get; set; } = new List<ServerFolder>();
+        [DataMember] public List<ServerModel> Models { get; set; } = new List<ServerModel>();
+    }
+
+    [DataContract]
+    public sealed class ServerFolder
+    {
+        [DataMember] public string Name { get; set; }
+        [DataMember] public bool HasContents { get; set; }
+    }
+
+    [DataContract]
+    public sealed class ServerModel
+    {
+        /// <summary>Имя с «.rvt».</summary>
+        [DataMember] public string Name { get; set; }
+        [DataMember] public long ModelSize { get; set; }
+    }
+
+    /// <summary>
+    /// Revit Server для «Добавить модели…» (разработчик, 02.11.2026: окно Revit «Открыть» из плагина Revit Server не показывает):
+    /// серверы — из настроек Revit (RSN.ini своей версии), папки и модели — через службу администрирования Revit Server
+    /// (только чтение: GET …/AdminRESTService.svc/{папка}/contents). Без Revit API.
+    /// </summary>
+    public static class RevitServers
+    {
+        /// <summary>Серверы, настроенные у Revit этой версии: %ProgramData%\Autodesk\Revit Server {год}\Config\RSN.ini.</summary>
+        public static List<string> Hosts(int year)
+        {
+            var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                "Autodesk", "Revit Server " + year, "Config", "RSN.ini");
+            return File.Exists(path) ? ParseRsn(File.ReadAllText(path)) : new List<string>();
+        }
+
+        /// <summary>RSN.ini — по серверу в строке; пустые и комментарии («;», «#») — мимо, повторы — один раз.</summary>
+        public static List<string> ParseRsn(string text) =>
+            (text ?? "").Split('\r', '\n').Select(l => l.Trim())
+                .Where(l => l.Length > 0 && !l.StartsWith(";") && !l.StartsWith("#"))
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+        /// <summary>
+        /// Адрес содержимого папки: «http://сервер/RevitServerAdminRESTService2026/AdminRESTService.svc/a|b/contents»; корень —
+        /// «|»; части — в кодировке адреса (кириллица, пробелы).
+        /// </summary>
+        public static string ContentsUrl(string host, int year, IList<string> folder) =>
+            "http://" + host + "/RevitServerAdminRESTService" + year + "/AdminRESTService.svc/" +
+            (folder.Count == 0 ? "%7C" : string.Join("%7C", folder.Select(Uri.EscapeDataString))) + "/contents";
+
+        /// <summary>Путь модели, как его пишет Revit: «RSN://10.10.1.88/2025_Ариал/01_AR/S03/модель.rvt».</summary>
+        public static string RsnPath(string host, IList<string> folder, string model) =>
+            "RSN://" + host + "/" + string.Join("/", folder.Concat(new[] { model }));
+
+        public static ServerContents ParseContents(string json)
+        {
+            using (var ms = new MemoryStream(Encoding.UTF8.GetBytes(json ?? "")))
+            {
+                var c = (ServerContents)new DataContractJsonSerializer(typeof(ServerContents)).ReadObject(ms);
+                c.Folders = c.Folders ?? new List<ServerFolder>();
+                c.Models = c.Models ?? new List<ServerModel>();
+                return c;
+            }
+        }
+
+        /// <summary>Размер модели: «734 МБ», «1,2 ГБ».</summary>
+        public static string SizeText(long bytes)
+        {
+            const double mb = 1024d * 1024d;
+            return bytes >= 1024 * mb
+                ? (bytes / (1024 * mb)).ToString("0.0", System.Globalization.CultureInfo.GetCultureInfo("ru-RU")) + " ГБ"
+                : Math.Max(1, (long)Math.Round(bytes / mb)) + " МБ";
+        }
+    }
+}

@@ -121,11 +121,8 @@ namespace RASv2.ClashAnalysis.UI
         private readonly Field _view;
         private readonly bool _ready;
 
-        /// <summary>
-        /// Выбор моделей: в Revit — окно Revit «Открыть» (сетевые папки и Revit Server, путь RSN://…); null — окно Windows
-        /// (вне Revit — снимок окна).
-        /// </summary>
-        public Func<List<string>> PickModels { get; set; }
+        /// <summary>Версия Revit — серверы Revit Server для «Добавить модели…» берутся из её настроек (RSN.ini).</summary>
+        public int RevitYear { get; set; } = 2026;
 
         public ExportNodeWindow(ExportTask task, ExportSettings common)
         {
@@ -218,10 +215,14 @@ namespace RASv2.ClashAnalysis.UI
             List<string> picked;
             try
             {
-                picked = PickModels != null ? PickModels() : PickFiles();
+                // окно Revit «Открыть» из плагина Revit Server не показывает (проверка разработчика, 02.11.2026) — своё окно
+                var picker = new ModelPickerWindow(RevitYear) { Owner = this };
+                if (picker.ShowDialog() != true) return;
+                picked = picker.Picked;
             }
             catch (Exception ex)
             {
+                // исключение сквозь вложенный ShowDialog роняет Revit (CLAUDE.md, «Правила, о которые уже спотыкались»)
                 RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: выбор моделей не открылся", ex);
                 Error.Text = "Окно выбора моделей не открылось — подробности в журнале плагина.";
                 return;
@@ -230,12 +231,6 @@ namespace RASv2.ClashAnalysis.UI
                 if (!_models.Any(m => string.Equals(m.Path, f, StringComparison.OrdinalIgnoreCase)))
                     _models.Add(new ModelRow(_common, new ExportModel { Path = f }));
             UpdateAll();
-        }
-
-        private List<string> PickFiles()
-        {
-            var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Модели Revit (*.rvt)|*.rvt", Multiselect = true };
-            return dialog.ShowDialog(this) == true ? dialog.FileNames.ToList() : new List<string>();
         }
 
         private void DeleteModel_Click(object sender, RoutedEventArgs e)

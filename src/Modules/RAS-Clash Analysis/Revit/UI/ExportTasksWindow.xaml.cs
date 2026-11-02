@@ -28,14 +28,14 @@ namespace RASv2.ClashAnalysis.UI
             public double NameSize => IsTask ? 18 : 16;
             public Thickness Indent => new Thickness(Level * 28, 0, 0, 6);
             // Segoe MDL2 Assets: E70D — вниз (развёрнуто), E76C — вправо (свёрнуто)
-            public string Arrow => Collapsed ? "" : "";
+            public string Arrow => Collapsed ? "\uE76C" : "\uE70D";
             public Visibility ArrowVisibility => Task.Children.Count > 0 ? Visibility.Visible : Visibility.Hidden;
             // узел уже идёт у коллеги — запускать нельзя; место кнопки остаётся, чтобы значки не прыгали
             public Visibility RunVisibility => Task.RunningBy == null ? Visibility.Visible : Visibility.Hidden;
         }
 
-        /// <summary>Выбор моделей для окна узла (в Revit — окно Revit «Открыть»); null — окно Windows.</summary>
-        public System.Func<List<string>> PickModels { get; set; }
+        /// <summary>Версия Revit — для выбора моделей с Revit Server (настройки серверов — свои у каждой версии).</summary>
+        public int RevitYear { get; set; } = 2026;
 
         /// <summary>Общие настройки — шестерёнка (пока в памяти).</summary>
         public ExportSettings Settings { get; set; } = new ExportSettings();
@@ -119,7 +119,7 @@ namespace RASv2.ClashAnalysis.UI
 
         /// <summary>Настройки строки (карандаш); true — сохранены.</summary>
         private bool OpenSettings(ExportTask task) =>
-            Nested(() => new ExportNodeWindow(task, Settings) { Owner = this, PickModels = PickModels }.ShowDialog(), "Настройки");
+            Nested(() => new ExportNodeWindow(task, Settings) { Owner = this, RevitYear = RevitYear }.ShowDialog(), "Настройки");
 
         /// <summary>Вложенное окно; исключение сквозь вложенный ShowDialog роняет Revit (CLAUDE.md, «Правила, о которые уже спотыкались»).</summary>
         private bool Nested(System.Func<bool?> show, string what)

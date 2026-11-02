@@ -191,6 +191,30 @@ namespace RASv2.Tests
                     new DateTime(2026, 10, 1));
                 Check(ExportNames.Fill(@"\\srv\NWC\{Блок}\{Отдел}\{Дата}", v) == @"\\srv\NWC\S6\KJ\01.10.2026", "метки по модели");
             });
+            yield return Case("Revit Server: серверы из RSN.ini, адрес папки, путь RSN://, ответ службы", () =>
+            {
+                var hosts = RevitServers.ParseRsn("10.10.1.88\r\n; старый\r\n\r\n26.219.177.116\n10.10.1.88 ");
+                Check(string.Join(",", hosts) == "10.10.1.88,26.219.177.116", string.Join(",", hosts));
+                Check(RevitServers.ContentsUrl("10.10.1.88", 2026, new List<string>()) ==
+                      "http://10.10.1.88/RevitServerAdminRESTService2026/AdminRESTService.svc/%7C/contents", "корень");
+                var url = RevitServers.ContentsUrl("10.10.1.88", 2026, new List<string> { "2025_Ариал", "01_AR", "S 03" });
+                Check(url == "http://10.10.1.88/RevitServerAdminRESTService2026/AdminRESTService.svc/" +
+                      "2025_%D0%90%D1%80%D0%B8%D0%B0%D0%BB%7C01_AR%7CS%2003/contents", url);
+                Check(RevitServers.RsnPath("10.10.1.88", new List<string> { "2025_Ариал", "01_AR" }, "ARL_03_01_S3_AR01_01_M3.rvt") ==
+                      "RSN://10.10.1.88/2025_Ариал/01_AR/ARL_03_01_S3_AR01_01_M3.rvt", "путь модели");
+                var c = RevitServers.ParseContents("{\"Path\":\"\",\"Files\":[{\"Name\":\"super.lock\",\"Size\":0}]," +
+                    "\"Folders\":[{\"HasContents\":true,\"LockState\":0,\"Name\":\"2025_Ариал\",\"Size\":4947859366}," +
+                    "{\"HasContents\":false,\"Name\":\"Пусто\",\"Size\":0}]," +
+                    "\"Models\":[{\"LockState\":0,\"ModelSize\":769982263,\"Name\":\"ARL_03_01_S3_AR01_01_M3.rvt\",\"ProductVersion\":16}]}");
+                Check(c.Folders.Count == 2 && c.Folders[0].Name == "2025_Ариал" && c.Folders[0].HasContents && !c.Folders[1].HasContents, "папки");
+                Check(c.Models.Count == 1 && c.Models[0].ModelSize == 769982263, "модели");
+                var empty = RevitServers.ParseContents("{\"Path\":\"x\"}");
+                Check(empty.Folders.Count == 0 && empty.Models.Count == 0, "пустая папка");
+                Check(RevitServers.SizeText(769982263) == "734 МБ" && RevitServers.SizeText(1288490189) == "1,2 ГБ" &&
+                      RevitServers.SizeText(1000) == "1 МБ", RevitServers.SizeText(769982263) + " " + RevitServers.SizeText(1288490189));
+                var lines = RevitServers.Hosts(1999);
+                Check(lines.Count == 0, "нет RSN.ini — серверов нет");
+            });
             yield return Case("удаление: вложенных на всех уровнях", () =>
             {
                 var roots = Sample(out var block1, out _);
