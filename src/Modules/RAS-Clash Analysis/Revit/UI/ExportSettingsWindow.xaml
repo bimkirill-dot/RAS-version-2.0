@@ -5,7 +5,8 @@
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Fg}" FontFamily="Segoe UI" FontSize="13">
     <!-- Общие настройки «Задач выгрузки» (шестерёнка главного окна, DECISIONS.md модуля): параметры окна экспортёра Navisworks
-         в Revit — те же подписи и тот же порядок, по снимку разработчика (02.11.2026); строки разделены линиями. Параметров,
+         в Revit — те же подписи и тот же порядок, по снимку разработчика (02.11.2026); подписи и значения списков — дословно из
+         экспортёра Revit 2026 (`ru-RU\nwexportrevit.name`); строки разделены линиями. Параметров,
          которых нет в Revit API («Внедрить текстуры», «Отделить пользовательские свойства», «Свойства типа для элементов»,
          «Точное сечение»), здесь нет. Кнопки, поля, кисти — общие образцы ядра (подключаются до разметки); ключи своих стилей
          не совпадают с кистями ядра. -->
@@ -76,7 +77,7 @@
                     <TextBlock Style="{StaticResource OptionName}" Text="Конвертировать параметры объектов" />
                     <ComboBox Grid.Column="1" x:Name="Parameters" Width="140">
                         <ComboBoxItem Content="Нет" />
-                        <ComboBoxItem Content="Элементы" />
+                        <ComboBoxItem Content="Объекты" />
                         <ComboBoxItem Content="Все" />
                     </ComboBox>
                 </Grid>
@@ -86,8 +87,8 @@
                     <Grid.ColumnDefinitions><ColumnDefinition Width="380" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Style="{StaticResource OptionName}" Text="Координаты" />
                     <ComboBox Grid.Column="1" x:Name="Coordinates" Width="200">
+                        <ComboBoxItem Content="Внутренние для проекта" />
                         <ComboBoxItem Content="Общие" />
-                        <ComboBoxItem Content="Внутренние проекта" />
                     </ComboBox>
                 </Grid>
             </Border>
@@ -166,12 +167,12 @@
                     <Grid.ColumnDefinitions><ColumnDefinition Width="380" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Style="{StaticResource OptionName}" Text="Экспорт" />
                     <ComboBox Grid.Column="1" x:Name="Scope" Width="200" SelectionChanged="Scope_Changed">
-                        <ComboBoxItem Content="Весь проект" />
-                        <ComboBoxItem Content="Вид для выгрузки" />
+                        <ComboBoxItem Content="Целый проект" />
+                        <ComboBoxItem Content="Текущий вид" />
                     </ComboBox>
                 </Grid>
             </Border>
-            <!-- в окне экспортёра — «Текущий вид»; у нас модель открывает плагин, вид — по имени -->
+            <!-- своя строка (в окне экспортёра её нет): «Текущий вид» — модель открывает плагин, вид — по имени; «Выбор» не нужен -->
             <Border Style="{StaticResource OptionRow}">
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="380" /><ColumnDefinition /></Grid.ColumnDefinitions>

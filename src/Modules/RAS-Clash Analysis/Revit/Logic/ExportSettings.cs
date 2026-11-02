@@ -7,10 +7,10 @@ using System.Text.RegularExpressions;
 
 namespace RASv2.ClashAnalysis.Logic
 {
-    /// <summary>Что выгружать: весь проект или вид для выгрузки («Экспорт» окна экспортёра; «Выделение» не нужно — модель открывает плагин).</summary>
+    /// <summary>Что выгружать: «Целый проект» или «Текущий вид» — вид для выгрузки («Экспорт» окна экспортёра; «Выбор» не нужен — модель открывает плагин).</summary>
     public enum NwcScope { Model, View }
 
-    /// <summary>«Конвертировать параметры объектов»: нет / элементы / все.</summary>
+    /// <summary>«Конвертировать параметры объектов»: «Нет» / «Объекты» / «Все».</summary>
     public enum NwcParameters { None, Elements, All }
 
     /// <summary>

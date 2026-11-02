@@ -24,7 +24,7 @@ namespace RASv2.ClashAnalysis.UI
         private void Fill(ExportSettings s)
         {
             Parameters.SelectedIndex = (int)s.Parameters;
-            Coordinates.SelectedIndex = s.SharedCoordinates ? 0 : 1;
+            Coordinates.SelectedIndex = s.SharedCoordinates ? 1 : 0;
             Faceting.Text = s.FacetingFactor.ToString(CultureInfo.CurrentCulture);
             ElementProperties.IsChecked = s.ConvertElementProperties;
             Urls.IsChecked = s.ConvertUrls;
@@ -41,7 +41,7 @@ namespace RASv2.ClashAnalysis.UI
             Error.Text = "";
         }
 
-        // имя вида нужно только при «Экспорт: вид для выгрузки»
+        // имя вида нужно только при «Экспорт: Текущий вид»
         private void Scope_Changed(object sender, SelectionChangedEventArgs e) => ViewName.IsEnabled = Scope.SelectedIndex == 1;
 
         private void Defaults_Click(object sender, RoutedEventArgs e) => Fill(new ExportSettings());
@@ -61,7 +61,7 @@ namespace RASv2.ClashAnalysis.UI
             }
 
             _settings.Parameters = (NwcParameters)Parameters.SelectedIndex;
-            _settings.SharedCoordinates = Coordinates.SelectedIndex == 0;
+            _settings.SharedCoordinates = Coordinates.SelectedIndex == 1;
             _settings.FacetingFactor = faceting;
             _settings.ConvertElementProperties = ElementProperties.IsChecked == true;
             _settings.ConvertUrls = Urls.IsChecked == true;
