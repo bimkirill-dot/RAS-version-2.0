@@ -89,8 +89,11 @@
                                     <ColumnDefinition Width="80" />
                                     <ColumnDefinition Width="40" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="{Binding Path}" ToolTip="{Binding Path}" TextTrimming="CharacterEllipsis"
-                                           VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <!-- имя модели — первым, папка — бледным: длинный путь не прячет имя (разбор 02.11.2026) -->
+                                <TextBlock ToolTip="{Binding Path}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <Run Text="{Binding FileName, Mode=OneWay}" />
+                                    <Run Text="{Binding Folder, Mode=OneWay}" Foreground="{DynamicResource Muted}" FontSize="12" />
+                                </TextBlock>
                                 <StackPanel Grid.Column="1" Margin="0,0,8,0">
                                     <!-- сразу при наборе: Enter («Сохранить») не уводит курсор из поля -->
                                     <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" ToolTip="Пусто — имя из имени модели" />

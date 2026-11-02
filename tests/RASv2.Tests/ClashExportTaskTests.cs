@@ -17,47 +17,49 @@ namespace RASv2.Tests
         private static List<ExportModel> Models(int n, string block = "S6") =>
             Enumerable.Range(1, n).Select(i => new ExportModel { Path = "0000_01_01_" + block + "_KJ0" + i + "_01_M3.rvt" }).ToList();
 
-        // Арман Кала → Блок 1 (6 моделей: Высокая, Средняя), Блок 2 (5); ЖК Нурлы (12)
-        private static List<ExportTask> Sample(out ExportTask block1, out ExportTask high)
+        // проекты → задачи: Арман Кала → S6 (6 моделей), S7 (5); ЖК Нурлы → S1 (12)
+        private static List<ExportTask> Sample(out ExportTask s6)
         {
             var project = new ExportTask { Name = "Арман Кала" };
-            block1 = project.Add(new ExportTask { Name = "Блок 1", ModelFiles = Models(6) });
-            high = block1.Add(new ExportTask { Name = "Высокая критичность" });
-            block1.Add(new ExportTask { Name = "Средняя критичность" });
-            project.Add(new ExportTask { Name = "Блок 2", ModelFiles = Models(5, "S7") });
-            return new List<ExportTask> { project, new ExportTask { Name = "ЖК Нурлы", ModelFiles = Models(12, "S1") } };
+            s6 = project.Add(new ExportTask { Name = "S6", ModelFiles = Models(6) });
+            project.Add(new ExportTask { Name = "S7", ModelFiles = Models(5, "S7") });
+            var nurly = new ExportTask { Name = "ЖК Нурлы" };
+            nurly.Add(new ExportTask { Name = "S1", ModelFiles = Models(12, "S1") });
+            return new List<ExportTask> { project, nurly };
         }
 
         public static IEnumerable<KeyValuePair<string, Action>> All()
         {
-            yield return Case("номера строк — сами, по уровням; свёрнутый узел — без вложенных", () =>
+            yield return Case("номера строк — сами: проект 1, его задачи 1.1, 1.2; свёрнутый проект — без задач", () =>
             {
-                var roots = Sample(out var block1, out _);
+                var roots = Sample(out _);
                 var rows = ExportTask.Rows(roots, new HashSet<ExportTask>());
                 var numbers = string.Join(" ", rows.Select(r => r.Number + ":" + r.Level));
-                Check(numbers == "1:0 1.1:1 1.1.1:2 1.1.2:2 1.2:1 2:0", numbers);
-                rows = ExportTask.Rows(roots, new HashSet<ExportTask> { block1 });
+                Check(numbers == "1:0 1.1:1 1.2:1 2:0 2.1:1", numbers);
+                rows = ExportTask.Rows(roots, new HashSet<ExportTask> { roots[0] });
                 numbers = string.Join(" ", rows.Select(r => r.Number));
-                Check(numbers == "1 1.1 1.2 2", "свёрнут блок 1: " + numbers);
+                Check(numbers == "1 2 2.1", "свёрнут первый проект: " + numbers);
             });
-            yield return Case("перенос — только внутри своего уровня, номера пересчитываются", () =>
+            yield return Case("перенос — проекты между собой, задачи внутри своего проекта; номера пересчитываются", () =>
             {
-                var roots = Sample(out var block1, out var high);
-                var block2 = roots[0].Children[1];
-                Check(ExportTask.MoveTo(roots[0].Children, block2, block1), "блок 2 — на место блока 1");
+                var roots = Sample(out var s6);
+                var s7 = roots[0].Children[1];
+                Check(ExportTask.MoveTo(roots[0].Children, s7, s6), "S7 — на место S6");
                 var rows = ExportTask.Rows(roots, new HashSet<ExportTask>());
-                Check(rows[1].Task == block2 && rows[1].Number == "1.1" && rows[2].Task == block1 && rows[2].Number == "1.2",
+                Check(rows[1].Task == s7 && rows[1].Number == "1.1" && rows[2].Task == s6 && rows[2].Number == "1.2",
                     string.Join(" ", rows.Select(r => r.Number + " " + r.Task.Name)));
-                Check(!ExportTask.MoveTo(roots[0].Children, high, block2), "критичность — не на уровень блоков");
-                Check(!ExportTask.MoveTo(roots, block1, roots[1]), "блок — не на уровень проектов");
+                Check(ExportTask.MoveTo(roots, roots[1], roots[0]) && roots[0].Name == "ЖК Нурлы", "проект — на место другого");
+                Check(!ExportTask.MoveTo(roots, s6, roots[1]), "задача — не на уровень проектов");
             });
-            yield return Case("моделей в выгрузке: свои, сумма вложенных, у критичности — модели блока", () =>
+            yield return Case("моделей в выгрузке: у задачи — свои, у проекта — сумма задач", () =>
             {
-                var roots = Sample(out var block1, out var high);
-                Check(block1.AllModels == 6, "блок 1: " + block1.AllModels);
-                Check(high.AllModels == 6, "критичность — модели блока: " + high.AllModels);
-                Check(roots[0].AllModels == 11, "проект — сумма блоков: " + roots[0].AllModels);
+                var roots = Sample(out var s6);
+                Check(s6.AllModels == 6, "S6: " + s6.AllModels);
+                Check(roots[0].AllModels == 11, "проект — сумма задач: " + roots[0].AllModels);
                 Check(new ExportTask().AllModels == 0, "пустая задача");
+                Check(ExportNodes.CheckProjectName("ArmanQala", new[] { "ЖК Нурлы" }) == null, "новое название проекта");
+                Check(ExportNodes.CheckProjectName(" armanqala ", new[] { "ArmanQala" }) != null && ExportNodes.CheckProjectName(" ", new string[0]) != null,
+                    "повтор названия проекта и пусто");
             });
             yield return Case("краткая информация: модели, выгрузка, не вышедшие, идёт у коллеги", () =>
             {
@@ -292,15 +294,13 @@ namespace RASv2.Tests
                     ivanov.SaveCommon(common);
                     Check(petrov.LoadCommon().BlockPrefix == "C", "общие настройки — у всех");
 
-                    var mine = new ExportTask { Name = "Жк Нурлы" };
+                    var mine = new ExportTask { Name = "Жк Нурлы", StoreOrder = 2 };
                     mine.Add(new ExportTask { Name = "S1", ModelFiles = Models(2, "S1") });
                     Check(ivanov.SaveProject(mine, false, out _, out _) == SaveResult.Saved && mine.StoreId != null, "новый проект записан");
-                    ivanov.SaveProject(new ExportTask { Name = "ArmanQala" }, false, out _, out _);
+                    ivanov.SaveProject(new ExportTask { Name = "ArmanQala", StoreOrder = 1 }, false, out _, out _);
                     var seen = petrov.LoadProjects();
-                    // по алфавиту текущей культуры: в .NET 8 по-русски кириллица идёт раньше латиницы, в .NET 4.8 — позже
-                    var names = seen.Select(x => x.Name).ToList();
-                    Check(names.Count == 2 && names.SequenceEqual(names.OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase)),
-                        "у коллеги — оба, по алфавиту: " + string.Join(",", names));
+                    Check(string.Join(",", seen.Select(x => x.Name + x.StoreOrder)) == "ArmanQala1,Жк Нурлы2",
+                        "у коллеги — оба, по порядковому номеру: " + string.Join(",", seen.Select(x => x.Name)));
                     var his = seen.Single(x => x.Name == "Жк Нурлы");
                     Check(his.StoreId == mine.StoreId && his.Children.Single().Models == 2, "тот же проект с задачами");
 
@@ -355,12 +355,12 @@ namespace RASv2.Tests
                 var lines = RevitServers.Hosts(1999);
                 Check(lines.Count == 0, "нет RSN.ini — серверов нет");
             });
-            yield return Case("удаление: вложенных на всех уровнях", () =>
+            yield return Case("удаление: задачи проекта", () =>
             {
-                var roots = Sample(out var block1, out _);
-                Check(roots[0].Descendants == 4, "у проекта: " + roots[0].Descendants);
-                roots[0].Remove(block1);
-                Check(roots[0].Descendants == 1 && block1.Parent == null, "после удаления блока 1: " + roots[0].Descendants);
+                var roots = Sample(out var s6);
+                Check(roots[0].Descendants == 2, "у проекта: " + roots[0].Descendants);
+                roots[0].Remove(s6);
+                Check(roots[0].Descendants == 1 && s6.Parent == null, "после удаления S6: " + roots[0].Descendants);
             });
         }
     }

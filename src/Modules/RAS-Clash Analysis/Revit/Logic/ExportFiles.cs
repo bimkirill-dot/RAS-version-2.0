@@ -35,6 +35,8 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>Кто и когда записал проект в общее хранилище — для «изменил Иванов в 14:20» (ExportStore).</summary>
         [DataMember(Order = 4, EmitDefaultValue = false)] public string ChangedBy { get; set; }
         [DataMember(Order = 5, EmitDefaultValue = false)] public DateTime? Changed { get; set; }
+        /// <summary>Порядковый номер проекта в общем списке (ExportStore).</summary>
+        [DataMember(Order = 6, EmitDefaultValue = false)] public int Order { get; set; }
     }
 
     [DataContract]

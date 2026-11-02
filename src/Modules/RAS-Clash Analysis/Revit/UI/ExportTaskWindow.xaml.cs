@@ -28,6 +28,8 @@ namespace RASv2.ClashAnalysis.UI
             }
 
             public string Path => Model.Path;
+            public string FileName => new FileRow(Path).Name;
+            public string Folder => new FileRow(Path).Folder;
 
             private string Auto => ExportNames.NwcName(Path, _common.TrimName, _common.NameParts, out _);
 
@@ -79,7 +81,7 @@ namespace RASv2.ClashAnalysis.UI
             InitializeComponent();
             _task = task;
             _common = common;
-            Title = "Задача — " + task.Name;
+            Title = string.IsNullOrEmpty(task.Name) ? "Новая задача" : "Задача — " + task.Name;
             TaskName.Text = task.Name;
             // новая задача: сразу печатать название
             Loaded += (s, e) =>
@@ -95,7 +97,20 @@ namespace RASv2.ClashAnalysis.UI
             ShowTests(task.TestsFiles != null, task.TestsFiles);
             _ready = true;
             UpdateAll();
+            _opened = State();
+            Closing += (s, e) => e.Cancel = !MayClose(this, DialogResult == true || State() == _opened);
         }
+
+        private readonly string _opened;
+
+        /// <summary>Всё, что правится в окне, — строкой: «Отмена» с правками спрашивает.</summary>
+        private string State() => string.Join("|", TaskName.Text, string.Join(";", _models.Select(m => m.Path + ">" + m.Model.NwcName)),
+            _ownTests, string.Join(";", _tests.Select(r => r.Path)));
+
+        /// <summary>Закрыть окно настроек: сохранено или правок нет — да; иначе — спросить (разбор 02.11.2026: «Отмена» молча теряла правки).</summary>
+        internal static bool MayClose(Window window, bool clean) =>
+            clean || MessageBox.Show(window, "Закрыть без сохранения? Правки пропадут.", window.Title, MessageBoxButton.YesNo,
+                MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes;
 
         private void Changed()
         {
@@ -122,9 +137,16 @@ namespace RASv2.ClashAnalysis.UI
             {
                 var model = draft.ModelFiles.FirstOrDefault();
                 var root = ExportNodes.Root(_task).Project.Folder;
-                NwcWhere.Text = "NWC: " + (model == null ? "—" : ExportNodes.Short(root, ExportNodes.NwcPath(draft, model, _common)));
-                NwfWhere.Text = "NWF: " + ExportNodes.Short(root, ExportNodes.NwfPath(draft, _common));
-                ReportWhere.Text = "Отчёты: " + ExportNodes.Short(root, ExportNodes.ReportPath(draft, _common, DateTime.Today));
+                // «…» — папка проекта (в этом окне её не видно): полный путь — в подсказке
+                var nwc = model == null ? null : ExportNodes.NwcPath(draft, model, _common);
+                var nwf = ExportNodes.NwfPath(draft, _common);
+                var report = ExportNodes.ReportPath(draft, _common, DateTime.Today);
+                NwcWhere.Text = "NWC: " + (nwc == null ? "—" : ExportNodes.Short(root, nwc));
+                NwfWhere.Text = "NWF: " + ExportNodes.Short(root, nwf);
+                ReportWhere.Text = "Отчёты: " + ExportNodes.Short(root, report);
+                NwcWhere.ToolTip = nwc;
+                NwfWhere.ToolTip = nwf;
+                ReportWhere.ToolTip = report;
             }
             finally
             {

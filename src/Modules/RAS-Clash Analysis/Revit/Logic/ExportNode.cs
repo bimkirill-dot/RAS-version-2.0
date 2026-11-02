@@ -169,6 +169,16 @@ namespace RASv2.ClashAnalysis.Logic
             return forbidden != null ? what + ": {" + forbidden + "} — нельзя, " + why + "." : null;
         }
 
+        /// <summary>Название проекта: есть и не повторяется — две одинаковые строки в общем списке не различить; null — всё верно.</summary>
+        public static string CheckProjectName(string name, IEnumerable<string> others)
+        {
+            var n = (name ?? "").Trim();
+            if (n.Length == 0) return "Нужно название.";
+            return others.Any(o => string.Equals((o ?? "").Trim(), n, StringComparison.OrdinalIgnoreCase))
+                ? "Проект «" + n + "» уже есть — назовите иначе."
+                : null;
+        }
+
         /// <summary>Название задачи — оно же имя NWF: знаки как в имени файла, не повторяется в проекте; null — всё верно.</summary>
         public static string CheckTaskName(ExportTask task, string name)
         {

@@ -26,6 +26,11 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>Проект в общем хранилище: ключ файла (null — ещё не записан) и время файла, когда прочитан или записан (ExportStore).</summary>
         public string StoreId { get; set; }
         public DateTime StoreStamp { get; set; }
+        /// <summary>
+        /// Порядковый номер проекта в списке — общий у всех (разработчик, 02.11.2026: «зачем по алфавиту — просто по порядковому
+        /// номеру»): новый — в конец, перетаскивание меняет; хранится в файле проекта.
+        /// </summary>
+        public int StoreOrder { get; set; }
         /// <summary>Последняя выгрузка узла; null — не выгружался.</summary>
         public DateTime? LastRun { get; set; }
         /// <summary>Моделей, не вышедших в последней выгрузке.</summary>
@@ -48,7 +53,7 @@ namespace RASv2.ClashAnalysis.Logic
             if (Children.Remove(child)) child.Parent = null;
         }
 
-        /// <summary>Сосед по уровню: сдвинуть себя на место target (перетаскивание строки мышью — только внутри своего уровня).</summary>
+        /// <summary>Сосед по уровню: сдвинуть себя на место target (перетаскивание строки мышью — проекты между собой, задачи внутри проекта).</summary>
         public static bool MoveTo(List<ExportTask> siblings, ExportTask item, ExportTask target)
         {
             if (item == target || !siblings.Contains(item) || !siblings.Contains(target)) return false;
@@ -61,21 +66,8 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>Вложенных узлов на всех уровнях.</summary>
         public int Descendants => Children.Sum(c => 1 + c.Descendants);
 
-        /// <summary>
-        /// Моделей в выгрузке узла: свои — если заданы; нет своих — сумма вложенных (проект — сумма блоков); нет и вложенных —
-        /// модели ближайшего узла выше, где они заданы (критичность выгружает модели своего блока).
-        /// </summary>
-        public int AllModels
-        {
-            get
-            {
-                if (Models > 0) return Models;
-                if (Children.Count > 0) return Children.Sum(c => c.AllModels);
-                for (var p = Parent; p != null; p = p.Parent)
-                    if (p.Models > 0) return p.Models;
-                return 0;
-            }
-        }
+        /// <summary>Моделей в выгрузке: у задачи — свои, у проекта — сумма задач.</summary>
+        public int AllModels => Models + Children.Sum(c => c.AllModels);
 
         /// <summary>
         /// Краткая информация строки: идёт у коллеги — «идёт у …, N из M»; иначе «N моделей · выгружено дата» и сколько не

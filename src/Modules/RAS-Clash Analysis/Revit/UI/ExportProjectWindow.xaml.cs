@@ -27,6 +27,10 @@ namespace RASv2.ClashAnalysis.UI
         private readonly InheritField _view;
         private readonly bool _hasView;
         private readonly bool _ready;
+        private readonly string _opened;
+
+        /// <summary>Названия других проектов — название не должно повторяться (две одинаковые строки в списке не различить).</summary>
+        public IReadOnlyCollection<string> TakenNames { get; set; } = new string[0];
 
         public ExportProjectWindow(ExportTask project, ExportSettings common)
         {
@@ -35,7 +39,7 @@ namespace RASv2.ClashAnalysis.UI
             _project = project;
             _common = common;
             var p = project.Project;
-            Title = "Проект — " + project.Name;
+            Title = string.IsNullOrEmpty(project.Name) ? "Новый проект" : "Проект — " + project.Name;
             ProjectName.Text = project.Name;
             Folder.Text = p.Folder;
             NwcFolder.Text = p.NwcFolder;
@@ -56,7 +60,13 @@ namespace RASv2.ClashAnalysis.UI
             };
             _ready = true;
             UpdateExamples();
+            _opened = State();
+            Closing += (s, e) => e.Cancel = !ExportTaskWindow.MayClose(this, DialogResult == true || State() == _opened);
         }
+
+        /// <summary>Всё, что правится в окне, — строкой: «Отмена» с правками спрашивает.</summary>
+        private string State() => string.Join("|", ProjectName.Text, Folder.Text, NwcFolder.Text, NwfFolder.Text, ReportFolder.Text,
+            string.Join(";", _tests.Select(r => r.Path)), _view.Value ?? "\u0001", _imported.Count);
 
         private void Changed()
         {
@@ -223,7 +233,9 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Что не так — первой ошибкой; null — всё верно.</summary>
         private string Validate()
         {
-            if (ProjectName.Text.Trim().Length == 0) return "Нужно название.";
+            var name = ExportNodes.CheckProjectName(ProjectName.Text, TakenNames);
+            if (name != null) return name;
+            if (Folder.Text.Trim().Length == 0) return "Нужна папка проекта — в ней NWC, NWF и отчёты.";
             if (_hasView && _view.Own && ViewName.Text.Trim().Length == 0) return "Нужно имя вида для выгрузки.";
             return ExportNodes.CheckNwcFolder(NwcFolder.Text)
                    ?? ExportNodes.CheckNwfFolder(NwfFolder.Text)

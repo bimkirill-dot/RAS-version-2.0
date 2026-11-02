@@ -34,7 +34,19 @@ namespace RASv2.ClashAnalysis.UI
             FillAll(settings);
             _ready = true;
             UpdateExample();
+            _opened = State();
+            Closing += (s, e) => e.Cancel = !ExportTaskWindow.MayClose(this, DialogResult == true || State() == _opened);
         }
+
+        private readonly string _opened;
+
+        /// <summary>Всё, что правится в окне, — строкой: «Отмена» с правками спрашивает.</summary>
+        private string State() => string.Join("|", Parameters.SelectedIndex, Coordinates.SelectedIndex, Faceting.Text,
+            ElementProperties.IsChecked, Urls.IsChecked, Lights.IsChecked, RoomAsAttribute.IsChecked, LinkedCad.IsChecked,
+            LinkedFiles.IsChecked, Parts.IsChecked, MissingMaterials.IsChecked, Levels.IsChecked, Scope.SelectedIndex, ViewName.Text,
+            RoomGeometry.IsChecked, RemoveRevitLinks.IsChecked, RemoveCad.IsChecked, RemovePointClouds.IsChecked, RemoveIfc.IsChecked,
+            TrimName.IsChecked, NameParts.Text, BlockPrefix.Text, DateFormat.SelectedIndex,
+            string.Join(";", _departments.Select(d => d.Department + ">" + d.Etalon + ">" + d.ViewTemplate)));
 
         /// <summary>Окно — из настроек (открытие и «Импорт…»).</summary>
         private void FillAll(ExportSettings s)

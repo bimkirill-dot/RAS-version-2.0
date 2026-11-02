@@ -42,7 +42,7 @@ namespace RASv2.ClashAnalysis.Logic
             Write(CommonPath, ExportFiles.FromCommon(settings));
         }
 
-        /// <summary>Все проекты — по алфавиту; файл, который не читается, пропускается (in broken — его имя).</summary>
+        /// <summary>Все проекты — по порядковому номеру (без номера — в конце, по названию); файл, который не читается, пропускается (в broken — его имя).</summary>
         public List<ExportTask> LoadProjects(List<string> broken = null)
         {
             var list = new List<ExportTask>();
@@ -60,7 +60,8 @@ namespace RASv2.ClashAnalysis.Logic
                     broken?.Add(Path.GetFileName(path));
                 }
             }
-            return list.OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+            return list.OrderBy(p => p.StoreOrder > 0 ? p.StoreOrder : int.MaxValue)
+                .ThenBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
         }
 
         private ExportTask LoadProject(string path)
@@ -70,6 +71,7 @@ namespace RASv2.ClashAnalysis.Logic
             var project = ExportFiles.ToProject(file.ProjectData, new string[0]);
             project.StoreId = Path.GetFileNameWithoutExtension(path);
             project.StoreStamp = File.GetLastWriteTimeUtc(path);
+            project.StoreOrder = file.ProjectData.Order;
             return project;
         }
 
@@ -103,6 +105,7 @@ namespace RASv2.ClashAnalysis.Logic
                 return SaveResult.Conflict;
             }
             var file = ExportFiles.FromProject(project.Name, project.Project, project.Children);
+            file.ProjectData.Order = project.StoreOrder;
             file.ProjectData.ChangedBy = _user;
             file.ProjectData.Changed = DateTime.Now;
             Write(path, file);

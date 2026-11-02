@@ -8,9 +8,9 @@ using RASv2.ClashAnalysis.Logic;
 namespace RASv2.ClashAnalysis.UI
 {
     /// <summary>
-    /// «Задачи выгрузки»: дерево задач выгрузки NWC (DECISIONS.md модуля). Строка — номер, название, краткая информация,
-    /// «Запустить», «+» (подзадача), карандаш (настройки узла), корзина. Перенос — перетаскиванием строки внутри своего
-    /// уровня. Пока — дерево и общие настройки в памяти: хранение на сервере и окно настроек узла — следующими шагами.
+    /// «Задачи выгрузки» (DECISIONS.md модуля): проекты и их задачи из общего хранилища на сервере. Строка — номер, название,
+    /// краткая информация, «Запустить», «+» (задача — у проекта), карандаш, корзина. Перенос — перетаскиванием: проекты между
+    /// собой (порядковый номер — общий), задачи внутри проекта.
     /// </summary>
     public partial class ExportTasksWindow : Window
     {
@@ -78,10 +78,9 @@ namespace RASv2.ClashAnalysis.UI
             Banner.Visibility = Visibility.Visible;
         }
 
-        // проекты — по алфавиту: общий порядок перетаскиванием пришлось бы делить между всеми
+        // проекты — по порядковому номеру (разработчик, 02.11.2026: «зачем по алфавиту»): так прочитаны, новые — в конец
         private void Refresh()
         {
-            _roots.Sort((a, b) => string.Compare(a.Name, b.Name, System.StringComparison.CurrentCultureIgnoreCase));
             RowsList.ItemsSource = ExportTask.Rows(_roots, _collapsed)
                 .Select(r => new RowItem { Task = r.Task, Number = r.Number, Level = r.Level, Collapsed = _collapsed.Contains(r.Task) })
                 .ToList();
@@ -128,7 +127,8 @@ namespace RASv2.ClashAnalysis.UI
         // Вверху — проект (каталог задач), в строке проекта — задача (обычно блок)
         private void AddTask_Click(object sender, RoutedEventArgs e)
         {
-            var project = new ExportTask { Name = "Новый проект" };
+            // названия вписывает человек (разработчик, 02.11.2026: «зачем автоматическое название»)
+            var project = new ExportTask { Name = "", StoreOrder = NextOrder() };
             _roots.Add(project);
             if (OpenSettings(project)) SaveProject(project);
             else _roots.Remove(project);
@@ -152,6 +152,7 @@ namespace RASv2.ClashAnalysis.UI
                     return;
                 }
                 var project = ExportFiles.ToProject(file.ProjectData, _roots.Select(r => r.Name));
+                project.StoreOrder = NextOrder();
                 _roots.Add(project);
                 SaveProject(project);
                 Refresh();
@@ -164,10 +165,12 @@ namespace RASv2.ClashAnalysis.UI
             }
         }
 
+        private int NextOrder() => _roots.Count == 0 ? 1 : _roots.Max(r => r.StoreOrder) + 1;
+
         private void AddChild_Click(object sender, RoutedEventArgs e)
         {
             var project = RowOf(sender).Task;
-            var task = project.Add(new ExportTask { Name = "S" + (project.Children.Count + 1) });
+            var task = project.Add(new ExportTask { Name = "" });
             _collapsed.Remove(project);
             if (OpenSettings(task)) SaveProject(project);
             else project.Remove(task);
@@ -238,7 +241,10 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Настройки строки (карандаш): проекта или задачи; true — сохранены.</summary>
         private bool OpenSettings(ExportTask task) =>
             task.Parent == null
-                ? Nested(() => new ExportProjectWindow(task, Settings) { Owner = this }.ShowDialog(), "Настройки проекта")
+                ? Nested(() => new ExportProjectWindow(task, Settings)
+                {
+                    Owner = this, TakenNames = _roots.Where(r => r != task).Select(r => r.Name).ToList(),
+                }.ShowDialog(), "Настройки проекта")
                 : Nested(() => new ExportTaskWindow(task, Settings) { Owner = this, RevitYear = RevitYear }.ShowDialog(), "Настройки задачи");
 
         /// <summary>Вложенное окно; исключение сквозь вложенный ShowDialog роняет Revit (CLAUDE.md, «Правила, о которые уже спотыкались»).</summary>
@@ -257,7 +263,10 @@ namespace RASv2.ClashAnalysis.UI
             }
         }
 
-        private void Run_Click(object sender, RoutedEventArgs e) { }
+        // выгрузка — следующим шагом; молчащая кнопка выглядела бы сломанной (разбор 02.11.2026)
+        private void Run_Click(object sender, RoutedEventArgs e) =>
+            MessageBox.Show(this, "Выгрузка — в следующей версии: сейчас задачи только настраиваются и хранятся.", Title,
+                MessageBoxButton.OK, MessageBoxImage.Information);
 
         // перетаскивание строки: нажали на строку (не на кнопку) и повели мышью — перенос внутри своего уровня
         private void Row_MouseDown(object sender, MouseButtonEventArgs e)
@@ -280,10 +289,8 @@ namespace RASv2.ClashAnalysis.UI
         {
             var item = e.Data.GetData(typeof(ExportTask)) as ExportTask;
             var target = RowOf(sender).Task;
-            // переносятся задачи внутри своего проекта; проекты — по алфавиту
-            e.Effects = item != null && item != target && item.Parent != null && item.Parent == target.Parent
-                ? DragDropEffects.Move
-                : DragDropEffects.None;
+            // проекты — между собой, задачи — внутри своего проекта
+            e.Effects = item != null && item != target && item.Parent == target.Parent ? DragDropEffects.Move : DragDropEffects.None;
             e.Handled = true;
         }
 
@@ -291,9 +298,19 @@ namespace RASv2.ClashAnalysis.UI
         {
             var item = e.Data.GetData(typeof(ExportTask)) as ExportTask;
             var target = RowOf(sender).Task;
-            if (item?.Parent == null || item.Parent != target.Parent) return;
+            if (item == null || item.Parent != target.Parent) return;
             if (!ExportTask.MoveTo(SiblingsOf(item), item, target)) return;
-            SaveProject(item.Parent);
+            if (item.Parent != null) SaveProject(item.Parent);
+            else
+            {
+                // порядковые номера проектов — заново; на сервер — у кого номер поменялся
+                for (var i = 0; i < _roots.Count; i++)
+                {
+                    if (_roots[i].StoreOrder == i + 1) continue;
+                    _roots[i].StoreOrder = i + 1;
+                    SaveProject(_roots[i]);
+                }
+            }
             Refresh();
         }
 

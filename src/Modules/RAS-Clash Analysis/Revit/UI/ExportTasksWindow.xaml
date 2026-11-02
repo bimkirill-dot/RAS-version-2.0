@@ -4,9 +4,10 @@
         Title="Задачи выгрузки" Width="1040" Height="600" MinWidth="760" MinHeight="320"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Fg}" FontFamily="Segoe UI" FontSize="13">
-    <!-- «Задачи выгрузки» (DECISIONS.md модуля): дерево задач — задача (проект) синей строкой, подзадачи серыми с отступом.
-         Раскладка — по рисунку разработчика (30.10.2026), с добавленными «Запустить» и «+» в строке. Кнопки, кисти — общие
-         образцы ядра (подключаются до разметки); ключи своих стилей не совпадают с кистями ядра. -->
+    <!-- «Задачи выгрузки» (DECISIONS.md модуля): проект синей строкой, его задачи серыми с отступом. Раскладка — по рисунку
+         разработчика (30.10.2026), с «Запустить» и «+» в строке; номер, название и сводка — текстом, без рамок полей (разбор
+         02.11.2026: рамки звали нажать и править). Кнопки, кисти — общие образцы ядра (подключаются до разметки); ключи своих
+         стилей не совпадают с кистями ядра. -->
     <Window.Resources>
         <!-- строка: у задачи — акцент, у подзадачи — фон строки; текст и значки берут цвет строки -->
         <Style x:Key="TaskRowBox" TargetType="Border">
@@ -30,15 +31,6 @@
             <Setter Property="Foreground"
                     Value="{Binding Path=(TextElement.Foreground), RelativeSource={RelativeSource AncestorType=Border}}" />
             <Setter Property="Margin" Value="2,0,0,0" />
-        </Style>
-        <Style x:Key="Cell" TargetType="Border">
-            <Setter Property="Background" Value="{DynamicResource Field}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="3" />
-            <Setter Property="Padding" Value="10,4" />
-            <Setter Property="Margin" Value="0,0,8,0" />
-            <Setter Property="TextElement.Foreground" Value="{DynamicResource Fg}" />
         </Style>
     </Window.Resources>
 
@@ -64,24 +56,19 @@
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="30" />
-                                    <ColumnDefinition Width="64" />
+                                    <ColumnDefinition Width="48" />
                                     <ColumnDefinition Width="2*" />
                                     <ColumnDefinition Width="3*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <Button Style="{StaticResource RowIcon}" Width="26" Margin="0" FontSize="12"
                                         Content="{Binding Arrow}" Visibility="{Binding ArrowVisibility}" Click="Toggle_Click" />
-                                <Border Grid.Column="1" Style="{StaticResource Cell}">
-                                    <TextBlock Text="{Binding Number}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                </Border>
-                                <Border Grid.Column="2" Style="{StaticResource Cell}">
-                                    <TextBlock Text="{Binding Name}" FontSize="{Binding NameSize}" FontWeight="SemiBold"
-                                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip="{Binding Name}" />
-                                </Border>
-                                <Border Grid.Column="3" Style="{StaticResource Cell}">
-                                    <TextBlock Text="{Binding Summary}" Foreground="{DynamicResource Muted}"
-                                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip="{Binding Summary}" />
-                                </Border>
+                                <TextBlock Grid.Column="1" Text="{Binding Number}" Opacity="0.75" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="2" Text="{Binding Name}" FontSize="{Binding NameSize}" FontWeight="SemiBold" Margin="0,0,12,0"
+                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip="{Binding Name}" />
+                                <!-- сводка — бледнее названия, цвет строки (на синей строке — белым) -->
+                                <TextBlock Grid.Column="3" Text="{Binding Summary}" Opacity="0.75" Margin="0,0,12,0"
+                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip="{Binding Summary}" />
                                 <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
                                     <Button Style="{StaticResource RowIcon}" Content="&#xE768;" Visibility="{Binding RunVisibility}"
                                             Click="Run_Click" ToolTip="Запустить" />
