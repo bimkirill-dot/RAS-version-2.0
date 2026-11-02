@@ -1,5 +1,5 @@
-using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -7,59 +7,50 @@ using System.Text.RegularExpressions;
 
 namespace RASv2.ClashAnalysis.Logic
 {
+    /// <summary>Что выгружать: весь проект или вид для выгрузки («Экспорт» окна экспортёра; «Выделение» не нужно — модель открывает плагин).</summary>
+    public enum NwcScope { Model, View }
+
+    /// <summary>«Конвертировать параметры объектов»: нет / элементы / все.</summary>
+    public enum NwcParameters { None, Elements, All }
+
     /// <summary>
-    /// Общие настройки «Задач выгрузки» — шестерёнка главного окна (DECISIONS.md модуля, «„Задачи выгрузки“…»): действуют у
-    /// всех задач, узел дерева может переопределить (кроме меток и таблицы отделов). Пока — в памяти; хранение на сервере —
-    /// следующим шагом. Без Revit API.
+    /// Общие настройки «Задач выгрузки» — шестерёнка главного окна: параметры выгрузки NWC, те же, что в окне экспортёра Navisworks
+    /// (разработчик, 02.11.2026: «главные настройки — те же самые, что открываются при экспорте в NWC стандартным экспортёром»;
+    /// значения по умолчанию — с его снимка окна). Папки, имя NWC, отделы, что удалить, временная папка — в настройках узла
+    /// (карандаш). Пока — в памяти; хранение на сервере — следующим шагом. Без Revit API: в NavisworksExportOptions —
+    /// при выгрузке.
     /// </summary>
     public sealed class ExportSettings
     {
-        /// <summary>Папка NWC — строка с метками; даты в ней нет: NWF ссылается на NWC по постоянному пути.</summary>
-        public string NwcFolder { get; set; } = @"{Проект}\{Блок}\NWC";
-        /// <summary>Папка отчётов (этап 2).</summary>
-        public string ReportFolder { get; set; } = @"{Проект}\{Блок}\{Дата}";
-        /// <summary>Формат метки {Дата} (.NET: yyyy-MM-dd и т. п.).</summary>
-        public string DateFormat { get; set; } = "yyyy-MM-dd";
-        /// <summary>Свои метки — без скобок; значение задаётся у узла и наследуется.</summary>
-        public List<string> Labels { get; set; } = new List<string>();
-
-        /// <summary>Обрезать имя NWC по шаблону имени модели.</summary>
-        public bool TrimName { get; set; } = true;
-        /// <summary>Сколько частей через «_» оставить в имени NWC.</summary>
-        public int NameParts { get; set; } = 7;
-        /// <summary>Какая часть имени (с 1) — раздел («KJ01»); отдел — его буквы до цифр («KJ»).</summary>
-        public int SectionPart { get; set; } = 5;
-
-        /// <summary>Отдел → эталон (.rte) → шаблон вида для выгрузки.</summary>
-        public List<DepartmentTemplate> Departments { get; set; } = new List<DepartmentTemplate>();
-
-        /// <summary>Вид для выгрузки; нет в модели — создаётся.</summary>
+        public bool ConvertElementIds => true;   // всегда: по номерам элементов работают «Показать в Revit» и «Коллизии элемента»
+        public NwcParameters Parameters { get; set; } = NwcParameters.All;
+        /// <summary>Координаты: общие (true) или внутренние.</summary>
+        public bool SharedCoordinates { get; set; } = true;
+        public double FacetingFactor { get; set; } = 1;
+        public bool ConvertElementProperties { get; set; } = true;
+        public bool ConvertUrls { get; set; }
+        public bool ConvertLights { get; set; }
+        public bool RoomAsAttribute { get; set; } = true;
+        public bool ConvertLinkedCad { get; set; }
+        public bool ConvertLinkedFiles { get; set; }
+        public bool ConvertParts { get; set; } = true;
+        public bool FindMissingMaterials { get; set; }
+        public bool DivideIntoLevels { get; set; } = true;
+        public NwcScope Scope { get; set; } = NwcScope.View;
+        /// <summary>Вид для выгрузки (при «Экспорт: вид»); нет в модели — создаётся.</summary>
         public string ViewName { get; set; } = "3D_Navisworks";
+        public bool RoomGeometry { get; set; }
 
-        // что удалить из копии модели перед выгрузкой
-        public bool RemoveRevitLinks { get; set; } = true;
-        public bool RemoveCad { get; set; } = true;
-        public bool RemovePointClouds { get; set; } = true;
-        public bool RemoveIfc { get; set; } = true;
-
-        /// <summary>Временная папка для копий моделей — личная (у каждого свой диск), хранится у человека, не на сервере.</summary>
-        public string TempFolder { get; set; } = Path.Combine(Path.GetTempPath(), "RAS_v_2.0", "NWC");
-    }
-
-    public sealed class DepartmentTemplate
-    {
-        public string Department { get; set; }
-        /// <summary>Путь к файлу шаблона проекта отдела (.rte).</summary>
-        public string Etalon { get; set; }
-        /// <summary>Имя шаблона вида для выгрузки в эталоне.</summary>
-        public string ViewTemplate { get; set; }
+        /// <summary>Коэффициент фасетизации из текста: «1», «0,5», «0.5»; больше нуля.</summary>
+        public static bool TryFaceting(string text, out double value) =>
+            double.TryParse((text ?? "").Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out value) && value > 0;
     }
 
     /// <summary>Метки в строке папки и имя NWC из имени модели.</summary>
     public static class ExportNames
     {
-        /// <summary>Встроенные метки: уровни дерева, дата, раздел и отдел из имени модели.</summary>
-        public static readonly string[] BuiltInLabels = { "Проект", "Блок", "Критичность", "Дата", "Отдел", "Раздел" };
+        /// <summary>Метки строки папки (разработчик, 02.11.2026: «оставим пока только блок и дату»); остальное пишется текстом.</summary>
+        public static readonly string[] BuiltInLabels = { "Блок", "Дата" };
 
         private static readonly Regex LabelRx = new Regex(@"\{([^{}]+)\}");
 

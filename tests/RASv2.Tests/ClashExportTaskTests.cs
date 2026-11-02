@@ -102,6 +102,19 @@ namespace RASv2.Tests
                 var labels = string.Join(",", ExportNames.LabelsIn(@"{Шифр}_{Проект}\{Проект}\{Дата}"));
                 Check(labels == "Шифр,Проект,Дата", labels);
             });
+            yield return Case("общие настройки: по умолчанию — как на снимке окна экспортёра; коэффициент фасетизации", () =>
+            {
+                var s = new ExportSettings();
+                Check(s.ConvertElementIds && s.Parameters == NwcParameters.All && s.SharedCoordinates && s.FacetingFactor == 1 &&
+                      s.ConvertElementProperties && s.RoomAsAttribute && s.ConvertParts && s.DivideIntoLevels &&
+                      s.Scope == NwcScope.View && s.ViewName == "3D_Navisworks", "включённое");
+                Check(!s.ConvertUrls && !s.ConvertLights && !s.ConvertLinkedCad && !s.ConvertLinkedFiles && !s.FindMissingMaterials &&
+                      !s.RoomGeometry, "выключенное");
+                Check(ExportSettings.TryFaceting("0,5", out var f) && f == 0.5, "запятая");
+                Check(ExportSettings.TryFaceting(" 2.5 ", out f) && f == 2.5, "точка");
+                Check(!ExportSettings.TryFaceting("0", out _) && !ExportSettings.TryFaceting("-1", out _) &&
+                      !ExportSettings.TryFaceting("абв", out _) && !ExportSettings.TryFaceting("", out _), "не число или не больше нуля");
+            });
             yield return Case("удаление: вложенных на всех уровнях", () =>
             {
                 var roots = Sample(out var block1, out _);
