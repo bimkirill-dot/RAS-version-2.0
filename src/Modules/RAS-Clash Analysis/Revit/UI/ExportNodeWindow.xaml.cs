@@ -66,6 +66,12 @@ namespace RASv2.ClashAnalysis.UI
         private ExportSettings _nwc;
         private readonly bool _ready;
 
+        /// <summary>
+        /// Выбор моделей: в Revit — окно Revit «Открыть» (сетевые папки и Revit Server, путь RSN://…); null — окно Windows
+        /// (вне Revit — снимок окна).
+        /// </summary>
+        public Func<List<string>> PickModels { get; set; }
+
         public ExportNodeWindow(ExportTask task, ExportSettings common)
         {
             RASv2.Core.WindowTheme.Apply(this);
@@ -241,26 +247,27 @@ namespace RASv2.ClashAnalysis.UI
 
         // ── модели ──
 
-        private void AddFiles_Click(object sender, RoutedEventArgs e)
+        private void AddModels_Click(object sender, RoutedEventArgs e)
         {
-            var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Модели Revit (*.rvt)|*.rvt", Multiselect = true };
-            if (dialog.ShowDialog(this) != true) return;
-            foreach (var f in dialog.FileNames) AddModel(f);
+            List<string> picked;
+            try
+            {
+                picked = PickModels != null ? PickModels() : PickFiles();
+            }
+            catch (Exception ex)
+            {
+                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: выбор моделей не открылся", ex);
+                Error.Text = "Окно выбора моделей не открылось — подробности в журнале плагина.";
+                return;
+            }
+            foreach (var f in picked) AddModel(f);
             UpdateAll();
         }
 
-        private void AddServer_Click(object sender, RoutedEventArgs e)
+        private List<string> PickFiles()
         {
-            var path = ServerPath.Text.Trim();
-            if (!ExportNodes.IsServerPath(path))
-            {
-                Error.Text = "Путь Revit Server — вида RSN://сервер/папка/модель.rvt.";
-                return;
-            }
-            Error.Text = "";
-            AddModel(path);
-            ServerPath.Text = "";
-            UpdateAll();
+            var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Модели Revit (*.rvt)|*.rvt", Multiselect = true };
+            return dialog.ShowDialog(this) == true ? dialog.FileNames.ToList() : new List<string>();
         }
 
         private void AddModel(string path)

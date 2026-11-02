@@ -168,7 +168,7 @@ namespace RASv2.ClashAnalysis
         {
             try
             {
-                var window = new ExportTasksWindow(_exportTasks) { Settings = _exportSettings };
+                var window = new ExportTasksWindow(_exportTasks) { Settings = _exportSettings, PickModels = PickModels };
                 if (owner != IntPtr.Zero) new WindowInteropHelper(window).Owner = owner;
                 window.ShowDialog();
             }
@@ -176,6 +176,20 @@ namespace RASv2.ClashAnalysis
             {
                 _log.Error("Задачи выгрузки: окно не открылось", ex);
                 TaskDialog.Show("Задачи выгрузки", "Окно не открылось — подробности в журнале плагина («О плагине» → «Показать журнал ошибок»).");
+            }
+        }
+
+        /// <summary>
+        /// «Добавить модели…» окна узла — окно Revit «Открыть»: сетевые папки и Revit Server (путь RSN://…); по одной модели за
+        /// раз. Окна узла модальные, внутри команды — Revit API доступен.
+        /// </summary>
+        private static List<string> PickModels()
+        {
+            using (var dialog = new FileOpenDialog("Модели Revit (*.rvt)|*.rvt") { Title = "Добавить модель" })
+            {
+                if (dialog.Show() != ItemSelectionDialogResult.Confirmed) return new List<string>();
+                var path = dialog.GetSelectedModelPath();
+                return path == null ? new List<string>() : new List<string> { ModelPathUtils.ConvertModelPathToUserVisiblePath(path) };
             }
         }
 

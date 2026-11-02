@@ -34,6 +34,9 @@ namespace RASv2.ClashAnalysis.UI
             public Visibility RunVisibility => Task.RunningBy == null ? Visibility.Visible : Visibility.Hidden;
         }
 
+        /// <summary>Выбор моделей для окна узла (в Revit — окно Revit «Открыть»); null — окно Windows.</summary>
+        public System.Func<List<string>> PickModels { get; set; }
+
         /// <summary>Общие настройки — шестерёнка (пока в памяти).</summary>
         public ExportSettings Settings { get; set; } = new ExportSettings();
 
@@ -99,7 +102,7 @@ namespace RASv2.ClashAnalysis.UI
         }
 
         private void Edit_Click(object sender, RoutedEventArgs e) =>
-            Nested(() => new ExportNodeWindow(RowOf(sender).Task, Settings) { Owner = this }.ShowDialog(), "Настройки узла");
+            Nested(() => new ExportNodeWindow(RowOf(sender).Task, Settings) { Owner = this, PickModels = PickModels }.ShowDialog(), "Настройки узла");
 
         private void Settings_Click(object sender, RoutedEventArgs e) =>
             Nested(() => new ExportSettingsWindow(Settings) { Owner = this }.ShowDialog(), "Общие настройки");
