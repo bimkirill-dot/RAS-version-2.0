@@ -57,7 +57,6 @@ namespace RASv2.ClashAnalysis.UI
 
         // пример под полями, пока у узла нет моделей — имя модели по регламенту
         private const string SampleModel = "0000_01_01_S6_KJ01_01_M3 еще текст.rvt";
-        private static readonly string[] DateFormats = { "dd.MM.yyyy", "yyyy-MM-dd", "yyyyMMdd", "yyyy.MM.dd" };
 
         private readonly ExportTask _task;
         private readonly ExportSettings _common;
@@ -85,15 +84,18 @@ namespace RASv2.ClashAnalysis.UI
                 _models.Add(new ModelRow(this, new ExportModel { Path = m.Path, NwcName = m.NwcName }));
             ModelsList.ItemsSource = _models;
             DepartmentsList.ItemsSource = _departments;
-            var today = DateTime.Today;
-            foreach (var f in DateFormats) DateFormat.Items.Add(new ComboBoxItem { Content = today.ToString(f), Tag = f });
 
             var own = task.Own;
-            FoldersOwn.IsChecked = own.Folders != null;
+            // у задачи выше никого: папки, имя, отделы — всегда свои, без «Своё» (разработчик, 02.11.2026: снимок пустых
+            // бледных папок «по умолчанию» у задачи); параметры NWC — «Своё» остаётся: иначе общие
+            var top = task.Parent == null;
+            foreach (var box in new[] { FoldersOwn, NamesOwn, DepartmentsOwn })
+                box.Visibility = top ? Visibility.Collapsed : Visibility.Visible;
+            FoldersOwn.IsChecked = top || own.Folders != null;
             ShowFolders(own.Folders ?? InheritedFolders().Value);
-            NamesOwn.IsChecked = own.Names != null;
+            NamesOwn.IsChecked = top || own.Names != null;
             ShowNames(own.Names ?? InheritedNames().Value);
-            DepartmentsOwn.IsChecked = own.Departments != null;
+            DepartmentsOwn.IsChecked = top || own.Departments != null;
             ShowDepartments(own.Departments ?? InheritedDepartments().Value);
             NwcOwn.IsChecked = own.Nwc != null;
             _nwc = (own.Nwc ?? InheritedNwc().Value).Clone();
@@ -134,14 +136,12 @@ namespace RASv2.ClashAnalysis.UI
         {
             NwcFolder.Text = f.NwcFolder;
             ReportFolder.Text = f.ReportFolder;
-            DateFormat.SelectedIndex = Math.Max(0, Array.IndexOf(DateFormats, f.DateFormat));
         }
 
         private FolderSettings ReadFolders() => new FolderSettings
         {
             NwcFolder = NwcFolder.Text.Trim(),
             ReportFolder = ReportFolder.Text.Trim(),
-            DateFormat = (string)((ComboBoxItem)DateFormat.SelectedItem)?.Tag ?? DateFormats[0],
         };
 
         private void ShowNames(NameSettings n)
@@ -235,7 +235,7 @@ namespace RASv2.ClashAnalysis.UI
             var values = new Dictionary<string, string>
             {
                 ["Блок"] = string.IsNullOrEmpty(block) ? "S1" : block,
-                ["Дата"] = DateTime.Today.ToString(ReadFolders().DateFormat),
+                ["Дата"] = DateTime.Today.ToString(_common.DateFormat),
             };
             NwcExample.Text = NwcFolder.Text.Trim().Length == 0 ? "Папка не задана"
                 : "Пример: " + ExportNames.Fill(NwcFolder.Text.Trim(), values) + "\\" + nwc + ".nwc";
@@ -306,7 +306,7 @@ namespace RASv2.ClashAnalysis.UI
             try
             {
                 var copy = _nwc.Clone();
-                if (new ExportSettingsWindow(copy) { Owner = this, Title = "Параметры выгрузки NWC — " + NodeName.Text.Trim() }.ShowDialog() == true)
+                if (new ExportSettingsWindow(copy) { Owner = this, ForNode = true, Title = "Параметры выгрузки NWC — " + NodeName.Text.Trim() }.ShowDialog() == true)
                     _nwc = copy;
                 UpdateAll();
             }

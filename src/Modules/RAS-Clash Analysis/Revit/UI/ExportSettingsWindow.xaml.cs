@@ -13,11 +13,19 @@ namespace RASv2.ClashAnalysis.UI
     {
         private readonly ExportSettings _settings;
 
+        /// <summary>Свои параметры выгрузки узла: без «Удалить из модели перед выгрузкой» и «Меток» — они только общие.</summary>
+        public bool ForNode
+        {
+            set => CommonPart.Visibility = value ? Visibility.Collapsed : Visibility.Visible;
+        }
+
         public ExportSettingsWindow(ExportSettings settings)
         {
             RASv2.Core.WindowTheme.Apply(this);
             InitializeComponent();
             _settings = settings;
+            var today = System.DateTime.Today;
+            foreach (var f in ExportSettings.DateFormats) DateFormat.Items.Add(new ComboBoxItem { Content = today.ToString(f), Tag = f });
             Fill(settings);
         }
 
@@ -42,6 +50,7 @@ namespace RASv2.ClashAnalysis.UI
             RemoveCad.IsChecked = s.RemoveCad;
             RemovePointClouds.IsChecked = s.RemovePointClouds;
             RemoveIfc.IsChecked = s.RemoveIfc;
+            DateFormat.SelectedIndex = System.Math.Max(0, System.Array.IndexOf(ExportSettings.DateFormats, s.DateFormat));
             Error.Text = "";
         }
 
@@ -83,6 +92,7 @@ namespace RASv2.ClashAnalysis.UI
             _settings.RemoveCad = RemoveCad.IsChecked == true;
             _settings.RemovePointClouds = RemovePointClouds.IsChecked == true;
             _settings.RemoveIfc = RemoveIfc.IsChecked == true;
+            _settings.DateFormat = (string)((ComboBoxItem)DateFormat.SelectedItem)?.Tag ?? ExportSettings.DateFormats[0];
             DialogResult = true;
         }
     }

@@ -114,6 +114,7 @@ namespace RASv2.Tests
                 Check(!s.ConvertUrls && !s.ConvertLights && !s.ConvertLinkedCad && !s.ConvertLinkedFiles && !s.FindMissingMaterials &&
                       !s.RoomGeometry, "выключенное");
                 Check(s.RemoveRevitLinks && s.RemoveCad && s.RemovePointClouds && s.RemoveIfc, "перед выгрузкой удаляется всё внешнее");
+                Check(s.DateFormat == "dd.MM.yyyy", "дата — как в папках отчётов: 01.10.2026");
                 Check(ExportSettings.TryFaceting("0,5", out var f) && f == 0.5, "запятая");
                 Check(ExportSettings.TryFaceting(" 2.5 ", out f) && f == 2.5, "точка");
                 Check(!ExportSettings.TryFaceting("0", out _) && !ExportSettings.TryFaceting("-1", out _) &&

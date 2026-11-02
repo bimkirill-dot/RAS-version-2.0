@@ -190,7 +190,9 @@
                 </Grid>
             </Border>
 
-            <!-- не из экспортёра: что удалить из копии модели перед выгрузкой (разработчик, 02.11.2026) -->
+            <!-- не из экспортёра и только в общих (у своих параметров узла — скрыто): что удалить из копии модели перед
+                 выгрузкой, метки строк папок (разработчик, 02.11.2026) -->
+            <StackPanel x:Name="CommonPart">
             <TextBlock Style="{StaticResource Head}" Text="Удалить из модели перед выгрузкой" />
             <Border Style="{StaticResource OptionRow}">
                 <Grid>
@@ -213,13 +215,31 @@
                     <CheckBox Grid.Column="1" x:Name="RemovePointClouds" />
                 </Grid>
             </Border>
-            <Border Style="{StaticResource OptionRow}" BorderThickness="0">
+            <Border Style="{StaticResource OptionRow}">
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="380" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Style="{StaticResource OptionName}" Text="Связи IFC" />
                     <CheckBox Grid.Column="1" x:Name="RemoveIfc" />
                 </Grid>
             </Border>
+
+            <TextBlock Style="{StaticResource Head}" Text="Метки" />
+            <Border Style="{StaticResource OptionRow}">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="380" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource OptionName}" Text="{}{Блок}" />
+                    <TextBlock Grid.Column="1" Text="имя подзадачи первого уровня" Foreground="{DynamicResource Muted}"
+                               VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+            <Border Style="{StaticResource OptionRow}" BorderThickness="0">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="380" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource OptionName}" Text="{}{Дата}" />
+                    <ComboBox Grid.Column="1" x:Name="DateFormat" Width="200" />
+                </Grid>
+            </Border>
+            </StackPanel>
         </StackPanel>
     </DockPanel>
 </Window>

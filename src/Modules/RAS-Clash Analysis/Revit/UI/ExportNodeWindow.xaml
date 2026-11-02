@@ -135,7 +135,6 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <TextBlock Style="{StaticResource Caption}" Text="Папка NWC" />
                         <TextBox Grid.Column="1" x:Name="NwcFolder" TextChanged="Any_Changed" />
@@ -143,9 +142,6 @@
                         <TextBlock Grid.Row="2" Style="{StaticResource Caption}" Text="Папка отчётов" />
                         <TextBox Grid.Row="2" Grid.Column="1" x:Name="ReportFolder" TextChanged="Any_Changed" />
                         <TextBlock Grid.Row="3" Grid.Column="1" x:Name="ReportExample" Style="{StaticResource Example}" />
-                        <TextBlock Grid.Row="4" Style="{StaticResource Caption}" Text="Формат даты" />
-                        <ComboBox Grid.Row="4" Grid.Column="1" x:Name="DateFormat" Width="200" HorizontalAlignment="Left" MinHeight="28"
-                                  VerticalContentAlignment="Center" SelectionChanged="Any_Changed" />
                     </Grid>
                 </StackPanel>
 

@@ -19,8 +19,6 @@ namespace RASv2.ClashAnalysis.Logic
         public string NwcFolder { get; set; } = "";
         /// <summary>Папка отчётов — этап 2; пока только хранится.</summary>
         public string ReportFolder { get; set; } = "";
-        /// <summary>Формат метки {Дата} (.NET); как в папках отчётов сейчас — «01.10.2026».</summary>
-        public string DateFormat { get; set; } = "dd.MM.yyyy";
         public FolderSettings Clone() => (FolderSettings)MemberwiseClone();
     }
 

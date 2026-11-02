@@ -48,6 +48,15 @@ namespace RASv2.ClashAnalysis.Logic
         public bool RemovePointClouds { get; set; } = true;
         public bool RemoveIfc { get; set; } = true;
 
+        /// <summary>
+        /// Формат метки {Дата} (.NET); как в папках отчётов сейчас — «01.10.2026». Метки — в общих (разработчик, 02.11.2026:
+        /// «настройки меток тоже добавь в общие настройки»).
+        /// </summary>
+        public string DateFormat { get; set; } = "dd.MM.yyyy";
+
+        /// <summary>Форматы {Дата} на выбор.</summary>
+        public static readonly string[] DateFormats = { "dd.MM.yyyy", "yyyy-MM-dd", "yyyyMMdd", "yyyy.MM.dd" };
+
         public ExportSettings Clone() => (ExportSettings)MemberwiseClone();
 
         /// <summary>Коэффициент фасетизации из текста: «1», «0,5», «0.5»; больше нуля.</summary>
