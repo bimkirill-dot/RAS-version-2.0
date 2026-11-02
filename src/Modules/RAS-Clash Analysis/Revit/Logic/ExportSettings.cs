@@ -89,6 +89,21 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>Форматы {Дата} на выбор.</summary>
         public static readonly string[] DateFormats = { "dd.MM.yyyy", "yyyy-MM-dd", "yyyyMMdd", "yyyy.MM.dd" };
 
+        /// <summary>Взять всё из другого (сохранить окно или импорт): объект общий с окном задач — меняется на месте.</summary>
+        public void CopyFrom(ExportSettings s)
+        {
+            Nwc = s.Nwc.Clone();
+            RemoveRevitLinks = s.RemoveRevitLinks;
+            RemoveCad = s.RemoveCad;
+            RemovePointClouds = s.RemovePointClouds;
+            RemoveIfc = s.RemoveIfc;
+            TrimName = s.TrimName;
+            NameParts = s.NameParts;
+            BlockPrefix = s.BlockPrefix;
+            DateFormat = s.DateFormat;
+            Departments = s.Departments.Select(d => d.Clone()).ToList();
+        }
+
         public ExportSettings Clone()
         {
             var copy = (ExportSettings)MemberwiseClone();

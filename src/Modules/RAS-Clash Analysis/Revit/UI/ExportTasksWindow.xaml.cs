@@ -74,6 +74,34 @@ namespace RASv2.ClashAnalysis.UI
             Refresh();
         }
 
+        /// <summary>Проект с задачами из файла — новым проектом; занятое название — «ArmanQala (2)».</summary>
+        private void Import_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.Win32.OpenFileDialog { Filter = ExportFiles.Filter };
+            if (dialog.ShowDialog(this) != true) return;
+            try
+            {
+                var file = ExportFiles.Load(dialog.FileName);
+                if (file.Kind != ExportFile.Project)
+                {
+                    MessageBox.Show(this, file.Kind == ExportFile.Task
+                            ? "В файле — задача. Её добавляют в проект: карандаш проекта → «Импорт задач…»."
+                            : "В файле — общие настройки. Их открывают в шестерёнке → «Импорт…».",
+                        Title, MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+                var project = ExportFiles.ToProject(file.ProjectData, _roots.Select(r => r.Name));
+                _roots.Add(project);
+                Refresh();
+            }
+            catch (System.Exception ex)
+            {
+                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: импорт проекта не прочитан", ex);
+                MessageBox.Show(this, ex is System.IO.InvalidDataException ? ex.Message : "Файл не прочитан: " + ex.Message,
+                    Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
         private void AddChild_Click(object sender, RoutedEventArgs e)
         {
             var project = RowOf(sender).Task;

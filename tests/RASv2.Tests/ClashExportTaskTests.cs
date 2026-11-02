@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using RASv2.ClashAnalysis.Logic;
 
@@ -163,10 +164,10 @@ namespace RASv2.Tests
             {
                 var common = new ExportSettings();
                 var project = new ExportTask { Name = "ArmanQala" };
-                project.Project.TestsFile = @"\\srv\Проверки.xml";
+                project.Project.TestsFiles = new List<string> { @"\\srv\Проверки.xml" };
                 var models = new[] { "0000_01_01_S1_KJ01_01_M3.rvt", "0000_01_01_S1_AR01_01_M3.rvt", "0000_01_01_S0_GP01_01_M3.rvt" };
                 var high = project.Add(new ExportTask { Name = "S1 высокая", ModelFiles = models.Select(x => new ExportModel { Path = x }).ToList(),
-                    TestsFile = @"\\srv\Высокая.xml" });
+                    TestsFiles = new List<string> { @"\\srv\Высокая.xml", @"\\srv\МЕР.xml" } });
                 var mid = project.Add(new ExportTask { Name = "S1 средняя", ModelFiles = models.Select(x => new ExportModel { Path = x }).ToList() });
                 Check(ExportNodes.BlockOf(high, common) == "S1", "блок — чаще всех в именах: " + ExportNodes.BlockOf(high, common));
                 Check(ExportNodes.NwcPath(high, high.ModelFiles[0], common) == ExportNodes.NwcPath(mid, mid.ModelFiles[0], common),
@@ -175,7 +176,7 @@ namespace RASv2.Tests
                     "свои NWF");
                 Check(ExportNodes.ReportPath(high, common, DateTime.Today) == ExportNodes.ReportPath(mid, common, DateTime.Today),
                     "отчёты — в одну папку прогона");
-                Check(ExportNodes.TestsFileOf(high) == @"\\srv\Высокая.xml" && ExportNodes.TestsFileOf(mid) == @"\\srv\Проверки.xml", "файл проверок");
+                Check(ExportNodes.TestsFilesOf(high).Count == 2 && ExportNodes.TestsFilesOf(mid).Single() == @"\\srv\Проверки.xml", "файлы проверок");
                 Check(ExportNodes.BlockOf(new ExportTask { Name = " Корпус Б " }, common) == "Корпус Б", "моделей нет — название задачи");
                 Check(ExportNodes.ViewOf(high, common) == "3D_Navisworks", "вид — из общих");
                 project.Project.ViewName = "3D_NW";
@@ -190,8 +191,21 @@ namespace RASv2.Tests
                 Check(ExportNodes.CheckTaskName(s2, " s1 ") != null, "повтор в проекте — один NWF на двоих");
                 Check(ExportNodes.CheckTaskName(s2, "S1:высокая") != null && ExportNodes.CheckTaskName(s2, " ") != null, "знаки и пусто");
                 Check(ExportNodes.CheckTaskName(project, "Арман: Кала") == null, "у проекта знаки не важны — NWF по нему не называется");
-                Check(ExportNodes.CheckTestsFile("") == null && ExportNodes.CheckTestsFile(@"\\srv\a.xml") == null &&
-                      ExportNodes.CheckTestsFile(@"\\srv\a.nwf") != null, "файл проверок — .xml");
+                var names = new Dictionary<string, string[]>
+                {
+                    [@"\\srv\КЖ-АР.xml"] = new[] { "КЖ Стены/АР Стены", "КЖ Плиты/АР Стены" },
+                    [@"\\srv\МЕР.xml"] = new[] { "ОВ/ВК" },
+                    [@"\\srv\Повтор.xml"] = new[] { "кж  стены/ар стены" },
+                };
+                IEnumerable<string> Names(string f) => names.TryGetValue(f, out var n) ? n : throw new IOException("сеть недоступна");
+                Check(ExportNodes.CheckTestsFiles(new[] { @"\\srv\КЖ-АР.xml", @"\\srv\МЕР.xml" }, Names) == null, "разные проверки");
+                Check(ExportNodes.CheckTestsFiles(new string[0], Names) == null, "файлов нет — можно");
+                var twice = ExportNodes.CheckTestsFiles(new[] { @"\\srv\КЖ-АР.xml", @"\\srv\Повтор.xml" }, Names);
+                Check(twice != null && twice.Contains("Повтор.xml"), "одна проверка в двух файлах (без учёта регистра и пробелов): " + twice);
+                Check(ExportNodes.CheckTestsFiles(new[] { @"\\srv\КЖ-АР.xml", @"\\нет\Недоступен.xml" }, Names) == null,
+                    "не прочитался — не сравнивается");
+                Check(ExportNodes.CheckTestsFiles(new[] { @"\\srv\a.nwf" }, Names) != null, "не .xml");
+                Check(ExportNodes.CheckTestsFiles(new[] { @"\\srv\МЕР.xml", @"\\SRV\мер.xml" }, Names) != null, "один файл дважды");
                 Check(ExportNodes.ServerFolderOf("RSN://10.10.1.88/2025_Ариал/01_AR/S03/ARL.rvt") == "RSN://10.10.1.88/2025_Ариал",
                     ExportNodes.ServerFolderOf("RSN://10.10.1.88/2025_Ариал/01_AR/S03/ARL.rvt"));
                 Check(ExportNodes.ServerFolderOf("RSN://10.10.1.88/ARL.rvt") == "" && ExportNodes.ServerFolderOf(@"\\srv\a.rvt") == "", "нет папки / не сервер");
@@ -213,6 +227,52 @@ namespace RASv2.Tests
                 Check(ExportNodes.CheckDepartmentCodes(new[] { "KJ", "AR", "" }) == null, "коды верные");
                 Check(ExportNodes.CheckDepartmentCodes(new[] { "KJ01" }) != null && ExportNodes.CheckDepartmentCodes(new[] { "KJ", "kj" }) != null,
                     "цифры в коде и повтор");
+            });
+            yield return Case("файл настроек: общие, проект с задачами, задача — туда и обратно; занятые названия — «(2)»", () =>
+            {
+                var dir = Path.Combine(Path.GetTempPath(), "RASv2.Tests", "export-files");
+                Directory.CreateDirectory(dir);
+                var common = new ExportSettings { BlockPrefix = "C", Departments = { new DepartmentTemplate { Department = "KJ", Etalon = @"\\srv\КЖ.rte" } } };
+                common.Nwc.ViewName = "3D_NW";
+                var path = Path.Combine(dir, "Общие настройки.json");
+                ExportFiles.Save(path, ExportFiles.FromCommon(common));
+                var back = ExportFiles.Load(path);
+                Check(back.Kind == ExportFile.Common && back.Settings.BlockPrefix == "C" && back.Settings.Nwc.ViewName == "3D_NW" &&
+                      back.Settings.Departments.Single().Etalon == @"\\srv\КЖ.rte", "общие");
+                var target = new ExportSettings();
+                target.CopyFrom(back.Settings);
+                Check(target.BlockPrefix == "C" && target.Departments.Count == 1 && target.Nwc.ViewName == "3D_NW", "взять на место");
+
+                var project = new ExportTask { Name = "ArmanQala" };
+                project.Project.Folder = @"\\srv\Арман Кала";
+                project.Project.TestsFiles = new List<string> { @"\\srv\Проверки.xml" };
+                project.Add(new ExportTask { Name = "S1", ModelFiles = Models(2, "S1"), TestsFiles = new List<string> { @"\\srv\Высокая.xml" } });
+                project.Add(new ExportTask { Name = "S2", ModelFiles = Models(1, "S2") });
+                path = Path.Combine(dir, "Проект.json");
+                ExportFiles.Save(path, ExportFiles.FromProject(project.Name, project.Project, project.Children));
+                back = ExportFiles.Load(path);
+                var copy = ExportFiles.ToProject(back.ProjectData, new[] { "ArmanQala" });
+                Check(copy.Name == "ArmanQala (2)" && copy.Project.Folder == @"\\srv\Арман Кала" && copy.Children.Count == 2, "проект: " + copy.Name);
+                Check(copy.Children[0].Models == 2 && copy.Children[0].TestsFiles.Single() == @"\\srv\Высокая.xml" &&
+                      copy.Children[1].TestsFiles == null && copy.Children[1].Parent == copy, "задачи проекта");
+                Check(ExportFiles.FromProject(project.Name, project.Project, project.Children).ProjectData.Settings != project.Project, "настройки — копией");
+
+                path = Path.Combine(dir, "Задача.json");
+                ExportFiles.Save(path, ExportFiles.FromTask(project.Children[0]));
+                back = ExportFiles.Load(path);
+                var task = ExportFiles.ToTask(back.TaskData, project.Children.Select(c => c.Name));
+                Check(back.Kind == ExportFile.Task && task.Name == "S1 (2)" && task.Models == 2, "задача: " + task.Name);
+                Check(ExportFiles.UniqueName("S1", new[] { "S1", "s1 (2)" }) == "S1 (3)" && ExportFiles.UniqueName(" ", new string[0]) == "Без названия",
+                    "уникальные названия");
+
+                File.WriteAllText(Path.Combine(dir, "чужой.json"), "{\"a\":1}");
+                var refused = false;
+                try { ExportFiles.Load(Path.Combine(dir, "чужой.json")); } catch (InvalidDataException) { refused = true; }
+                Check(refused, "чужой JSON — понятный отказ");
+                File.WriteAllText(Path.Combine(dir, "не json.json"), "не json");
+                refused = false;
+                try { ExportFiles.Load(Path.Combine(dir, "не json.json")); } catch (InvalidDataException) { refused = true; }
+                Check(refused, "не JSON — понятный отказ");
             });
             yield return Case("Revit Server: серверы из RSN.ini, адрес папки, путь RSN://, ответ службы", () =>
             {

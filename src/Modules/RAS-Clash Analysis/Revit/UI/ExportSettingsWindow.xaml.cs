@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -19,7 +20,7 @@ namespace RASv2.ClashAnalysis.UI
         private const string SampleModel = "0000_01_01_S6_KJ01_01_M3 еще текст.rvt";
 
         private readonly ExportSettings _settings;
-        private readonly ObservableCollection<DepartmentTemplate> _departments;
+        private readonly ObservableCollection<DepartmentTemplate> _departments = new ObservableCollection<DepartmentTemplate>();
         private readonly bool _ready;
 
         public ExportSettingsWindow(ExportSettings settings)
@@ -27,23 +28,28 @@ namespace RASv2.ClashAnalysis.UI
             RASv2.Core.WindowTheme.Apply(this);
             InitializeComponent();
             _settings = settings;
-
-            FillNwc(settings.Nwc);
-            RemoveRevitLinks.IsChecked = settings.RemoveRevitLinks;
-            RemoveCad.IsChecked = settings.RemoveCad;
-            RemovePointClouds.IsChecked = settings.RemovePointClouds;
-            RemoveIfc.IsChecked = settings.RemoveIfc;
-            TrimName.IsChecked = settings.TrimName;
-            NameParts.Text = settings.NameParts.ToString();
-            BlockPrefix.Text = settings.BlockPrefix;
             var today = DateTime.Today;
             foreach (var f in ExportSettings.DateFormats) DateFormat.Items.Add(new ComboBoxItem { Content = today.ToString(f), Tag = f });
-            DateFormat.SelectedIndex = Math.Max(0, Array.IndexOf(ExportSettings.DateFormats, settings.DateFormat));
-            _departments = new ObservableCollection<DepartmentTemplate>(settings.Departments.Select(d => d.Clone()));
             DepartmentsList.ItemsSource = _departments;
-
+            FillAll(settings);
             _ready = true;
             UpdateExample();
+        }
+
+        /// <summary>Окно — из настроек (открытие и «Импорт…»).</summary>
+        private void FillAll(ExportSettings s)
+        {
+            FillNwc(s.Nwc);
+            RemoveRevitLinks.IsChecked = s.RemoveRevitLinks;
+            RemoveCad.IsChecked = s.RemoveCad;
+            RemovePointClouds.IsChecked = s.RemovePointClouds;
+            RemoveIfc.IsChecked = s.RemoveIfc;
+            TrimName.IsChecked = s.TrimName;
+            NameParts.Text = s.NameParts.ToString();
+            BlockPrefix.Text = s.BlockPrefix;
+            DateFormat.SelectedIndex = Math.Max(0, Array.IndexOf(ExportSettings.DateFormats, s.DateFormat));
+            _departments.Clear();
+            foreach (var d in s.Departments) _departments.Add(d.Clone());
         }
 
         private void FillNwc(NwcOptions s)
@@ -111,11 +117,63 @@ namespace RASv2.ClashAnalysis.UI
 
         private void Save_Click(object sender, RoutedEventArgs e)
         {
+            var collected = Collect();
+            if (collected == null) return;
+            _settings.CopyFrom(collected);
+            DialogResult = true;
+        }
+
+        private void Export_Click(object sender, RoutedEventArgs e)
+        {
+            var collected = Collect();
+            if (collected == null) return;
+            var dialog = new Microsoft.Win32.SaveFileDialog { Filter = ExportFiles.Filter, FileName = "Общие настройки выгрузки.json" };
+            if (dialog.ShowDialog(this) != true) return;
+            try
+            {
+                ExportFiles.Save(dialog.FileName, ExportFiles.FromCommon(collected));
+                Info.Text = "Сохранено: " + Path.GetFileName(dialog.FileName);
+            }
+            catch (Exception ex)
+            {
+                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: экспорт общих настроек не записан", ex);
+                Error.Text = "Файл не записан: " + ex.Message;
+            }
+        }
+
+        private void Import_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.Win32.OpenFileDialog { Filter = ExportFiles.Filter };
+            if (dialog.ShowDialog(this) != true) return;
+            try
+            {
+                var file = ExportFiles.Load(dialog.FileName);
+                if (file.Kind != ExportFile.Common)
+                {
+                    Error.Text = "В файле — " + file.Kind.ToLowerInvariant() + ", а не общие настройки.";
+                    return;
+                }
+                FillAll(file.Settings);
+                UpdateExample();
+                Error.Text = "";
+                Info.Text = "Взято из «" + Path.GetFileName(dialog.FileName) + "» — сохранится по «Сохранить».";
+            }
+            catch (Exception ex)
+            {
+                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: импорт общих настроек не прочитан", ex);
+                Error.Text = ex is InvalidDataException ? ex.Message : "Файл не прочитан: " + ex.Message;
+            }
+        }
+
+        /// <summary>Настройки, как сейчас в окне; что-то не так — ошибка внизу и null.</summary>
+        private ExportSettings Collect()
+        {
             var error = Validate(out var faceting, out var parts);
             Error.Text = error ?? "";
-            if (error != null) return;
+            if (error != null) return null;
 
-            var n = _settings.Nwc;
+            var result = new ExportSettings();
+            var n = result.Nwc;
             n.Parameters = (NwcParameters)Parameters.SelectedIndex;
             n.SharedCoordinates = Coordinates.SelectedIndex == 1;
             n.FacetingFactor = faceting;
@@ -132,18 +190,18 @@ namespace RASv2.ClashAnalysis.UI
             n.ViewName = ViewName.Text.Trim();
             n.RoomGeometry = RoomGeometry.IsChecked == true;
 
-            _settings.RemoveRevitLinks = RemoveRevitLinks.IsChecked == true;
-            _settings.RemoveCad = RemoveCad.IsChecked == true;
-            _settings.RemovePointClouds = RemovePointClouds.IsChecked == true;
-            _settings.RemoveIfc = RemoveIfc.IsChecked == true;
-            _settings.TrimName = TrimName.IsChecked == true;
-            _settings.NameParts = parts;
-            _settings.BlockPrefix = BlockPrefix.Text.Trim();
-            _settings.DateFormat = SelectedDateFormat;
-            _settings.Departments = _departments.Where(d => !string.IsNullOrWhiteSpace(d.Department))
+            result.RemoveRevitLinks = RemoveRevitLinks.IsChecked == true;
+            result.RemoveCad = RemoveCad.IsChecked == true;
+            result.RemovePointClouds = RemovePointClouds.IsChecked == true;
+            result.RemoveIfc = RemoveIfc.IsChecked == true;
+            result.TrimName = TrimName.IsChecked == true;
+            result.NameParts = parts;
+            result.BlockPrefix = BlockPrefix.Text.Trim();
+            result.DateFormat = SelectedDateFormat;
+            result.Departments = _departments.Where(d => !string.IsNullOrWhiteSpace(d.Department))
                 .Select(d => new DepartmentTemplate { Department = d.Department.Trim(), Etalon = d.Etalon?.Trim(), ViewTemplate = d.ViewTemplate?.Trim() })
                 .ToList();
-            DialogResult = true;
+            return result;
         }
 
         /// <summary>Что не так — первой ошибкой; null — всё верно.</summary>

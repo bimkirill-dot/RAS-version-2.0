@@ -23,7 +23,10 @@ namespace RASv2.ClashAnalysis.Logic
     {
         /// <summary>Папка проекта на сетевом диске — от неё строки папок.</summary>
         public string Folder { get; set; } = "";
-        /// <summary>Папка проекта на Revit Server (RSN://сервер/папка) — с неё открывается «Добавить модели…»; пусто — корень.</summary>
+        /// <summary>
+        /// Папка проекта на Revit Server (RSN://сервер/папка) — откуда уже добавляли модели этого проекта: с неё открывается
+        /// «Добавить модели…»; ставится сама, в окне её нет (разработчик, 02.11.2026: «убрать „Модели на сервере“ совсем»).
+        /// </summary>
         public string ServerFolder { get; set; } = "";
         /// <summary>NWC — метки {Блок}, {Отдел}; даты нет: NWF ссылается на NWC по постоянному пути.</summary>
         public string NwcFolder { get; set; } = @"{Блок}\NWC";
@@ -31,8 +34,11 @@ namespace RASv2.ClashAnalysis.Logic
         public string NwfFolder { get; set; } = "{Блок}";
         /// <summary>Отчёты прогона — метки {Блок}, {Дата}; прямо в папке прогона, без папок критичности.</summary>
         public string ReportFolder { get; set; } = @"{Блок}\{Дата}";
-        /// <summary>Файл проверок Navisworks (.xml, выгрузка Clash Detective) — у всех задач, если у задачи нет своего.</summary>
-        public string TestsFile { get; set; } = "";
+        /// <summary>
+        /// Файлы проверок Navisworks (.xml, выгрузка Clash Detective) — у всех задач, если у задачи нет своих (разработчик,
+        /// 02.11.2026: «возможность добавлять несколько файлов проверок»); все — в NWF задачи.
+        /// </summary>
+        public List<string> TestsFiles { get; set; } = new List<string>();
         /// <summary>Вид для выгрузки; null — из общих настроек.</summary>
         public string ViewName { get; set; }
     }
@@ -103,9 +109,8 @@ namespace RASv2.ClashAnalysis.Logic
             return InProject(p.Folder, ExportNames.Fill(p.ReportFolder, Labels(task, null, common, runDate)));
         }
 
-        /// <summary>Файл проверок задачи: свой или проекта.</summary>
-        public static string TestsFileOf(ExportTask task) =>
-            !string.IsNullOrWhiteSpace(task.TestsFile) ? task.TestsFile.Trim() : Root(task).Project.TestsFile;
+        /// <summary>Файлы проверок задачи: свои или проекта.</summary>
+        public static List<string> TestsFilesOf(ExportTask task) => task.TestsFiles ?? Root(task).Project.TestsFiles ?? new List<string>();
 
         /// <summary>Вид для выгрузки: проекта или из общих.</summary>
         public static string ViewOf(ExportTask task, ExportSettings common) => Root(task).Project.ViewName ?? common.Nwc.ViewName;
@@ -163,11 +168,51 @@ namespace RASv2.ClashAnalysis.Logic
             return twin == null ? null : "Задача «" + n + "» в проекте уже есть: у двух задач был бы один NWF.";
         }
 
-        /// <summary>Файл проверок: пусто или .xml; null — всё верно.</summary>
-        public static string CheckTestsFile(string file) =>
-            string.IsNullOrWhiteSpace(file) || file.Trim().EndsWith(".xml", StringComparison.OrdinalIgnoreCase)
-                ? null
-                : "Файл проверок — .xml из Clash Detective.";
+        /// <summary>
+        /// Файлы проверок: .xml, без повторов; одно название проверки — только в одном файле (отчёт называется по проверке, в
+        /// одной папке прогона отчёты заменили бы друг друга). names — названия проверок файла; не прочитался — исключение,
+        /// файл тогда не сравнивается (сеть недоступна — сохранить всё равно можно). null — всё верно.
+        /// </summary>
+        public static string CheckTestsFiles(IList<string> files, Func<string, IEnumerable<string>> names)
+        {
+            var notXml = files.FirstOrDefault(f => !f.Trim().EndsWith(".xml", StringComparison.OrdinalIgnoreCase));
+            if (notXml != null) return "Файл проверок «" + FileName(notXml) + "» — не .xml из Clash Detective.";
+            var twice = files.GroupBy(f => f.Trim(), StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1);
+            if (twice != null) return "Файл проверок «" + FileName(twice.Key) + "» — дважды.";
+            var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var f in files)
+            {
+                IEnumerable<string> list;
+                try
+                {
+                    list = names(f);
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+                foreach (var n in list)
+                {
+                    var key = Regex.Replace(n.Trim(), @"\s+", " ");
+                    if (seen.TryGetValue(key, out var other) && !string.Equals(other, f, StringComparison.OrdinalIgnoreCase))
+                        return "Проверка «" + n.Trim() + "» — и в «" + FileName(other) + "», и в «" + FileName(f) +
+                               "»: отчёты заменят друг друга.";
+                    seen[key] = f;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Имя файла для сообщений — всё после последней косой черты: Path.GetFileName в .NET 8 у «\\сервер\файл» отдаёт пусто
+        /// (считает его корнем сетевой папки).
+        /// </summary>
+        public static string FileName(string path)
+        {
+            var s = (path ?? "").Trim();
+            var i = s.LastIndexOfAny(new[] { '\\', '/' });
+            return i >= 0 ? s.Substring(i + 1) : s;
+        }
 
         /// <summary>Имена NWC моделей задачи: допустимые знаки, без повторов; null — всё верно.</summary>
         public static string CheckNwcNames(IEnumerable<string> names)

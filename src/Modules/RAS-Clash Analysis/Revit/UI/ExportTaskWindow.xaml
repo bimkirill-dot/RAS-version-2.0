@@ -5,8 +5,8 @@
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Fg}" FontFamily="Segoe UI" FontSize="13">
     <!-- Задача проекта «Задач выгрузки» (карандаш у задачи, DECISIONS.md модуля): обычно блок — название (оно же имя NWF),
-         модели, файл проверок (как у проекта или свой: два NWF на блок — две задачи со своими файлами). Папки — у проекта;
-         внизу — куда ляжет. Кнопки, поля, кисти — общие образцы ядра (подключаются до разметки); ключи своих стилей не
+         модели, файлы проверок (как у проекта или свои: два NWF на блок — две задачи со своими файлами). Папки — у проекта;
+         внизу — куда ляжет; экспорт задачи — поделиться. Кнопки, поля, кисти — общие образцы ядра (подключаются до разметки); ключи своих стилей не
          совпадают с кистями ядра. -->
     <Window.Resources>
         <Style x:Key="Head" TargetType="TextBlock">
@@ -42,11 +42,15 @@
     <DockPanel>
         <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="20,12">
             <DockPanel>
+                <Button DockPanel.Dock="Left" Content="Экспорт…" Click="Export_Click" ToolTip="Задача — в файл, чтобы поделиться" />
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <Button Content="Сохранить" Style="{StaticResource PrimaryButton}" IsDefault="True" Click="Save_Click" />
                     <Button Content="Отмена" IsCancel="True" Margin="8,0,0,0" />
                 </StackPanel>
-                <TextBlock x:Name="Error" Foreground="{DynamicResource Error}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                <StackPanel VerticalAlignment="Center" Margin="16,0">
+                    <TextBlock x:Name="Info" Style="{StaticResource Note}" TextWrapping="Wrap" />
+                    <TextBlock x:Name="Error" Foreground="{DynamicResource Error}" TextWrapping="Wrap" />
+                </StackPanel>
             </DockPanel>
         </Border>
 
@@ -104,26 +108,32 @@
                 <!-- одна кнопка — и Revit Server (с папки проекта), и сетевые папки (окно «Добавить модели») -->
                 <Button Content="Добавить модели…" HorizontalAlignment="Left" Margin="0,2,0,0" Click="AddModels_Click" />
 
+                <!-- файлы проверок: как у проекта (бледным) или свои — список -->
                 <DockPanel Style="{StaticResource HeadBar}">
-                    <TextBlock Style="{StaticResource Head}" Text="Проверки" />
-                </DockPanel>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="130" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Style="{StaticResource Caption}" Text="Файл проверок" />
-                    <DockPanel Grid.Column="1">
-                        <Button x:Name="BrowseTests" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE8E5;"
-                                Margin="4,0,0,0" Click="BrowseTests_Click" ToolTip="Выбрать файл (.xml из Clash Detective)" />
-                        <TextBox x:Name="TestsFile" />
-                    </DockPanel>
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                         <TextBlock x:Name="TestsFrom" Style="{StaticResource Note}" Margin="0,0,8,0" />
-                        <Button x:Name="TestsLink" Style="{StaticResource LinkButton}" />
+                        <Button x:Name="TestsLink" Style="{StaticResource LinkButton}" Click="TestsLink_Click" />
                     </StackPanel>
-                </Grid>
+                    <TextBlock Style="{StaticResource Head}" Text="Файлы проверок" />
+                </DockPanel>
+                <ItemsControl x:Name="TestsList">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <DockPanel Margin="0,0,0,4">
+                                <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE74D;" Margin="4,0,0,0"
+                                        Click="DeleteTests_Click" ToolTip="Убрать файл"
+                                        Visibility="{Binding DataContext.OwnVisibility, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                <TextBlock ToolTip="{Binding Path}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center">
+                                    <Run Text="{Binding Name, Mode=OneWay}" />
+                                    <Run Text="{Binding Folder, Mode=OneWay}" Foreground="{DynamicResource Muted}" FontSize="12" />
+                                </TextBlock>
+                            </DockPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock x:Name="NoTests" Style="{StaticResource Note}" HorizontalAlignment="Left" Text="Файлов нет" />
+                <Button x:Name="AddTests" Content="Добавить…" HorizontalAlignment="Left" Margin="0,4,0,0" Click="AddTests_Click"
+                        ToolTip="Файлы проверок .xml из Clash Detective — можно несколько" />
 
                 <!-- куда ляжет — по папкам проекта -->
                 <DockPanel Style="{StaticResource HeadBar}">

@@ -21,8 +21,8 @@ namespace RASv2.ClashAnalysis.Logic
         public int Models => ModelFiles.Count;
         /// <summary>Настройки проекта — у верхней строки.</summary>
         public ProjectSettings Project { get; } = new ProjectSettings();
-        /// <summary>Файл проверок задачи; null — как у проекта (два NWF на блок — две задачи со своими файлами).</summary>
-        public string TestsFile { get; set; }
+        /// <summary>Файлы проверок задачи; null — как у проекта (два NWF на блок — две задачи со своими файлами).</summary>
+        public List<string> TestsFiles { get; set; }
         /// <summary>Последняя выгрузка узла; null — не выгружался.</summary>
         public DateTime? LastRun { get; set; }
         /// <summary>Моделей, не вышедших в последней выгрузке.</summary>

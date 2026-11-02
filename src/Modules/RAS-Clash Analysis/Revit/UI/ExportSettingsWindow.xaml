@@ -67,11 +67,19 @@
     <DockPanel>
         <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="20,12">
             <DockPanel>
+                <!-- поделиться с коллегой (разработчик, 02.11.2026): импорт заполняет окно, сохраняется по «Сохранить» -->
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                    <Button Content="Экспорт…" Click="Export_Click" ToolTip="Общие настройки — в файл, чтобы поделиться" />
+                    <Button Content="Импорт…" Margin="8,0,0,0" Click="Import_Click" ToolTip="Общие настройки из файла — в это окно" />
+                </StackPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <Button Content="Сохранить" Style="{StaticResource PrimaryButton}" IsDefault="True" Click="Save_Click" />
                     <Button Content="Отмена" IsCancel="True" Margin="8,0,0,0" />
                 </StackPanel>
-                <TextBlock x:Name="Error" Foreground="{DynamicResource Error}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                <StackPanel VerticalAlignment="Center" Margin="16,0">
+                    <TextBlock x:Name="Info" Foreground="{DynamicResource Muted}" FontSize="12" TextWrapping="Wrap" />
+                    <TextBlock x:Name="Error" Foreground="{DynamicResource Error}" TextWrapping="Wrap" />
+                </StackPanel>
             </DockPanel>
         </Border>
 
