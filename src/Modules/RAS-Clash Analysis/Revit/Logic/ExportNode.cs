@@ -2,10 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace RASv2.ClashAnalysis.Logic
 {
-    /// <summary>Модель в выгрузке узла: файл (сетевая папка) или путь Revit Server (RSN://…).</summary>
+    /// <summary>Модель задачи: файл (сетевая папка) или путь Revit Server (RSN://…).</summary>
     public sealed class ExportModel
     {
         public string Path { get; set; }
@@ -14,68 +15,35 @@ namespace RASv2.ClashAnalysis.Logic
     }
 
     /// <summary>
-    /// Проверка задачи (02.11.2026, разработчик: «у блока S1 нужно 2 NWF и 2 отчёта — высокая и средняя критичность»): задаётся
-    /// один раз у задачи и действует у всех её блоков; на каждый блок — свой NWF и свой отчёт. Разделения по критичности нет —
-    /// одна проверка; проверок нет — только NWC.
+    /// Настройки проекта — общие для всех его задач (разработчик, 02.11.2026: «проект — как каталог, в нём задачи-блоки, у
+    /// проекта — настройки, общие для блоков»). Папки — строки внутри папки проекта (полный путь — тоже можно), по умолчанию —
+    /// по регламенту 15.10 / 22.10.2026: «&lt;проект&gt;\&lt;блок&gt;\&lt;дата&gt;\&lt;отчёты&gt;», один постоянный NWF на блок.
     /// </summary>
-    public sealed class CheckSet
+    public sealed class ProjectSettings
     {
-        /// <summary>Постоянный ключ: по нему блок помнит снятую проверку, даже если её переименуют.</summary>
-        public string Id { get; set; } = Guid.NewGuid().ToString("N");
-        /// <summary>Название — как папка критичности («Высокая критичность»): по ней сайт коллизий узнаёт критичность.</summary>
-        public string Name { get; set; } = "";
-        /// <summary>Файл проверок Navisworks (.xml, выгрузка Clash Detective).</summary>
+        /// <summary>Папка проекта на сетевом диске — от неё строки папок.</summary>
+        public string Folder { get; set; } = "";
+        /// <summary>Папка проекта на Revit Server (RSN://сервер/папка) — с неё открывается «Добавить модели…»; пусто — корень.</summary>
+        public string ServerFolder { get; set; } = "";
+        /// <summary>NWC — метки {Блок}, {Отдел}; даты нет: NWF ссылается на NWC по постоянному пути.</summary>
+        public string NwcFolder { get; set; } = @"{Блок}\NWC";
+        /// <summary>NWF — один постоянный на задачу, имя — название задачи; метка {Блок}.</summary>
+        public string NwfFolder { get; set; } = "{Блок}";
+        /// <summary>Отчёты прогона — метки {Блок}, {Дата}; прямо в папке прогона, без папок критичности.</summary>
+        public string ReportFolder { get; set; } = @"{Блок}\{Дата}";
+        /// <summary>Файл проверок Navisworks (.xml, выгрузка Clash Detective) — у всех задач, если у задачи нет своего.</summary>
         public string TestsFile { get; set; } = "";
-        /// <summary>Имя NWF — строка с {Блок}; пусто — «{Блок}_название».</summary>
-        public string NwfName { get; set; } = "";
-        /// <summary>Папка отчётов — строка с {Блок}, {Дата}; критичность — текстом.</summary>
-        public string ReportFolder { get; set; } = "";
-
-        public string EffectiveNwfName => string.IsNullOrWhiteSpace(NwfName) ? "{Блок}_" + Name.Trim() : NwfName.Trim();
-
-        public CheckSet Clone() => (CheckSet)MemberwiseClone();
-    }
-
-    /// <summary>
-    /// Своё у строки (карандаш) — только то, что различается между проектами (разбор настроек, 02.11.2026): папки NWC и NWF,
-    /// вид — каждая строка наследуется отдельно, null — как у строки выше, у задачи — пусто (папки) или из общих (вид);
-    /// проверки — только у задачи. Модели — у самой строки (ExportTask.ModelFiles), остальное — общее (шестерёнка).
-    /// </summary>
-    public sealed class NodeSettings
-    {
-        /// <summary>Папка NWC — строка с метками {Блок}, {Отдел}; даты нет: NWF ссылается на NWC по постоянному пути.</summary>
-        public string NwcFolder { get; set; }
-        /// <summary>Папка NWF — строка с метками {Блок}, {Дата}.</summary>
-        public string NwfFolder { get; set; }
-        /// <summary>Вид для выгрузки; null — как выше, у задачи — из общих.</summary>
+        /// <summary>Вид для выгрузки; null — из общих настроек.</summary>
         public string ViewName { get; set; }
-        /// <summary>Проверки — у задачи (верхняя строка); null — нет.</summary>
-        public List<CheckSet> Checks { get; set; }
     }
 
-    /// <summary>Наследование по дереву, где лежат модели, проверки, проверки окна строки.</summary>
+    /// <summary>Где что лежит у задачи, проверки окон проекта и задачи.</summary>
     public static class ExportNodes
     {
         /// <summary>Метки, которые можно ставить в строки (подсказка под полем и проверка при сохранении).</summary>
         public static readonly string[] NwcFolderLabels = { "Блок", "Отдел" };
-        public static readonly string[] NwfFolderLabels = { "Блок", "Дата" };
-        public static readonly string[] NwfNameLabels = { "Блок" };
+        public static readonly string[] NwfFolderLabels = { "Блок" };
         public static readonly string[] ReportFolderLabels = { "Блок", "Дата" };
-
-        /// <summary>Значение от строк выше: ближайшая, у которой оно своё; нет ни у кого — (null, null).</summary>
-        public static (T Value, ExportTask From) Inherited<T>(ExportTask task, Func<NodeSettings, T> pick) where T : class
-        {
-            for (var p = task.Parent; p != null; p = p.Parent)
-            {
-                var v = pick(p.Own);
-                if (v != null) return (v, p);
-            }
-            return (null, null);
-        }
-
-        /// <summary>Действующее значение строки: своё, иначе от строк выше; null — нигде не задано.</summary>
-        public static T Effective<T>(ExportTask task, Func<NodeSettings, T> pick) where T : class =>
-            pick(task.Own) ?? Inherited(task, pick).Value;
 
         public static ExportTask Root(ExportTask task)
         {
@@ -83,52 +51,71 @@ namespace RASv2.ClashAnalysis.Logic
             return task;
         }
 
-        /// <summary>Проверки задачи этой строки (заданы у задачи); нет — пусто.</summary>
-        public static List<CheckSet> ChecksOf(ExportTask task) => Root(task).Own.Checks ?? new List<CheckSet>();
-
-        /// <summary>Проверки, которые строка делает: проверки задачи без снятых у строки.</summary>
-        public static List<CheckSet> ActiveChecks(ExportTask task) =>
-            ChecksOf(task).Where(c => !task.SkippedChecks.Contains(c.Id)).ToList();
-
-        /// <summary>Ближайшая строка выше со своими моделями; null — нет.</summary>
-        public static ExportTask ModelsAbove(ExportTask task)
-        {
-            for (var p = task.Parent; p != null; p = p.Parent)
-                if (p.Models > 0) return p;
-            return null;
-        }
-
-        /// <summary>Вложенные строки со своими моделями, по порядку.</summary>
-        public static List<ExportTask> ModelsBelow(ExportTask task)
-        {
-            var list = new List<ExportTask>();
-            foreach (var c in task.Children)
-            {
-                if (c.Models > 0) list.Add(c);
-                list.AddRange(ModelsBelow(c));
-            }
-            return list;
-        }
-
         /// <summary>
-        /// Можно ли строке держать модели: модели выгружаются один раз — у одной строки на ветке (обычно у блока); ни выше, ни
-        /// ниже их быть не должно. Проект без блоков держит модели сам.
+        /// Блок задачи — тот, что чаще всех находится в именах её моделей («S1» у «S1 высокая» и «S1 средняя»); моделей с блоком
+        /// нет — название задачи.
         /// </summary>
-        public static bool CanHaveModels(ExportTask task) => task.Models > 0 || ModelsAbove(task) == null && ModelsBelow(task).Count == 0;
-
-        /// <summary>Папки NWC и NWF нужны строке, если выше нет строки с моделями.</summary>
-        public static bool HasNwcFolder(ExportTask task) => ModelsAbove(task) == null;
-
-        /// <summary>Строка проекта (кроме except), у которой уже есть эта модель; null — нет.</summary>
-        public static ExportTask FindModel(ExportTask root, string path, ExportTask except)
+        public static string BlockOf(ExportTask task, ExportSettings common)
         {
-            if (root != except && root.ModelFiles.Any(m => string.Equals(m.Path, path, StringComparison.OrdinalIgnoreCase))) return root;
-            foreach (var c in root.Children)
+            var block = task.ModelFiles.Select(m => ExportNames.Block(m.Path, common.BlockPrefix)).Where(b => b.Length > 0)
+                .GroupBy(b => b, StringComparer.OrdinalIgnoreCase).OrderByDescending(g => g.Count()).Select(g => g.Key).FirstOrDefault();
+            return block ?? (task.Name ?? "").Trim();
+        }
+
+        /// <summary>Метки задачи: {Блок} — блок задачи, {Отдел} — по модели (пусто — без модели), {Дата} — date.</summary>
+        public static Dictionary<string, string> Labels(ExportTask task, ExportModel model, ExportSettings common, DateTime date) =>
+            new Dictionary<string, string>
             {
-                var found = FindModel(c, path, except);
-                if (found != null) return found;
-            }
-            return null;
+                ["Блок"] = BlockOf(task, common),
+                ["Отдел"] = model == null ? "" : ExportNames.Department(model.Path, common.Departments.Select(d => d.Department)),
+                ["Дата"] = date.ToString(common.DateFormat),
+            };
+
+        /// <summary>Строка папки — внутри папки проекта; полный путь («\\сервер\…», «D:\…») — как есть.</summary>
+        public static string InProject(string projectFolder, string folder)
+        {
+            var f = (folder ?? "").Trim();
+            if (f.StartsWith(@"\\") || Regex.IsMatch(f, @"^[A-Za-z]:")) return f;
+            var root = (projectFolder ?? "").Trim().TrimEnd('\\');
+            return root.Length == 0 ? f : f.Length == 0 ? root : root + "\\" + f.TrimStart('\\');
+        }
+
+        /// <summary>Файл NWC модели задачи.</summary>
+        public static string NwcPath(ExportTask task, ExportModel model, ExportSettings common)
+        {
+            var p = Root(task).Project;
+            return InProject(p.Folder, ExportNames.Fill(p.NwcFolder, Labels(task, model, common, DateTime.Today))) + "\\" +
+                   NwcNameOf(model, common) + ".nwc";
+        }
+
+        /// <summary>Постоянный NWF задачи — имя по названию задачи («S1.nwf», «S1 высокая.nwf»).</summary>
+        public static string NwfPath(ExportTask task, ExportSettings common)
+        {
+            var p = Root(task).Project;
+            return InProject(p.Folder, ExportNames.Fill(p.NwfFolder, Labels(task, null, common, DateTime.Today))) + "\\" +
+                   (task.Name ?? "").Trim() + ".nwf";
+        }
+
+        /// <summary>Папка отчётов прогона задачи на дату запуска (одна на весь запуск проекта).</summary>
+        public static string ReportPath(ExportTask task, ExportSettings common, DateTime runDate)
+        {
+            var p = Root(task).Project;
+            return InProject(p.Folder, ExportNames.Fill(p.ReportFolder, Labels(task, null, common, runDate)));
+        }
+
+        /// <summary>Файл проверок задачи: свой или проекта.</summary>
+        public static string TestsFileOf(ExportTask task) =>
+            !string.IsNullOrWhiteSpace(task.TestsFile) ? task.TestsFile.Trim() : Root(task).Project.TestsFile;
+
+        /// <summary>Вид для выгрузки: проекта или из общих.</summary>
+        public static string ViewOf(ExportTask task, ExportSettings common) => Root(task).Project.ViewName ?? common.Nwc.ViewName;
+
+        /// <summary>Папка проекта на Revit Server по модели: «RSN://сервер/первая папка» — для «Добавить модели…»; не сервер — пусто.</summary>
+        public static string ServerFolderOf(string modelPath)
+        {
+            if (!IsServerPath(modelPath)) return "";
+            var parts = modelPath.Trim().Substring("RSN://".Length).Split('/');
+            return parts.Length >= 3 ? "RSN://" + parts[0] + "/" + parts[1] : "";
         }
 
         /// <summary>Имя NWC модели: поправленное руками или из имени модели по общему правилу.</summary>
@@ -144,24 +131,15 @@ namespace RASv2.ClashAnalysis.Logic
 
         /// <summary>Папка NWC: только {Блок}, {Отдел} — даты нет, NWF ищет NWC по постоянному пути; null — всё верно.</summary>
         public static string CheckNwcFolder(string folder) =>
-            CheckLabels(folder, "Папка NWC", NwcFolderLabels, "даты в папке NWC быть не должно: NWF ищет NWC по постоянному пути");
+            CheckLabels(folder, "NWC", NwcFolderLabels, "даты в папке NWC быть не должно: NWF ищет NWC по постоянному пути");
 
-        /// <summary>Папка NWF: только {Блок}, {Дата} — NWF один на блок и проверку, не на отдел; null — всё верно.</summary>
+        /// <summary>Папка NWF: только {Блок} — NWF постоянный (регламент), один на задачу; null — всё верно.</summary>
         public static string CheckNwfFolder(string folder) =>
-            CheckLabels(folder, "Папка NWF", NwfFolderLabels, "NWF один на блок, а не на модель отдела");
+            CheckLabels(folder, "NWF", NwfFolderLabels, "NWF постоянный — один на задачу, без даты и отдела");
 
-        /// <summary>Папка отчётов: только {Блок}, {Дата} — отчёт один на блок; null — всё верно.</summary>
-        public static string CheckReportFolder(string folder, string what = "Папка отчётов") =>
-            CheckLabels(folder, what, ReportFolderLabels, "отчёт один на блок, а не на модель отдела");
-
-        /// <summary>Имя NWF: только {Блок}, знаки — как в имени файла; null — всё верно.</summary>
-        public static string CheckNwfName(string name, string what)
-        {
-            var labels = CheckLabels(name, what, NwfNameLabels, "NWF один на блок и проверку");
-            if (labels != null) return labels;
-            var plain = ExportNames.Fill(name, NwfNameLabels.ToDictionary(l => l, l => "x"));
-            return plain.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ? what + ": недопустимые знаки в имени файла." : null;
-        }
+        /// <summary>Папка отчётов: только {Блок}, {Дата} — отчёт один на задачу, не на модель отдела; null — всё верно.</summary>
+        public static string CheckReportFolder(string folder) =>
+            CheckLabels(folder, "Отчёты", ReportFolderLabels, "отчёт один на задачу, а не на модель отдела");
 
         private static string CheckLabels(string text, string what, string[] allowed, string why)
         {
@@ -174,23 +152,24 @@ namespace RASv2.ClashAnalysis.Logic
             return forbidden != null ? what + ": {" + forbidden + "} — нельзя, " + why + "." : null;
         }
 
-        /// <summary>Проверки задачи: названия есть и не повторяются, строки — с верными метками, имена NWF — разные; null — всё верно.</summary>
-        public static string CheckChecks(IList<CheckSet> checks)
+        /// <summary>Название задачи — оно же имя NWF: знаки как в имени файла, не повторяется в проекте; null — всё верно.</summary>
+        public static string CheckTaskName(ExportTask task, string name)
         {
-            if (checks.Any(c => string.IsNullOrWhiteSpace(c.Name))) return "У проверки нет названия.";
-            var twice = checks.GroupBy(c => c.Name.Trim(), StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1);
-            if (twice != null) return "Проверка «" + twice.Key + "» — дважды.";
-            foreach (var c in checks)
-            {
-                var error = CheckNwfName(c.EffectiveNwfName, "«" + c.Name.Trim() + "», имя NWF")
-                            ?? CheckReportFolder(c.ReportFolder, "«" + c.Name.Trim() + "», папка отчётов");
-                if (error != null) return error;
-            }
-            var sameNwf = checks.GroupBy(c => c.EffectiveNwfName, StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1);
-            return sameNwf == null ? null : "Имя NWF «" + sameNwf.Key + "» — у двух проверок: файлы заменят друг друга.";
+            var n = (name ?? "").Trim();
+            if (n.Length == 0) return "Нужно название.";
+            if (task.Parent == null) return null;
+            if (n.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return "В названии задачи — недопустимые знаки: по нему называется NWF.";
+            var twin = task.Parent.Children.FirstOrDefault(c => c != task && string.Equals((c.Name ?? "").Trim(), n, StringComparison.OrdinalIgnoreCase));
+            return twin == null ? null : "Задача «" + n + "» в проекте уже есть: у двух задач был бы один NWF.";
         }
 
-        /// <summary>Имена NWC моделей строки: допустимые знаки, без повторов; null — всё верно.</summary>
+        /// <summary>Файл проверок: пусто или .xml; null — всё верно.</summary>
+        public static string CheckTestsFile(string file) =>
+            string.IsNullOrWhiteSpace(file) || file.Trim().EndsWith(".xml", StringComparison.OrdinalIgnoreCase)
+                ? null
+                : "Файл проверок — .xml из Clash Detective.";
+
+        /// <summary>Имена NWC моделей задачи: допустимые знаки, без повторов; null — всё верно.</summary>
         public static string CheckNwcNames(IEnumerable<string> names)
         {
             var list = names.ToList();

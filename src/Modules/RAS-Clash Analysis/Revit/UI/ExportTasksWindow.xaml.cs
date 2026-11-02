@@ -64,21 +64,22 @@ namespace RASv2.ClashAnalysis.UI
 
         private List<ExportTask> SiblingsOf(ExportTask task) => task.Parent?.Children ?? _roots;
 
-        // «+» — сразу настройки новой строки (разбор настроек, 02.11.2026: без поиска строки и карандаша); «Отмена» — строки нет
+        // «+» — сразу настройки новой строки (разбор настроек, 02.11.2026: без поиска строки и карандаша); «Отмена» — строки нет.
+        // Вверху — проект (каталог задач), в строке проекта — задача (обычно блок)
         private void AddTask_Click(object sender, RoutedEventArgs e)
         {
-            var task = new ExportTask { Name = "Новая задача" };
-            _roots.Add(task);
-            if (!OpenSettings(task)) _roots.Remove(task);
+            var project = new ExportTask { Name = "Новый проект" };
+            _roots.Add(project);
+            if (!OpenSettings(project)) _roots.Remove(project);
             Refresh();
         }
 
         private void AddChild_Click(object sender, RoutedEventArgs e)
         {
-            var parent = RowOf(sender).Task;
-            var task = parent.Add(new ExportTask { Name = "Новая подзадача" });
-            _collapsed.Remove(parent);
-            if (!OpenSettings(task)) parent.Remove(task);
+            var project = RowOf(sender).Task;
+            var task = project.Add(new ExportTask { Name = "S" + (project.Children.Count + 1) });
+            _collapsed.Remove(project);
+            if (!OpenSettings(task)) project.Remove(task);
             Refresh();
         }
 
@@ -93,18 +94,12 @@ namespace RASv2.ClashAnalysis.UI
         {
             var task = RowOf(sender).Task;
             var inner = task.Descendants;
-            var text = "Удалить «" + task.Name + "»" + (inner > 0 ? " и " + inner + " " + SubtasksWord(inner) : "") + "?";
+            var text = "Удалить «" + task.Name + "»" + (inner > 0 ? " и " + inner + " " + ExportTask.TasksWord(inner) : "") + "?";
             if (MessageBox.Show(this, text, Title, MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No)
                 != MessageBoxResult.Yes) return;
             if (task.Parent != null) task.Parent.Remove(task);
             else _roots.Remove(task);
             Refresh();
-        }
-
-        private static string SubtasksWord(int n)
-        {
-            var w = ExportTask.ModelsWord(n);
-            return w == "модель" ? "подзадачу" : w == "модели" ? "подзадачи" : "подзадач";
         }
 
         private void Edit_Click(object sender, RoutedEventArgs e)
@@ -119,9 +114,11 @@ namespace RASv2.ClashAnalysis.UI
             Refresh();
         }
 
-        /// <summary>Настройки строки (карандаш); true — сохранены.</summary>
+        /// <summary>Настройки строки (карандаш): проекта или задачи; true — сохранены.</summary>
         private bool OpenSettings(ExportTask task) =>
-            Nested(() => new ExportNodeWindow(task, Settings) { Owner = this, RevitYear = RevitYear }.ShowDialog(), "Настройки");
+            task.Parent == null
+                ? Nested(() => new ExportProjectWindow(task, Settings) { Owner = this }.ShowDialog(), "Настройки проекта")
+                : Nested(() => new ExportTaskWindow(task, Settings) { Owner = this, RevitYear = RevitYear }.ShowDialog(), "Настройки задачи");
 
         /// <summary>Вложенное окно; исключение сквозь вложенный ShowDialog роняет Revit (CLAUDE.md, «Правила, о которые уже спотыкались»).</summary>
         private bool Nested(System.Func<bool?> show, string what)

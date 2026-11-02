@@ -5,9 +5,9 @@ using System.Linq;
 namespace RASv2.ClashAnalysis.Logic
 {
     /// <summary>
-    /// Узел дерева «Задачи выгрузки» (DECISIONS.md модуля, «„Задачи выгрузки“ — выгрузка NWC и проверки в Navisworks»):
-    /// задача — проект («Арман Кала»), подзадача — блок, под ней при необходимости — критичность; глубина любая. Пока —
-    /// строка главного окна и свои настройки узла (карандаш, ExportNode.cs). Без Revit API.
+    /// Строка «Задач выгрузки» (DECISIONS.md модуля): верхняя — **проект**, каталог с общими настройками (Project,
+    /// ExportNode.cs), своих моделей нет, «Запустить» — все его задачи; под ним — **задачи** (обычно блок): модели, файл проверок,
+    /// свой NWF (разработчик, 02.11.2026). Без Revit API.
     /// </summary>
     public sealed class ExportTask
     {
@@ -15,14 +15,14 @@ namespace RASv2.ClashAnalysis.Logic
         public ExportTask Parent { get; private set; }
         public List<ExportTask> Children { get; } = new List<ExportTask>();
 
-        /// <summary>Модели самого узла (без вложенных) — обычно у блока.</summary>
+        /// <summary>Модели задачи; у проекта своих нет.</summary>
         public List<ExportModel> ModelFiles { get; set; } = new List<ExportModel>();
-        /// <summary>Моделей у самого узла.</summary>
+        /// <summary>Моделей у самой строки.</summary>
         public int Models => ModelFiles.Count;
-        /// <summary>Свои настройки узла; не заданное — от узлов выше.</summary>
-        public NodeSettings Own { get; } = new NodeSettings();
-        /// <summary>Проверки задачи, снятые у этой строки (Id): блок их не делает.</summary>
-        public HashSet<string> SkippedChecks { get; set; } = new HashSet<string>();
+        /// <summary>Настройки проекта — у верхней строки.</summary>
+        public ProjectSettings Project { get; } = new ProjectSettings();
+        /// <summary>Файл проверок задачи; null — как у проекта (два NWF на блок — две задачи со своими файлами).</summary>
+        public string TestsFile { get; set; }
         /// <summary>Последняя выгрузка узла; null — не выгружался.</summary>
         public DateTime? LastRun { get; set; }
         /// <summary>Моделей, не вышедших в последней выгрузке.</summary>
@@ -82,13 +82,20 @@ namespace RASv2.ClashAnalysis.Logic
         {
             var models = AllModels;
             if (RunningBy != null) return "идёт у " + RunningBy + " — " + RunningDone + " из " + models;
-            var parts = new List<string> { models + " " + ModelsWord(models) };
+            var parts = new List<string>();
+            if (Parent == null) parts.Add(Children.Count + " " + TasksWord(Children.Count));
+            parts.Add(models + " " + ModelsWord(models));
             if (LastRun == null) parts.Add("не выгружалось");
             else if (Failed > 0) parts.Add(Failed + " не " + (Failed == 1 ? "вышла" : "вышли") + " " + LastRun.Value.ToString("dd.MM HH:mm"));
             else parts.Add("выгружено " + LastRun.Value.ToString("dd.MM HH:mm"));
-            // у задачи — её проверки (задаются один раз на все блоки)
-            if (Parent == null && Own.Checks?.Count > 0) parts.Add("проверки: " + string.Join(", ", Own.Checks.Select(c => c.Name)));
             return string.Join(" · ", parts);
+        }
+
+        /// <summary>«задача», «задачи», «задач» — по числу.</summary>
+        public static string TasksWord(int n)
+        {
+            var w = ModelsWord(n);
+            return w == "модель" ? "задача" : w == "модели" ? "задачи" : "задач";
         }
 
         /// <summary>«модель», «модели», «моделей» — по числу.</summary>

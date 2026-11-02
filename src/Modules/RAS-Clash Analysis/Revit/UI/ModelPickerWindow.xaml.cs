@@ -95,6 +95,9 @@ namespace RASv2.ClashAnalysis.UI
 
         private readonly int _year;
         private readonly List<string> _hosts;
+        // папка проекта на сервере: раскрыть её после загрузки корня
+        private readonly string _startHost;
+        private readonly List<string> _startPath = new List<string>();
         private readonly ObservableCollection<Node> _roots = new ObservableCollection<Node>();
         private string _host;
         private int _sourceIndex = -1;
@@ -102,12 +105,28 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Выбранные модели: «RSN://сервер/папка/модель.rvt» или пути файлов.</summary>
         public List<string> Picked { get; } = new List<string>();
 
-        public ModelPickerWindow(int revitYear)
+        /// <param name="startFolder">Папка проекта на Revit Server (RSN://сервер/папка) — окно открывается в ней; пусто — корень.</param>
+        public ModelPickerWindow(int revitYear, string startFolder = null)
         {
             RASv2.Core.WindowTheme.Apply(this);
             InitializeComponent();
             _year = revitYear;
             _hosts = RevitServers.Hosts(revitYear);
+            var start = (startFolder ?? "").Trim();
+            if (start.StartsWith("RSN://", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = start.Substring("RSN://".Length).Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 0)
+                {
+                    _startHost = parts[0];
+                    _startPath.AddRange(parts.Skip(1));
+                    // сервер проекта — первым, даже если его нет в настройках Revit этой версии
+                    var known = _hosts.FindIndex(h => string.Equals(h, _startHost, StringComparison.OrdinalIgnoreCase));
+                    if (known >= 0) _hosts.RemoveAt(known);
+                    _hosts.Insert(0, _startHost);
+                    _lastHost = _startHost;
+                }
+            }
             // только адрес (разработчик, 02.11.2026: «слово Revit Server уберём, оставим просто адрес»)
             foreach (var h in _hosts) Source.Items.Add(h);
             Source.Items.Add(FolderSource);
@@ -172,12 +191,27 @@ namespace RASv2.ClashAnalysis.UI
                 if (host != _host) return;   // пока грузилось, выбрали другой сервер
                 Fill(_roots, null, new List<string>(), contents);
                 Status.Text = _roots.Count == 0 ? "На сервере пусто." : "";
+                if (string.Equals(host, _startHost, StringComparison.OrdinalIgnoreCase)) await OpenStart(host);
             }
             catch (Exception ex)
             {
                 if (host != _host) return;
                 RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: Revit Server " + host + " (Revit " + _year + ") не ответил", ex);
                 Status.Text = "Revit Server " + host + " не отвечает для Revit " + _year + ".";
+            }
+        }
+
+        /// <summary>Раскрыть папку проекта: по частям пути, каждая — после загрузки предыдущей.</summary>
+        private async Task OpenStart(string host)
+        {
+            IEnumerable<Node> level = _roots;
+            foreach (var name in _startPath)
+            {
+                var folder = level.FirstOrDefault(n => n.IsFolder && string.Equals(n.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (folder == null || host != _host) return;
+                if (!folder.Loaded) await LoadChildren(folder);
+                folder.IsExpanded = true;
+                level = folder.Children;
             }
         }
 

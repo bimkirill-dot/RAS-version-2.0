@@ -115,15 +115,6 @@ namespace RASv2.ClashAnalysis.Logic
             LabelRx.Replace(template ?? "", m =>
                 values.TryGetValue(m.Groups[1].Value.Trim(), out var v) && !string.IsNullOrEmpty(v) ? v : m.Value);
 
-        /// <summary>Значения меток для модели: {Блок} и {Отдел} — найденные в её имени (не нашлось — пусто), {Дата} — date.</summary>
-        public static Dictionary<string, string> LabelValues(string modelFile, ExportSettings common, DateTime date) =>
-            new Dictionary<string, string>
-            {
-                ["Блок"] = Block(modelFile, common.BlockPrefix),
-                ["Отдел"] = Department(modelFile, common.Departments.Select(d => d.Department)),
-                ["Дата"] = date.ToString(common.DateFormat),
-            };
-
         /// <summary>Части имени модели через «_», каждая — до пробела: «…_M3 еще текст» → «M3».</summary>
         private static IEnumerable<string> Parts(string modelFile) =>
             Path.GetFileNameWithoutExtension(modelFile ?? "").Split('_').Select(p =>

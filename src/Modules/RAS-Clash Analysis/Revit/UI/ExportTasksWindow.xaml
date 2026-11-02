@@ -44,7 +44,7 @@
 
     <DockPanel Margin="20,14,20,16">
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,12">
-            <Button Style="{StaticResource IconButton}" Content="&#xE710;" Click="AddTask_Click" ToolTip="Новая задача" />
+            <Button Style="{StaticResource IconButton}" Content="&#xE710;" Click="AddTask_Click" ToolTip="Новый проект" />
             <Button Style="{StaticResource IconButton}" Content="&#xE713;" Margin="4,0,0,0" Click="Settings_Click"
                     ToolTip="Общие настройки" />
         </StackPanel>
@@ -80,8 +80,8 @@
                                 <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
                                     <Button Style="{StaticResource RowIcon}" Content="&#xE768;" Visibility="{Binding RunVisibility}"
                                             Click="Run_Click" ToolTip="Запустить" />
-                                    <!-- подзадача (блок) — только у задачи: критичности — проверками задачи (02.11.2026), третьего уровня нет -->
-                                    <Button Style="{StaticResource RowIcon}" Content="&#xE710;" Click="AddChild_Click" ToolTip="Подзадача"
+                                    <!-- задача (блок) — только у проекта: проект — каталог задач (02.11.2026), третьего уровня нет -->
+                                    <Button Style="{StaticResource RowIcon}" Content="&#xE710;" Click="AddChild_Click" ToolTip="Задача"
                                             Visibility="{Binding AddChildVisibility}" />
                                     <Button Style="{StaticResource RowIcon}" Content="&#xE70F;" Click="Edit_Click" ToolTip="Изменить" />
                                     <Button Style="{StaticResource RowIcon}" Content="&#xE74D;" Click="Delete_Click" ToolTip="Удалить" />
