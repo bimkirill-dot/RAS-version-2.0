@@ -41,7 +41,7 @@ namespace RASv2.ClashAnalysis.UI
             Error.Text = "";
         }
 
-        // имя вида нужно только при «Экспорт: Текущий вид»
+        // имя вида нужно только при «Экспорт: Вид»
         private void Scope_Changed(object sender, SelectionChangedEventArgs e) => ViewName.IsEnabled = Scope.SelectedIndex == 1;
 
         private void Defaults_Click(object sender, RoutedEventArgs e) => Fill(new ExportSettings());

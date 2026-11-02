@@ -166,12 +166,12 @@
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="380" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Style="{StaticResource OptionName}" Text="Экспорт" />
-                    <!-- «Текущий вид» — вид с этим именем: модель открывает плагин (разработчик, 02.11.2026: имя вида — в этой же
+                    <!-- «Вид» (в экспортёре — «Текущий вид»; разработчик: «замени на просто „вид“») — вид с этим именем: модель открывает плагин (разработчик, 02.11.2026: имя вида — в этой же
                          строке, без отдельной); «Выбор» не нужен -->
                     <StackPanel Grid.Column="1" Orientation="Horizontal">
                         <ComboBox x:Name="Scope" Width="130" SelectionChanged="Scope_Changed">
                             <ComboBoxItem Content="Целый проект" />
-                            <ComboBoxItem Content="Текущий вид" />
+                            <ComboBoxItem Content="Вид" />
                         </ComboBox>
                         <TextBox x:Name="ViewName" Width="160" Margin="8,0,0,0" ToolTip="Имя вида для выгрузки" />
                     </StackPanel>
