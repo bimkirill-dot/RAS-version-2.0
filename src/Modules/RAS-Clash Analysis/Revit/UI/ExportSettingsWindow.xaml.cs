@@ -38,6 +38,10 @@ namespace RASv2.ClashAnalysis.UI
             Scope.SelectedIndex = s.Scope == NwcScope.View ? 1 : 0;
             ViewName.Text = s.ViewName;
             RoomGeometry.IsChecked = s.RoomGeometry;
+            RemoveRevitLinks.IsChecked = s.RemoveRevitLinks;
+            RemoveCad.IsChecked = s.RemoveCad;
+            RemovePointClouds.IsChecked = s.RemovePointClouds;
+            RemoveIfc.IsChecked = s.RemoveIfc;
             Error.Text = "";
         }
 
@@ -75,6 +79,10 @@ namespace RASv2.ClashAnalysis.UI
             _settings.Scope = scope;
             _settings.ViewName = ViewName.Text.Trim();
             _settings.RoomGeometry = RoomGeometry.IsChecked == true;
+            _settings.RemoveRevitLinks = RemoveRevitLinks.IsChecked == true;
+            _settings.RemoveCad = RemoveCad.IsChecked == true;
+            _settings.RemovePointClouds = RemovePointClouds.IsChecked == true;
+            _settings.RemoveIfc = RemoveIfc.IsChecked == true;
             DialogResult = true;
         }
     }

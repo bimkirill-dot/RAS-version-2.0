@@ -9,7 +9,7 @@ using RASv2.ClashAnalysis.Logic;
 namespace RASv2.ClashAnalysis.UI
 {
     /// <summary>
-    /// Настройки узла «Задач выгрузки» (карандаш): название, модели, папки, имя NWC, отделы, что удалить, параметры выгрузки NWC.
+    /// Настройки узла «Задач выгрузки» (карандаш): название, модели, папки, имя NWC, отделы, параметры выгрузки NWC.
     /// Раздел без «Своё» — значение узла выше (бледным, «как у «…»»); у самого верхнего — по умолчанию, параметры NWC — общие
     /// (шестерёнка). Правится копия: «Отмена» оставляет узел как был. Примерное окно (02.11.2026), рисунка нет.
     /// </summary>
@@ -89,8 +89,6 @@ namespace RASv2.ClashAnalysis.UI
             ShowNames(own.Names ?? InheritedNames().Value);
             DepartmentsOwn.IsChecked = own.Departments != null;
             ShowDepartments(own.Departments ?? InheritedDepartments().Value);
-            RemoveOwn.IsChecked = own.Remove != null;
-            ShowRemove(own.Remove ?? InheritedRemove().Value);
             NwcOwn.IsChecked = own.Nwc != null;
             _nwc = (own.Nwc ?? InheritedNwc().Value).Clone();
 
@@ -116,12 +114,6 @@ namespace RASv2.ClashAnalysis.UI
         {
             var (v, from) = ExportNodes.Inherited(_task, s => s.Departments);
             return (v ?? new List<DepartmentTemplate>(), from);
-        }
-
-        private (RemoveSettings Value, ExportTask From) InheritedRemove()
-        {
-            var (v, from) = ExportNodes.Inherited(_task, s => s.Remove);
-            return (v ?? new RemoveSettings(), from);
         }
 
         private (ExportSettings Value, ExportTask From) InheritedNwc()
@@ -168,22 +160,6 @@ namespace RASv2.ClashAnalysis.UI
             foreach (var d in list) _departments.Add(d.Clone());
         }
 
-        private void ShowRemove(RemoveSettings r)
-        {
-            RemoveRevitLinks.IsChecked = r.RevitLinks;
-            RemoveCad.IsChecked = r.Cad;
-            RemovePointClouds.IsChecked = r.PointClouds;
-            RemoveIfc.IsChecked = r.Ifc;
-        }
-
-        private RemoveSettings ReadRemove() => new RemoveSettings
-        {
-            RevitLinks = RemoveRevitLinks.IsChecked == true,
-            Cad = RemoveCad.IsChecked == true,
-            PointClouds = RemovePointClouds.IsChecked == true,
-            Ifc = RemoveIfc.IsChecked == true,
-        };
-
         // ── «Своё» и подписи «как у …» ──
 
         private void Own_Changed(object sender, RoutedEventArgs e)
@@ -193,7 +169,6 @@ namespace RASv2.ClashAnalysis.UI
             if (sender == FoldersOwn && FoldersOwn.IsChecked != true) ShowFolders(InheritedFolders().Value);
             if (sender == NamesOwn && NamesOwn.IsChecked != true) ShowNames(InheritedNames().Value);
             if (sender == DepartmentsOwn && DepartmentsOwn.IsChecked != true) ShowDepartments(InheritedDepartments().Value);
-            if (sender == RemoveOwn && RemoveOwn.IsChecked != true) ShowRemove(InheritedRemove().Value);
             if (sender == NwcOwn && NwcOwn.IsChecked != true) _nwc = InheritedNwc().Value.Clone();
             UpdateAll();
         }
@@ -208,7 +183,6 @@ namespace RASv2.ClashAnalysis.UI
             Section(FoldersOwn, FoldersPanel, FoldersFrom, InheritedFolders().From, "по умолчанию");
             Section(NamesOwn, NamesPanel, NamesFrom, InheritedNames().From, "по умолчанию");
             Section(DepartmentsOwn, DepartmentsPanel, DepartmentsFrom, InheritedDepartments().From, "не заданы");
-            Section(RemoveOwn, RemovePanel, RemoveFrom, InheritedRemove().From, "по умолчанию");
             Section(NwcOwn, NwcPanel, NwcFrom, InheritedNwc().From, "общие (шестерёнка)");
             NwcSummary.Text = _nwc.Scope == NwcScope.View ? "вид «" + _nwc.ViewName + "»" : "целый проект";
 
@@ -354,7 +328,6 @@ namespace RASv2.ClashAnalysis.UI
             own.Departments = DepartmentsOwn.IsChecked == true
                 ? _departments.Where(d => !string.IsNullOrWhiteSpace(d.Department)).Select(d => d.Clone()).ToList()
                 : null;
-            own.Remove = RemoveOwn.IsChecked == true ? ReadRemove() : null;
             own.Nwc = NwcOwn.IsChecked == true ? _nwc.Clone() : null;
             DialogResult = true;
         }

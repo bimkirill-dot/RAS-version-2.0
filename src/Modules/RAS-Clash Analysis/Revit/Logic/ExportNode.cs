@@ -35,16 +35,6 @@ namespace RASv2.ClashAnalysis.Logic
         public NameSettings Clone() => (NameSettings)MemberwiseClone();
     }
 
-    /// <summary>Что удалить из копии модели перед выгрузкой.</summary>
-    public sealed class RemoveSettings
-    {
-        public bool RevitLinks { get; set; } = true;
-        public bool Cad { get; set; } = true;
-        public bool PointClouds { get; set; } = true;
-        public bool Ifc { get; set; } = true;
-        public RemoveSettings Clone() => (RemoveSettings)MemberwiseClone();
-    }
-
     public sealed class DepartmentTemplate
     {
         public string Department { get; set; }
@@ -56,7 +46,7 @@ namespace RASv2.ClashAnalysis.Logic
     }
 
     /// <summary>
-    /// Свои настройки узла (карандаш); null — как у узла выше, у самого верхнего — по умолчанию (папки, имя, удаление) или
+    /// Свои настройки узла (карандаш); null — как у узла выше, у самого верхнего — по умолчанию (папки, имя) или
     /// общие (параметры выгрузки NWC — шестерёнка).
     /// </summary>
     public sealed class NodeSettings
@@ -64,7 +54,6 @@ namespace RASv2.ClashAnalysis.Logic
         public FolderSettings Folders { get; set; }
         public NameSettings Names { get; set; }
         public List<DepartmentTemplate> Departments { get; set; }
-        public RemoveSettings Remove { get; set; }
         public ExportSettings Nwc { get; set; }
     }
 

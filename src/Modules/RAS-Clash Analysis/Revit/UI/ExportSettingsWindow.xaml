@@ -17,6 +17,11 @@
             <Setter Property="Padding" Value="0,6" />
             <Setter Property="MinHeight" Value="40" />
         </Style>
+        <Style x:Key="Head" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Margin" Value="0,22,0,4" />
+        </Style>
         <Style x:Key="OptionName" TargetType="TextBlock">
             <Setter Property="HorizontalAlignment" Value="Right" />
             <Setter Property="VerticalAlignment" Value="Center" />
@@ -177,11 +182,42 @@
                     </StackPanel>
                 </Grid>
             </Border>
-            <Border Style="{StaticResource OptionRow}" BorderThickness="0">
+            <Border Style="{StaticResource OptionRow}">
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="380" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Style="{StaticResource OptionName}" Text="Экспортировать геометрию помещения" />
                     <CheckBox Grid.Column="1" x:Name="RoomGeometry" />
+                </Grid>
+            </Border>
+
+            <!-- не из экспортёра: что удалить из копии модели перед выгрузкой (разработчик, 02.11.2026) -->
+            <TextBlock Style="{StaticResource Head}" Text="Удалить из модели перед выгрузкой" />
+            <Border Style="{StaticResource OptionRow}">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="380" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource OptionName}" Text="Связи Revit" />
+                    <CheckBox Grid.Column="1" x:Name="RemoveRevitLinks" />
+                </Grid>
+            </Border>
+            <Border Style="{StaticResource OptionRow}">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="380" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource OptionName}" Text="DWG и другие CAD — связанные и импортированные" />
+                    <CheckBox Grid.Column="1" x:Name="RemoveCad" />
+                </Grid>
+            </Border>
+            <Border Style="{StaticResource OptionRow}">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="380" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource OptionName}" Text="Облака точек" />
+                    <CheckBox Grid.Column="1" x:Name="RemovePointClouds" />
+                </Grid>
+            </Border>
+            <Border Style="{StaticResource OptionRow}" BorderThickness="0">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="380" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource OptionName}" Text="Связи IFC" />
+                    <CheckBox Grid.Column="1" x:Name="RemoveIfc" />
                 </Grid>
             </Border>
         </StackPanel>

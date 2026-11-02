@@ -16,8 +16,8 @@ namespace RASv2.ClashAnalysis.Logic
     /// <summary>
     /// Общие настройки «Задач выгрузки» — шестерёнка главного окна: параметры выгрузки NWC, те же, что в окне экспортёра Navisworks
     /// (разработчик, 02.11.2026: «главные настройки — те же самые, что открываются при экспорте в NWC стандартным экспортёром»;
-    /// значения по умолчанию — с его снимка окна). Папки, имя NWC, отделы, что удалить, временная папка — в настройках узла
-    /// (карандаш). Пока — в памяти; хранение на сервере — следующим шагом. Без Revit API: в NavisworksExportOptions —
+    /// значения по умолчанию — с его снимка окна) и что удалить из модели перед выгрузкой. Папки, имя NWC, отделы — в
+    /// настройках узла (карандаш). Пока — в памяти; хранение на сервере — следующим шагом. Без Revit API: в NavisworksExportOptions —
     /// при выгрузке.
     /// </summary>
     public sealed class ExportSettings
@@ -40,6 +40,13 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>Вид для выгрузки (при «Экспорт: вид»); нет в модели — создаётся.</summary>
         public string ViewName { get; set; } = "3D_Navisworks";
         public bool RoomGeometry { get; set; }
+
+        // что удалить из копии модели перед выгрузкой — одно правило для всех задач (разработчик, 02.11.2026: «можно вынести
+        // в общие настройки»); связанное в NWC и так не попадёт, импортированный DWG — попадёт
+        public bool RemoveRevitLinks { get; set; } = true;
+        public bool RemoveCad { get; set; } = true;
+        public bool RemovePointClouds { get; set; } = true;
+        public bool RemoveIfc { get; set; } = true;
 
         public ExportSettings Clone() => (ExportSettings)MemberwiseClone();
 

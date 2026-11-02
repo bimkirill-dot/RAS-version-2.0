@@ -211,21 +211,6 @@
                     <Button Content="Добавить отдел" HorizontalAlignment="Left" Click="AddDepartment_Click" />
                 </StackPanel>
 
-                <!-- Удалить перед выгрузкой -->
-                <DockPanel Style="{StaticResource HeadBar}">
-                    <TextBlock Style="{StaticResource Head}" Text="Удалить из модели перед выгрузкой" />
-                    <CheckBox x:Name="RemoveOwn" Content="Своё" Margin="16,0,0,0" Checked="Own_Changed" Unchecked="Own_Changed" />
-                    <TextBlock x:Name="RemoveFrom" Style="{StaticResource FromText}" />
-                </DockPanel>
-                <StackPanel x:Name="RemovePanel" Style="{StaticResource Section}">
-                    <WrapPanel>
-                        <CheckBox x:Name="RemoveRevitLinks" Content="Связи Revit" />
-                        <CheckBox x:Name="RemoveCad" Content="DWG и другие CAD" />
-                        <CheckBox x:Name="RemovePointClouds" Content="Облака точек" />
-                        <CheckBox x:Name="RemoveIfc" Content="IFC" />
-                    </WrapPanel>
-                </StackPanel>
-
                 <!-- Параметры выгрузки NWC -->
                 <DockPanel Style="{StaticResource HeadBar}">
                     <TextBlock Style="{StaticResource Head}" Text="Параметры выгрузки NWC" />
