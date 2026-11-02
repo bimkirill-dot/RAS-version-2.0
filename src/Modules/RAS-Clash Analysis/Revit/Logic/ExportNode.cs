@@ -86,6 +86,18 @@ namespace RASv2.ClashAnalysis.Logic
             return root.Length == 0 ? f : f.Length == 0 ? root : root + "\\" + f.TrimStart('\\');
         }
 
+        /// <summary>
+        /// Путь для примера под полем: внутри папки проекта — «…\S1\NWC\…» (папка проекта и так видна выше; разработчик,
+        /// 02.11.2026: «полный путь не писать — троеточием отметить, что до этого места всё есть»); вне — целиком.
+        /// </summary>
+        public static string Short(string projectFolder, string path)
+        {
+            var root = (projectFolder ?? "").Trim().TrimEnd('\\');
+            return root.Length > 0 && path.StartsWith(root + "\\", StringComparison.OrdinalIgnoreCase)
+                ? "…\\" + path.Substring(root.Length + 1)
+                : path;
+        }
+
         /// <summary>Файл NWC модели задачи.</summary>
         public static string NwcPath(ExportTask task, ExportModel model, ExportSettings common)
         {

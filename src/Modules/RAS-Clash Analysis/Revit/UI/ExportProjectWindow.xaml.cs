@@ -85,7 +85,7 @@ namespace RASv2.ClashAnalysis.UI
         private static string Example(string projectFolder, string folder, Dictionary<string, string> labels, string file)
         {
             var path = ExportNodes.InProject(projectFolder, ExportNames.Fill(folder, labels));
-            return path.Length == 0 ? "Папка не задана" : "Пример: " + path + file;
+            return path.Length == 0 ? "Папка не задана" : "Пример: " + ExportNodes.Short(projectFolder, path + file);
         }
 
         /// <summary>Метка под строкой — в строку, в место курсора.</summary>

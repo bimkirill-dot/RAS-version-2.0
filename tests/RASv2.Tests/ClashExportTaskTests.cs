@@ -151,6 +151,11 @@ namespace RASv2.Tests
                 project.Project.NwfFolder = @"D:\NWF\{Блок}";
                 Check(ExportNodes.NwfPath(s1, common) == @"D:\NWF\S1\S1.nwf", "полный путь — как есть");
                 Check(ExportNodes.InProject("", @"{Блок}") == "{Блок}" && ExportNodes.InProject(@"\\srv\P", "") == @"\\srv\P", "пустые части");
+                Check(ExportNodes.Short(@"\\srv\2025_Арман Кала 7 очередь\", @"\\srv\2025_Арман Кала 7 очередь\S1\NWC\a.nwc") == @"…\S1\NWC\a.nwc",
+                    "пример внутри папки проекта — с «…»");
+                Check(ExportNodes.Short(@"\\srv\P", @"D:\NWF\S1\S1.nwf") == @"D:\NWF\S1\S1.nwf" &&
+                      ExportNodes.Short(@"\\srv\P", @"\\srv\P2\a") == @"\\srv\P2\a" && ExportNodes.Short("", @"S1\NWC") == @"S1\NWC",
+                    "вне папки проекта — целиком");
                 Check(ExportNodes.CheckNwcFolder(@"{Блок}\NWC\{Отдел}") == null && ExportNodes.CheckNwcFolder(@"{Блок}\{Дата}") != null,
                     "NWC — без даты");
                 Check(ExportNodes.CheckNwfFolder("{Блок}") == null && ExportNodes.CheckNwfFolder(@"{Блок}\{Дата}") != null &&

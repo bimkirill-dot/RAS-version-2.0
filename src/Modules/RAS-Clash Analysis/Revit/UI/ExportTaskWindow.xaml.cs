@@ -121,9 +121,10 @@ namespace RASv2.ClashAnalysis.UI
             try
             {
                 var model = draft.ModelFiles.FirstOrDefault();
-                NwcWhere.Text = "NWC: " + (model == null ? "—" : ExportNodes.NwcPath(draft, model, _common));
-                NwfWhere.Text = "NWF: " + ExportNodes.NwfPath(draft, _common);
-                ReportWhere.Text = "Отчёты: " + ExportNodes.ReportPath(draft, _common, DateTime.Today);
+                var root = ExportNodes.Root(_task).Project.Folder;
+                NwcWhere.Text = "NWC: " + (model == null ? "—" : ExportNodes.Short(root, ExportNodes.NwcPath(draft, model, _common)));
+                NwfWhere.Text = "NWF: " + ExportNodes.Short(root, ExportNodes.NwfPath(draft, _common));
+                ReportWhere.Text = "Отчёты: " + ExportNodes.Short(root, ExportNodes.ReportPath(draft, _common, DateTime.Today));
             }
             finally
             {
