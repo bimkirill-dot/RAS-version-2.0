@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using RASv2.ClashAnalysis.Logic;
@@ -9,9 +11,9 @@ using RASv2.ClashAnalysis.Logic;
 namespace RASv2.ClashAnalysis.UI
 {
     /// <summary>
-    /// Настройки строки «Задач выгрузки» (карандаш): название, модели, папка NWC, папка отчётов, вид. Остальное — общее
-    /// (шестерёнка). Папки и вид наследуются построчно: «как у «…»» и «Изменить» / «Вернуть как у «…»». Правится копия:
-    /// «Отмена» оставляет строку как была.
+    /// Настройки строки «Задач выгрузки» (карандаш): название, модели, папки NWC и NWF, вид, проверки. Остальное — общее
+    /// (шестерёнка). Папки и вид наследуются построчно: «как у «…»» и «Изменить» / «Вернуть как у «…»». Проверки — у задачи; у
+    /// блока — какие из них делать. Правится копия: «Отмена» оставляет строку как была.
     /// </summary>
     public partial class ExportNodeWindow : Window
     {
@@ -57,24 +59,107 @@ namespace RASv2.ClashAnalysis.UI
             private static string Or(string s) => string.IsNullOrEmpty(s) ? "не найден" : s;
         }
 
+        /// <summary>Карточка проверки у задачи; примеры под строками — на модели-примере окна.</summary>
+        public sealed class CheckRow : INotifyPropertyChanged
+        {
+            private readonly ExportNodeWindow _window;
+            public CheckSet Check { get; }
+
+            public CheckRow(ExportNodeWindow window, CheckSet check)
+            {
+                _window = window;
+                Check = check;
+            }
+
+            public string Name
+            {
+                get => Check.Name;
+                set
+                {
+                    Check.Name = value ?? "";
+                    Notify();
+                    Notify(nameof(NwfExample));
+                }
+            }
+
+            public string TestsFile
+            {
+                get => Check.TestsFile;
+                set
+                {
+                    Check.TestsFile = value ?? "";
+                    Notify();
+                }
+            }
+
+            public string NwfName
+            {
+                get => Check.NwfName;
+                set
+                {
+                    Check.NwfName = value ?? "";
+                    Notify();
+                    Notify(nameof(NwfExample));
+                }
+            }
+
+            public string ReportFolder
+            {
+                get => Check.ReportFolder;
+                set
+                {
+                    Check.ReportFolder = value ?? "";
+                    Notify();
+                    Notify(nameof(ReportExample));
+                }
+            }
+
+            public string NwfExample => "Пример: " + ExportNames.Fill(Check.EffectiveNwfName, _window.ExampleValues()) + ".nwf";
+
+            public string ReportExample => string.IsNullOrWhiteSpace(Check.ReportFolder)
+                ? "Папка не задана"
+                : "Пример: " + ExportNames.Fill(Check.ReportFolder.Trim(), _window.ExampleValues());
+
+            public void Refresh()
+            {
+                Notify(nameof(NwfExample));
+                Notify(nameof(ReportExample));
+            }
+
+            public event PropertyChangedEventHandler PropertyChanged;
+
+            private void Notify([CallerMemberName] string name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        }
+
+        /// <summary>Проверка задачи у блока: делать или нет.</summary>
+        public sealed class BlockCheckRow
+        {
+            public CheckSet Check { get; set; }
+            public string Name => Check.Name;
+            public bool On { get; set; }
+        }
+
         /// <summary>
-        /// Строка «своё или как выше»: своё — поле правится, «Вернуть как у «…»»; как выше — значение выше бледным, «Изменить».
-        /// Source == null — наследовать не от кого (папки у задачи): поле всегда своё.
+        /// Строка «своё или как выше»: своё — поле правится, под ним метки, «Вернуть …»; как выше — значение выше бледным,
+        /// «Изменить». Source == null — наследовать не от кого (папки у задачи): поле всегда своё.
         /// </summary>
         private sealed class Field
         {
             private readonly TextBox _box;
             private readonly TextBlock _from;
             private readonly Button _link;
+            private readonly FrameworkElement _labels;
             private readonly string _inherited;
             private readonly string _source;
             public bool Own { get; private set; }
 
-            public Field(TextBox box, TextBlock from, Button link, string own, string inherited, string source, Action changed)
+            public Field(TextBox box, TextBlock from, Button link, FrameworkElement labels, string own, string inherited, string source,
+                Action changed)
             {
                 _box = box;
                 _from = from;
                 _link = link;
+                _labels = labels;
                 _inherited = inherited ?? "";
                 _source = source;
                 Own = own != null || source == null;
@@ -98,6 +183,7 @@ namespace RASv2.ClashAnalysis.UI
             {
                 _box.IsEnabled = Own;
                 _box.Opacity = Own ? 1 : 0.5;   // как выше — бледным
+                if (_labels != null) _labels.Visibility = Own ? Visibility.Visible : Visibility.Collapsed;
                 _link.Visibility = _source == null ? Visibility.Collapsed : Visibility.Visible;
                 _from.Text = _source == null || Own ? "" : _source;
                 _link.Content = Own ? "Вернуть " + _source : "Изменить";
@@ -113,11 +199,14 @@ namespace RASv2.ClashAnalysis.UI
         private readonly ExportTask _task;
         private readonly ExportSettings _common;
         private readonly ObservableCollection<ModelRow> _models = new ObservableCollection<ModelRow>();
+        private readonly ObservableCollection<CheckRow> _checks = new ObservableCollection<CheckRow>();
+        private readonly List<BlockCheckRow> _blockChecks = new List<BlockCheckRow>();
+        private readonly bool _top;
         private readonly bool _canHaveModels;
-        private readonly bool _hasNwcFolder;
+        private readonly bool _hasFolders;
         private readonly bool _hasView;
         private readonly Field _nwcFolder;
-        private readonly Field _reportFolder;
+        private readonly Field _nwfFolder;
         private readonly Field _view;
         private readonly bool _ready;
 
@@ -130,6 +219,7 @@ namespace RASv2.ClashAnalysis.UI
             InitializeComponent();
             _task = task;
             _common = common;
+            _top = task.Parent == null;
             Title = "Настройки — " + task.Name;
             NodeName.Text = task.Name;
             // новая строка: сразу печатать название
@@ -145,21 +235,39 @@ namespace RASv2.ClashAnalysis.UI
             ModelsList.ItemsSource = _models;
             ModelsPanel.Visibility = _canHaveModels ? Visibility.Visible : Visibility.Collapsed;
 
-            var top = task.Parent == null;
             var (nwc, nwcFrom) = ExportNodes.Inherited(task, s => s.NwcFolder);
-            _nwcFolder = new Field(NwcFolder, NwcFrom, NwcLink, task.Own.NwcFolder, nwc, top ? null : Like(nwcFrom), Changed);
-            var (report, reportFrom) = ExportNodes.Inherited(task, s => s.ReportFolder);
-            _reportFolder = new Field(ReportFolder, ReportFrom, ReportLink, task.Own.ReportFolder, report, top ? null : Like(reportFrom), Changed);
+            _nwcFolder = new Field(NwcFolder, NwcFrom, NwcLink, NwcLabels, task.Own.NwcFolder, nwc, _top ? null : Like(nwcFrom), Changed);
+            var (nwf, nwfFrom) = ExportNodes.Inherited(task, s => s.NwfFolder);
+            _nwfFolder = new Field(NwfFolder, NwfFrom, NwfLink, NwfLabels, task.Own.NwfFolder, nwf, _top ? null : Like(nwfFrom), Changed);
             var (view, viewFrom) = ExportNodes.Inherited(task, s => s.ViewName);
-            _view = new Field(ViewName, ViewFrom, ViewLink, task.Own.ViewName, view ?? common.Nwc.ViewName,
-                viewFrom != null ? Like(viewFrom) : "как в общих", Changed);
+            // разработчик, 02.11.2026: не «как в общих», а «по общим настройкам»
+            _view = new Field(ViewName, ViewFrom, ViewLink, null, task.Own.ViewName, view ?? common.Nwc.ViewName,
+                viewFrom != null ? Like(viewFrom) : "по общим настройкам", Changed);
 
-            _hasNwcFolder = ExportNodes.HasNwcFolder(task);
-            foreach (var e in new FrameworkElement[] { NwcCaption, NwcFolder, NwcState, NwcExample })
-                e.Visibility = _hasNwcFolder ? Visibility.Visible : Visibility.Collapsed;
+            _hasFolders = ExportNodes.HasNwcFolder(task);
+            foreach (var e in new FrameworkElement[] { NwcCaption, NwcFolder, NwcState, NwcUnder, NwfCaption, NwfFolder, NwfState, NwfUnder })
+                e.Visibility = _hasFolders ? Visibility.Visible : Visibility.Collapsed;
             _hasView = common.Nwc.Scope == NwcScope.View;
             foreach (var e in new FrameworkElement[] { ViewCaption, ViewName, ViewState })
                 e.Visibility = _hasView ? Visibility.Visible : Visibility.Collapsed;
+
+            if (_top)
+            {
+                foreach (var c in task.Own.Checks ?? new List<CheckSet>()) _checks.Add(new CheckRow(this, c.Clone()));
+                ChecksList.ItemsSource = _checks;
+                BlockChecksList.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                ChecksPanel.Visibility = Visibility.Collapsed;
+                foreach (var c in ExportNodes.ChecksOf(task))
+                    _blockChecks.Add(new BlockCheckRow { Check = c, On = !task.SkippedChecks.Contains(c.Id) });
+                BlockChecksList.ItemsSource = _blockChecks;
+                var root = ExportNodes.Root(task);
+                ChecksInfo.Text = _blockChecks.Count == 0
+                    ? "у «" + root.Name + "» проверок нет — только выгрузка NWC"
+                    : "заданы у «" + root.Name + "»";
+            }
 
             _ready = true;
             UpdateAll();
@@ -179,6 +287,7 @@ namespace RASv2.ClashAnalysis.UI
         {
             ModelsInfo.Text = ModelsText();
             ModelsHead.Visibility = _models.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            if (_top) ChecksInfo.Text = _checks.Count == 0 ? "нет — только выгрузка NWC" : "";
             UpdateExamples();
         }
 
@@ -197,15 +306,30 @@ namespace RASv2.ClashAnalysis.UI
             ?? ExportNodes.ModelsBelow(_task).FirstOrDefault()?.ModelFiles.FirstOrDefault()
             ?? new ExportModel { Path = SampleModel };
 
+        internal Dictionary<string, string> ExampleValues() => ExportNames.LabelValues(ExampleModel().Path, _common, DateTime.Today);
+
         private void UpdateExamples()
         {
             var model = ExampleModel();
-            var values = ExportNames.LabelValues(model.Path, _common, DateTime.Today);
+            var values = ExampleValues();
             var nwc = NwcFolder.Text.Trim();
             NwcExample.Text = nwc.Length == 0 ? "Папка не задана"
                 : "Пример: " + ExportNames.Fill(nwc, values) + "\\" + ExportNodes.NwcNameOf(model, _common) + ".nwc";
-            var report = ReportFolder.Text.Trim();
-            ReportExample.Text = report.Length == 0 ? "Папка не задана" : "Пример: " + ExportNames.Fill(report, values);
+            var nwf = NwfFolder.Text.Trim();
+            NwfExample.Text = nwf.Length == 0 ? "Папка не задана" : "Пример: " + ExportNames.Fill(nwf, values);
+            foreach (var c in _checks) c.Refresh();
+        }
+
+        /// <summary>Метка под строкой — в строку, в место курсора.</summary>
+        private void Chip_Click(object sender, RoutedEventArgs e)
+        {
+            var button = (Button)sender;
+            if (!(button.Tag is TextBox box) || !box.IsEnabled) return;
+            var label = (string)button.Content;
+            var at = Math.Min(box.CaretIndex, box.Text.Length);
+            box.Text = box.Text.Insert(at, label);
+            box.Focus();
+            box.CaretIndex = at + label.Length;
         }
 
         // ── модели ──
@@ -239,6 +363,27 @@ namespace RASv2.ClashAnalysis.UI
             UpdateAll();
         }
 
+        // ── проверки задачи ──
+
+        private void AddCheck_Click(object sender, RoutedEventArgs e)
+        {
+            _checks.Add(new CheckRow(this, new CheckSet()));
+            UpdateAll();
+        }
+
+        private void DeleteCheck_Click(object sender, RoutedEventArgs e)
+        {
+            _checks.Remove((CheckRow)((FrameworkElement)sender).DataContext);
+            UpdateAll();
+        }
+
+        private void BrowseTests_Click(object sender, RoutedEventArgs e)
+        {
+            var row = (CheckRow)((FrameworkElement)sender).DataContext;
+            var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Проверки Navisworks (*.xml)|*.xml", FileName = row.TestsFile ?? "" };
+            if (dialog.ShowDialog(this) == true) row.TestsFile = dialog.FileName;
+        }
+
         // ── сохранить ──
 
         private void Save_Click(object sender, RoutedEventArgs e)
@@ -250,9 +395,20 @@ namespace RASv2.ClashAnalysis.UI
             _task.Name = NodeName.Text.Trim();
             if (_canHaveModels) _task.ModelFiles = _models.Select(m => m.Model).ToList();
             var own = _task.Own;
-            if (_hasNwcFolder) own.NwcFolder = _nwcFolder.Value;
-            own.ReportFolder = _reportFolder.Value;
+            if (_hasFolders)
+            {
+                own.NwcFolder = _nwcFolder.Value;
+                own.NwfFolder = _nwfFolder.Value;
+            }
             if (_hasView) own.ViewName = _view.Value;
+            if (_top)
+                own.Checks = _checks.Select(c => new CheckSet
+                {
+                    Id = c.Check.Id, Name = c.Check.Name.Trim(), TestsFile = c.Check.TestsFile.Trim(),
+                    NwfName = c.Check.NwfName.Trim(), ReportFolder = c.Check.ReportFolder.Trim(),
+                }).ToList();
+            else
+                _task.SkippedChecks = new HashSet<string>(_blockChecks.Where(c => !c.On).Select(c => c.Check.Id));
             DialogResult = true;
         }
 
@@ -260,17 +416,26 @@ namespace RASv2.ClashAnalysis.UI
         private string Validate()
         {
             if (NodeName.Text.Trim().Length == 0) return "Нужно название.";
-            if (_hasNwcFolder && _nwcFolder.Own)
+            if (_hasFolders && _nwcFolder.Own)
             {
                 var nwc = ExportNodes.CheckNwcFolder(NwcFolder.Text);
                 if (nwc != null) return nwc;
             }
-            if (_reportFolder.Own)
+            if (_hasFolders && _nwfFolder.Own)
             {
-                var report = ExportNodes.CheckReportFolder(ReportFolder.Text);
-                if (report != null) return report;
+                var nwf = ExportNodes.CheckNwfFolder(NwfFolder.Text);
+                if (nwf != null) return nwf;
             }
             if (_hasView && _view.Own && ViewName.Text.Trim().Length == 0) return "Нужно имя вида для выгрузки.";
+
+            if (_top)
+            {
+                var checks = ExportNodes.CheckChecks(_checks.Select(c => c.Check).ToList());
+                if (checks != null) return checks;
+                var notXml = _checks.FirstOrDefault(c => c.Check.TestsFile.Trim().Length > 0 &&
+                                                         !c.Check.TestsFile.Trim().EndsWith(".xml", StringComparison.OrdinalIgnoreCase));
+                if (notXml != null) return "«" + notXml.Check.Name.Trim() + "»: файл проверок — .xml из Clash Detective.";
+            }
 
             var names = ExportNodes.CheckNwcNames(_models.Select(m => m.Name));
             if (names != null) return names;

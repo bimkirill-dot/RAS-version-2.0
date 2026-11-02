@@ -21,6 +21,8 @@ namespace RASv2.ClashAnalysis.Logic
         public int Models => ModelFiles.Count;
         /// <summary>Свои настройки узла; не заданное — от узлов выше.</summary>
         public NodeSettings Own { get; } = new NodeSettings();
+        /// <summary>Проверки задачи, снятые у этой строки (Id): блок их не делает.</summary>
+        public HashSet<string> SkippedChecks { get; set; } = new HashSet<string>();
         /// <summary>Последняя выгрузка узла; null — не выгружался.</summary>
         public DateTime? LastRun { get; set; }
         /// <summary>Моделей, не вышедших в последней выгрузке.</summary>
@@ -84,6 +86,8 @@ namespace RASv2.ClashAnalysis.Logic
             if (LastRun == null) parts.Add("не выгружалось");
             else if (Failed > 0) parts.Add(Failed + " не " + (Failed == 1 ? "вышла" : "вышли") + " " + LastRun.Value.ToString("dd.MM HH:mm"));
             else parts.Add("выгружено " + LastRun.Value.ToString("dd.MM HH:mm"));
+            // у задачи — её проверки (задаются один раз на все блоки)
+            if (Parent == null && Own.Checks?.Count > 0) parts.Add("проверки: " + string.Join(", ", Own.Checks.Select(c => c.Name)));
             return string.Join(" · ", parts);
         }
 

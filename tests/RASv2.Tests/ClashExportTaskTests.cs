@@ -140,16 +140,47 @@ namespace RASv2.Tests
                 var roots = Sample(out var block1, out var high);
                 var project = roots[0];
                 project.Own.NwcFolder = @"\\srv\ArmanQala\NWC\{Блок}";
-                project.Own.ReportFolder = @"\\srv\ArmanQala\{Дата}\XML\{Блок}";
-                high.Own.ReportFolder = @"\\srv\ArmanQala\{Дата}\Высокая критичность\XML\{Блок}";
-                var (nwc, from) = ExportNodes.Inherited(high, s => s.NwcFolder);
-                Check(from == project && nwc.EndsWith("{Блок}"), "папка NWC у критичности — от задачи");
-                Check(ExportNodes.Effective(high, s => s.ReportFolder).Contains("Высокая"), "своя папка отчётов");
+                project.Own.NwfFolder = @"\\srv\ArmanQala\NWF";
+                block1.Own.NwfFolder = @"\\srv\ArmanQala\NWF\{Блок}";
+                var (nwc, from) = ExportNodes.Inherited(block1, s => s.NwcFolder);
+                Check(from == project && nwc.EndsWith("{Блок}"), "папка NWC у блока — от задачи");
+                Check(ExportNodes.Effective(block1, s => s.NwfFolder).EndsWith(@"NWF\{Блок}"), "своя папка NWF");
                 project.Own.NwcFolder = @"\\srv2\NWC\{Блок}";
-                Check(ExportNodes.Effective(high, s => s.NwcFolder).StartsWith(@"\\srv2"), "поменяли у задачи — критичность следом");
+                Check(ExportNodes.Effective(block1, s => s.NwcFolder).StartsWith(@"\\srv2"), "поменяли у задачи — блок следом");
                 Check(ExportNodes.Effective(block1, s => s.ViewName) == null, "вид нигде не задан — из общих");
-                block1.Own.ViewName = "3D_NW_Блок";
-                Check(ExportNodes.Effective(high, s => s.ViewName) == "3D_NW_Блок", "вид — от блока");
+                project.Own.ViewName = "3D_NW_Проект";
+                Check(ExportNodes.Effective(high, s => s.ViewName) == "3D_NW_Проект", "вид — от задачи");
+            });
+            yield return Case("проверки: у задачи на все блоки; блок снимает ненужные; имя NWF и папка отчётов", () =>
+            {
+                var roots = Sample(out var block1, out _);
+                var project = roots[0];
+                var high = new CheckSet { Name = "Высокая критичность", ReportFolder = @"\\srv\{Дата}\Высокая критичность\XML\{Блок}" };
+                var mid = new CheckSet { Name = "Средняя критичность", NwfName = "{Блок}_средняя" };
+                project.Own.Checks = new List<CheckSet> { high, mid };
+                var block2 = project.Children[1];
+                block2.SkippedChecks.Add(mid.Id);
+                Check(ExportNodes.ActiveChecks(block1).Count == 2, "у блока 1 — обе");
+                Check(ExportNodes.ActiveChecks(block2).Count == 1 && ExportNodes.ActiveChecks(block2)[0] == high, "у блока 2 средняя снята");
+                mid.Name = "Средняя";
+                Check(ExportNodes.ActiveChecks(block2).Count == 1, "переименовали — снятая так и осталась снятой (по ключу)");
+                Check(ExportNodes.ChecksOf(roots[1]).Count == 0, "у другой задачи проверок нет");
+                Check(high.EffectiveNwfName == "{Блок}_Высокая критичность" && mid.EffectiveNwfName == "{Блок}_средняя", "имя NWF");
+                var v = new Dictionary<string, string> { ["Блок"] = "S1", ["Дата"] = "01.10.2026" };
+                Check(ExportNames.Fill(high.EffectiveNwfName, v) == "S1_Высокая критичность", "NWF блока");
+                Check(ExportNames.Fill(high.ReportFolder, v) == @"\\srv\01.10.2026\Высокая критичность\XML\S1", "папка отчётов блока");
+                Check(ExportNodes.CheckChecks(project.Own.Checks) == null, "проверки верные");
+                Check(ExportNodes.CheckChecks(new List<CheckSet> { new CheckSet { Name = " " } }) != null, "без названия");
+                Check(ExportNodes.CheckChecks(new List<CheckSet> { new CheckSet { Name = "А" }, new CheckSet { Name = "а " } }) != null, "повтор названия");
+                Check(ExportNodes.CheckChecks(new List<CheckSet> { new CheckSet { Name = "А", NwfName = "{Блок}" }, new CheckSet { Name = "Б", NwfName = "{Блок}" } }) != null,
+                    "одно имя NWF у двух проверок");
+                Check(ExportNodes.CheckChecks(new List<CheckSet> { new CheckSet { Name = "А", NwfName = "{Отдел}" } }) != null, "{Отдел} в имени NWF");
+                Check(ExportNodes.CheckChecks(new List<CheckSet> { new CheckSet { Name = "А", NwfName = "a:b" } }) != null, "знаки в имени NWF");
+                Check(ExportNodes.CheckChecks(new List<CheckSet> { new CheckSet { Name = "А", ReportFolder = @"\\srv\{Отдел}" } }) != null, "{Отдел} в папке отчётов");
+                Check(ExportNodes.CheckNwfFolder(@"\\srv\NWF\{Блок}\{Дата}") == null && ExportNodes.CheckNwfFolder(@"\\srv\{Отдел}") != null, "папка NWF");
+                project.ModelFiles.Clear();
+                Check(project.Summary().EndsWith("проверки: Высокая критичность, Средняя"), project.Summary());
+                Check(!block1.Summary().Contains("проверки"), "у блока проверок в строке нет");
             });
             yield return Case("модели — у одной строки на ветке; папка NWC — не ниже неё; модель — один раз на проект", () =>
             {

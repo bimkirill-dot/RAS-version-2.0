@@ -108,7 +108,8 @@ namespace RASv2.ClashAnalysis.UI
             InitializeComponent();
             _year = revitYear;
             _hosts = RevitServers.Hosts(revitYear);
-            foreach (var h in _hosts) Source.Items.Add("Revit Server " + h);
+            // только адрес (разработчик, 02.11.2026: «слово Revit Server уберём, оставим просто адрес»)
+            foreach (var h in _hosts) Source.Items.Add(h);
             Source.Items.Add(FolderSource);
             Tree.ItemsSource = _roots;
             if (_hosts.Count == 0)

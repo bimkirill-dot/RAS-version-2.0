@@ -32,6 +32,8 @@ namespace RASv2.ClashAnalysis.UI
             public Visibility ArrowVisibility => Task.Children.Count > 0 ? Visibility.Visible : Visibility.Hidden;
             // узел уже идёт у коллеги — запускать нельзя; место кнопки остаётся, чтобы значки не прыгали
             public Visibility RunVisibility => Task.RunningBy == null ? Visibility.Visible : Visibility.Hidden;
+            // место кнопки остаётся, чтобы значки строк стояли ровно
+            public Visibility AddChildVisibility => IsTask ? Visibility.Visible : Visibility.Hidden;
         }
 
         /// <summary>Версия Revit — для выбора моделей с Revit Server (настройки серверов — свои у каждой версии).</summary>
