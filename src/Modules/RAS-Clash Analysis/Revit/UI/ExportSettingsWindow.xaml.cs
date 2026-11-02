@@ -51,6 +51,8 @@ namespace RASv2.ClashAnalysis.UI
             RemovePointClouds.IsChecked = s.RemovePointClouds;
             RemoveIfc.IsChecked = s.RemoveIfc;
             DateFormat.SelectedIndex = System.Math.Max(0, System.Array.IndexOf(ExportSettings.DateFormats, s.DateFormat));
+            BlockPart.Text = s.BlockPart.ToString();
+            DepartmentPart.Text = s.DepartmentPart.ToString();
             Error.Text = "";
         }
 
@@ -64,6 +66,13 @@ namespace RASv2.ClashAnalysis.UI
             if (!ExportSettings.TryFaceting(Faceting.Text, out var faceting))
             {
                 Error.Text = "Коэффициент фасетизации — число больше нуля.";
+                return;
+            }
+            // у своих параметров узла меток нет — числа в скрытых полях те же, что у общих
+            if (!int.TryParse(BlockPart.Text, out var blockPart) || blockPart < 1 || blockPart > 30 ||
+                !int.TryParse(DepartmentPart.Text, out var departmentPart) || departmentPart < 1 || departmentPart > 30)
+            {
+                Error.Text = "Номер части имени модели у {Блок} и {Отдел} — от 1 до 30.";
                 return;
             }
             var scope = Scope.SelectedIndex == 1 ? NwcScope.View : NwcScope.Model;
@@ -93,6 +102,8 @@ namespace RASv2.ClashAnalysis.UI
             _settings.RemovePointClouds = RemovePointClouds.IsChecked == true;
             _settings.RemoveIfc = RemoveIfc.IsChecked == true;
             _settings.DateFormat = (string)((ComboBoxItem)DateFormat.SelectedItem)?.Tag ?? ExportSettings.DateFormats[0];
+            _settings.BlockPart = blockPart;
+            _settings.DepartmentPart = departmentPart;
             DialogResult = true;
         }
     }

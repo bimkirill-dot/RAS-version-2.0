@@ -156,8 +156,6 @@
                     <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                         <TextBlock Style="{StaticResource Caption}" Text="Частей через «_»" />
                         <TextBox x:Name="NameParts" Style="{StaticResource Num}" TextChanged="Any_Changed" />
-                        <TextBlock Style="{StaticResource Caption}" Text="Раздел — часть №" Margin="28,0,12,0" />
-                        <TextBox x:Name="SectionPart" Style="{StaticResource Num}" TextChanged="Any_Changed" />
                     </StackPanel>
                     <TextBlock x:Name="NameExample" Style="{StaticResource Example}" Margin="0,8,0,0" />
                 </StackPanel>

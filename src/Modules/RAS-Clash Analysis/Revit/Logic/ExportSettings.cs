@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -54,6 +55,14 @@ namespace RASv2.ClashAnalysis.Logic
         /// </summary>
         public string DateFormat { get; set; } = "dd.MM.yyyy";
 
+        /// <summary>
+        /// {Блок} — часть имени модели с этим номером (с 1): «S6» в «0000_01_01_S6_KJ01_01_M3» (разработчик, 02.11.2026: «метка
+        /// блок и отдел — просто из названия файла»).
+        /// </summary>
+        public int BlockPart { get; set; } = 4;
+        /// <summary>{Отдел} — буквы до цифр части с этим номером: «KJ01» → «KJ»; по отделу же — эталон и шаблон вида.</summary>
+        public int DepartmentPart { get; set; } = 5;
+
         /// <summary>Форматы {Дата} на выбор.</summary>
         public static readonly string[] DateFormats = { "dd.MM.yyyy", "yyyy-MM-dd", "yyyyMMdd", "yyyy.MM.dd" };
 
@@ -67,8 +76,20 @@ namespace RASv2.ClashAnalysis.Logic
     /// <summary>Метки в строке папки и имя NWC из имени модели.</summary>
     public static class ExportNames
     {
-        /// <summary>Метки строки папки (разработчик, 02.11.2026: «оставим пока только блок и дату»); остальное пишется текстом.</summary>
-        public static readonly string[] BuiltInLabels = { "Блок", "Дата" };
+        /// <summary>
+        /// Метки строки папки: блок и отдел — из имени модели, дата — день выгрузки (разработчик, 02.11.2026); остальное пишется
+        /// текстом.
+        /// </summary>
+        public static readonly string[] BuiltInLabels = { "Блок", "Отдел", "Дата" };
+
+        /// <summary>Значения меток для модели: {Блок} и {Отдел} — из её имени (нет такой части — пусто), {Дата} — date.</summary>
+        public static Dictionary<string, string> LabelValues(string modelFile, ExportSettings common, DateTime date) =>
+            new Dictionary<string, string>
+            {
+                ["Блок"] = Section(modelFile, common.BlockPart),
+                ["Отдел"] = Department(Section(modelFile, common.DepartmentPart)),
+                ["Дата"] = date.ToString(common.DateFormat),
+            };
 
         private static readonly Regex LabelRx = new Regex(@"\{([^{}]+)\}");
 
@@ -99,7 +120,7 @@ namespace RASv2.ClashAnalysis.Logic
             return string.Join("_", kept);
         }
 
-        /// <summary>Раздел — часть имени модели с номером part (с 1): «KJ01»; нет такой части — пусто.</summary>
+        /// <summary>Часть имени модели с номером part (с 1), до пробела: «S6», «KJ01»; нет такой части — пусто.</summary>
         public static string Section(string modelFile, int part)
         {
             var split = Path.GetFileNameWithoutExtension(modelFile ?? "").Split('_');

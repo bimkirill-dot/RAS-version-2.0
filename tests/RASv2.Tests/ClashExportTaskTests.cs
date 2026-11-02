@@ -135,13 +135,18 @@ namespace RASv2.Tests
                 Check(ExportNodes.Effective(high, s => s.Folders).NwcFolder == "своя", "своё сильнее");
                 Check(ExportNodes.Inherited(high, s => s.Folders).From == project, "унаследованное — по-прежнему от проекта");
             });
-            yield return Case("{Блок}: у блока — он сам, у критичности — её блок, у задачи — первый блок", () =>
+            yield return Case("метки {Блок} и {Отдел} — из имени модели, {Дата} — по формату общих", () =>
             {
-                var roots = Sample(out var block1, out var high);
-                Check(ExportNodes.BlockName(block1) == "Блок 1" && ExportNodes.BlockName(high) == "Блок 1", "блок и критичность");
-                Check(ExportNodes.BlockName(roots[0]) == "Блок 1", "задача — пример по первому блоку");
-                Check(ExportNodes.BlockName(roots[1]) == null, "блоков нет");
-                Check(ExportNodes.Level(high) == 2 && ExportNodes.Level(roots[0]) == 0, "уровни");
+                var common = new ExportSettings();
+                var v = ExportNames.LabelValues(@"\\srv\Проект\0000_01_01_S6_KJ01_01_M3 еще текст.rvt", common, new DateTime(2026, 10, 1));
+                Check(v["Блок"] == "S6" && v["Отдел"] == "KJ" && v["Дата"] == "01.10.2026", string.Join(" ", v.Values));
+                var folder = ExportNames.Fill(@"\\srv\ArmanQala\NWC\{Блок}\{Отдел}", v);
+                Check(folder == @"\\srv\ArmanQala\NWC\S6\KJ", folder);
+                v = ExportNames.LabelValues("Модель АР.rvt", common, new DateTime(2026, 10, 1));
+                Check(v["Блок"] == "" && v["Отдел"] == "", "не по шаблону — пусто");
+                common.BlockPart = 1;
+                Check(ExportNames.LabelValues("S9_KJ01.rvt", common, DateTime.Today)["Блок"] == "S9", "номер части — из настройки");
+                Check(ExportNodes.CheckFolder(@"\\srv\{Отдел}\{Блок}\{Дата}", "Папка") == null, "три метки известны");
             });
             yield return Case("модели узла: имя NWC руками или из имени; Revit Server; проверка имён и папок", () =>
             {

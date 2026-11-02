@@ -228,8 +228,21 @@
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="380" /><ColumnDefinition /></Grid.ColumnDefinitions>
                     <TextBlock Style="{StaticResource OptionName}" Text="{}{Блок}" />
-                    <TextBlock Grid.Column="1" Text="имя подзадачи первого уровня" Foreground="{DynamicResource Muted}"
-                               VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <TextBlock Text="часть имени №" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBox x:Name="BlockPart" Width="56" HorizontalContentAlignment="Right" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+            <Border Style="{StaticResource OptionRow}">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="380" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource OptionName}" Text="{}{Отдел}" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <TextBlock Text="часть имени №" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBox x:Name="DepartmentPart" Width="56" HorizontalContentAlignment="Right" />
+                        <TextBlock Text="— буквы до цифр" VerticalAlignment="Center" Margin="8,0,0,0" />
+                    </StackPanel>
                 </Grid>
             </Border>
             <Border Style="{StaticResource OptionRow}" BorderThickness="0">

@@ -52,7 +52,7 @@ namespace RASv2.ClashAnalysis.UI
                 }
             }
 
-            public string Department => Or(ExportNames.Department(ExportNames.Section(Path, _window.CurrentNames().SectionPart)));
+            public string Department => Or(ExportNames.Department(ExportNames.Section(Path, _window._common.DepartmentPart)));
         }
 
         // пример под полями, пока у узла нет моделей — имя модели по регламенту
@@ -148,7 +148,6 @@ namespace RASv2.ClashAnalysis.UI
         {
             TrimName.IsChecked = n.Trim;
             NameParts.Text = n.Parts.ToString();
-            SectionPart.Text = n.SectionPart.ToString();
         }
 
         /// <summary>Правила имени, как сейчас в окне; неверное число — по умолчанию (ошибку покажет «Сохранить»).</summary>
@@ -156,7 +155,6 @@ namespace RASv2.ClashAnalysis.UI
         {
             var n = new NameSettings { Trim = TrimName.IsChecked == true };
             if (int.TryParse(NameParts.Text, out var parts) && parts >= 1 && parts <= 30) n.Parts = parts;
-            if (int.TryParse(SectionPart.Text, out var section) && section >= 1) n.SectionPart = section;
             return n;
         }
 
@@ -218,25 +216,17 @@ namespace RASv2.ClashAnalysis.UI
             return "";
         }
 
-        /// <summary>Примеры под полями — на первой модели узла (нет — имя по регламенту) и блоке узла.</summary>
+        /// <summary>Примеры под полями — на первой модели узла (нет — имя по регламенту): метки {Блок} и {Отдел} — из её имени.</summary>
         private void UpdateExamples()
         {
             var names = CurrentNames();
             var model = _models.FirstOrDefault()?.Model ?? new ExportModel { Path = SampleModel };
             var nwc = ExportNodes.NwcNameOf(model, names);
             ExportNames.NwcName(model.Path, names.Trim, names.Parts, out var matches);
-            var section = ExportNames.Section(model.Path, names.SectionPart);
             NameExample.Text = "Пример: " + System.IO.Path.GetFileName(model.Path) + " → " + nwc + ".nwc" +
-                               (matches || !names.Trim ? "" : " (не по шаблону)") +
-                               " · раздел " + Or(section) + " · отдел " + Or(ExportNames.Department(section));
+                               (matches || !names.Trim ? "" : " (не по шаблону)");
 
-            // у самого блока — имя из поля «Название», пока его правят
-            var block = ExportNodes.Level(_task) == 1 ? NodeName.Text.Trim() : ExportNodes.BlockName(_task);
-            var values = new Dictionary<string, string>
-            {
-                ["Блок"] = string.IsNullOrEmpty(block) ? "S1" : block,
-                ["Дата"] = DateTime.Today.ToString(_common.DateFormat),
-            };
+            var values = ExportNames.LabelValues(model.Path, _common, DateTime.Today);
             NwcExample.Text = NwcFolder.Text.Trim().Length == 0 ? "Папка не задана"
                 : "Пример: " + ExportNames.Fill(NwcFolder.Text.Trim(), values) + "\\" + nwc + ".nwc";
             ReportExample.Text = ReportFolder.Text.Trim().Length == 0 ? "Папка не задана"
@@ -352,8 +342,6 @@ namespace RASv2.ClashAnalysis.UI
             {
                 if (!int.TryParse(NameParts.Text, out var parts) || parts < 1 || parts > 30)
                     return "Частей через «_» — число от 1 до 30.";
-                if (!int.TryParse(SectionPart.Text, out var section) || section < 1 || section > parts)
-                    return "Раздел — номер части от 1 до " + parts + ".";
             }
             return ExportNodes.CheckNwcNames(_models.Select(m => m.Name));
         }
