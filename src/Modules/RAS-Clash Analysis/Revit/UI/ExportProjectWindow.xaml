@@ -99,7 +99,7 @@
 
                 <!-- папки — внутри папки проекта; полный путь — тоже можно -->
                 <TextBlock Grid.Row="3" Grid.ColumnSpan="3" Style="{StaticResource Head}" Text="Папки внутри проекта" />
-                <TextBlock Grid.Row="4" Style="{StaticResource Caption}" Text="NWC" />
+                <TextBlock Grid.Row="4" Style="{StaticResource Caption}" Text="Папка для NWC" />
                 <DockPanel Grid.Row="4" Grid.Column="1">
                     <Button Style="{StaticResource Browse}" Tag="{Binding ElementName=NwcFolder}" Click="BrowseInner_Click" />
                     <TextBox x:Name="NwcFolder" TextChanged="Any_Changed" />
@@ -112,7 +112,7 @@
                     </StackPanel>
                     <TextBlock x:Name="NwcExample" Style="{StaticResource Example}" />
                 </StackPanel>
-                <TextBlock Grid.Row="6" Style="{StaticResource Caption}" Text="NWF" />
+                <TextBlock Grid.Row="6" Style="{StaticResource Caption}" Text="Папка для NWF" />
                 <DockPanel Grid.Row="6" Grid.Column="1">
                     <Button Style="{StaticResource Browse}" Tag="{Binding ElementName=NwfFolder}" Click="BrowseInner_Click" />
                     <TextBox x:Name="NwfFolder" TextChanged="Any_Changed" />
@@ -124,7 +124,7 @@
                     </StackPanel>
                     <TextBlock x:Name="NwfExample" Style="{StaticResource Example}" />
                 </StackPanel>
-                <TextBlock Grid.Row="8" Style="{StaticResource Caption}" Text="Отчёты" />
+                <TextBlock Grid.Row="8" Style="{StaticResource Caption}" Text="Папка для отчётов" />
                 <DockPanel Grid.Row="8" Grid.Column="1">
                     <Button Style="{StaticResource Browse}" Tag="{Binding ElementName=ReportFolder}" Click="BrowseInner_Click" />
                     <TextBox x:Name="ReportFolder" TextChanged="Any_Changed" />

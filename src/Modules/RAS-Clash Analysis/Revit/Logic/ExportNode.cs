@@ -148,15 +148,15 @@ namespace RASv2.ClashAnalysis.Logic
 
         /// <summary>Папка NWC: только {Блок}, {Отдел} — даты нет, NWF ищет NWC по постоянному пути; null — всё верно.</summary>
         public static string CheckNwcFolder(string folder) =>
-            CheckLabels(folder, "NWC", NwcFolderLabels, "даты в папке NWC быть не должно: NWF ищет NWC по постоянному пути");
+            CheckLabels(folder, "Папка для NWC", NwcFolderLabels, "даты в папке NWC быть не должно: NWF ищет NWC по постоянному пути");
 
         /// <summary>Папка NWF: только {Блок} — NWF постоянный (регламент), один на задачу; null — всё верно.</summary>
         public static string CheckNwfFolder(string folder) =>
-            CheckLabels(folder, "NWF", NwfFolderLabels, "NWF постоянный — один на задачу, без даты и отдела");
+            CheckLabels(folder, "Папка для NWF", NwfFolderLabels, "NWF постоянный — один на задачу, без даты и отдела");
 
         /// <summary>Папка отчётов: только {Блок}, {Дата} — отчёт один на задачу, не на модель отдела; null — всё верно.</summary>
         public static string CheckReportFolder(string folder) =>
-            CheckLabels(folder, "Отчёты", ReportFolderLabels, "отчёт один на задачу, а не на модель отдела");
+            CheckLabels(folder, "Папка для отчётов", ReportFolderLabels, "отчёт один на задачу, а не на модель отдела");
 
         private static string CheckLabels(string text, string what, string[] allowed, string why)
         {
