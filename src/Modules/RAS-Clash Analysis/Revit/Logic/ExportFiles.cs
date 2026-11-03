@@ -208,7 +208,7 @@ namespace RASv2.ClashAnalysis.Logic
             Clean(s);
             s.Models = s.Models ?? d.Models;
             s.TestsFiles = s.TestsFiles ?? d.TestsFiles;
-            s.HideNames = s.HideNames ?? d.HideNames;
+            s.HideSets = s.HideSets ?? d.HideSets;
             s.Folder = s.Folder ?? d.Folder;
             s.NwcFolder = s.NwcFolder ?? d.NwcFolder;
             s.NwfFolder = s.NwfFolder ?? d.NwfFolder;
@@ -223,6 +223,9 @@ namespace RASv2.ClashAnalysis.Logic
             if (s.ReportFormats == null && s.Xml != null && s.Html != null)
                 s.ReportFormats = new[] { s.Xml == true ? "XML" : null, s.Html == true ? "HTML" : null }.Where(f => f != null).ToList();
             s.Xml = s.Html = null;
+            // прежние строки «имя элемента содержит …» — тем же поиском, что набор Navisworks
+            if (s.HideSets == null && s.HideNames != null) s.HideSets = s.HideNames.Where(n => !string.IsNullOrWhiteSpace(n)).Select(SearchSets.FromName).ToList();
+            s.HideNames = null;
             if (s.Export != null && s.Export.Nwc == null) s.Export.Nwc = new NwcOptions();
         }
 

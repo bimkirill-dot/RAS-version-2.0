@@ -89,11 +89,16 @@ namespace RASv2.Tests
                 Check(ExportNodes.ViewOf(s1, common) == "3D_NW", "вид — от задачи");
                 top.Settings.ServerFolder = "RSN://srv/AQ";
                 Check(ExportNodes.StartServerFolder(s1) == "RSN://srv/AQ", "откуда добавлять модели — от задачи");
-                Check(ExportNodes.HideNamesOf(s1).Count == 0, "скрыть в NWF — у новой задачи ничего, своих строк компании в коде нет");
-                top.Settings.HideNames.Add("временн");
-                Check(ExportNodes.HideNamesOf(s1).Single() == "временн", "скрыть в NWF — от задачи подзадачам");
-                high.Settings.HideNames = new List<string> { "временн", "черновик" };
-                Check(ExportNodes.HideNamesOf(s1).Count == 2 && ExportNodes.HideNamesOf(mid).Count == 1, "своё у подзадачи — ниже неё");
+                Check(ExportNodes.HideSetsOf(s1).Count == 0, "скрыть — у новой задачи ничего, своих правил компании в коде нет");
+                top.Settings.HideSets.Add(SearchSets.FromName("временн"));
+                Check(ExportNodes.HideSetsOf(s1).Single().Name == "Имя содержит «временн»", "скрыть — от задачи подзадачам");
+                high.Settings.HideSets = new List<HideSet> { SearchSets.FromName("временн"), SearchSets.FromName("черновик") };
+                Check(ExportNodes.HideSetsOf(s1).Count == 2 && ExportNodes.HideSetsOf(mid).Count == 1, "своё у подзадачи — ниже неё");
+                Check(!ExportNodes.MakesReports(s1), "отчёты — только с галочкой");
+                s1.Settings.MakeReports = true;
+                Check(ExportNodes.MakesReports(s1), "отчёты — у строки с NWF и галочкой");
+                s1.Settings.MakeNwf = false;
+                Check(!ExportNodes.MakesReports(s1), "без NWF отчётов нет");
             });
             yield return Case("NWF: у строки без подзадач с галочкой; имя — своё или название строки, не наследуется", () =>
             {
@@ -277,6 +282,33 @@ namespace RASv2.Tests
                 all.Settings.ReportFolder = @"Отчеты\{Дата}";
                 Check(ExportNodes.CheckNwf(top, common) == null, "без {Блок} — одна NWF на всё");
             });
+            yield return Case("скрыть: поисковые наборы Navisworks из файла экспорта; простые наборы выбора — мимо; прежние строки", () =>
+            {
+                const string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><exchange units=\"m\"><selectionsets>" +
+                    "<selectionset name=\"Временные\" guid=\"a\"><findspec mode=\"all\" disjoint=\"0\"><conditions>" +
+                    "<condition test=\"contains\" flags=\"10\"><category><name internal=\"LcOaNode\">Элемент</name></category>" +
+                    "<property><name internal=\"LcOaSceneBaseUserName\">Имя</name></property><value><data type=\"wstring\">временн</data></value></condition>" +
+                    "<condition test=\"equals\" flags=\"10\"><category><name internal=\"LcRevitData_Element\">Объект</name></category>" +
+                    "<property><name internal=\"LcRevitPropertyElementCategory\">Категория</name></property><value><data type=\"wstring\">Обобщённые модели</data></value></condition>" +
+                    "</conditions><locator>/</locator></findspec></selectionset>" +
+                    "<viewfolder name=\"Папка\"><selectionset name=\"Есть марка\"><findspec mode=\"all\" disjoint=\"0\"><conditions>" +
+                    "<condition test=\"defined\" flags=\"10\"><category><name internal=\"LcRevitData_Parameter\">Параметры</name></category>" +
+                    "<property><name internal=\"Марка\">Марка</name></property></condition></conditions><locator>/</locator></findspec></selectionset></viewfolder>" +
+                    "<selectionset name=\"Выбранные руками\"><selection><locator>lcop_selection_set_tree/0/1</locator></selection></selectionset>" +
+                    "</selectionsets></exchange>";
+                var sets = SearchSets.Read(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(xml)), out var skipped);
+                Check(sets.Count == 2 && skipped == 1, "два поисковых, простой набор — мимо: " + sets.Count + "/" + skipped);
+                Check(sets[0].Name == "Временные" && sets[0].Text == "Элемент › Имя содержит «временн»; Объект › Категория = «Обобщённые модели»", sets[0].Text);
+                Check(sets[1].Name == "Есть марка" && sets[1].Text == "Параметры › Марка задано", "из папки наборов: " + sets[1].Text);
+                Check(sets[0].Xml.StartsWith("<selectionset name=\"Временные\"") && sets[0].Xml.Contains("<findspec"), "набор — как в файле");
+                var refused = false;
+                try { SearchSets.Read(new MemoryStream(System.Text.Encoding.UTF8.GetBytes("<a/>")), out _); } catch (InvalidDataException) { refused = true; }
+                Check(refused, "не тот файл — понятный отказ");
+                var old = SearchSets.FromName("врем<енн");
+                Check(old.Text == "Элемент › Имя содержит «врем<енн»" && old.Xml.Contains("врем&lt;енн"), "прежняя строка — набор «Имя содержит»");
+                var back = SearchSets.Read(new MemoryStream(System.Text.Encoding.UTF8.GetBytes("<exchange><selectionsets>" + old.Xml + "</selectionsets></exchange>")), out _);
+                Check(back.Single().Text == old.Text, "прежняя строка читается как набор Navisworks");
+            });
             yield return Case("файлы проверок: .xml, без повторов, одна проверка — в одном файле", () =>
             {
                 var names = new Dictionary<string, string[]>
@@ -337,7 +369,7 @@ namespace RASv2.Tests
                 var roots = Sample(out var high, out var mid);
                 var top = roots[0];
                 top.Settings.Models.Last().Block = "S1";
-                top.Settings.HideNames.Add("временн");
+                top.Settings.HideSets.Add(SearchSets.FromName("временн"));
                 mid.Settings.ReportFormats = new List<string> { "XML" };
                 high.Settings.Export = ExportOverride.From(new ExportSettings { RemoveIfc = false });
                 path = Path.Combine(dir, "Задача.json");
@@ -346,7 +378,7 @@ namespace RASv2.Tests
                 var copy = ExportFiles.ToTop(back.ProjectData, new[] { "ArmanQala" });
                 Check(copy.Name == "ArmanQala (2)" && copy.Settings.Folder == top.Settings.Folder && copy.Settings.Models.Count == 7 &&
                       copy.Settings.Models.Last().Block == "S1" && copy.Settings.NwfName == null &&
-                      copy.Settings.HideNames.Single() == "временн", "задача: " + copy.Name);
+                      copy.Settings.HideSets.Single().Text == "Элемент › Имя содержит «временн»", "задача: " + copy.Name);
                 var h = copy.Children[0];
                 var md = copy.Children[1];
                 Check(h.Parent == copy && h.Settings.Models == null && h.Settings.ReportFormats == null && ExportNodes.ModelsOf(h).Count == 7 &&
@@ -377,6 +409,13 @@ namespace RASv2.Tests
                       v2.Settings.NwfName == null && string.Join(",", v2.Settings.ReportFormats) == "XML,HTML", "проект → задача");
                 Check(hv2.Settings.TestsFiles.Single() == "t.xml" && hv2.Settings.NwfName == "{Блок}_ВК" && string.Join(",", hv2.Settings.ReportFormats) == "XML" &&
                       ExportNodes.ModelsOf(hv2).Count == 1, "задача проекта → подзадача, модели — от задачи");
+
+                // 03.11.2026, днём: «скрыть» — строками «имя содержит»
+                path = Path.Combine(dir, "Задача со строками скрытия.json");
+                File.WriteAllText(path, "{\"Kind\":\"Проект\",\"Version\":3,\"ProjectData\":{\"Name\":\"С\",\"Tasks\":[],\"Node\":{\"Folder\":\"x\"," +
+                    "\"HideNames\":[\"временн\"]}}}");
+                var hn = ExportFiles.ToTop(ExportFiles.Load(path).ProjectData, new string[0]);
+                Check(hn.Settings.HideNames == null && hn.Settings.HideSets.Single().Name == "Имя содержит «временн»", "строки скрытия — в наборы");
 
                 // версия 1 (02.11.2026): задачи-блоки со своими моделями — модели переходят в задачу, файлы проверок — свои у подзадачи
                 path = Path.Combine(dir, "Проект v1.json");

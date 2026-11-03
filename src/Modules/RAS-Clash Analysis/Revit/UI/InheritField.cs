@@ -6,7 +6,7 @@ namespace RASv2.ClashAnalysis.UI
 {
     /// <summary>
     /// Строка «своё или как выше» окон «Задач выгрузки»: своё — поле правится, рядом «Вернуть …»; как выше — значение выше
-    /// бледным, «от «…»» / «по общим настройкам» и «Изменить». Extras (метки, «Обзор») — видны, только когда своё.
+    /// бледным, «от «…»» / «По общим настройкам» и «Изменить». Extras (метки, «Обзор») — видны, только когда своё.
     /// </summary>
     internal sealed class InheritField
     {
@@ -50,7 +50,8 @@ namespace RASv2.ClashAnalysis.UI
             _box.Opacity = Own ? 1 : 0.5;   // как выше — бледным
             foreach (var e in _extras) e.Visibility = Own ? Visibility.Visible : Visibility.Collapsed;
             _from.Text = Own ? "" : _source;
-            _link.Content = Own ? "Вернуть " + _source : "Изменить";
+            // «По общим настройкам» — с большой буквы, когда подписью; в «Вернуть …» — с маленькой
+            _link.Content = Own ? "Вернуть " + char.ToLower(_source[0]) + _source.Substring(1) : "Изменить";
         }
 
         /// <summary>Своё значение; null — как выше.</summary>

@@ -54,10 +54,7 @@ namespace RASv2.ClashAnalysis.Logic
         /// «подзадача — как отдельный блок, обычно 4 модели: добавляем их, ставим галочку — они объединяются в NWF»).
         /// </summary>
         [DataMember(Order = 12, EmitDefaultValue = false)] public bool MakeNwf { get; set; }
-        /// <summary>
-        /// Скрыть в NWF элементы, имя которых содержит одну из строк (разработчик, 03.11.2026: «временные» скрываем — скрытые в
-        /// проверки не попадают; «перенести в настройки задачи, передаётся подзадачам»). Своих строк компании в коде нет.
-        /// </summary>
+        /// <summary>Только прежние файлы (03.11.2026, днём): «имя элемента содержит …» — при чтении переходят в HideSets.</summary>
         [DataMember(Order = 13, EmitDefaultValue = false)] public List<string> HideNames { get; set; }
         /// <summary>Форматы отчётов — названия, как в Navisworks (ExportNodes.ReportFormatNames).</summary>
         [DataMember(Order = 14, EmitDefaultValue = false)] public List<string> ReportFormats { get; set; }
@@ -66,11 +63,18 @@ namespace RASv2.ClashAnalysis.Logic
         /// „Изменить“, то же, что шестерёнка»); null — от уровня выше, нигде — из общих настроек.
         /// </summary>
         [DataMember(Order = 15, EmitDefaultValue = false)] public ExportOverride Export { get; set; }
+        /// <summary>
+        /// Скрыть в NWF — поисковые наборы Navisworks (разработчик, 03.11.2026: «временные» скрываем — скрытые в проверки не
+        /// попадают; правила — из инструмента поиска Navisworks; передаётся подзадачам). Своих правил компании в коде нет.
+        /// </summary>
+        [DataMember(Order = 16, EmitDefaultValue = false)] public List<HideSet> HideSets { get; set; }
+        /// <summary>«Формировать отчёты» — своё у строки, не наследуется; действует у строки, которая собирает NWF.</summary>
+        [DataMember(Order = 17, EmitDefaultValue = false)] public bool MakeReports { get; set; }
 
         /// <summary>Задача верхнего уровня: всё своё, по умолчанию — регламент 15.10 (вида нет — из общих настроек).</summary>
         public static NodeSettings Top() => new NodeSettings
         {
-            Models = new List<ExportModel>(), TestsFiles = new List<string>(), HideNames = new List<string>(), Folder = "", NwcFolder = @"{Блок}\NWC",
+            Models = new List<ExportModel>(), TestsFiles = new List<string>(), HideSets = new List<HideSet>(), Folder = "", NwcFolder = @"{Блок}\NWC",
             NwfFolder = "{Блок}", ReportFolder = @"{Блок}\{Дата}", ReportFormats = new List<string> { "XML", "HTML" },
         };
 
@@ -80,6 +84,7 @@ namespace RASv2.ClashAnalysis.Logic
             TestsFiles = TestsFiles?.ToList(), NwfName = NwfName, Folder = Folder, ServerFolder = ServerFolder, NwcFolder = NwcFolder,
             NwfFolder = NwfFolder, ReportFolder = ReportFolder, Xml = Xml, Html = Html, ViewName = ViewName, MakeNwf = MakeNwf,
             HideNames = HideNames?.ToList(), ReportFormats = ReportFormats?.ToList(), Export = Export?.Clone(),
+            HideSets = HideSets?.Select(h => h.Clone()).ToList(), MakeReports = MakeReports,
         };
     }
 
@@ -169,7 +174,9 @@ namespace RASv2.ClashAnalysis.Logic
 
         public static List<ExportModel> ModelsOf(ExportTask task) => Get(task, s => s.Models);
         public static List<string> TestsOf(ExportTask task) => Get(task, s => s.TestsFiles);
-        public static List<string> HideNamesOf(ExportTask task) => Get(task, s => s.HideNames);
+        public static List<HideSet> HideSetsOf(ExportTask task) => Get(task, s => s.HideSets);
+        /// <summary>Строка выгружает отчёты: собирает NWF и «Формировать отчёты».</summary>
+        public static bool MakesReports(ExportTask task) => MakesNwf(task) && task.Settings.MakeReports;
         /// <summary>Имя NWF строки — своё (не наследуется), пусто — название строки.</summary>
         public static string NwfNameOf(ExportTask task) =>
             (string.IsNullOrWhiteSpace(task.Settings.NwfName) ? task.Name ?? "" : task.Settings.NwfName).Trim();

@@ -6,7 +6,7 @@
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Fg}" FontFamily="Segoe UI" FontSize="13">
     <!-- Настройки задачи или подзадачи «Задач выгрузки» (карандаш; DECISIONS.md модуля, «Разделы окна задачи — по разработчику
          (03.11.2026)»): «Общее», «Экспорт», «NWF и отчёты». Одна сетка на все строки (разработчик: «надписи, поля — ровнее»):
-         подпись — 150, значение — на всю ширину (поле, «Обзор» за ним, пример — под ним), справа — колонка «от «…»» /
+         подпись — 170, значение — на всю ширину (поле, «Обзор» за ним, пример — под ним), справа — колонка «от «…»» /
          «Изменить» одной ширины. Кнопки, поля, кисти — общие образцы ядра (подключаются до разметки); ключи своих стилей не
          совпадают с кистями ядра. -->
     <Window.Resources>
@@ -114,12 +114,12 @@
                     </DockPanel>
                 </Border>
                 <Grid Style="{StaticResource RowGrid}">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
                     <TextBlock Style="{StaticResource Cap}" Text="Название" />
                     <TextBox x:Name="TaskName" Grid.Column="1" TextChanged="Any_Changed" />
                 </Grid>
                 <Grid Style="{StaticResource RowGrid}">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
                     <TextBlock Style="{StaticResource Cap}" Text="Папка задачи" />
                     <Button Grid.Column="2" x:Name="FolderBrowse" Style="{StaticResource Browse}" Click="BrowseProject_Click" />
                     <DockPanel Grid.Column="1" VerticalAlignment="Top">
@@ -137,7 +137,7 @@
                 </Border>
                 <!-- вида нет, если в общих «Экспорт: Целый проект» -->
                 <Grid x:Name="ViewRow" Style="{StaticResource RowGrid}">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
                     <TextBlock Style="{StaticResource Cap}" Text="Выгружать вид" />
                     <TextBox x:Name="ViewName" Grid.Column="1" VerticalAlignment="Top" />
                     <StackPanel Style="{StaticResource Side}">
@@ -148,7 +148,7 @@
 
                 <!-- внутри папки задачи; полный путь — тоже можно -->
                 <Grid Style="{StaticResource RowGrid}">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
                     <TextBlock Style="{StaticResource Cap}" Text="Папка для NWC" />
                     <Button Grid.Column="2" x:Name="NwcBrowse" Style="{StaticResource Browse}" Tag="{Binding ElementName=NwcFolder}" Click="Browse_Click" />
                     <StackPanel Grid.Column="1">
@@ -170,7 +170,7 @@
 
                 <!-- модели: одной строкой, список по блокам — по «Показать» -->
                 <Grid Style="{StaticResource RowGrid}">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
                     <TextBlock Style="{StaticResource Cap}" Text="Модели" />
                     <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
                         <Button x:Name="AddModels" DockPanel.Dock="Right" Content="Добавить модели…" Margin="12,0,0,0" Click="AddModels_Click" />
@@ -182,212 +182,231 @@
                         <Button x:Name="ModelsLink" Style="{StaticResource SideLink}" Click="ModelsLink_Click" />
                     </StackPanel>
                 </Grid>
-                <StackPanel x:Name="ModelsPanel" Margin="150,0,0,16">
-                    <Grid Margin="0,0,40,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="80" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="240" />
-                            <ColumnDefinition Width="70" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Style="{StaticResource ColHead}" Text="Блок" />
-                        <TextBlock Grid.Column="1" Style="{StaticResource ColHead}" Text="Модель" />
-                        <TextBlock Grid.Column="2" Style="{StaticResource ColHead}" Text="Имя NWC" />
-                        <TextBlock Grid.Column="3" Style="{StaticResource ColHead}" Text="Отдел" />
-                    </Grid>
-                    <ItemsControl x:Name="ModelsList">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Grid Margin="{Binding Gap}">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="80" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="240" />
-                                        <ColumnDefinition Width="70" />
-                                        <ColumnDefinition Width="40" />
-                                    </Grid.ColumnDefinitions>
-                                    <!-- блок — у первой модели блока; у модели без блока в имени — поле: блок вписывается руками -->
-                                    <TextBlock Text="{Binding BlockTitle}" FontWeight="SemiBold" VerticalAlignment="Center"
-                                               Visibility="{Binding TitleVisibility}" />
-                                    <TextBox Text="{Binding Block, UpdateSourceTrigger=PropertyChanged}" Width="60" HorizontalAlignment="Left"
-                                             Visibility="{Binding BoxVisibility}" LostFocus="Block_LostFocus"
-                                             ToolTip="В имени модели блока нет — впишите (например, S1)" />
-                                    <!-- имя модели — первым, папка — бледным: длинный путь не прячет имя (разбор 02.11.2026) -->
-                                    <TextBlock Grid.Column="1" ToolTip="{Binding Path}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                                               Margin="0,0,8,0">
-                                        <Run Text="{Binding FileName, Mode=OneWay}" />
-                                        <Run Text="{Binding Folder, Mode=OneWay}" Foreground="{DynamicResource Muted}" FontSize="12" />
-                                    </TextBlock>
-                                    <!-- имя NWC — текстом, правится по двойному щелчку -->
-                                    <Grid Grid.Column="2" Margin="0,0,8,0" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" Visibility="{Binding ShowVisibility}"
-                                                   MouseLeftButtonDown="NwcName_MouseDown" Background="Transparent"
-                                                   ToolTip="Двойной щелчок — поправить имя NWC" />
-                                        <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Visibility="{Binding EditVisibility}"
-                                                 LostFocus="NwcName_LostFocus" ToolTip="Пусто — имя из имени модели" />
-                                    </Grid>
-                                    <TextBlock Grid.Column="3" Text="{Binding Department}" VerticalAlignment="Center" />
-                                    <Button Grid.Column="4" Style="{StaticResource IconButton}" Content="&#xE74D;" HorizontalAlignment="Right"
-                                            VerticalAlignment="Center" Click="DeleteModel_Click" ToolTip="Убрать модель"
-                                            Visibility="{Binding DataContext.ModelsEditVisibility, RelativeSource={RelativeSource AncestorType=Window}}" />
-                                </Grid>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
+                <!-- модели: компактный список в своей рамке — по блокам, имя без пути (общая папка — одной строкой сверху), имя NWC —
+                     только если отличается, корзина — при наведении (разработчик, 03.11.2026: «таблица несуразная — компактнее») -->
+                <Border x:Name="ModelsPanel" Margin="170,0,286,16" Background="{DynamicResource Row}" BorderBrush="{DynamicResource Line}"
+                        BorderThickness="1" CornerRadius="4" Padding="12,8">
+                    <StackPanel>
+                        <TextBlock x:Name="ModelsFolder" Style="{StaticResource Note}" TextTrimming="CharacterEllipsis" Margin="0,0,0,4" />
+                        <ScrollViewer MaxHeight="320" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl x:Name="ModelsList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel>
+                                            <!-- заголовок блока — над его первой моделью -->
+                                            <TextBlock Text="{Binding GroupTitle}" FontWeight="SemiBold" Margin="0,8,0,2"
+                                                       Visibility="{Binding HeaderVisibility}" />
+                                            <Grid Background="Transparent" MinHeight="26">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition />
+                                                    <ColumnDefinition Width="60" />
+                                                    <ColumnDefinition Width="32" />
+                                                </Grid.ColumnDefinitions>
+                                                <!-- блока в имени нет — вписывается руками -->
+                                                <TextBox Text="{Binding Block, UpdateSourceTrigger=PropertyChanged}" Width="56" Margin="0,0,8,0"
+                                                         VerticalAlignment="Center" Visibility="{Binding BoxVisibility}" LostFocus="Block_LostFocus"
+                                                         ToolTip="В имени модели блока нет — впишите (например, S1)" />
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" ToolTip="{Binding Path}"
+                                                            Background="Transparent" MouseLeftButtonDown="NwcName_MouseDown">
+                                                    <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                    <!-- имя NWC — только если не совпадает с именем модели; двойной щелчок — поправить -->
+                                                    <TextBlock Text="{Binding NwcHint}" Style="{StaticResource Note}" Margin="10,0,0,0"
+                                                               Visibility="{Binding ShowVisibility}" />
+                                                    <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="260" Margin="10,0,0,0"
+                                                             Visibility="{Binding EditVisibility}" LostFocus="NwcName_LostFocus"
+                                                             ToolTip="Имя NWC; пусто — из имени модели" />
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="2" Text="{Binding Department}" Style="{StaticResource Note}" />
+                                                <Button Grid.Column="3" Content="&#xE74D;" ToolTip="Убрать модель" Click="DeleteModel_Click"
+                                                        Visibility="{Binding DataContext.ModelsEditVisibility, RelativeSource={RelativeSource AncestorType=Window}}">
+                                                    <Button.Style>
+                                                        <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
+                                                            <Setter Property="Opacity" Value="0" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True">
+                                                                    <Setter Property="Opacity" Value="1" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Button.Style>
+                                                </Button>
+                                            </Grid>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </StackPanel>
+                </Border>
 
                 <!-- параметры экспортёра и «Удалить перед выгрузкой» — по общим настройкам или свои (то же окно, что шестерёнка) -->
                 <Grid Style="{StaticResource RowGrid}">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
-                    <TextBlock Style="{StaticResource Cap}" Text="Настройки" />
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource Cap}" Text="Настройки NWC Exporter" />
                     <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
-                        <Button x:Name="ExportEdit" DockPanel.Dock="Right" Content="Изменить…" Margin="12,0,0,0" Click="ExportEdit_Click" />
                         <TextBlock x:Name="ExportFrom" VerticalAlignment="Center" />
+                        <Button x:Name="ExportEdit" Style="{StaticResource SideLink}" Content="изменить" FontSize="12" Margin="10,0,0,0"
+                                HorizontalAlignment="Left" Click="ExportEdit_Click" />
                     </DockPanel>
                     <StackPanel Style="{StaticResource Side}">
                         <Button x:Name="ExportReset" Style="{StaticResource SideLink}" Click="ExportReset_Click" />
                     </StackPanel>
                 </Grid>
 
-                <!-- ══ NWF и отчёты ══ -->
+                <!-- ══ NWF ══ -->
                 <Border Style="{StaticResource SectionHead}">
-                    <TextBlock Style="{StaticResource SectionTitle}" Text="NWF и отчёты" />
+                    <TextBlock Style="{StaticResource SectionTitle}" Text="NWF" />
                 </Border>
-                <!-- NWF собирает строка без подзадач; у строки с подзадачами галочка недоступна -->
+                <!-- NWF собирает строка без подзадач; у строки с подзадачами галочка недоступна, а поля ниже задаются для подзадач -->
                 <Grid Style="{StaticResource RowGrid}">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
                     <TextBlock Style="{StaticResource Cap}" Text="Формировать NWF" />
                     <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
                         <CheckBox x:Name="MakeNwf" VerticalAlignment="Center" Checked="Any_Changed" Unchecked="Any_Changed" />
                     </DockPanel>
                 </Grid>
-                <Grid Style="{StaticResource RowGrid}">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
-                    <TextBlock Style="{StaticResource Cap}" Text="Имя NWF" />
-                    <StackPanel Grid.Column="1">
-                        <TextBox x:Name="NwfName" TextChanged="Any_Changed" />
-                        <TextBlock x:Name="NwfNameExample" Style="{StaticResource Example}" />
-                    </StackPanel>
-                </Grid>
+                <!-- галочка снята — всё ниже серое и не правится (разработчик, 03.11.2026) -->
+                <StackPanel x:Name="NwfFields">
+                    <Grid Style="{StaticResource RowGrid}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Cap}" Text="Имя NWF" />
+                        <TextBox x:Name="NwfName" Grid.Column="1" VerticalAlignment="Top" TextChanged="Any_Changed" />
+                    </Grid>
 
-                <Grid Style="{StaticResource RowGrid}">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
-                    <TextBlock Style="{StaticResource Cap}" Text="Проверки" />
-                    <!-- на две колонки: корзины — в колонке «Обзора», поля кончаются на одной линии с остальными -->
-                    <StackPanel Grid.Column="1" Grid.ColumnSpan="2">
-                        <!-- от уровня выше — именами в строку; свои — списком с корзинами -->
-                        <DockPanel Style="{StaticResource FirstLine}">
-                            <TextBlock x:Name="TestsInline" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                        </DockPanel>
-                        <StackPanel x:Name="TestsPanel">
-                            <ItemsControl x:Name="TestsList">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <DockPanel MinHeight="30">
-                                            <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE74D;" Margin="4,0,0,0" Width="32"
-                                                    Click="DeleteTests_Click" ToolTip="Убрать файл" />
-                                            <TextBlock ToolTip="{Binding Path}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center">
-                                                <Run Text="{Binding Name, Mode=OneWay}" />
-                                                <Run Text="{Binding Folder, Mode=OneWay}" Foreground="{DynamicResource Muted}" FontSize="12" />
-                                            </TextBlock>
-                                        </DockPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <Button Content="Добавить…" HorizontalAlignment="Left" Margin="0,4,0,0" Click="AddTests_Click"
-                                    ToolTip="Файлы проверок .xml из Clash Detective — можно несколько" />
+                    <Grid Style="{StaticResource RowGrid}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Cap}" Text="Проверки" />
+                        <!-- на две колонки: корзины — в колонке «Обзора», поля кончаются на одной линии с остальными -->
+                        <StackPanel Grid.Column="1" Grid.ColumnSpan="2">
+                            <!-- от уровня выше — именами в строку; свои — списком с корзинами -->
+                            <DockPanel Style="{StaticResource FirstLine}">
+                                <TextBlock x:Name="TestsInline" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            </DockPanel>
+                            <StackPanel x:Name="TestsPanel">
+                                <ItemsControl x:Name="TestsList">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <DockPanel MinHeight="30">
+                                                <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE74D;" Margin="4,0,0,0" Width="32"
+                                                        Click="DeleteTests_Click" ToolTip="Убрать файл" />
+                                                <TextBlock ToolTip="{Binding Path}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center">
+                                                    <Run Text="{Binding Name, Mode=OneWay}" />
+                                                    <Run Text="{Binding Folder, Mode=OneWay}" Foreground="{DynamicResource Muted}" FontSize="12" />
+                                                </TextBlock>
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Button Content="Добавить…" HorizontalAlignment="Left" Margin="0,4,0,0" Click="AddTests_Click"
+                                        ToolTip="Файлы проверок .xml из Clash Detective — можно несколько" />
+                            </StackPanel>
                         </StackPanel>
-                    </StackPanel>
-                    <StackPanel Style="{StaticResource Side}">
-                        <TextBlock x:Name="TestsFrom" Style="{StaticResource From}" />
-                        <Button x:Name="TestsLink" Style="{StaticResource SideLink}" Click="TestsLink_Click" />
-                    </StackPanel>
-                </Grid>
-
-                <!-- скрыть в NWF по имени элемента (разработчик, 03.11.2026: в задаче, передаётся подзадачам) -->
-                <Grid Style="{StaticResource RowGrid}">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
-                    <TextBlock Style="{StaticResource Cap}" Text="Скрыть в NWF" />
-                    <StackPanel Grid.Column="1" Grid.ColumnSpan="2">
-                        <DockPanel Style="{StaticResource FirstLine}">
-                            <TextBlock x:Name="HideInline" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                        </DockPanel>
-                        <StackPanel x:Name="HidePanel">
-                            <ItemsControl x:Name="HideList">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <DockPanel Margin="0,0,0,6">
-                                            <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE74D;" Margin="4,0,0,0" Width="32"
-                                                    Click="DeleteHide_Click" ToolTip="Удалить правило" />
-                                            <TextBox Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" ToolTip="Часть имени элемента" />
-                                        </DockPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <Button Content="Добавить правило" HorizontalAlignment="Left" Click="AddHide_Click" />
+                        <StackPanel Style="{StaticResource Side}">
+                            <TextBlock x:Name="TestsFrom" Style="{StaticResource From}" />
+                            <Button x:Name="TestsLink" Style="{StaticResource SideLink}" Click="TestsLink_Click" />
                         </StackPanel>
-                    </StackPanel>
-                    <StackPanel Style="{StaticResource Side}">
-                        <TextBlock x:Name="HideFrom" Style="{StaticResource From}" />
-                        <Button x:Name="HideLink" Style="{StaticResource SideLink}" Click="HideLink_Click" />
-                    </StackPanel>
-                </Grid>
+                    </Grid>
 
-                <Grid Style="{StaticResource RowGrid}">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
-                    <TextBlock Style="{StaticResource Cap}" Text="Папка для NWF" />
-                    <Button Grid.Column="2" x:Name="NwfBrowse" Style="{StaticResource Browse}" Tag="{Binding ElementName=NwfFolder}" Click="Browse_Click" />
-                    <StackPanel Grid.Column="1">
-                        <DockPanel>
+                    <!-- скрыть — поисковые наборы Navisworks из файла «Экспорт поисковых наборов» (разработчик, 03.11.2026) -->
+                    <Grid Style="{StaticResource RowGrid}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Cap}" Text="Скрыть" />
+                        <StackPanel Grid.Column="1" Grid.ColumnSpan="2">
+                            <DockPanel Style="{StaticResource FirstLine}">
+                                <TextBlock x:Name="HideInline" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            </DockPanel>
+                            <StackPanel x:Name="HidePanel">
+                                <ItemsControl x:Name="HideList">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <DockPanel MinHeight="30" Margin="0,0,0,4">
+                                                <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE74D;" Margin="4,0,0,0" Width="32"
+                                                        VerticalAlignment="Center" Click="DeleteHide_Click" ToolTip="Удалить правило" />
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding Text}" Style="{StaticResource Note}" TextTrimming="CharacterEllipsis"
+                                                               ToolTip="{Binding Text}" />
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Button Content="Добавить правила…" HorizontalAlignment="Left" Margin="0,4,0,0" Click="AddHide_Click"
+                                        ToolTip="Файл поисковых наборов Navisworks: «Наборы» → «Экспорт поисковых наборов»" />
+                            </StackPanel>
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource Side}">
+                            <TextBlock x:Name="HideFrom" Style="{StaticResource From}" />
+                            <Button x:Name="HideLink" Style="{StaticResource SideLink}" Click="HideLink_Click" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Style="{StaticResource RowGrid}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Cap}" Text="Папка для NWF" />
+                        <Button Grid.Column="2" x:Name="NwfBrowse" Style="{StaticResource Browse}" Tag="{Binding ElementName=NwfFolder}" Click="Browse_Click" />
+                        <StackPanel Grid.Column="1">
                             <TextBox x:Name="NwfFolder" TextChanged="Any_Changed" />
-                        </DockPanel>
-                        <TextBlock x:Name="NwfExample" Style="{StaticResource Example}" />
-                    </StackPanel>
-                    <StackPanel Style="{StaticResource Side}">
-                        <TextBlock x:Name="NwfFrom" Style="{StaticResource From}" />
-                        <Button x:Name="NwfLink" Style="{StaticResource SideLink}" />
-                    </StackPanel>
-                </Grid>
-
-                <Grid Style="{StaticResource RowGrid}">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
-                    <TextBlock Style="{StaticResource Cap}" Text="Папка для отчётов" />
-                    <Button Grid.Column="2" x:Name="ReportBrowse" Style="{StaticResource Browse}" Tag="{Binding ElementName=ReportFolder}" Click="Browse_Click" />
-                    <StackPanel Grid.Column="1">
-                        <DockPanel>
-                            <TextBox x:Name="ReportFolder" TextChanged="Any_Changed" />
-                        </DockPanel>
-                        <StackPanel x:Name="ReportChips" Orientation="Horizontal" Margin="0,4,0,0">
-                            <TextBlock Style="{StaticResource Note}" Text="Метки:" />
-                            <Button Style="{StaticResource Chip}" Content="{}{Блок}" Tag="{Binding ElementName=ReportFolder}" Click="Chip_Click" />
-                            <Button Style="{StaticResource Chip}" Content="{}{Дата}" Tag="{Binding ElementName=ReportFolder}" Click="Chip_Click" />
-                            <Button Style="{StaticResource Chip}" Content="{}{Формат}" Tag="{Binding ElementName=ReportFolder}" Click="Chip_Click" />
+                            <TextBlock x:Name="NwfExample" Style="{StaticResource Example}" />
                         </StackPanel>
-                        <TextBlock x:Name="ReportExample" Style="{StaticResource Example}" />
-                    </StackPanel>
-                    <StackPanel Style="{StaticResource Side}">
-                        <TextBlock x:Name="ReportFrom" Style="{StaticResource From}" />
-                        <Button x:Name="ReportLink" Style="{StaticResource SideLink}" />
-                    </StackPanel>
-                </Grid>
+                        <StackPanel Style="{StaticResource Side}">
+                            <TextBlock x:Name="NwfFrom" Style="{StaticResource From}" />
+                            <Button x:Name="NwfLink" Style="{StaticResource SideLink}" />
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
 
-                <!-- форматы — выпадающий список с галочками: все форматы отчёта Clash Detective (разработчик, 03.11.2026) -->
+                <!-- ══ Отчёты ══ -->
+                <Border Style="{StaticResource SectionHead}">
+                    <TextBlock Style="{StaticResource SectionTitle}" Text="Отчёты" />
+                </Border>
                 <Grid Style="{StaticResource RowGrid}">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
-                    <TextBlock Style="{StaticResource Cap}" Text="Формат отчётов" />
-                    <ComboBox x:Name="Formats" Grid.Column="1" VerticalAlignment="Top" MinHeight="30" VerticalContentAlignment="Center"
-                              IsEditable="True" IsReadOnly="True" StaysOpenOnEdit="True" DropDownClosed="Formats_Closed">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate>
-                                <CheckBox Content="{Binding Name}" IsChecked="{Binding On}" Checked="Format_Changed" Unchecked="Format_Changed" />
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
-                    <StackPanel Style="{StaticResource Side}">
-                        <TextBlock x:Name="FormatsFrom" Style="{StaticResource From}" />
-                        <Button x:Name="FormatsLink" Style="{StaticResource SideLink}" Click="FormatsLink_Click" />
-                    </StackPanel>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource Cap}" Text="Формировать отчёты" />
+                    <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
+                        <CheckBox x:Name="MakeReports" VerticalAlignment="Center" Checked="Any_Changed" Unchecked="Any_Changed" />
+                    </DockPanel>
                 </Grid>
+                <StackPanel x:Name="ReportFields">
+                    <!-- форматы — выпадающий список с галочками: все форматы отчёта Clash Detective (разработчик, 03.11.2026) -->
+                    <Grid Style="{StaticResource RowGrid}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Cap}" Text="Формат отчётов" />
+                        <ComboBox x:Name="Formats" Grid.Column="1" VerticalAlignment="Top" MinHeight="30" VerticalContentAlignment="Center"
+                                  IsEditable="True" IsReadOnly="True" StaysOpenOnEdit="True" DropDownClosed="Formats_Closed">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <CheckBox Content="{Binding Name}" IsChecked="{Binding On}" Checked="Format_Changed" Unchecked="Format_Changed" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <StackPanel Style="{StaticResource Side}">
+                            <TextBlock x:Name="FormatsFrom" Style="{StaticResource From}" />
+                            <Button x:Name="FormatsLink" Style="{StaticResource SideLink}" Click="FormatsLink_Click" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Style="{StaticResource RowGrid}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Cap}" Text="Папка для отчётов" />
+                        <Button Grid.Column="2" x:Name="ReportBrowse" Style="{StaticResource Browse}" Tag="{Binding ElementName=ReportFolder}" Click="Browse_Click" />
+                        <StackPanel Grid.Column="1">
+                            <TextBox x:Name="ReportFolder" TextChanged="Any_Changed" />
+                            <StackPanel x:Name="ReportChips" Orientation="Horizontal" Margin="0,4,0,0">
+                                <TextBlock Style="{StaticResource Note}" Text="Метки:" />
+                                <Button Style="{StaticResource Chip}" Content="{}{Блок}" Tag="{Binding ElementName=ReportFolder}" Click="Chip_Click" />
+                                <Button Style="{StaticResource Chip}" Content="{}{Дата}" Tag="{Binding ElementName=ReportFolder}" Click="Chip_Click" />
+                                <Button Style="{StaticResource Chip}" Content="{}{Формат}" Tag="{Binding ElementName=ReportFolder}" Click="Chip_Click" />
+                            </StackPanel>
+                            <TextBlock x:Name="ReportExample" Style="{StaticResource Example}" />
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource Side}">
+                            <TextBlock x:Name="ReportFrom" Style="{StaticResource From}" />
+                            <Button x:Name="ReportLink" Style="{StaticResource SideLink}" />
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
             </StackPanel>
         </ScrollViewer>
     </DockPanel>

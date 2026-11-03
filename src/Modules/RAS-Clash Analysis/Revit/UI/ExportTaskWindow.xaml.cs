@@ -20,7 +20,10 @@ namespace RASv2.ClashAnalysis.UI
     /// </summary>
     public partial class ExportTaskWindow : Window, INotifyPropertyChanged
     {
-        /// <summary>Строка списка моделей: блок (у первой модели блока; без блока в имени — поле), имя NWC, отдел.</summary>
+        /// <summary>
+        /// Строка списка моделей (разработчик, 03.11.2026: «компактнее, лаконичнее»): над первой моделью блока — «S1 · 4 модели»; имя
+        /// модели без пути и «.rvt»; имя NWC — только если отличается (двойной щелчок — поправить); отдел; корзина — при наведении.
+        /// </summary>
         public sealed class ModelRow : INotifyPropertyChanged
         {
             public event PropertyChangedEventHandler PropertyChanged;
@@ -48,12 +51,33 @@ namespace RASv2.ClashAnalysis.UI
                 set => Model.Block = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
             }
 
-            /// <summary>Первая строка блока — над ней отступ и название блока.</summary>
+            /// <summary>Первая строка блока — над ней заголовок блока (GroupTitle — ставит окно: «S1 · 4 модели»).</summary>
             public bool First { get; set; }
-            public string BlockTitle => Effective;
-            public Visibility TitleVisibility => First && !Manual ? Visibility.Visible : Visibility.Collapsed;
+            public string GroupTitle { get; set; }
+            public Visibility HeaderVisibility => First ? Visibility.Visible : Visibility.Collapsed;
             public Visibility BoxVisibility => Manual ? Visibility.Visible : Visibility.Collapsed;
-            public Thickness Gap => new Thickness(0, First ? 10 : 0, 0, 4);
+
+            /// <summary>Имя модели без папки и «.rvt».</summary>
+            public string DisplayName
+            {
+                get
+                {
+                    var n = FileName;
+                    return n.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase) ? n.Substring(0, n.Length - 4) : n;
+                }
+            }
+
+            /// <summary>Имя NWC — только если не совпадает с именем модели; «не по шаблону» — если «М3» в имени нет.</summary>
+            public string NwcHint
+            {
+                get
+                {
+                    ExportNames.NwcName(Path, _common.TrimName, out var matches);
+                    var hint = Name == DisplayName ? "" : "→ " + Name;
+                    if (_common.TrimName && Model.NwcName == null && !matches) hint += (hint.Length > 0 ? " · " : "") + "не по шаблону";
+                    return hint;
+                }
+            }
 
             /// <summary>Имя NWC правится (двойной щелчок) — поле вместо текста.</summary>
             public bool Editing
@@ -65,7 +89,7 @@ namespace RASv2.ClashAnalysis.UI
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowVisibility)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(EditVisibility)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Name)));
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(MismatchVisibility)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(NwcHint)));
                 }
             }
 
@@ -86,21 +110,12 @@ namespace RASv2.ClashAnalysis.UI
                 }
             }
 
-            public Visibility MismatchVisibility
-            {
-                get
-                {
-                    ExportNames.NwcName(Path, _common.TrimName, out var matches);
-                    return _common.TrimName && Model.NwcName == null && !matches ? Visibility.Visible : Visibility.Collapsed;
-                }
-            }
-
             public string Department
             {
                 get
                 {
                     var d = ExportNames.Department(Path, _common.Departments.Select(x => x.Department));
-                    return string.IsNullOrEmpty(d) ? "не найден" : d;
+                    return string.IsNullOrEmpty(d) ? "—" : d;
                 }
             }
         }
@@ -112,11 +127,6 @@ namespace RASv2.ClashAnalysis.UI
             public bool On { get; set; }
         }
 
-        /// <summary>Правило «Скрыть в NWF»: строка, которую ищут в имени элемента.</summary>
-        public sealed class HideRow
-        {
-            public string Text { get; set; }
-        }
 
         // пример, пока моделей нет
         private const string SampleModel = "0000_01_01_S1_KJ01_01_M3.rvt";
@@ -126,7 +136,7 @@ namespace RASv2.ClashAnalysis.UI
         private readonly ExportSettings _common;
         private readonly List<ModelRow> _models = new List<ModelRow>();
         private readonly ObservableCollection<FileRow> _tests = new ObservableCollection<FileRow>();
-        private readonly ObservableCollection<HideRow> _hide = new ObservableCollection<HideRow>();
+        private readonly ObservableCollection<HideSet> _hide = new ObservableCollection<HideSet>();
         private readonly List<ExportTask> _imported = new List<ExportTask>();
         private readonly InheritField _folder, _nwc, _nwf, _report, _view;
         private readonly bool _hasView;
@@ -167,9 +177,9 @@ namespace RASv2.ClashAnalysis.UI
             _testsOwn = _parent == null || s.TestsFiles != null;
             TestsList.ItemsSource = _tests;
             FillTests(_testsOwn ? s.TestsFiles ?? ExportNodes.TestsOf(task) : ExportNodes.TestsOf(_parent));
-            _hideOwn = _parent == null || s.HideNames != null;
+            _hideOwn = _parent == null || s.HideSets != null;
             HideList.ItemsSource = _hide;
-            FillHide(_hideOwn ? s.HideNames ?? ExportNodes.HideNamesOf(task) : ExportNodes.HideNamesOf(_parent));
+            FillHide(_hideOwn ? s.HideSets ?? ExportNodes.HideSetsOf(task) : ExportNodes.HideSetsOf(_parent));
             _formatsOwn = _parent == null || s.ReportFormats != null;
             FillFormats(_formatsOwn ? s.ReportFormats ?? ExportNodes.FormatsOf(task) : ExportNodes.FormatsOf(_parent));
             Formats.ItemsSource = _formats;
@@ -178,6 +188,7 @@ namespace RASv2.ClashAnalysis.UI
             // «Формировать NWF» и имя NWF — свои у строки; у строки с подзадачами галочка недоступна
             MakeNwf.IsChecked = s.MakeNwf && task.Children.Count == 0;
             MakeNwf.IsEnabled = task.Children.Count == 0;
+            MakeReports.IsChecked = s.MakeReports && task.Children.Count == 0;
             NwfName.Text = s.NwfName ?? "";
             _folder = Field(Folder, FolderFrom, FolderLink, x => x.Folder, ExportNodes.FolderOf, FolderBrowse);
             _nwc = Field(NwcFolder, NwcFrom, NwcLink, x => x.NwcFolder, ExportNodes.NwcFolderOf, NwcBrowse, NwcChips);
@@ -187,7 +198,7 @@ namespace RASv2.ClashAnalysis.UI
             var viewOwner = _parent == null ? null : ExportNodes.OwnerOf(_parent, x => x.ViewName);
             _view = new InheritField(ViewName, ViewFrom, ViewLink, null, s.ViewName,
                 _parent == null ? common.Nwc.ViewName : ExportNodes.ViewOf(_parent, common),
-                viewOwner == null ? "по общим настройкам" : "от «" + viewOwner.Name + "»", Changed);
+                viewOwner == null ? "По общим настройкам" : "от «" + viewOwner.Name + "»", Changed);
             _hasView = common.Nwc.Scope == NwcScope.View;
             ViewRow.Visibility = _hasView ? Visibility.Visible : Visibility.Collapsed;
 
@@ -236,8 +247,8 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Всё, что правится в окне, — строкой: «Отмена» с правками спрашивает.</summary>
         private string State() => string.Join("|", TaskName.Text, _modelsOwn,
             string.Join(";", _models.Select(m => m.Path + ">" + m.Model.NwcName + ">" + m.Model.Block)), _testsOwn,
-            string.Join(";", _tests.Select(r => r.Path)), _hideOwn, string.Join(";", _hide.Select(h => h.Text)), _formatsOwn, string.Join(";", Checked()), _export == null, _exportEdits,
-            MakeNwf.IsChecked, NwfName.Text, Own(_folder), Own(_nwc), Own(_nwf), Own(_report), Own(_view), _imported.Count);
+            string.Join(";", _tests.Select(r => r.Path)), _hideOwn, string.Join(";", _hide.Select(h => h.Xml)), _formatsOwn, string.Join(";", Checked()), _export == null, _exportEdits,
+            MakeNwf.IsChecked, MakeReports.IsChecked, NwfName.Text, Own(_folder), Own(_nwc), Own(_nwf), Own(_report), Own(_view), _imported.Count);
 
         private static string Own(InheritField f) => f.Value ?? "\u0001";
 
@@ -318,7 +329,14 @@ namespace RASv2.ClashAnalysis.UI
             {
                 m.First = last == null || !string.Equals(last, m.Effective, StringComparison.OrdinalIgnoreCase);
                 last = m.Effective;
+                if (!m.First) continue;
+                var n = sorted.Count(x => string.Equals(x.Effective, m.Effective, StringComparison.OrdinalIgnoreCase));
+                m.GroupTitle = (m.Effective.Length == 0 ? "Без блока" : m.Effective) + " · " + n + " " + ExportTask.ModelsWord(n);
             }
+            // общая папка моделей — одной строкой сверху, а не в каждой строке
+            var folders = sorted.Select(m => m.Folder).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            ModelsFolder.Text = folders.Count == 1 && folders[0].Length > 0 ? folders[0] : "";
+            ModelsFolder.Visibility = ModelsFolder.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             if (_modelsOwn)
             {
                 _models.Clear();
@@ -423,23 +441,24 @@ namespace RASv2.ClashAnalysis.UI
             ShowTests();
         }
 
-        // ── скрыть в NWF: своё или от уровня выше ──
+        // ── скрыть: поисковые наборы Navisworks; свои или от уровня выше ──
 
-        private void FillHide(IEnumerable<string> names)
+        private void FillHide(IEnumerable<HideSet> sets)
         {
             _hide.Clear();
-            foreach (var n in names ?? new List<string>()) _hide.Add(new HideRow { Text = n });
+            foreach (var s in sets ?? new List<HideSet>()) _hide.Add(s.Clone());
         }
 
-        // от уровня выше — строками через запятую; своё — правилами с корзинами
+        // от уровня выше — названиями через «;»; свои — наборами с условиями и корзинами
         private void ShowHide()
         {
             HidePanel.Visibility = _hideOwn ? Visibility.Visible : Visibility.Collapsed;
             ((FrameworkElement)HideInline.Parent).Visibility = !_hideOwn || _hide.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-            HideInline.Text = _hide.Count == 0 ? "ничего" : "имя содержит: " + string.Join(", ", _hide.Select(h => "«" + h.Text + "»"));
+            HideInline.Text = _hide.Count == 0 ? "ничего" : string.Join("; ", _hide.Select(h => h.Name));
+            HideInline.ToolTip = _hide.Count == 0 ? null : string.Join("\n", _hide.Select(h => h.Name + ": " + h.Text));
             HideInline.Foreground = (System.Windows.Media.Brush)FindResource(_hide.Count == 0 ? "Muted" : "Fg");
-            HideFrom.Text = _hideOwn ? "" : Source(x => x.HideNames);
-            HideLink.Content = _hideOwn ? "Вернуть " + Source(x => x.HideNames) : "Изменить";
+            HideFrom.Text = _hideOwn ? "" : Source(x => x.HideSets);
+            HideLink.Content = _hideOwn ? "Вернуть " + Source(x => x.HideSets) : "Изменить";
             HideLink.Visibility = _parent == null ? Visibility.Collapsed : Visibility.Visible;
         }
 
@@ -447,19 +466,46 @@ namespace RASv2.ClashAnalysis.UI
         private void HideLink_Click(object sender, RoutedEventArgs e)
         {
             _hideOwn = !_hideOwn;
-            FillHide(ExportNodes.HideNamesOf(_parent));
+            FillHide(ExportNodes.HideSetsOf(_parent));
             ShowHide();
         }
 
+        /// <summary>
+        /// Правила — из файла поисковых наборов Navisworks («Наборы» → «Экспорт поисковых наборов»): все поисковые наборы файла;
+        /// такие же уже есть — мимо; простые наборы выбора (список элементов) не годятся — пропускаются с сообщением.
+        /// </summary>
         private void AddHide_Click(object sender, RoutedEventArgs e)
         {
-            _hide.Add(new HideRow { Text = "" });
-            ShowHide();
+            var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Поисковые наборы Navisworks (*.xml)|*.xml" };
+            if (dialog.ShowDialog(this) != true) return;
+            try
+            {
+                List<HideSet> sets;
+                int skipped;
+                using (var stream = File.OpenRead(dialog.FileName))
+                    sets = SearchSets.Read(stream, out skipped);
+                var added = 0;
+                foreach (var s in sets)
+                {
+                    if (_hide.Any(h => h.Xml == s.Xml)) continue;
+                    _hide.Add(s);
+                    added++;
+                }
+                Error.Text = "";
+                Info.Text = "Добавлено правил: " + added + (sets.Count > added ? ", уже были: " + (sets.Count - added) : "") +
+                            (skipped > 0 ? "; простые наборы выбора не годятся — пропущено: " + skipped : "") + ".";
+                ShowHide();
+            }
+            catch (Exception ex)
+            {
+                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: поисковые наборы не прочитаны", ex);
+                Error.Text = ex is InvalidDataException ? ex.Message : "Файл не прочитан: " + ex.Message;
+            }
         }
 
         private void DeleteHide_Click(object sender, RoutedEventArgs e)
         {
-            _hide.Remove((HideRow)((FrameworkElement)sender).DataContext);
+            _hide.Remove((HideSet)((FrameworkElement)sender).DataContext);
             ShowHide();
         }
 
@@ -509,9 +555,9 @@ namespace RASv2.ClashAnalysis.UI
         private void ShowExport()
         {
             var owner = _parent == null ? null : ExportNodes.OwnerOf(_parent, x => x.Export);
-            var inherited = owner == null ? "по общим настройкам" : "от «" + owner.Name + "»";
-            ExportFrom.Text = _export != null ? "свои" : inherited;
-            ExportReset.Content = "Вернуть " + inherited;
+            var inherited = owner == null ? "По общим настройкам" : "от «" + owner.Name + "»";
+            ExportFrom.Text = _export != null ? "Свои" : inherited;
+            ExportReset.Content = "Вернуть " + (owner == null ? "по общим настройкам" : inherited);
             ExportReset.Visibility = _export != null ? Visibility.Visible : Visibility.Collapsed;
         }
 
@@ -550,10 +596,17 @@ namespace RASv2.ClashAnalysis.UI
         {
             var models = EffectiveModels();
             // NWF строка не собирает — имя бледным, пример папки — без файла
+            // галочка снята — раздел серый и не правится (разработчик, 03.11.2026); у строки с подзадачами галочек нет, а поля
+            // задаются для подзадач — правятся
+            var leaf = _task.Children.Count == 0;
             var makes = MakeNwf.IsChecked == true;
-            NwfName.IsEnabled = makes;
-            NwfName.Opacity = makes ? 1 : 0.5;
-            NwfNameExample.Visibility = makes ? Visibility.Visible : Visibility.Collapsed;
+            MakeReports.IsEnabled = leaf && makes;
+            var nwfOn = !leaf || makes;
+            var reportsOn = !leaf || makes && MakeReports.IsChecked == true;
+            NwfFields.IsEnabled = nwfOn;
+            NwfFields.Opacity = nwfOn ? 1 : 0.45;
+            ReportFields.IsEnabled = reportsOn;
+            ReportFields.Opacity = reportsOn ? 1 : 0.45;
             // {Блок} — общий блок моделей строки; разные — для примера первый из них (сохранить с {Блок} не даст проверка)
             var blocks = models.Select(m => ExportNodes.BlockOf(m, _common)).Where(b => b.Length > 0)
                 .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -563,7 +616,6 @@ namespace RASv2.ClashAnalysis.UI
             var name = ExportNames.Fill(NwfNameText(), labels) + ".nwf";
             var nwfFolder = ExportNodes.InProject(root, ExportNames.Fill(NwfFolder.Text, labels));
             var nwf = nwfFolder + (makes ? "\\" + name : "");
-            NwfNameExample.Text = "→ " + ExportNodes.Short(root, nwfFolder + "\\" + name);
             NwfExample.Text = "Пример: " + ExportNodes.Short(root, nwf);
             NwfExample.ToolTip = nwf;
 
@@ -622,9 +674,8 @@ namespace RASv2.ClashAnalysis.UI
         {
             Models = _modelsOwn ? _models.Select(m => m.Model).ToList() : null,
             TestsFiles = _testsOwn ? _tests.Select(r => r.Path).ToList() : null,
-            HideNames = _hideOwn
-                ? _hide.Select(h => (h.Text ?? "").Trim()).Where(h => h.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
-                : null,
+            HideSets = _hideOwn ? _hide.Select(h => h.Clone()).ToList() : null,
+            MakeReports = MakeReports.IsChecked == true,
             NwfName = NwfName.Text.Trim().Length > 0 ? NwfName.Text.Trim() : null,
             MakeNwf = MakeNwf.IsChecked == true,
             Folder = _folder.Value,
