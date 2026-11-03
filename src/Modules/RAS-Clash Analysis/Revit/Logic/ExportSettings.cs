@@ -59,8 +59,8 @@ namespace RASv2.ClashAnalysis.Logic
 
     /// <summary>
     /// Общие настройки «Задач выгрузки» — шестерёнка главного окна: всё, что одно на компанию (разбор настроек, 02.11.2026):
-    /// параметры выгрузки NWC, что удалить из модели перед выгрузкой, правило имени модели и метки, отделы. У задач — только
-    /// своё: модели, папки, вид (ExportNode.cs). Пока — в памяти; хранение на сервере — следующим шагом.
+    /// параметры выгрузки NWC, что удалить из модели перед выгрузкой, что скрыть в NWF, правило имени модели и метки, отделы. У
+    /// проекта и задач — только своё (ExportNode.cs). Хранятся на сервере (ExportStore).
     /// </summary>
     public sealed class ExportSettings
     {
@@ -86,6 +86,13 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>Отделы — их коды ищутся в имени модели ({Отдел}), по ним же эталон и шаблон вида.</summary>
         public List<DepartmentTemplate> Departments { get; set; } = new List<DepartmentTemplate>();
 
+        /// <summary>
+        /// Скрыть в NWF элементы, имя которых содержит одну из строк (разработчик, 03.11.2026: «скрываем по имени — если имя
+        /// содержит „временн…“, объект скрывается в самой NWF»; скрытые в проверки не попадают). Своих строк компании в коде
+        /// нет — список задаёт человек.
+        /// </summary>
+        public List<string> HideNames { get; set; } = new List<string>();
+
         /// <summary>Форматы {Дата} на выбор.</summary>
         public static readonly string[] DateFormats = { "dd.MM.yyyy", "yyyy-MM-dd", "yyyyMMdd", "yyyy.MM.dd" };
 
@@ -102,6 +109,7 @@ namespace RASv2.ClashAnalysis.Logic
             BlockPrefix = s.BlockPrefix;
             DateFormat = s.DateFormat;
             Departments = s.Departments.Select(d => d.Clone()).ToList();
+            HideNames = (s.HideNames ?? new List<string>()).ToList();
         }
 
         public ExportSettings Clone()
@@ -109,6 +117,7 @@ namespace RASv2.ClashAnalysis.Logic
             var copy = (ExportSettings)MemberwiseClone();
             copy.Nwc = Nwc.Clone();
             copy.Departments = Departments.Select(d => d.Clone()).ToList();
+            copy.HideNames = (HideNames ?? new List<string>()).ToList();
             return copy;
         }
     }
@@ -117,7 +126,7 @@ namespace RASv2.ClashAnalysis.Logic
     public static class ExportNames
     {
         /// <summary>Метки строки папки: блок и отдел — из имени модели, дата — день выгрузки; остальное пишется текстом.</summary>
-        public static readonly string[] BuiltInLabels = { "Блок", "Отдел", "Дата" };
+        public static readonly string[] BuiltInLabels = { "Блок", "Отдел", "Дата", "Формат" };
 
         private static readonly Regex LabelRx = new Regex(@"\{([^{}]+)\}");
 
@@ -130,9 +139,20 @@ namespace RASv2.ClashAnalysis.Logic
             LabelRx.Replace(template ?? "", m =>
                 values.TryGetValue(m.Groups[1].Value.Trim(), out var v) && !string.IsNullOrEmpty(v) ? v : m.Value);
 
+        /// <summary>
+        /// Имя модели без папки и расширения. Не Path.GetFileNameWithoutExtension: в .NET 8 у «\\сервер\файл.rvt» он отдаёт пусто
+        /// (считает его корнем сетевой папки).
+        /// </summary>
+        private static string BareName(string modelFile)
+        {
+            var name = ExportNodes.FileName(modelFile);
+            var dot = name.LastIndexOf('.');
+            return dot > 0 ? name.Substring(0, dot) : name;
+        }
+
         /// <summary>Части имени модели через «_», каждая — до пробела: «…_M3 еще текст» → «M3».</summary>
         private static IEnumerable<string> Parts(string modelFile) =>
-            Path.GetFileNameWithoutExtension(modelFile ?? "").Split('_').Select(p =>
+            BareName(modelFile).Split('_').Select(p =>
             {
                 var space = p.IndexOf(' ');
                 return (space >= 0 ? p.Substring(0, space) : p).Trim();
@@ -166,7 +186,7 @@ namespace RASv2.ClashAnalysis.Logic
         /// </summary>
         public static string NwcName(string modelFile, bool trim, int parts, out bool matches)
         {
-            var name = Path.GetFileNameWithoutExtension(modelFile ?? "").Trim();
+            var name = BareName(modelFile).Trim();
             var split = name.Split('_');
             matches = parts > 0 && split.Length >= parts;
             if (!trim || !matches) return name;

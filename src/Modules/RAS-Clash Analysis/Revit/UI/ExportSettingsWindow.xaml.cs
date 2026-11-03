@@ -11,16 +11,23 @@ namespace RASv2.ClashAnalysis.UI
 {
     /// <summary>
     /// Общие настройки «Задач выгрузки» (шестерёнка) — всё, что одно на компанию: параметры выгрузки NWC (как в окне экспортёра
-    /// Navisworks в Revit, те же подписи и порядок), что удалить перед выгрузкой, имя модели и метки, отделы. «По умолчанию» —
+    /// Navisworks в Revit, те же подписи и порядок), что удалить перед выгрузкой, что скрыть в NWF, имя модели и метки, отделы. «По умолчанию» —
     /// только параметры экспортёра, значения со снимка окна разработчика. Правится копия: «Отмена» оставляет как было.
     /// </summary>
     public partial class ExportSettingsWindow : Window
     {
+        /// <summary>Правило «Скрыть в NWF»: строка, которую ищут в имени элемента.</summary>
+        public sealed class HideRow
+        {
+            public string Text { get; set; }
+        }
+
         // пример под «Именем модели» — имя по регламенту
         private const string SampleModel = "0000_01_01_S6_KJ01_01_M3 еще текст.rvt";
 
         private readonly ExportSettings _settings;
         private readonly ObservableCollection<DepartmentTemplate> _departments = new ObservableCollection<DepartmentTemplate>();
+        private readonly ObservableCollection<HideRow> _hide = new ObservableCollection<HideRow>();
         private readonly bool _ready;
 
         public ExportSettingsWindow(ExportSettings settings)
@@ -31,6 +38,7 @@ namespace RASv2.ClashAnalysis.UI
             var today = DateTime.Today;
             foreach (var f in ExportSettings.DateFormats) DateFormat.Items.Add(new ComboBoxItem { Content = today.ToString(f), Tag = f });
             DepartmentsList.ItemsSource = _departments;
+            HideList.ItemsSource = _hide;
             FillAll(settings);
             _ready = true;
             UpdateExample();
@@ -46,7 +54,8 @@ namespace RASv2.ClashAnalysis.UI
             LinkedFiles.IsChecked, Parts.IsChecked, MissingMaterials.IsChecked, Levels.IsChecked, Scope.SelectedIndex, ViewName.Text,
             RoomGeometry.IsChecked, RemoveRevitLinks.IsChecked, RemoveCad.IsChecked, RemovePointClouds.IsChecked, RemoveIfc.IsChecked,
             TrimName.IsChecked, NameParts.Text, BlockPrefix.Text, DateFormat.SelectedIndex,
-            string.Join(";", _departments.Select(d => d.Department + ">" + d.Etalon + ">" + d.ViewTemplate)));
+            string.Join(";", _departments.Select(d => d.Department + ">" + d.Etalon + ">" + d.ViewTemplate)),
+            string.Join(";", _hide.Select(h => h.Text)));
 
         /// <summary>Окно — из настроек (открытие и «Импорт…»).</summary>
         private void FillAll(ExportSettings s)
@@ -56,6 +65,8 @@ namespace RASv2.ClashAnalysis.UI
             RemoveCad.IsChecked = s.RemoveCad;
             RemovePointClouds.IsChecked = s.RemovePointClouds;
             RemoveIfc.IsChecked = s.RemoveIfc;
+            _hide.Clear();
+            foreach (var h in s.HideNames ?? new System.Collections.Generic.List<string>()) _hide.Add(new HideRow { Text = h });
             TrimName.IsChecked = s.TrimName;
             NameParts.Text = s.NameParts.ToString();
             BlockPrefix.Text = s.BlockPrefix;
@@ -109,6 +120,10 @@ namespace RASv2.ClashAnalysis.UI
         }
 
         private static string Or(string s) => string.IsNullOrEmpty(s) ? "не найден" : s;
+
+        private void AddHide_Click(object sender, RoutedEventArgs e) => _hide.Add(new HideRow { Text = "" });
+
+        private void DeleteHide_Click(object sender, RoutedEventArgs e) => _hide.Remove((HideRow)((FrameworkElement)sender).DataContext);
 
         private void AddDepartment_Click(object sender, RoutedEventArgs e) => _departments.Add(new DepartmentTemplate());
 
@@ -206,6 +221,8 @@ namespace RASv2.ClashAnalysis.UI
             result.RemoveCad = RemoveCad.IsChecked == true;
             result.RemovePointClouds = RemovePointClouds.IsChecked == true;
             result.RemoveIfc = RemoveIfc.IsChecked == true;
+            result.HideNames = _hide.Select(h => (h.Text ?? "").Trim()).Where(h => h.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             result.TrimName = TrimName.IsChecked == true;
             result.NameParts = parts;
             result.BlockPrefix = BlockPrefix.Text.Trim();

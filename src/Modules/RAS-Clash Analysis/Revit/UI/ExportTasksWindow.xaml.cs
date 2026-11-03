@@ -8,32 +8,36 @@ using RASv2.ClashAnalysis.Logic;
 namespace RASv2.ClashAnalysis.UI
 {
     /// <summary>
-    /// «Задачи выгрузки» (DECISIONS.md модуля): проекты и их задачи из общего хранилища на сервере. Строка — номер, название,
-    /// краткая информация, «Запустить», «+» (задача — у проекта), карандаш, корзина. Перенос — перетаскиванием: проекты между
-    /// собой (порядковый номер — общий), задачи внутри проекта.
+    /// «Задачи выгрузки» (DECISIONS.md модуля, модель разработчика 03.11.2026): проекты из общего хранилища на сервере, под
+    /// проектом — задачи (критичности), под задачей — её блоки. Строка — номер, название, краткая информация, «Запустить»; у
+    /// проекта — «+» (новая задача), у задачи — копия (вторая критичность), у обоих — карандаш и корзина; у блока — только
+    /// «Запустить». Перенос — перетаскиванием: проекты между собой (порядковый номер — общий), задачи внутри проекта.
     /// </summary>
     public partial class ExportTasksWindow : Window
     {
-        /// <summary>Строка окна: узел с номером и уровнем.</summary>
+        /// <summary>Строка окна: проект, задача или блок задачи.</summary>
         public sealed class RowItem
         {
-            public ExportTask Task { get; set; }
-            public string Number { get; set; }
-            public int Level { get; set; }
+            public TreeRow Row { get; set; }
+            public string Summary { get; set; }
             public bool Collapsed { get; set; }
+            public bool HasInner { get; set; }
 
-            public bool IsTask => Level == 0;
-            public string Name => Task.Name;
-            public string Summary => Task.Summary();
-            public double NameSize => IsTask ? 18 : 16;
-            public Thickness Indent => new Thickness(Level * 28, 0, 0, 6);
+            public ExportTask Item => Row.Item;
+            public string Number => Row.Number;
+            public bool IsProject => Row.Level == 0;
+            public bool IsTask => Row.Level == 1;
+            public bool IsBlock => Row.Level == 2;
+            public string Name => IsBlock ? Row.Block.Name : Item.Name;
+            public double NameSize => IsProject ? 18 : IsTask ? 15 : 13;
+            public FontWeight NameWeight => IsBlock ? FontWeights.Normal : FontWeights.SemiBold;
+            public Thickness Indent => new Thickness(Row.Level * 28, 0, 0, IsBlock ? 2 : 6);
             // Segoe MDL2 Assets: E70D — вниз (развёрнуто), E76C — вправо (свёрнуто)
             public string Arrow => Collapsed ? "\uE76C" : "\uE70D";
-            public Visibility ArrowVisibility => Task.Children.Count > 0 ? Visibility.Visible : Visibility.Hidden;
-            // узел уже идёт у коллеги — запускать нельзя; место кнопки остаётся, чтобы значки не прыгали
-            public Visibility RunVisibility => Task.RunningBy == null ? Visibility.Visible : Visibility.Hidden;
-            // место кнопки остаётся, чтобы значки строк стояли ровно
-            public Visibility AddChildVisibility => IsTask ? Visibility.Visible : Visibility.Hidden;
+            public Visibility ArrowVisibility => HasInner ? Visibility.Visible : Visibility.Hidden;
+            public Visibility AddVisibility => IsProject ? Visibility.Visible : Visibility.Hidden;
+            public Visibility CopyVisibility => IsTask ? Visibility.Visible : Visibility.Hidden;
+            public Visibility EditVisibility => IsBlock ? Visibility.Hidden : Visibility.Visible;
         }
 
         /// <summary>Версия Revit — для выбора моделей с Revit Server (настройки серверов — свои у каждой версии).</summary>
@@ -69,6 +73,8 @@ namespace RASv2.ClashAnalysis.UI
                 Toolbar.Visibility = Visibility.Collapsed;
                 RowsList.IsEnabled = false;
             }
+            // блоки свёрнуты: открыли окно — видно проекты и задачи
+            foreach (var p in _roots) foreach (var t in p.Children) _collapsed.Add(t);
             Refresh();
         }
 
@@ -81,8 +87,14 @@ namespace RASv2.ClashAnalysis.UI
         // проекты — по порядковому номеру (разработчик, 02.11.2026: «зачем по алфавиту»): так прочитаны, новые — в конец
         private void Refresh()
         {
-            RowsList.ItemsSource = ExportTask.Rows(_roots, _collapsed)
-                .Select(r => new RowItem { Task = r.Task, Number = r.Number, Level = r.Level, Collapsed = _collapsed.Contains(r.Task) })
+            RowsList.ItemsSource = ExportNodes.Rows(_roots, _collapsed, Settings)
+                .Select(r => new RowItem
+                {
+                    Row = r,
+                    Summary = ExportNodes.Summary(r, Settings),
+                    Collapsed = r.Block == null && _collapsed.Contains(r.Item),
+                    HasInner = r.Block == null && (r.Level == 0 ? r.Item.Children.Count > 0 : ExportNodes.TaskBlocks(r.Item, Settings).Count > 0),
+                })
                 .ToList();
         }
 
@@ -124,10 +136,9 @@ namespace RASv2.ClashAnalysis.UI
         private List<ExportTask> SiblingsOf(ExportTask task) => task.Parent?.Children ?? _roots;
 
         // «+» — сразу настройки новой строки (разбор настроек, 02.11.2026: без поиска строки и карандаша); «Отмена» — строки нет.
-        // Вверху — проект (каталог задач), в строке проекта — задача (обычно блок)
-        private void AddTask_Click(object sender, RoutedEventArgs e)
+        // Названия вписывает человек (разработчик, 02.11.2026: «зачем автоматическое название»)
+        private void AddProject_Click(object sender, RoutedEventArgs e)
         {
-            // названия вписывает человек (разработчик, 02.11.2026: «зачем автоматическое название»)
             var project = new ExportTask { Name = "", StoreOrder = NextOrder() };
             _roots.Add(project);
             if (OpenSettings(project)) SaveProject(project);
@@ -167,9 +178,9 @@ namespace RASv2.ClashAnalysis.UI
 
         private int NextOrder() => _roots.Count == 0 ? 1 : _roots.Max(r => r.StoreOrder) + 1;
 
-        private void AddChild_Click(object sender, RoutedEventArgs e)
+        private void AddTask_Click(object sender, RoutedEventArgs e)
         {
-            var project = RowOf(sender).Task;
+            var project = RowOf(sender).Item;
             var task = project.Add(new ExportTask { Name = "" });
             _collapsed.Remove(project);
             if (OpenSettings(task)) SaveProject(project);
@@ -177,16 +188,36 @@ namespace RASv2.ClashAnalysis.UI
             Refresh();
         }
 
+        /// <summary>
+        /// Копия задачи — сразу под ней и сразу в её настройки: переименовать, поменять файл проверок и имя NWF (разработчик,
+        /// 03.11.2026: «копируем, переименовываем на „Средняя критичность“»). «Отмена» — копии нет.
+        /// </summary>
+        private void Copy_Click(object sender, RoutedEventArgs e)
+        {
+            var task = RowOf(sender).Item;
+            var project = task.Parent;
+            var copy = project.Add(new ExportTask
+            {
+                Name = ExportFiles.UniqueName(task.Name, project.Children.Select(c => c.Name)), Options = task.Options.Clone(),
+            });
+            project.Children.Remove(copy);
+            project.Children.Insert(project.Children.IndexOf(task) + 1, copy);
+            if (_collapsed.Contains(task)) _collapsed.Add(copy);
+            if (OpenSettings(copy)) SaveProject(project);
+            else project.Remove(copy);
+            Refresh();
+        }
+
         private void Toggle_Click(object sender, RoutedEventArgs e)
         {
-            var task = RowOf(sender).Task;
-            if (!_collapsed.Remove(task)) _collapsed.Add(task);
+            var item = RowOf(sender).Item;
+            if (!_collapsed.Remove(item)) _collapsed.Add(item);
             Refresh();
         }
 
         private void Delete_Click(object sender, RoutedEventArgs e)
         {
-            var task = RowOf(sender).Task;
+            var task = RowOf(sender).Item;
             var inner = task.Descendants;
             var text = "Удалить «" + task.Name + "»" + (inner > 0 ? " и " + inner + " " + ExportTask.TasksWord(inner) : "") + "?";
             if (MessageBox.Show(this, text, Title, MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No)
@@ -216,7 +247,7 @@ namespace RASv2.ClashAnalysis.UI
 
         private void Edit_Click(object sender, RoutedEventArgs e)
         {
-            var task = RowOf(sender).Task;
+            var task = RowOf(sender).Item;
             if (OpenSettings(task)) SaveProject(ExportNodes.Root(task));
             Refresh();
         }
@@ -243,9 +274,9 @@ namespace RASv2.ClashAnalysis.UI
             task.Parent == null
                 ? Nested(() => new ExportProjectWindow(task, Settings)
                 {
-                    Owner = this, TakenNames = _roots.Where(r => r != task).Select(r => r.Name).ToList(),
+                    Owner = this, RevitYear = RevitYear, TakenNames = _roots.Where(r => r != task).Select(r => r.Name).ToList(),
                 }.ShowDialog(), "Настройки проекта")
-                : Nested(() => new ExportTaskWindow(task, Settings) { Owner = this, RevitYear = RevitYear }.ShowDialog(), "Настройки задачи");
+                : Nested(() => new ExportTaskWindow(task, Settings) { Owner = this }.ShowDialog(), "Настройки задачи");
 
         /// <summary>Вложенное окно; исключение сквозь вложенный ShowDialog роняет Revit (CLAUDE.md, «Правила, о которые уже спотыкались»).</summary>
         private bool Nested(System.Func<bool?> show, string what)
@@ -268,10 +299,10 @@ namespace RASv2.ClashAnalysis.UI
             MessageBox.Show(this, "Выгрузка — в следующей версии: сейчас задачи только настраиваются и хранятся.", Title,
                 MessageBoxButton.OK, MessageBoxImage.Information);
 
-        // перетаскивание строки: нажали на строку (не на кнопку) и повели мышью — перенос внутри своего уровня
+        // перетаскивание строки: нажали на строку (не на кнопку) и повели мышью — перенос внутри своего уровня; блоки не переносятся
         private void Row_MouseDown(object sender, MouseButtonEventArgs e)
         {
-            _dragArmed = !(e.OriginalSource is DependencyObject d && FindButton(d));
+            _dragArmed = !RowOf(sender).IsBlock && !(e.OriginalSource is DependencyObject d && FindButton(d));
             _dragStart = e.GetPosition(this);
         }
 
@@ -282,23 +313,24 @@ namespace RASv2.ClashAnalysis.UI
             if (System.Math.Abs(p.X - _dragStart.X) < SystemParameters.MinimumHorizontalDragDistance &&
                 System.Math.Abs(p.Y - _dragStart.Y) < SystemParameters.MinimumVerticalDragDistance) return;
             _dragArmed = false;
-            DragDrop.DoDragDrop((DependencyObject)sender, RowOf(sender).Task, DragDropEffects.Move);
+            DragDrop.DoDragDrop((DependencyObject)sender, RowOf(sender).Item, DragDropEffects.Move);
         }
 
         private void Row_DragOver(object sender, DragEventArgs e)
         {
             var item = e.Data.GetData(typeof(ExportTask)) as ExportTask;
-            var target = RowOf(sender).Task;
+            var row = RowOf(sender);
             // проекты — между собой, задачи — внутри своего проекта
-            e.Effects = item != null && item != target && item.Parent == target.Parent ? DragDropEffects.Move : DragDropEffects.None;
+            e.Effects = item != null && !row.IsBlock && item != row.Item && item.Parent == row.Item.Parent ? DragDropEffects.Move : DragDropEffects.None;
             e.Handled = true;
         }
 
         private void Row_Drop(object sender, DragEventArgs e)
         {
             var item = e.Data.GetData(typeof(ExportTask)) as ExportTask;
-            var target = RowOf(sender).Task;
-            if (item == null || item.Parent != target.Parent) return;
+            var row = RowOf(sender);
+            var target = row.Item;
+            if (item == null || row.IsBlock || item.Parent != target.Parent) return;
             if (!ExportTask.MoveTo(SiblingsOf(item), item, target)) return;
             if (item.Parent != null) SaveProject(item.Parent);
             else

@@ -104,7 +104,7 @@ namespace RASv2.ClashAnalysis.Logic
                 }
                 return SaveResult.Conflict;
             }
-            var file = ExportFiles.FromProject(project.Name, project.Project, project.Children);
+            var file = ExportFiles.FromProject(project.Name, project.Project, project.ModelFiles, project.Children);
             file.ProjectData.Order = project.StoreOrder;
             file.ProjectData.ChangedBy = _user;
             file.ProjectData.Changed = DateTime.Now;

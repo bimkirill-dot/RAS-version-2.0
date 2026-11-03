@@ -1,79 +1,34 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
 using RASv2.ClashAnalysis.Logic;
 
 namespace RASv2.ClashAnalysis.UI
 {
     /// <summary>
-    /// Задача проекта «Задач выгрузки» (карандаш у задачи): название — оно же имя NWF, модели, файлы проверок (как у проекта или
-    /// свои), куда ляжет — по папкам проекта; экспорт задачи. Правится копия: «Отмена» оставляет задачу как была.
+    /// Задача проекта «Задач выгрузки» (карандаш у задачи; набросок 03.11.2026): название, файлы проверок, имя и папка NWF, папка
+    /// отчётов, форматы, блоки (из моделей проекта; снятый задача не делает). Примеры — на первом блоке задачи. Правится копия:
+    /// «Отмена» оставляет задачу как была.
     /// </summary>
-    public partial class ExportTaskWindow : Window, INotifyPropertyChanged
+    public partial class ExportTaskWindow : Window
     {
-        /// <summary>Строка списка моделей: имя NWC — по общему правилу или поправленное руками; блок и отдел — из имени.</summary>
-        public sealed class ModelRow
+        /// <summary>Блок проекта с галочкой «задача его делает».</summary>
+        public sealed class BlockItem
         {
-            private readonly ExportSettings _common;
-            public ExportModel Model { get; }
-
-            public ModelRow(ExportSettings common, ExportModel model)
-            {
-                _common = common;
-                Model = model;
-            }
-
-            public string Path => Model.Path;
-            public string FileName => new FileRow(Path).Name;
-            public string Folder => new FileRow(Path).Folder;
-
-            private string Auto => ExportNames.NwcName(Path, _common.TrimName, _common.NameParts, out _);
-
-            public string Name
-            {
-                get => ExportNodes.NwcNameOf(Model, _common);
-                // пусто или как из имени модели — снова «само»
-                set
-                {
-                    var v = (value ?? "").Trim();
-                    Model.NwcName = v.Length == 0 || v == Auto ? null : v;
-                }
-            }
-
-            public Visibility MismatchVisibility
-            {
-                get
-                {
-                    ExportNames.NwcName(Path, _common.TrimName, _common.NameParts, out var matches);
-                    return _common.TrimName && Model.NwcName == null && !matches ? Visibility.Visible : Visibility.Collapsed;
-                }
-            }
-
-            public string Block => Or(ExportNames.Block(Path, _common.BlockPrefix));
-            public string Department => Or(ExportNames.Department(Path, _common.Departments.Select(d => d.Department)));
-
-            private static string Or(string s) => string.IsNullOrEmpty(s) ? "не найден" : s;
+            public string Name { get; set; }
+            public bool On { get; set; }
         }
 
         private readonly ExportTask _task;
         private readonly ExportSettings _common;
-        private readonly ObservableCollection<ModelRow> _models = new ObservableCollection<ModelRow>();
-        private readonly ObservableCollection<FileRow> _tests = new ObservableCollection<FileRow>();
-        private bool _ownTests;
-        private string _serverFolder;
+        private readonly ObservableCollection<FileRow> _tests;
+        private readonly List<BlockItem> _blocks;
         private readonly bool _ready;
-
-        /// <summary>Корзина у файла проверок — только у своего списка.</summary>
-        public Visibility OwnVisibility => _ownTests ? Visibility.Visible : Visibility.Collapsed;
-
-        public event PropertyChangedEventHandler PropertyChanged;
-
-        /// <summary>Версия Revit — серверы Revit Server для «Добавить модели…» берутся из её настроек (RSN.ini).</summary>
-        public int RevitYear { get; set; } = 2026;
+        private readonly string _opened;
 
         public ExportTaskWindow(ExportTask task, ExportSettings common)
         {
@@ -81,131 +36,91 @@ namespace RASv2.ClashAnalysis.UI
             InitializeComponent();
             _task = task;
             _common = common;
+            var o = task.Options;
             Title = string.IsNullOrEmpty(task.Name) ? "Новая задача" : "Задача — " + task.Name;
             TaskName.Text = task.Name;
-            // новая задача: сразу печатать название
+            _tests = new ObservableCollection<FileRow>((o.TestsFiles ?? new List<string>()).Select(f => new FileRow(f)));
+            TestsList.ItemsSource = _tests;
+            NwfName.Text = o.NwfName;
+            NwfFolder.Text = o.NwfFolder;
+            ReportFolder.Text = o.ReportFolder;
+            Xml.IsChecked = o.Xml;
+            Html.IsChecked = o.Html;
+            var skipped = o.SkippedBlocks ?? new List<string>();
+            _blocks = ExportNodes.Blocks(ExportNodes.Root(task), common).Where(b => b.Name.Length > 0)
+                .Select(b => new BlockItem { Name = b.Name, On = !skipped.Contains(b.Name, StringComparer.OrdinalIgnoreCase) })
+                .ToList();
+            BlocksList.ItemsSource = _blocks;
+            NoBlocks.Visibility = _blocks.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
+            // новая задача и копия: сразу печатать название
             Loaded += (s, e) =>
             {
                 TaskName.Focus();
                 TaskName.SelectAll();
             };
-            foreach (var m in task.ModelFiles)
-                _models.Add(new ModelRow(common, new ExportModel { Path = m.Path, NwcName = m.NwcName }));
-            ModelsList.ItemsSource = _models;
-            DataContext = this;
-            TestsList.ItemsSource = _tests;
-            ShowTests(task.TestsFiles != null, task.TestsFiles);
             _ready = true;
             UpdateAll();
             _opened = State();
             Closing += (s, e) => e.Cancel = !MayClose(this, DialogResult == true || State() == _opened);
         }
 
-        private readonly string _opened;
-
         /// <summary>Всё, что правится в окне, — строкой: «Отмена» с правками спрашивает.</summary>
-        private string State() => string.Join("|", TaskName.Text, string.Join(";", _models.Select(m => m.Path + ">" + m.Model.NwcName)),
-            _ownTests, string.Join(";", _tests.Select(r => r.Path)));
+        private string State() => string.Join("|", TaskName.Text, string.Join(";", _tests.Select(r => r.Path)), NwfName.Text, NwfFolder.Text,
+            ReportFolder.Text, Xml.IsChecked, Html.IsChecked, string.Join(";", _blocks.Select(b => b.Name + ">" + b.On)));
 
         /// <summary>Закрыть окно настроек: сохранено или правок нет — да; иначе — спросить (разбор 02.11.2026: «Отмена» молча теряла правки).</summary>
         internal static bool MayClose(Window window, bool clean) =>
             clean || MessageBox.Show(window, "Закрыть без сохранения? Правки пропадут.", window.Title, MessageBoxButton.YesNo,
                 MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes;
 
-        private void Changed()
+        private void Any_Changed(object sender, RoutedEventArgs e)
         {
             if (_ready) UpdateAll();
         }
 
-        private void Any_Changed(object sender, RoutedEventArgs e) => Changed();
-
-        /// <summary>Задача, как она сейчас в окне, — для «куда»: название и модели из окна.</summary>
-        private ExportTask Draft()
-        {
-            var draft = new ExportTask { Name = TaskName.Text.Trim(), ModelFiles = _models.Select(m => m.Model).ToList() };
-            ExportNodes.Root(_task).Add(draft);
-            return draft;
-        }
-
         private void UpdateAll()
         {
-            ModelsInfo.Text = _models.Count > 0 ? _models.Count + " " + ExportTask.ModelsWord(_models.Count) : "";
-            ModelsHead.Visibility = _models.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-
-            var draft = Draft();
-            try
-            {
-                var model = draft.ModelFiles.FirstOrDefault();
-                var root = ExportNodes.Root(_task).Project.Folder;
-                // «…» — папка проекта (в этом окне её не видно): полный путь — в подсказке
-                var nwc = model == null ? null : ExportNodes.NwcPath(draft, model, _common);
-                var nwf = ExportNodes.NwfPath(draft, _common);
-                var report = ExportNodes.ReportPath(draft, _common, DateTime.Today);
-                NwcWhere.Text = "NWC: " + (nwc == null ? "—" : ExportNodes.Short(root, nwc));
-                NwfWhere.Text = "NWF: " + ExportNodes.Short(root, nwf);
-                ReportWhere.Text = "Отчёты: " + ExportNodes.Short(root, report);
-                NwcWhere.ToolTip = nwc;
-                NwfWhere.ToolTip = nwf;
-                ReportWhere.ToolTip = report;
-            }
-            finally
-            {
-                draft.Parent.Remove(draft);
-            }
-        }
-
-        // ── модели ──
-
-        private void AddModels_Click(object sender, RoutedEventArgs e)
-        {
-            List<string> picked;
-            try
-            {
-                // окно Revit «Открыть» из плагина Revit Server не показывает (проверка разработчика, 02.11.2026) — своё окно; с
-                // папки проекта на сервере
-                var picker = new ModelPickerWindow(RevitYear, _serverFolder ?? ExportNodes.Root(_task).Project.ServerFolder) { Owner = this };
-                if (picker.ShowDialog() != true) return;
-                picked = picker.Picked;
-                // откуда добавляли — оттуда и следующий раз (папка проекта на сервере; поля для неё нет)
-                var server = picked.Select(ExportNodes.ServerFolderOf).FirstOrDefault(f => f.Length > 0);
-                if (server != null) _serverFolder = server;
-            }
-            catch (Exception ex)
-            {
-                // исключение сквозь вложенный ShowDialog роняет Revit (CLAUDE.md, «Правила, о которые уже спотыкались»)
-                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: выбор моделей не открылся", ex);
-                Error.Text = "Окно выбора моделей не открылось — подробности в журнале плагина.";
-                return;
-            }
-            foreach (var f in picked)
-                if (!_models.Any(m => string.Equals(m.Path, f, StringComparison.OrdinalIgnoreCase)))
-                    _models.Add(new ModelRow(_common, new ExportModel { Path = f }));
-            UpdateAll();
-        }
-
-        private void DeleteModel_Click(object sender, RoutedEventArgs e)
-        {
-            _models.Remove((ModelRow)((FrameworkElement)sender).DataContext);
-            UpdateAll();
-        }
-
-        // ── файлы проверок: как у проекта или свои ──
-
-        private void ShowTests(bool own, IEnumerable<string> list)
-        {
-            _ownTests = own;
-            _tests.Clear();
-            foreach (var f in own ? list : ExportNodes.Root(_task).Project.TestsFiles ?? new List<string>()) _tests.Add(new FileRow(f));
-            TestsList.Opacity = own ? 1 : 0.5;   // как у проекта — бледным
-            AddTests.Visibility = own ? Visibility.Visible : Visibility.Collapsed;
             NoTests.Visibility = _tests.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-            TestsFrom.Text = own ? "" : "как у проекта";
-            TestsLink.Content = own ? "Вернуть как у проекта" : "Изменить";
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(OwnVisibility)));
+            // примеры — на первом блоке задачи; блоков нет — «S1»
+            var block = _blocks.FirstOrDefault(b => b.On)?.Name ?? _blocks.FirstOrDefault()?.Name ?? "S1";
+            var root = ExportNodes.Root(_task).Project.Folder;
+            var labels = ExportNodes.Labels(block, null, _common, DateTime.Today);
+            var name = ExportNames.Fill(NwfName.Text.Trim(), labels) + ".nwf";
+            NwfNameExample.Text = "Пример: " + name;
+            var nwf = ExportNodes.InProject(root, ExportNames.Fill(NwfFolder.Text, labels)) + "\\" + name;
+            NwfExample.Text = "Пример: " + ExportNodes.Short(root, nwf);
+            NwfExample.ToolTip = nwf;
+            var format = Html.IsChecked == true ? "HTML" : Xml.IsChecked == true ? "XML" : "";
+            var report = ExportNodes.InProject(root, ExportNames.Fill(ReportFolder.Text, ExportNodes.Labels(block, null, _common, DateTime.Today, format)));
+            ReportExample.Text = report.Length == 0 ? "Папка не задана" : "Пример: " + ExportNodes.Short(root, report);
+            ReportExample.ToolTip = report;
         }
 
-        // «Изменить» — свои, начиная с проектных; «Вернуть» — снова проектные
-        private void TestsLink_Click(object sender, RoutedEventArgs e) => ShowTests(!_ownTests, _tests.Select(r => r.Path).ToList());
+        /// <summary>Метка под строкой — в строку, в место курсора.</summary>
+        private void Chip_Click(object sender, RoutedEventArgs e)
+        {
+            var button = (Button)sender;
+            if (!(button.Tag is TextBox box)) return;
+            var label = (string)button.Content;
+            var at = Math.Min(box.CaretIndex, box.Text.Length);
+            box.Text = box.Text.Insert(at, label);
+            box.Focus();
+            box.CaretIndex = at + label.Length;
+        }
+
+        /// <summary>Папка NWF / отчётов: внутри папки проекта — коротко («S1»; S1 на {Блок} — меткой), вне — полный путь.</summary>
+        private void Browse_Click(object sender, RoutedEventArgs e)
+        {
+            var box = (TextBox)((Button)sender).Tag;
+            var root = ExportNodes.Root(_task).Project.Folder.Trim().TrimEnd('\\');
+            var path = FolderDialog.Pick(this, root, "Папка внутри проекта");
+            if (path == null) return;
+            box.Text = root.Length > 0 && path.StartsWith(root + "\\", StringComparison.OrdinalIgnoreCase)
+                ? path.Substring(root.Length + 1)
+                : path;
+        }
+
+        // ── файлы проверок ──
 
         private void AddTests_Click(object sender, RoutedEventArgs e)
         {
@@ -213,16 +128,33 @@ namespace RASv2.ClashAnalysis.UI
             if (dialog.ShowDialog(this) != true) return;
             foreach (var f in dialog.FileNames)
                 if (!_tests.Any(r => string.Equals(r.Path, f, StringComparison.OrdinalIgnoreCase))) _tests.Add(new FileRow(f));
-            NoTests.Visibility = _tests.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            UpdateAll();
         }
 
         private void DeleteTests_Click(object sender, RoutedEventArgs e)
         {
             _tests.Remove((FileRow)((FrameworkElement)sender).DataContext);
-            NoTests.Visibility = _tests.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            UpdateAll();
         }
 
-        // ── экспорт ──
+        // ── экспорт и сохранить ──
+
+        /// <summary>Настройки задачи, как сейчас в окне; снятые блоки, которых уже нет в проекте, остаются снятыми.</summary>
+        private TaskSettings Collect()
+        {
+            var shown = new HashSet<string>(_blocks.Select(b => b.Name), StringComparer.OrdinalIgnoreCase);
+            return new TaskSettings
+            {
+                TestsFiles = _tests.Select(r => r.Path).ToList(),
+                NwfName = NwfName.Text.Trim(),
+                NwfFolder = NwfFolder.Text.Trim(),
+                ReportFolder = ReportFolder.Text.Trim(),
+                Xml = Xml.IsChecked == true,
+                Html = Html.IsChecked == true,
+                SkippedBlocks = _blocks.Where(b => !b.On).Select(b => b.Name)
+                    .Concat((_task.Options.SkippedBlocks ?? new List<string>()).Where(s => !shown.Contains(s))).ToList(),
+            };
+        }
 
         private void Export_Click(object sender, RoutedEventArgs e)
         {
@@ -237,11 +169,7 @@ namespace RASv2.ClashAnalysis.UI
             if (dialog.ShowDialog(this) != true) return;
             try
             {
-                var draft = new ExportTask
-                {
-                    Name = TaskName.Text.Trim(), ModelFiles = _models.Select(m => m.Model).ToList(), TestsFiles = _ownTests ? _tests.Select(r => r.Path).ToList() : null,
-                };
-                ExportFiles.Save(dialog.FileName, ExportFiles.FromTask(draft));
+                ExportFiles.Save(dialog.FileName, ExportFiles.FromTask(new ExportTask { Name = TaskName.Text.Trim(), Options = Collect() }));
                 Info.Text = "Сохранено: " + Path.GetFileName(dialog.FileName);
             }
             catch (Exception ex)
@@ -251,25 +179,26 @@ namespace RASv2.ClashAnalysis.UI
             }
         }
 
-        // ── сохранить ──
-
         private void Save_Click(object sender, RoutedEventArgs e)
         {
             var error = Validate();
             Error.Text = error ?? "";
             if (error != null) return;
-
             _task.Name = TaskName.Text.Trim();
-            _task.ModelFiles = _models.Select(m => m.Model).ToList();
-            _task.TestsFiles = _ownTests ? _tests.Select(r => r.Path).ToList() : null;
-            if (_serverFolder != null) ExportNodes.Root(_task).Project.ServerFolder = _serverFolder;
+            _task.Options = Collect();
             DialogResult = true;
         }
 
         /// <summary>Что не так — первой ошибкой; null — всё верно.</summary>
-        private string Validate() =>
-            ExportNodes.CheckTaskName(_task, TaskName.Text)
-            ?? ExportNodes.CheckNwcNames(_models.Select(m => m.Name))
-            ?? (_ownTests ? ExportNodes.CheckTestsFiles(_tests.Select(r => r.Path).ToList(), ExportProjectWindow.TestNames) : null);
+        private string Validate()
+        {
+            if (Xml.IsChecked != true && Html.IsChecked != true) return "Нужен хотя бы один формат отчётов.";
+            return ExportNodes.CheckTaskName(_task, TaskName.Text)
+                   ?? ExportNodes.CheckTestsFiles(_tests.Select(r => r.Path).ToList(), ExportProjectWindow.TestNames)
+                   ?? ExportNodes.CheckNwfName(NwfName.Text)
+                   ?? ExportNodes.CheckNwfFolder(NwfFolder.Text)
+                   ?? ExportNodes.CheckNwfTaken(_task, NwfFolder.Text, NwfName.Text, _common)
+                   ?? ExportNodes.CheckReportFolder(ReportFolder.Text);
+        }
     }
 }

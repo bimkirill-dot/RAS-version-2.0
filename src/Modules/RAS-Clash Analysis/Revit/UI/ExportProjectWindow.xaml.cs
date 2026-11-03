@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -11,26 +10,95 @@ using RASv2.ClashAnalysis.Site.Logic;
 namespace RASv2.ClashAnalysis.UI
 {
     /// <summary>
-    /// Настройки проекта «Задач выгрузки» (карандаш у проекта): название, папка проекта, папки NWC, NWF и отчётов внутри проекта,
-    /// файлы проверок, вид — общие для всех задач проекта. Примеры — на первой задаче с моделями. Внизу — экспорт проекта с
-    /// задачами и импорт задач (добавятся по «Сохранить»).
+    /// Проект «Задач выгрузки» (карандаш у проекта; набросок 03.11.2026): название, папка проекта, папка для NWC, вид, модели —
+    /// один раз на проект, по блокам. Блок и отдел — из имени модели; блока в имени нет — вписывается руками. Внизу — экспорт
+    /// проекта с моделями и задачами и импорт задач (добавятся по «Сохранить»). Правятся копии моделей: «Отмена» оставляет как было.
     /// </summary>
     public partial class ExportProjectWindow : Window
     {
-        // пример, пока в проекте нет задач с моделями
+        /// <summary>Строка списка моделей: блок (у первой модели блока; без блока в имени — поле), имя NWC, отдел.</summary>
+        public sealed class ModelRow
+        {
+            private readonly ExportSettings _common;
+            public ExportModel Model { get; }
+
+            public ModelRow(ExportSettings common, ExportModel model)
+            {
+                _common = common;
+                Model = model;
+            }
+
+            public string Path => Model.Path;
+            public string FileName => new FileRow(Path).Name;
+            public string Folder => new FileRow(Path).Folder;
+
+            /// <summary>Блока в имени модели нет — вписывается руками («Генплан.rvt»).</summary>
+            public bool Manual => ExportNames.Block(Path, _common.BlockPrefix).Length == 0;
+            public string Effective => ExportNodes.BlockOf(Model, _common);
+
+            public string Block
+            {
+                get => Model.Block ?? "";
+                set => Model.Block = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+            }
+
+            /// <summary>Первая строка блока — над ней отступ и название блока.</summary>
+            public bool First { get; set; }
+            public string BlockTitle => Effective;
+            public Visibility TitleVisibility => First && !Manual ? Visibility.Visible : Visibility.Collapsed;
+            public Visibility BoxVisibility => Manual ? Visibility.Visible : Visibility.Collapsed;
+            public Thickness Gap => new Thickness(0, First ? 10 : 0, 0, 4);
+
+            private string Auto => ExportNames.NwcName(Path, _common.TrimName, _common.NameParts, out _);
+
+            public string Name
+            {
+                get => ExportNodes.NwcNameOf(Model, _common);
+                // пусто или как из имени модели — снова «само»
+                set
+                {
+                    var v = (value ?? "").Trim();
+                    Model.NwcName = v.Length == 0 || v == Auto ? null : v;
+                }
+            }
+
+            public Visibility MismatchVisibility
+            {
+                get
+                {
+                    ExportNames.NwcName(Path, _common.TrimName, _common.NameParts, out var matches);
+                    return _common.TrimName && Model.NwcName == null && !matches ? Visibility.Visible : Visibility.Collapsed;
+                }
+            }
+
+            public string Department
+            {
+                get
+                {
+                    var d = ExportNames.Department(Path, _common.Departments.Select(x => x.Department));
+                    return string.IsNullOrEmpty(d) ? "не найден" : d;
+                }
+            }
+        }
+
+        // пример, пока в проекте нет моделей
         private const string SampleModel = "0000_01_01_S1_KJ01_01_M3.rvt";
 
         private readonly ExportTask _project;
         private readonly ExportSettings _common;
-        private readonly ObservableCollection<FileRow> _tests;
+        private readonly List<ModelRow> _models;
         private readonly List<ExportTask> _imported = new List<ExportTask>();
         private readonly InheritField _view;
         private readonly bool _hasView;
         private readonly bool _ready;
         private readonly string _opened;
+        private string _serverFolder;
 
         /// <summary>Названия других проектов — название не должно повторяться (две одинаковые строки в списке не различить).</summary>
         public IReadOnlyCollection<string> TakenNames { get; set; } = new string[0];
+
+        /// <summary>Версия Revit — серверы Revit Server для «Добавить модели…» берутся из её настроек (RSN.ini).</summary>
+        public int RevitYear { get; set; } = 2026;
 
         public ExportProjectWindow(ExportTask project, ExportSettings common)
         {
@@ -43,14 +111,12 @@ namespace RASv2.ClashAnalysis.UI
             ProjectName.Text = project.Name;
             Folder.Text = p.Folder;
             NwcFolder.Text = p.NwcFolder;
-            NwfFolder.Text = p.NwfFolder;
-            ReportFolder.Text = p.ReportFolder;
-            _tests = new ObservableCollection<FileRow>((p.TestsFiles ?? new List<string>()).Select(f => new FileRow(f)));
-            TestsList.ItemsSource = _tests;
+            _models = project.ModelFiles.Select(m => new ModelRow(common, new ExportModel { Path = m.Path, NwcName = m.NwcName, Block = m.Block }))
+                .ToList();
             // разработчик, 02.11.2026: не «как в общих», а «по общим настройкам»
             _view = new InheritField(ViewName, ViewFrom, ViewLink, null, p.ViewName, common.Nwc.ViewName, "по общим настройкам", Changed);
             _hasView = common.Nwc.Scope == NwcScope.View;
-            foreach (var e in new FrameworkElement[] { ViewCaption, ViewName, ViewState })
+            foreach (var e in new FrameworkElement[] { ViewCaption, ViewRow })
                 e.Visibility = _hasView ? Visibility.Visible : Visibility.Collapsed;
             // новый проект: сразу печатать название
             Loaded += (s, e) =>
@@ -59,55 +125,78 @@ namespace RASv2.ClashAnalysis.UI
                 ProjectName.SelectAll();
             };
             _ready = true;
-            UpdateExamples();
+            Regroup();
             _opened = State();
             Closing += (s, e) => e.Cancel = !ExportTaskWindow.MayClose(this, DialogResult == true || State() == _opened);
         }
 
         /// <summary>Всё, что правится в окне, — строкой: «Отмена» с правками спрашивает.</summary>
-        private string State() => string.Join("|", ProjectName.Text, Folder.Text, NwcFolder.Text, NwfFolder.Text, ReportFolder.Text,
-            string.Join(";", _tests.Select(r => r.Path)), _view.Value ?? "\u0001", _imported.Count);
+        private string State() => string.Join("|", ProjectName.Text, Folder.Text, NwcFolder.Text, _view.Value ?? "\u0001",
+            string.Join(";", _models.Select(m => m.Path + ">" + m.Model.NwcName + ">" + m.Model.Block)), _imported.Count);
 
         private void Changed()
         {
-            if (_ready) UpdateExamples();
+            if (_ready) UpdateExample();
         }
 
         private void Any_Changed(object sender, RoutedEventArgs e) => Changed();
 
-        /// <summary>Примеры — на первой задаче с моделями и её первой модели; нет — задача «S1» с моделью по регламенту.</summary>
-        private void UpdateExamples()
+        /// <summary>Модели — по блокам (S1, S2, S10; без блока — в конце), в блоке — сначала с блоком в имени.</summary>
+        private void Regroup()
         {
-            var task = _project.Children.Concat(_imported).FirstOrDefault(c => c.Models > 0);
-            if (task == null)
+            var sorted = _models
+                .OrderBy(m => m.Effective, Comparer<string>.Create((a, b) =>
+                    a.Length == 0 ? (b.Length == 0 ? 0 : 1) : b.Length == 0 ? -1 : ExportNodes.NaturalCompare(a, b)))
+                .ThenBy(m => m.Manual)
+                .ThenBy(m => m.FileName, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+            string last = null;
+            foreach (var m in sorted)
             {
-                task = new ExportTask { Name = "S1" };
-                task.ModelFiles.Add(new ExportModel { Path = SampleModel });
+                m.First = last == null || !string.Equals(last, m.Effective, StringComparison.OrdinalIgnoreCase);
+                last = m.Effective;
             }
-            var model = task.ModelFiles[0];
-            var labels = ExportNodes.Labels(task, model, _common, DateTime.Today);
-            var folder = Folder.Text.Trim();
-            NwcExample.Text = Example(folder, NwcFolder.Text, labels, "\\" + ExportNodes.NwcNameOf(model, _common) + ".nwc");
-            NwfExample.Text = Example(folder, NwfFolder.Text, labels, "\\" + task.Name.Trim() + ".nwf");
-            ReportExample.Text = Example(folder, ReportFolder.Text, labels, "");
+            _models.Clear();
+            _models.AddRange(sorted);
+            ModelsList.ItemsSource = null;
+            ModelsList.ItemsSource = _models;
+            ModelsHead.Text = _models.Count > 0 ? "Модели (" + _models.Count + ")" : "Модели";
+            ModelsCols.Visibility = _models.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            NoModels.Visibility = _models.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
+            UpdateExample();
         }
 
-        private static string Example(string projectFolder, string folder, Dictionary<string, string> labels, string file)
+        // вписали блок — модель переходит в свой блок, когда курсор ушёл из поля
+        private void Block_LostFocus(object sender, RoutedEventArgs e) => Regroup();
+
+        /// <summary>Проект, как он сейчас в окне, — для примера и проверки имён NWC.</summary>
+        private ExportTask Draft()
         {
-            var path = ExportNodes.InProject(projectFolder, ExportNames.Fill(folder, labels));
-            return path.Length == 0 ? "Папка не задана" : "Пример: " + ExportNodes.Short(projectFolder, path + file);
+            var draft = new ExportTask { Name = ProjectName.Text.Trim(), ModelFiles = _models.Select(m => m.Model).ToList() };
+            draft.Project.Folder = Folder.Text.Trim();
+            draft.Project.NwcFolder = NwcFolder.Text.Trim();
+            return draft;
+        }
+
+        /// <summary>Пример под «Папкой для NWC» — на первой модели проекта; нет — модель по регламенту.</summary>
+        private void UpdateExample()
+        {
+            var draft = Draft();
+            var model = draft.ModelFiles.FirstOrDefault() ?? new ExportModel { Path = SampleModel };
+            var path = ExportNodes.NwcPath(draft, model, _common);
+            NwcExample.Text = draft.Project.Folder.Length == 0 && NwcFolder.Text.Trim().Length == 0
+                ? "Папка не задана"
+                : "Пример: " + ExportNodes.Short(draft.Project.Folder, path);
         }
 
         /// <summary>Метка под строкой — в строку, в место курсора.</summary>
         private void Chip_Click(object sender, RoutedEventArgs e)
         {
-            var button = (Button)sender;
-            if (!(button.Tag is TextBox box)) return;
-            var label = (string)button.Content;
-            var at = Math.Min(box.CaretIndex, box.Text.Length);
-            box.Text = box.Text.Insert(at, label);
-            box.Focus();
-            box.CaretIndex = at + label.Length;
+            var label = (string)((Button)sender).Content;
+            var at = Math.Min(NwcFolder.CaretIndex, NwcFolder.Text.Length);
+            NwcFolder.Text = NwcFolder.Text.Insert(at, label);
+            NwcFolder.Focus();
+            NwcFolder.CaretIndex = at + label.Length;
         }
 
         // ── «Обзор» ──
@@ -118,40 +207,60 @@ namespace RASv2.ClashAnalysis.UI
             if (path != null) Folder.Text = path;
         }
 
-        /// <summary>Папка NWC / NWF / отчётов: внутри папки проекта — коротко («S1\NWC»; S1 на {Блок} — меткой), вне — полный путь.</summary>
-        private void BrowseInner_Click(object sender, RoutedEventArgs e)
+        /// <summary>Папка NWC: внутри папки проекта — коротко («S1\NWC»; S1 на {Блок} — меткой), вне — полный путь.</summary>
+        private void BrowseNwc_Click(object sender, RoutedEventArgs e)
         {
-            var box = (TextBox)((Button)sender).Tag;
             var root = Folder.Text.Trim().TrimEnd('\\');
-            var path = FolderDialog.Pick(this, root, "Папка внутри проекта");
+            var path = FolderDialog.Pick(this, root, "Папка для NWC");
             if (path == null) return;
-            box.Text = root.Length > 0 && path.StartsWith(root + "\\", StringComparison.OrdinalIgnoreCase)
+            NwcFolder.Text = root.Length > 0 && path.StartsWith(root + "\\", StringComparison.OrdinalIgnoreCase)
                 ? path.Substring(root.Length + 1)
                 : path;
         }
 
-        // ── файлы проверок ──
+        // ── модели ──
 
-        private void AddTests_Click(object sender, RoutedEventArgs e)
+        private void AddModels_Click(object sender, RoutedEventArgs e)
         {
-            var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Проверки Navisworks (*.xml)|*.xml", Multiselect = true };
-            if (dialog.ShowDialog(this) != true) return;
-            foreach (var f in dialog.FileNames)
-                if (!_tests.Any(r => string.Equals(r.Path, f, StringComparison.OrdinalIgnoreCase))) _tests.Add(new FileRow(f));
+            List<string> picked;
+            try
+            {
+                // окно Revit «Открыть» из плагина Revit Server не показывает (проверка разработчика, 02.11.2026) — своё окно; с
+                // папки проекта на сервере
+                var picker = new ModelPickerWindow(RevitYear, _serverFolder ?? _project.Project.ServerFolder) { Owner = this };
+                if (picker.ShowDialog() != true) return;
+                picked = picker.Picked;
+                // откуда добавляли — оттуда и следующий раз (папка проекта на сервере; поля для неё нет)
+                var server = picked.Select(ExportNodes.ServerFolderOf).FirstOrDefault(f => f.Length > 0);
+                if (server != null) _serverFolder = server;
+            }
+            catch (Exception ex)
+            {
+                // исключение сквозь вложенный ShowDialog роняет Revit (CLAUDE.md, «Правила, о которые уже спотыкались»)
+                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: выбор моделей не открылся", ex);
+                Error.Text = "Окно выбора моделей не открылось — подробности в журнале плагина.";
+                return;
+            }
+            var draft = new ExportTask { ModelFiles = _models.Select(m => m.Model).ToList() };
+            var added = ExportNodes.AddModels(draft, picked);
+            foreach (var m in draft.ModelFiles.Skip(_models.Count).ToList()) _models.Add(new ModelRow(_common, m));
+            Info.Text = added == picked.Count ? "" : "Уже в проекте: " + (picked.Count - added) + " " + ExportTask.ModelsWord(picked.Count - added) + ".";
+            Regroup();
         }
 
-        private void DeleteTests_Click(object sender, RoutedEventArgs e) => _tests.Remove((FileRow)((FrameworkElement)sender).DataContext);
+        private void DeleteModel_Click(object sender, RoutedEventArgs e)
+        {
+            _models.Remove((ModelRow)((FrameworkElement)sender).DataContext);
+            Regroup();
+        }
 
         // ── экспорт и импорт ──
 
         private ProjectSettings Collect() => new ProjectSettings
         {
             Folder = Folder.Text.Trim(),
-            ServerFolder = _project.Project.ServerFolder,
+            ServerFolder = _serverFolder ?? _project.Project.ServerFolder,
             NwcFolder = NwcFolder.Text.Trim(),
-            NwfFolder = NwfFolder.Text.Trim(),
-            ReportFolder = ReportFolder.Text.Trim(),
-            TestsFiles = _tests.Select(r => r.Path).ToList(),
             ViewName = _hasView ? _view.Value : _project.Project.ViewName,
         };
 
@@ -168,7 +277,8 @@ namespace RASv2.ClashAnalysis.UI
             if (dialog.ShowDialog(this) != true) return;
             try
             {
-                ExportFiles.Save(dialog.FileName, ExportFiles.FromProject(ProjectName.Text.Trim(), Collect(), _project.Children.Concat(_imported)));
+                ExportFiles.Save(dialog.FileName, ExportFiles.FromProject(ProjectName.Text.Trim(), Collect(), _models.Select(m => m.Model),
+                    _project.Children.Concat(_imported)));
                 Info.Text = "Сохранено: " + Path.GetFileName(dialog.FileName);
             }
             catch (Exception ex)
@@ -178,7 +288,7 @@ namespace RASv2.ClashAnalysis.UI
             }
         }
 
-        /// <summary>Задача или все задачи проекта из файла — в этот проект; добавятся по «Сохранить».</summary>
+        /// <summary>Задача или все задачи проекта из файла — в этот проект (настройки задач, без моделей); добавятся по «Сохранить».</summary>
         private void ImportTasks_Click(object sender, RoutedEventArgs e)
         {
             var dialog = new Microsoft.Win32.OpenFileDialog { Filter = ExportFiles.Filter };
@@ -198,7 +308,6 @@ namespace RASv2.ClashAnalysis.UI
                     _imported.Add(ExportFiles.ToTask(t, _project.Children.Concat(_imported).Select(c => c.Name)));
                 Error.Text = "";
                 Info.Text = "Добавятся по «Сохранить»: " + string.Join(", ", _imported.Select(t => t.Name));
-                UpdateExamples();
             }
             catch (Exception ex)
             {
@@ -221,11 +330,10 @@ namespace RASv2.ClashAnalysis.UI
             var s = Collect();
             var p = _project.Project;
             p.Folder = s.Folder;
+            p.ServerFolder = s.ServerFolder;
             p.NwcFolder = s.NwcFolder;
-            p.NwfFolder = s.NwfFolder;
-            p.ReportFolder = s.ReportFolder;
-            p.TestsFiles = s.TestsFiles;
             p.ViewName = s.ViewName;
+            _project.ModelFiles = _models.Select(m => m.Model).ToList();
             foreach (var t in _imported) _project.Add(t);
             DialogResult = true;
         }
@@ -237,10 +345,7 @@ namespace RASv2.ClashAnalysis.UI
             if (name != null) return name;
             if (Folder.Text.Trim().Length == 0) return "Нужна папка проекта — в ней NWC, NWF и отчёты.";
             if (_hasView && _view.Own && ViewName.Text.Trim().Length == 0) return "Нужно имя вида для выгрузки.";
-            return ExportNodes.CheckNwcFolder(NwcFolder.Text)
-                   ?? ExportNodes.CheckNwfFolder(NwfFolder.Text)
-                   ?? ExportNodes.CheckReportFolder(ReportFolder.Text)
-                   ?? ExportNodes.CheckTestsFiles(_tests.Select(r => r.Path).ToList(), TestNames);
+            return ExportNodes.CheckNwcFolder(NwcFolder.Text) ?? ExportNodes.CheckNwcNames(Draft(), _common);
         }
 
         /// <summary>Названия проверок файла (.xml Clash Detective) — тем же чтением, что на сайте («Категории проверок»).</summary>
