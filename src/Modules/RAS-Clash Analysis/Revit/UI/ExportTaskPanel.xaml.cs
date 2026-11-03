@@ -516,7 +516,12 @@ namespace RASv2.ClashAnalysis.UI
         {
             var button = (Button)sender;
             var box = (TextBox)button.Tag;
-            var calendar = new System.Windows.Controls.Calendar { SelectedDate = DateOf(box), DisplayDate = DateOf(box) ?? DateTime.Today };
+            // шрифт — плагина: иначе календарь берёт шрифт значка-кнопки (Segoe MDL2 Assets), а в нём нет цифр и букв — квадратики
+            var calendar = new System.Windows.Controls.Calendar
+            {
+                SelectedDate = DateOf(box), DisplayDate = DateOf(box) ?? DateTime.Today,
+                FontFamily = new System.Windows.Media.FontFamily("Segoe UI"), FontSize = 13,
+            };
             var popup = new System.Windows.Controls.Primitives.Popup
             {
                 PlacementTarget = button, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom, StaysOpen = false,
