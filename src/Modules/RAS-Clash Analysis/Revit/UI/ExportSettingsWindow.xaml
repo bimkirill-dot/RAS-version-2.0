@@ -220,8 +220,6 @@
                         <TextBlock Style="{StaticResource OptionName}" Text="Обрезать имя NWC по шаблону" />
                         <StackPanel Grid.Column="1" Orientation="Horizontal">
                             <CheckBox x:Name="TrimName" Checked="Any_Changed" Unchecked="Any_Changed" />
-                            <TextBlock Style="{StaticResource Inline}" Text="частей через «_»" />
-                            <TextBox x:Name="NameParts" Width="56" HorizontalContentAlignment="Right" TextChanged="Any_Changed" />
                         </StackPanel>
                     </Grid>
                 </Border>

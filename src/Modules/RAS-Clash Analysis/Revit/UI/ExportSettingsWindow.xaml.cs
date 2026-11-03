@@ -22,6 +22,8 @@ namespace RASv2.ClashAnalysis.UI
         private readonly ExportSettings _settings;
         private readonly ObservableCollection<DepartmentTemplate> _departments = new ObservableCollection<DepartmentTemplate>();
         private readonly bool _ready;
+        // частей имени NWC при обрезке — в окне не правится (разработчик, 03.11.2026: «просто галочка»), хранится в общих настройках
+        private int _nameParts;
 
         public ExportSettingsWindow(ExportSettings settings)
         {
@@ -45,7 +47,7 @@ namespace RASv2.ClashAnalysis.UI
             ElementProperties.IsChecked, Urls.IsChecked, Lights.IsChecked, RoomAsAttribute.IsChecked, LinkedCad.IsChecked,
             LinkedFiles.IsChecked, Parts.IsChecked, MissingMaterials.IsChecked, Levels.IsChecked, Scope.SelectedIndex, ViewName.Text,
             RoomGeometry.IsChecked, RemoveRevitLinks.IsChecked, RemoveCad.IsChecked, RemovePointClouds.IsChecked, RemoveIfc.IsChecked,
-            TrimName.IsChecked, NameParts.Text, BlockPrefix.Text, DateFormat.SelectedIndex,
+            TrimName.IsChecked, BlockPrefix.Text, DateFormat.SelectedIndex,
             string.Join(";", _departments.Select(d => d.Department + ">" + d.Etalon + ">" + d.ViewTemplate)));
 
         /// <summary>Окно — из настроек (открытие и «Импорт…»).</summary>
@@ -57,7 +59,7 @@ namespace RASv2.ClashAnalysis.UI
             RemovePointClouds.IsChecked = s.RemovePointClouds;
             RemoveIfc.IsChecked = s.RemoveIfc;
             TrimName.IsChecked = s.TrimName;
-            NameParts.Text = s.NameParts.ToString();
+            _nameParts = s.NameParts;
             BlockPrefix.Text = s.BlockPrefix;
             DateFormat.SelectedIndex = Math.Max(0, Array.IndexOf(ExportSettings.DateFormats, s.DateFormat));
             _departments.Clear();
@@ -99,8 +101,7 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Пример под «Обрезать имя NWC»: имя модели → имя NWC — по тому, что сейчас в окне (разработчик, 03.11.2026: без меток).</summary>
         private void UpdateExample()
         {
-            int.TryParse(NameParts.Text, out var parts);
-            var nwc = ExportNames.NwcName(SampleModel, TrimName.IsChecked == true, parts, out var matches);
+            var nwc = ExportNames.NwcName(SampleModel, TrimName.IsChecked == true, _nameParts, out var matches);
             NameExample.Text = "Пример: " + SampleModel + " → " + nwc + (matches || TrimName.IsChecked != true ? "" : " (не по шаблону)");
         }
 
@@ -174,7 +175,7 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Настройки, как сейчас в окне; что-то не так — ошибка внизу и null.</summary>
         private ExportSettings Collect()
         {
-            var error = Validate(out var faceting, out var parts);
+            var error = Validate(out var faceting);
             Error.Text = error ?? "";
             if (error != null) return null;
 
@@ -201,7 +202,7 @@ namespace RASv2.ClashAnalysis.UI
             result.RemovePointClouds = RemovePointClouds.IsChecked == true;
             result.RemoveIfc = RemoveIfc.IsChecked == true;
             result.TrimName = TrimName.IsChecked == true;
-            result.NameParts = parts;
+            result.NameParts = _nameParts;
             result.BlockPrefix = BlockPrefix.Text.Trim();
             result.DateFormat = SelectedDateFormat;
             result.Departments = _departments.Where(d => !string.IsNullOrWhiteSpace(d.Department))
@@ -211,12 +212,10 @@ namespace RASv2.ClashAnalysis.UI
         }
 
         /// <summary>Что не так — первой ошибкой; null — всё верно.</summary>
-        private string Validate(out double faceting, out int parts)
+        private string Validate(out double faceting)
         {
-            parts = 0;
             if (!NwcOptions.TryFaceting(Faceting.Text, out faceting)) return "Коэффициент фасетизации — число больше нуля.";
             if (Scope.SelectedIndex == 1 && string.IsNullOrWhiteSpace(ViewName.Text)) return "Нужно имя вида для выгрузки.";
-            if (!int.TryParse(NameParts.Text, out parts) || parts < 1 || parts > 30) return "Частей через «_» — число от 1 до 30.";
             var prefix = BlockPrefix.Text.Trim();
             if (prefix.Length == 0 || !prefix.All(char.IsLetter)) return "{Блок}: часть имени — буквы перед цифрами блока (например, S).";
             return ExportNodes.CheckDepartmentCodes(_departments.Select(d => d.Department));
