@@ -287,6 +287,8 @@
                         <ComboBox Grid.Column="1" x:Name="DateFormat" Width="200" SelectionChanged="Any_Changed" />
                     </Grid>
                 </Border>
+                <!-- пример меток — на том же имени, что у обрезки (разработчик, 03.11.2026) -->
+                <TextBlock x:Name="LabelsExample" Foreground="{DynamicResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="394,6,0,0" />
 
                 <DockPanel Style="{StaticResource HeadBar}">
                     <TextBlock Style="{StaticResource Head}" Text="Отделы" />

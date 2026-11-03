@@ -95,12 +95,18 @@ namespace RASv2.ClashAnalysis.UI
 
         private string SelectedDateFormat => (string)((ComboBoxItem)DateFormat.SelectedItem)?.Tag ?? ExportSettings.DateFormats[0];
 
-        /// <summary>Пример под «Обрезать имя NWC»: имя модели → имя NWC — по тому, что сейчас в окне (разработчик, 03.11.2026: без меток).</summary>
+        /// <summary>Примеры на одном имени модели: под «Обрезать имя NWC» — имя NWC, под «Метками» — {Блок}, {Отдел}, {Дата} (по тому, что сейчас в окне).</summary>
         private void UpdateExample()
         {
             var nwc = ExportNames.NwcName(SampleModel, TrimName.IsChecked == true, out var matches);
             NameExample.Text = "Пример: " + SampleModel + " → " + nwc + (matches || TrimName.IsChecked != true ? "" : " (не по шаблону)");
+            var block = ExportNames.Block(SampleModel, BlockPrefix.Text);
+            var department = ExportNames.Department(SampleModel, _departments.Select(d => d.Department));
+            LabelsExample.Text = "Пример: " + SampleModel + " → {Блок} " + Or(block) + " · {Отдел} " + Or(department) +
+                                 " · {Дата} " + DateTime.Today.ToString(SelectedDateFormat);
         }
+
+        private static string Or(string s) => string.IsNullOrEmpty(s) ? "не найден" : s;
 
         private void AddDepartment_Click(object sender, RoutedEventArgs e) => _departments.Add(new DepartmentTemplate());
 
