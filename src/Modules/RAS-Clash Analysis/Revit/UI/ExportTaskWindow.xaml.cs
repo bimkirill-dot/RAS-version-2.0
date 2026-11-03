@@ -13,8 +13,9 @@ namespace RASv2.ClashAnalysis.UI
 {
     /// <summary>
     /// Настройки задачи или подзадачи «Задач выгрузки» (карандаш; «Дерево задач с наследованием», 03.11.2026): название, модели,
-    /// файлы проверок, имя NWF, папка проекта, папки NWC / NWF / отчётов, форматы, вид. Каждая настройка — своя или от уровня выше
-    /// (бледным, «от «…»», «Изменить»); у задачи верхнего уровня всё своё. Правятся копии: «Отмена» оставляет как было.
+    /// файлы проверок, «Формировать NWF» и имя NWF (свои у строки), папка проекта, папки NWC / NWF / отчётов, форматы, вид — свои
+    /// или от уровня выше (бледным, «от «…»», «Изменить»); у задачи верхнего уровня всё своё. Правятся копии: «Отмена» оставляет
+    /// как было.
     /// </summary>
     public partial class ExportTaskWindow : Window, INotifyPropertyChanged
     {
@@ -92,7 +93,7 @@ namespace RASv2.ClashAnalysis.UI
         private readonly List<ModelRow> _models = new List<ModelRow>();
         private readonly ObservableCollection<FileRow> _tests = new ObservableCollection<FileRow>();
         private readonly List<ExportTask> _imported = new List<ExportTask>();
-        private readonly InheritField _nwfName, _folder, _nwc, _nwf, _report, _view;
+        private readonly InheritField _folder, _nwc, _nwf, _report, _view;
         private readonly bool _hasView;
         private readonly bool _ready;
         private readonly string _opened;
@@ -131,7 +132,10 @@ namespace RASv2.ClashAnalysis.UI
             Xml.IsChecked = _formatsOwn ? s.Xml ?? true : ExportNodes.XmlOf(_parent);
             Html.IsChecked = _formatsOwn ? s.Html ?? true : ExportNodes.HtmlOf(_parent);
 
-            _nwfName = Field(NwfName, NwfNameFrom, NwfNameLink, x => x.NwfName, ExportNodes.NwfNameOf);
+            // «Формировать NWF» и имя NWF — свои у строки; у строки с подзадачами галочка недоступна
+            MakeNwf.IsChecked = s.MakeNwf && task.Children.Count == 0;
+            MakeNwf.IsEnabled = task.Children.Count == 0;
+            NwfName.Text = s.NwfName ?? "";
             _folder = Field(Folder, FolderFrom, FolderLink, x => x.Folder, ExportNodes.FolderOf, FolderBrowse);
             _nwc = Field(NwcFolder, NwcFrom, NwcLink, x => x.NwcFolder, ExportNodes.NwcFolderOf, NwcBrowse, NwcChips);
             _nwf = Field(NwfFolder, NwfFrom, NwfLink, x => x.NwfFolder, ExportNodes.NwfFolderOf, NwfBrowse);
@@ -186,7 +190,7 @@ namespace RASv2.ClashAnalysis.UI
         private string State() => string.Join("|", TaskName.Text, _modelsOwn,
             string.Join(";", _models.Select(m => m.Path + ">" + m.Model.NwcName + ">" + m.Model.Block)), _testsOwn,
             string.Join(";", _tests.Select(r => r.Path)), _formatsOwn, Xml.IsChecked, Html.IsChecked,
-            Own(_nwfName), Own(_folder), Own(_nwc), Own(_nwf), Own(_report), Own(_view), _imported.Count);
+            MakeNwf.IsChecked, NwfName.Text, Own(_folder), Own(_nwc), Own(_nwf), Own(_report), Own(_view), _imported.Count);
 
         private static string Own(InheritField f) => f.Value ?? "\u0001";
 
@@ -353,16 +357,20 @@ namespace RASv2.ClashAnalysis.UI
         private void UpdateExamples()
         {
             var models = EffectiveModels();
-            var blocks = ExportNodes.Blocks(models, _common).Where(b => b.Name.Length > 0).Select(b => b.Name).ToList();
-            if (blocks.Count == 0) blocks.Add("S1");
+            // NWF строка не собирает — имя бледным, пример папки — без файла
+            var makes = MakeNwf.IsChecked == true;
+            NwfName.IsEnabled = makes;
+            NwfName.Opacity = makes ? 1 : 0.5;
+            NwfNameExample.Visibility = makes ? Visibility.Visible : Visibility.Collapsed;
+            // {Блок} — общий блок моделей строки; разные — для примера первый из них (сохранить с {Блок} не даст проверка)
+            var blocks = models.Select(m => ExportNodes.BlockOf(m, _common)).Where(b => b.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var block = blocks.FirstOrDefault() ?? "S1";
             var root = Folder.Text.Trim();
-            string Nwf(string block) => ExportNames.Fill(NwfName.Text.Trim(), ExportNodes.Labels(block, null, _common, DateTime.Today)) + ".nwf";
-            NwfNameExample.Text = "Пример: " + (blocks.Count == 1 ? Nwf(blocks[0])
-                : blocks.Count == 2 ? Nwf(blocks[0]) + ", " + Nwf(blocks[1])
-                : Nwf(blocks[0]) + " … " + Nwf(blocks[blocks.Count - 1]));
-
-            var labels = ExportNodes.Labels(blocks[0], null, _common, DateTime.Today);
-            var nwf = ExportNodes.InProject(root, ExportNames.Fill(NwfFolder.Text, labels)) + "\\" + Nwf(blocks[0]);
+            var labels = ExportNodes.Labels(block, null, _common, DateTime.Today);
+            var name = ExportNames.Fill(NwfNameText(), labels) + ".nwf";
+            NwfNameExample.Text = "Пример: " + name;
+            var nwf = ExportNodes.InProject(root, ExportNames.Fill(NwfFolder.Text, labels)) + (makes ? "\\" + name : "");
             NwfExample.Text = "Пример: " + ExportNodes.Short(root, nwf);
             NwfExample.ToolTip = nwf;
 
@@ -373,10 +381,13 @@ namespace RASv2.ClashAnalysis.UI
             NwcExample.ToolTip = nwc;
 
             var format = Html.IsChecked == true ? "HTML" : Xml.IsChecked == true ? "XML" : "";
-            var report = ExportNodes.InProject(root, ExportNames.Fill(ReportFolder.Text, ExportNodes.Labels(blocks[0], null, _common, DateTime.Today, format)));
+            var report = ExportNodes.InProject(root, ExportNames.Fill(ReportFolder.Text, ExportNodes.Labels(block, null, _common, DateTime.Today, format)));
             ReportExample.Text = report.Length == 0 ? "Папка не задана" : "Пример: " + ExportNodes.Short(root, report);
             ReportExample.ToolTip = report;
         }
+
+        /// <summary>Имя NWF, как сейчас в окне: своё или название строки.</summary>
+        private string NwfNameText() => (NwfName.Text.Trim().Length > 0 ? NwfName.Text : TaskName.Text).Trim();
 
         /// <summary>Метка под строкой — в строку, в место курсора.</summary>
         private void Chip_Click(object sender, RoutedEventArgs e)
@@ -417,7 +428,8 @@ namespace RASv2.ClashAnalysis.UI
         {
             Models = _modelsOwn ? _models.Select(m => m.Model).ToList() : null,
             TestsFiles = _testsOwn ? _tests.Select(r => r.Path).ToList() : null,
-            NwfName = _nwfName.Value,
+            NwfName = NwfName.Text.Trim().Length > 0 ? NwfName.Text.Trim() : null,
+            MakeNwf = MakeNwf.IsChecked == true,
             Folder = _folder.Value,
             NwcFolder = _nwc.Value,
             NwfFolder = _nwf.Value,
@@ -488,7 +500,7 @@ namespace RASv2.ClashAnalysis.UI
             Error.Text = error ?? "";
             if (error != null) return;
 
-            // проверки по всему дереву (имена NWC, NWF двух строк в один файл) — на уже применённых настройках; ошибка — вернуть как было
+            // проверки по всему дереву (имена NWC, строки с NWF) — на уже применённых настройках; ошибка — вернуть как было
             var name = _task.Name;
             var settings = _task.Settings;
             _task.Name = TaskName.Text.Trim();
@@ -496,7 +508,7 @@ namespace RASv2.ClashAnalysis.UI
             foreach (var t in _imported) _task.Add(t);
             var root = ExportNodes.Root(_task);
             error = root.Self().Select(t => ExportNodes.CheckNwcNames(t, _common)).FirstOrDefault(x => x != null)
-                    ?? ExportNodes.CheckNwfTaken(root, _common);
+                    ?? ExportNodes.CheckNwf(root, _common);
             if (error != null)
             {
                 foreach (var t in _imported) _task.Remove(t);
@@ -517,7 +529,7 @@ namespace RASv2.ClashAnalysis.UI
             if (_formatsOwn && Xml.IsChecked != true && Html.IsChecked != true) return "Нужен хотя бы один формат отчётов.";
             if (_hasView && _view.Own && ViewName.Text.Trim().Length == 0) return "Нужно имя вида для выгрузки.";
             return (_testsOwn ? ExportNodes.CheckTestsFiles(_tests.Select(r => r.Path).ToList(), TestNames) : null)
-                   ?? (_nwfName.Own ? ExportNodes.CheckNwfName(NwfName.Text) : null)
+                   ?? (MakeNwf.IsChecked == true ? ExportNodes.CheckNwfName(NwfNameText()) : null)
                    ?? (_nwc.Own ? ExportNodes.CheckNwcFolder(NwcFolder.Text) : null)
                    ?? (_nwf.Own ? ExportNodes.CheckNwfFolder(NwfFolder.Text) : null)
                    ?? (_report.Own ? ExportNodes.CheckReportFolder(ReportFolder.Text) : null);

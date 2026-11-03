@@ -90,6 +90,7 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <TextBlock Style="{StaticResource Caption}" Text="Название" />
@@ -184,17 +185,19 @@
                     </DockPanel>
                 </StackPanel>
 
-                <!-- NWF — постоянная, одна на блок: имя с {Блок} -->
-                <TextBlock Grid.Row="4" Style="{StaticResource Caption}" Text="Имя NWF" />
-                <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal" Style="{StaticResource Spaced}">
+                <!-- NWF собирает строка без подзадач (разработчик, 03.11.2026): её модели — в одну NWF; галочка и имя — свои, не
+                     наследуются; у строки с подзадачами галочка недоступна -->
+                <TextBlock Grid.Row="4" Style="{StaticResource Caption}" Text="Формировать NWF" />
+                <CheckBox x:Name="MakeNwf" Grid.Row="4" Grid.Column="1" VerticalAlignment="Center" Margin="0,0,0,12"
+                          Checked="Any_Changed" Unchecked="Any_Changed" />
+                <TextBlock Grid.Row="5" Style="{StaticResource Caption}" Text="Имя NWF" />
+                <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal" Style="{StaticResource Spaced}">
                     <TextBox x:Name="NwfName" Width="260" TextChanged="Any_Changed" />
-                    <TextBlock x:Name="NwfNameFrom" Style="{StaticResource From}" />
-                    <Button x:Name="NwfNameLink" Style="{StaticResource LinkButton}" />
                     <TextBlock x:Name="NwfNameExample" Style="{StaticResource Example}" Margin="16,0,0,0" />
                 </StackPanel>
 
-                <TextBlock Grid.Row="5" Style="{StaticResource Caption}" Text="Папка проекта" />
-                <DockPanel Grid.Row="5" Grid.Column="1" Style="{StaticResource Spaced}">
+                <TextBlock Grid.Row="6" Style="{StaticResource Caption}" Text="Папка проекта" />
+                <DockPanel Grid.Row="6" Grid.Column="1" Style="{StaticResource Spaced}">
                     <Button x:Name="FolderLink" DockPanel.Dock="Right" Style="{StaticResource LinkButton}" />
                     <TextBlock x:Name="FolderFrom" DockPanel.Dock="Right" Style="{StaticResource From}" />
                     <Button x:Name="FolderBrowse" DockPanel.Dock="Right" Style="{StaticResource Browse}" Click="BrowseProject_Click" />
@@ -202,8 +205,8 @@
                 </DockPanel>
 
                 <!-- внутри папки проекта; полный путь — тоже можно -->
-                <TextBlock Grid.Row="6" Style="{StaticResource TopCaption}" Text="Папка для NWC" />
-                <StackPanel Grid.Row="6" Grid.Column="1" Style="{StaticResource Spaced}">
+                <TextBlock Grid.Row="7" Style="{StaticResource TopCaption}" Text="Папка для NWC" />
+                <StackPanel Grid.Row="7" Grid.Column="1" Style="{StaticResource Spaced}">
                     <DockPanel>
                         <Button x:Name="NwcLink" DockPanel.Dock="Right" Style="{StaticResource LinkButton}" />
                         <TextBlock x:Name="NwcFrom" DockPanel.Dock="Right" Style="{StaticResource From}" />
@@ -219,8 +222,8 @@
                     <TextBlock x:Name="NwcExample" Style="{StaticResource Example}" />
                 </StackPanel>
 
-                <TextBlock Grid.Row="7" Style="{StaticResource Caption}" Text="Папка для NWF" />
-                <StackPanel Grid.Row="7" Grid.Column="1" Orientation="Horizontal" Style="{StaticResource Spaced}">
+                <TextBlock Grid.Row="8" Style="{StaticResource Caption}" Text="Папка для NWF" />
+                <StackPanel Grid.Row="8" Grid.Column="1" Orientation="Horizontal" Style="{StaticResource Spaced}">
                     <TextBox x:Name="NwfFolder" Width="260" TextChanged="Any_Changed" />
                     <Button x:Name="NwfBrowse" Style="{StaticResource Browse}" Tag="{Binding ElementName=NwfFolder}" Click="Browse_Click" />
                     <TextBlock x:Name="NwfFrom" Style="{StaticResource From}" />
@@ -228,8 +231,8 @@
                     <TextBlock x:Name="NwfExample" Style="{StaticResource Example}" Margin="16,0,0,0" />
                 </StackPanel>
 
-                <TextBlock Grid.Row="8" Style="{StaticResource TopCaption}" Text="Папка для отчётов" />
-                <StackPanel Grid.Row="8" Grid.Column="1" Style="{StaticResource Spaced}">
+                <TextBlock Grid.Row="9" Style="{StaticResource TopCaption}" Text="Папка для отчётов" />
+                <StackPanel Grid.Row="9" Grid.Column="1" Style="{StaticResource Spaced}">
                     <DockPanel>
                         <Button x:Name="ReportLink" DockPanel.Dock="Right" Style="{StaticResource LinkButton}" />
                         <TextBlock x:Name="ReportFrom" DockPanel.Dock="Right" Style="{StaticResource From}" />
@@ -246,8 +249,8 @@
                     <TextBlock x:Name="ReportExample" Style="{StaticResource Example}" />
                 </StackPanel>
 
-                <TextBlock Grid.Row="9" Style="{StaticResource Caption}" Text="Форматы отчётов" />
-                <StackPanel Grid.Row="9" Grid.Column="1" Orientation="Horizontal" Style="{StaticResource Spaced}">
+                <TextBlock Grid.Row="10" Style="{StaticResource Caption}" Text="Форматы отчётов" />
+                <StackPanel Grid.Row="10" Grid.Column="1" Orientation="Horizontal" Style="{StaticResource Spaced}">
                     <CheckBox x:Name="Xml" Content="XML" VerticalAlignment="Center" Checked="Any_Changed" Unchecked="Any_Changed" />
                     <CheckBox x:Name="Html" Content="HTML" VerticalAlignment="Center" Margin="20,0,0,0" Checked="Any_Changed" Unchecked="Any_Changed" />
                     <TextBlock x:Name="FormatsFrom" Style="{StaticResource From}" />
@@ -255,8 +258,8 @@
                 </StackPanel>
 
                 <!-- вида нет, если в общих «Экспорт: Целый проект» -->
-                <TextBlock x:Name="ViewCaption" Grid.Row="10" Style="{StaticResource Caption}" Text="Вид для выгрузки" />
-                <StackPanel x:Name="ViewRow" Grid.Row="10" Grid.Column="1" Orientation="Horizontal" Style="{StaticResource Spaced}">
+                <TextBlock x:Name="ViewCaption" Grid.Row="11" Style="{StaticResource Caption}" Text="Вид для выгрузки" />
+                <StackPanel x:Name="ViewRow" Grid.Row="11" Grid.Column="1" Orientation="Horizontal" Style="{StaticResource Spaced}">
                     <TextBox x:Name="ViewName" Width="260" />
                     <TextBlock x:Name="ViewFrom" Style="{StaticResource From}" />
                     <Button x:Name="ViewLink" Style="{StaticResource LinkButton}" />

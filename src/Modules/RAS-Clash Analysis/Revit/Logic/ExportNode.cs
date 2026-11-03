@@ -29,7 +29,7 @@ namespace RASv2.ClashAnalysis.Logic
         [DataMember(Order = 1, EmitDefaultValue = false)] public List<ExportModel> Models { get; set; }
         /// <summary>Файлы проверок Navisworks (.xml, выгрузка Clash Detective) — все в NWF блока.</summary>
         [DataMember(Order = 2, EmitDefaultValue = false)] public List<string> TestsFiles { get; set; }
-        /// <summary>Имя NWF блока — строка с {Блок}: «{Блок}_ВК» → «S1_ВК.nwf».</summary>
+        /// <summary>Имя NWF строки — своё, не наследуется; пусто — название строки («S1_ВК» → «S1_ВК.nwf»).</summary>
         [DataMember(Order = 3, EmitDefaultValue = false)] public string NwfName { get; set; }
         /// <summary>Папка проекта на сетевом диске — от неё строки папок.</summary>
         [DataMember(Order = 4, EmitDefaultValue = false)] public string Folder { get; set; }
@@ -49,11 +49,16 @@ namespace RASv2.ClashAnalysis.Logic
         [DataMember(Order = 10, EmitDefaultValue = false)] public bool? Html { get; set; }
         /// <summary>Вид для выгрузки; нигде не задан — из общих настроек.</summary>
         [DataMember(Order = 11, EmitDefaultValue = false)] public string ViewName { get; set; }
+        /// <summary>
+        /// «Формировать NWF» — своё у строки, не наследуется; действует только у строки без подзадач (разработчик, 03.11.2026:
+        /// «подзадача — как отдельный блок, обычно 4 модели: добавляем их, ставим галочку — они объединяются в NWF»).
+        /// </summary>
+        [DataMember(Order = 12, EmitDefaultValue = false)] public bool MakeNwf { get; set; }
 
         /// <summary>Задача верхнего уровня: всё своё, по умолчанию — регламент 15.10 (вида нет — из общих настроек).</summary>
         public static NodeSettings Top() => new NodeSettings
         {
-            Models = new List<ExportModel>(), TestsFiles = new List<string>(), NwfName = "{Блок}", Folder = "", NwcFolder = @"{Блок}\NWC",
+            Models = new List<ExportModel>(), TestsFiles = new List<string>(), Folder = "", NwcFolder = @"{Блок}\NWC",
             NwfFolder = "{Блок}", ReportFolder = @"{Блок}\{Дата}", Xml = true, Html = true,
         };
 
@@ -61,7 +66,7 @@ namespace RASv2.ClashAnalysis.Logic
         {
             Models = Models?.Select(m => new ExportModel { Path = m.Path, NwcName = m.NwcName, Block = m.Block }).ToList(),
             TestsFiles = TestsFiles?.ToList(), NwfName = NwfName, Folder = Folder, ServerFolder = ServerFolder, NwcFolder = NwcFolder,
-            NwfFolder = NwfFolder, ReportFolder = ReportFolder, Xml = Xml, Html = Html, ViewName = ViewName,
+            NwfFolder = NwfFolder, ReportFolder = ReportFolder, Xml = Xml, Html = Html, ViewName = ViewName, MakeNwf = MakeNwf,
         };
     }
 
@@ -72,15 +77,12 @@ namespace RASv2.ClashAnalysis.Logic
         public List<ExportModel> Models { get; set; } = new List<ExportModel>();
     }
 
-    /// <summary>Строка главного окна: задача, подзадача или блок нижней строки (Block не пусто).</summary>
+    /// <summary>Строка главного окна: задача или подзадача.</summary>
     public sealed class TreeRow
     {
         public string Number { get; set; }
         public int Level { get; set; }
-        /// <summary>Задача; у строки блока — её задача.</summary>
         public ExportTask Item { get; set; }
-        /// <summary>Блок — у строки блока; иначе null.</summary>
-        public BlockGroup Block { get; set; }
     }
 
     /// <summary>Настройка строки по дереву, блоки, где что лежит, строки окна, проверки окна настроек.</summary>
@@ -119,7 +121,11 @@ namespace RASv2.ClashAnalysis.Logic
 
         public static List<ExportModel> ModelsOf(ExportTask task) => Get(task, s => s.Models);
         public static List<string> TestsOf(ExportTask task) => Get(task, s => s.TestsFiles);
-        public static string NwfNameOf(ExportTask task) => Get(task, s => s.NwfName);
+        /// <summary>Имя NWF строки — своё (не наследуется), пусто — название строки.</summary>
+        public static string NwfNameOf(ExportTask task) =>
+            (string.IsNullOrWhiteSpace(task.Settings.NwfName) ? task.Name ?? "" : task.Settings.NwfName).Trim();
+        /// <summary>Строка собирает NWF: галочка «Формировать NWF» и нет подзадач.</summary>
+        public static bool MakesNwf(ExportTask task) => task.Settings.MakeNwf && task.Children.Count == 0;
         public static string FolderOf(ExportTask task) => Get(task, s => s.Folder);
         public static string NwcFolderOf(ExportTask task) => Get(task, s => s.NwcFolder);
         public static string NwfFolderOf(ExportTask task) => Get(task, s => s.NwfFolder);
@@ -147,11 +153,14 @@ namespace RASv2.ClashAnalysis.Logic
         }
 
         /// <summary>
-        /// Блоки, которые делает строка: только у нижней строки ветки (у кого подзадач нет) — её модели по блокам; модели без блока не
-        /// делаются (некуда положить).
+        /// {Блок} строки — для папок NWF и отчётов: блок, общий у всех её моделей (S1_ВК — модели S1 → «S1»); разные блоки или
+        /// моделей нет — пусто.
         /// </summary>
-        public static List<BlockGroup> TaskBlocks(ExportTask task, ExportSettings common) =>
-            task.Children.Count > 0 ? new List<BlockGroup>() : Blocks(ModelsOf(task), common).Where(b => b.Name.Length > 0).ToList();
+        public static string BlockOfTask(ExportTask task, ExportSettings common)
+        {
+            var blocks = ModelsOf(task).Select(m => BlockOf(m, common)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            return blocks.Count == 1 ? blocks[0] : "";
+        }
 
         /// <summary>Сравнение «по-человечески»: S2 раньше S10.</summary>
         public static int NaturalCompare(string a, string b)
@@ -171,33 +180,25 @@ namespace RASv2.ClashAnalysis.Logic
         // ── строки главного окна ──
 
         /// <summary>
-        /// Строки главного окна: задача «1», подзадачи «1.1», «1.1.1»…, у нижней строки ветки — её блоки следующим номером;
-        /// свёрнутые (collapsed) — без вложенных. Номера ставятся сами.
+        /// Строки главного окна: задача «1», подзадачи «1.1», «1.1.1»…; свёрнутые (collapsed) — без вложенных. Номера ставятся сами.
         /// </summary>
-        public static List<TreeRow> Rows(IList<ExportTask> roots, ISet<ExportTask> collapsed, ExportSettings common)
+        public static List<TreeRow> Rows(IList<ExportTask> roots, ISet<ExportTask> collapsed)
         {
             var rows = new List<TreeRow>();
-            for (var i = 0; i < roots.Count; i++) AddRows(rows, roots[i], (i + 1).ToString(), 0, collapsed, common);
+            for (var i = 0; i < roots.Count; i++) AddRows(rows, roots[i], (i + 1).ToString(), 0, collapsed);
             return rows;
         }
 
-        private static void AddRows(List<TreeRow> rows, ExportTask task, string number, int level, ISet<ExportTask> collapsed, ExportSettings common)
+        private static void AddRows(List<TreeRow> rows, ExportTask task, string number, int level, ISet<ExportTask> collapsed)
         {
             rows.Add(new TreeRow { Number = number, Level = level, Item = task });
             if (collapsed.Contains(task)) return;
-            for (var i = 0; i < task.Children.Count; i++) AddRows(rows, task.Children[i], number + "." + (i + 1), level + 1, collapsed, common);
-            var blocks = TaskBlocks(task, common);
-            for (var b = 0; b < blocks.Count; b++)
-                rows.Add(new TreeRow { Number = number + "." + (b + 1), Level = level + 1, Item = task, Block = blocks[b] });
+            for (var i = 0; i < task.Children.Count; i++) AddRows(rows, task.Children[i], number + "." + (i + 1), level + 1, collapsed);
         }
 
-        /// <summary>
-        /// Краткая информация строки: подзадачи, модели (свои или от кого), файлы проверок, у нижней строки — имя NWF и модели без
-        /// блока; у блока — его модели.
-        /// </summary>
-        public static string Summary(TreeRow row, ExportSettings common)
+        /// <summary>Краткая информация строки: подзадачи, модели (свои или от кого), файлы проверок, NWF — если строка её собирает.</summary>
+        public static string Summary(TreeRow row)
         {
-            if (row.Block != null) return row.Block.Models.Count + " " + ExportTask.ModelsWord(row.Block.Models.Count);
             var task = row.Item;
             var parts = new List<string>();
             if (task.Children.Count > 0) parts.Add(task.Children.Count + " " + ExportTask.SubtasksWord(task.Children.Count));
@@ -207,12 +208,7 @@ namespace RASv2.ClashAnalysis.Logic
                       (task.Parent == null ? "" : owner == task ? " (свои)" : owner != null ? " от «" + owner.Name + "»" : ""));
             var tests = TestsOf(task);
             if (tests.Count > 0) parts.Add(string.Join(", ", tests.Select(FileName)));
-            if (task.Children.Count == 0)
-            {
-                parts.Add(NwfNameOf(task));
-                var loose = Blocks(models, common).Where(b => b.Name.Length == 0).Sum(b => b.Models.Count);
-                if (loose > 0) parts.Add("без блока: " + loose);
-            }
+            if (MakesNwf(task)) parts.Add(NwfNameOf(task) + ".nwf");
             return string.Join(" · ", parts);
         }
 
@@ -254,16 +250,16 @@ namespace RASv2.ClashAnalysis.Logic
             InProject(FolderOf(task), ExportNames.Fill(NwcFolderOf(task), Labels(BlockOf(model, common), model, common, DateTime.Today))) + "\\" +
             NwcNameOf(model, common) + ".nwc";
 
-        /// <summary>Постоянный NWF блока строки: папка и имя — строки по дереву («{Блок}_ВК» → «S1_ВК.nwf»).</summary>
-        public static string NwfPath(ExportTask task, string block, ExportSettings common)
+        /// <summary>Постоянная NWF строки: папка — строка по дереву ({Блок} — общий блок моделей строки), имя — своё или название строки.</summary>
+        public static string NwfPath(ExportTask task, ExportSettings common)
         {
-            var labels = Labels(block, null, common, DateTime.Today);
+            var labels = Labels(BlockOfTask(task, common), null, common, DateTime.Today);
             return InProject(FolderOf(task), ExportNames.Fill(NwfFolderOf(task), labels)) + "\\" + ExportNames.Fill(NwfNameOf(task), labels).Trim() + ".nwf";
         }
 
-        /// <summary>Папка отчётов блока строки на дату запуска (одна на весь запуск) и формат («XML», «HTML»).</summary>
-        public static string ReportPath(ExportTask task, string block, ExportSettings common, DateTime runDate, string format) =>
-            InProject(FolderOf(task), ExportNames.Fill(ReportFolderOf(task), Labels(block, null, common, runDate, format)));
+        /// <summary>Папка отчётов строки на дату запуска (одна на весь запуск) и формат («XML», «HTML»).</summary>
+        public static string ReportPath(ExportTask task, ExportSettings common, DateTime runDate, string format) =>
+            InProject(FolderOf(task), ExportNames.Fill(ReportFolderOf(task), Labels(BlockOfTask(task, common), null, common, runDate, format)));
 
         // ── модели ──
 
@@ -310,33 +306,41 @@ namespace RASv2.ClashAnalysis.Logic
         public static string CheckNwfFolder(string folder) =>
             CheckLabels(folder, "Папка для NWF", NwfFolderLabels, "NWF постоянная — одна на блок, без даты и отдела");
 
-        /// <summary>Имя NWF: с {Блок} (иначе у блоков строки — один файл), знаки — как в имени файла; null — всё верно.</summary>
+        /// <summary>Имя NWF (уже с названием строки, если поле пусто): метка — только {Блок}, знаки — как в имени файла; null — всё верно.</summary>
         public static string CheckNwfName(string name)
         {
             if (string.IsNullOrWhiteSpace(name)) return "Нужно имя NWF.";
-            var labels = CheckLabels(name, "Имя NWF", NwfNameLabels, "NWF одна на блок");
+            var labels = CheckLabels(name, "Имя NWF", NwfNameLabels, "NWF постоянная — без даты и отдела");
             if (labels != null) return labels;
-            if (!ExportNames.LabelsIn(name).Any())
-                return "Имя NWF — с меткой {Блок} (например, {Блок}_ВК): иначе все блоки запишутся в один файл.";
             var plain = ExportNames.Fill(name, NwfNameLabels.ToDictionary(l => l, l => "x"));
             return plain.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ? "Имя NWF: недопустимые знаки в имени файла." : null;
         }
 
         /// <summary>
-        /// NWF строк не совпадают: две нижние строки дерева, которые пишут блок в один файл (копия со старым именем NWF), — ошибка;
-        /// сравнивается по блокам каждой строки. null — всё верно.
+        /// Строки, которые собирают NWF, — по всему дереву: есть модели; {Блок} в имени и папках NWF и отчётов — только когда модели
+        /// строки из одного блока; две строки не пишут в одну NWF (копия со старым именем). null — всё верно.
         /// </summary>
-        public static string CheckNwfTaken(ExportTask root, ExportSettings common)
+        public static string CheckNwf(ExportTask root, ExportSettings common)
         {
             var seen = new Dictionary<string, ExportTask>(StringComparer.OrdinalIgnoreCase);
-            foreach (var leaf in root.Self().Where(t => t.Children.Count == 0))
-                foreach (var b in TaskBlocks(leaf, common))
+            foreach (var t in root.Self().Where(MakesNwf))
+            {
+                var models = ModelsOf(t);
+                if (models.Count == 0) return "«" + t.Name + "»: моделей нет — NWF не из чего собрать.";
+                var withBlock = new[] { NwfNameOf(t), NwfFolderOf(t), ReportFolderOf(t) }
+                    .Any(s => ExportNames.LabelsIn(s).Contains("Блок", StringComparer.OrdinalIgnoreCase));
+                if (withBlock && BlockOfTask(t, common).Length == 0)
                 {
-                    var path = NwfPath(leaf, b.Name, common);
-                    if (seen.TryGetValue(path, out var other) && other != leaf)
-                        return "NWF «" + FileName(path) + "» — и у «" + other.Name + "», и у «" + leaf.Name + "»: поменяйте имя или папку NWF.";
-                    seen[path] = leaf;
+                    var blocks = models.Select(m => BlockOf(m, common)).Select(b => b.Length == 0 ? "без блока" : b)
+                        .Distinct(StringComparer.OrdinalIgnoreCase);
+                    return "«" + t.Name + "»: модели из разных блоков (" + string.Join(", ", blocks) +
+                           ") — {Блок} в имени или папках NWF и отчётов не подставить.";
                 }
+                var path = NwfPath(t, common);
+                if (seen.TryGetValue(path, out var other))
+                    return "NWF «" + FileName(path) + "» — и у «" + other.Name + "», и у «" + t.Name + "»: поменяйте имя или папку NWF.";
+                seen[path] = t;
+            }
             return null;
         }
 

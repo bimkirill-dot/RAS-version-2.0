@@ -5,12 +5,11 @@
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Fg}" FontFamily="Segoe UI" FontSize="13">
     <!-- «Задачи выгрузки» (DECISIONS.md модуля, «Дерево задач с наследованием (03.11.2026)»): задача синей строкой, под ней
-         подзадачи любой глубины, у нижней строки ветки — её блоки (собираются сами по именам моделей, у блока — только
-         «Запустить»). Раскладка — по рисунку разработчика (30.10.2026) и наброскам 03.11.2026; номер, название и сводка — текстом,
+         подзадачи любой глубины; NWF собирает подзадача без подзадач с галочкой «Формировать NWF». Раскладка — по рисунку разработчика (30.10.2026) и наброскам 03.11.2026; номер, название и сводка — текстом,
          без рамок полей. Кнопки, кисти — общие образцы ядра (подключаются до разметки); ключи своих стилей не совпадают с кистями
          ядра. -->
     <Window.Resources>
-        <!-- строка: у задачи — акцент, у подзадачи — фон строки, у блока — без рамки; текст и значки берут цвет строки -->
+        <!-- строка: у задачи — акцент, у подзадачи — фон строки; текст и значки берут цвет строки -->
         <Style x:Key="TaskRowBox" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource Row}" />
             <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
@@ -24,11 +23,6 @@
                     <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
                     <Setter Property="TextElement.Foreground" Value="{DynamicResource AccentFg}" />
                     <Setter Property="Padding" Value="6,10" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding IsBlock}" Value="True">
-                    <Setter Property="Background" Value="Transparent" />
-                    <Setter Property="BorderThickness" Value="0" />
-                    <Setter Property="Padding" Value="6,2" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
@@ -69,7 +63,7 @@
                                 <Button Style="{StaticResource RowIcon}" Width="26" Margin="0" FontSize="12"
                                         Content="{Binding Arrow}" Visibility="{Binding ArrowVisibility}" Click="Toggle_Click" />
                                 <TextBlock Grid.Column="1" Text="{Binding Number}" Opacity="0.75" VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="2" Text="{Binding Name}" FontSize="{Binding NameSize}" FontWeight="{Binding NameWeight}"
+                                <TextBlock Grid.Column="2" Text="{Binding Name}" FontSize="{Binding NameSize}" FontWeight="SemiBold"
                                            Margin="0,0,12,0" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip="{Binding Name}" />
                                 <!-- сводка — бледнее названия, цвет строки (на синей строке — белым) -->
                                 <TextBlock Grid.Column="3" Text="{Binding Summary}" Opacity="0.75" Margin="0,0,12,0"
@@ -77,15 +71,12 @@
                                 <!-- места кнопок остаются и у строки, где их нет, — значки строк стоят ровно -->
                                 <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
                                     <Button Style="{StaticResource RowIcon}" Content="&#xE768;" Click="Run_Click" ToolTip="Запустить" />
-                                    <Button Style="{StaticResource RowIcon}" Content="&#xE710;" Click="AddSub_Click" ToolTip="Новая подзадача"
-                                            Visibility="{Binding EditVisibility}" />
+                                    <Button Style="{StaticResource RowIcon}" Content="&#xE710;" Click="AddSub_Click" ToolTip="Новая подзадача" />
                                     <!-- копия подзадачи (вторая критичность — копия первой) -->
                                     <Button Style="{StaticResource RowIcon}" Content="&#xE8C8;" Click="Copy_Click" ToolTip="Копия"
                                             Visibility="{Binding CopyVisibility}" />
-                                    <Button Style="{StaticResource RowIcon}" Content="&#xE70F;" Click="Edit_Click" ToolTip="Изменить"
-                                            Visibility="{Binding EditVisibility}" />
-                                    <Button Style="{StaticResource RowIcon}" Content="&#xE74D;" Click="Delete_Click" ToolTip="Удалить"
-                                            Visibility="{Binding EditVisibility}" />
+                                    <Button Style="{StaticResource RowIcon}" Content="&#xE70F;" Click="Edit_Click" ToolTip="Изменить" />
+                                    <Button Style="{StaticResource RowIcon}" Content="&#xE74D;" Click="Delete_Click" ToolTip="Удалить" />
                                 </StackPanel>
                             </Grid>
                         </Border>

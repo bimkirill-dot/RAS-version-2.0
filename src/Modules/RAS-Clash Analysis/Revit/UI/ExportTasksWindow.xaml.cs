@@ -9,13 +9,13 @@ namespace RASv2.ClashAnalysis.UI
 {
     /// <summary>
     /// «Задачи выгрузки» (DECISIONS.md модуля, «Дерево задач с наследованием (03.11.2026)»): задачи из общего хранилища на
-    /// сервере, под задачей — подзадачи любой глубины, у нижней строки ветки — её блоки. Строка — номер, название, краткая
-    /// информация, «Запустить», «+» (подзадача), копия (у подзадачи), карандаш, корзина; у блока — только «Запустить». Перенос —
-    /// перетаскиванием внутри своего уровня (порядковый номер задач — общий).
+    /// сервере, под задачей — подзадачи любой глубины. Строка — номер, название, краткая информация, «Запустить», «+»
+    /// (подзадача), копия (у подзадачи), карандаш, корзина. Перенос — перетаскиванием внутри своего уровня (порядковый номер
+    /// задач — общий).
     /// </summary>
     public partial class ExportTasksWindow : Window
     {
-        /// <summary>Строка окна: задача, подзадача или блок.</summary>
+        /// <summary>Строка окна: задача или подзадача.</summary>
         public sealed class RowItem
         {
             public TreeRow Row { get; set; }
@@ -25,18 +25,15 @@ namespace RASv2.ClashAnalysis.UI
 
             public ExportTask Item => Row.Item;
             public string Number => Row.Number;
-            public bool IsBlock => Row.Block != null;
-            public bool IsTop => !IsBlock && Item.Parent == null;
-            public string Name => IsBlock ? Row.Block.Name : Item.Name;
-            public double NameSize => IsTop ? 18 : IsBlock ? 13 : 15;
-            public FontWeight NameWeight => IsBlock ? FontWeights.Normal : FontWeights.SemiBold;
-            public Thickness Indent => new Thickness(Row.Level * 28, 0, 0, IsBlock ? 2 : 6);
+            public bool IsTop => Item.Parent == null;
+            public string Name => Item.Name;
+            public double NameSize => IsTop ? 18 : 15;
+            public Thickness Indent => new Thickness(Row.Level * 28, 0, 0, 6);
             // Segoe MDL2 Assets: E70D — вниз (развёрнуто), E76C — вправо (свёрнуто)
             public string Arrow => Collapsed ? "\uE76C" : "\uE70D";
             public Visibility ArrowVisibility => HasInner ? Visibility.Visible : Visibility.Hidden;
-            // места кнопок остаются и у строки, где их нет, — значки строк стоят ровно
-            public Visibility CopyVisibility => !IsBlock && !IsTop ? Visibility.Visible : Visibility.Hidden;
-            public Visibility EditVisibility => IsBlock ? Visibility.Hidden : Visibility.Visible;
+            // место кнопки остаётся и у задачи, где её нет, — значки строк стоят ровно
+            public Visibility CopyVisibility => IsTop ? Visibility.Hidden : Visibility.Visible;
         }
 
         /// <summary>Версия Revit — для выбора моделей с Revit Server (настройки серверов — свои у каждой версии).</summary>
@@ -72,8 +69,6 @@ namespace RASv2.ClashAnalysis.UI
                 Toolbar.Visibility = Visibility.Collapsed;
                 RowsList.IsEnabled = false;
             }
-            // блоки свёрнуты: открыли окно — видно задачи и подзадачи
-            foreach (var t in _roots.SelectMany(r => r.Self()).Where(t => t.Children.Count == 0)) _collapsed.Add(t);
             Refresh();
         }
 
@@ -86,13 +81,10 @@ namespace RASv2.ClashAnalysis.UI
         // задачи — по порядковому номеру (разработчик, 02.11.2026: «зачем по алфавиту»): так прочитаны, новые — в конец
         private void Refresh()
         {
-            RowsList.ItemsSource = ExportNodes.Rows(_roots, _collapsed, Settings)
+            RowsList.ItemsSource = ExportNodes.Rows(_roots, _collapsed)
                 .Select(r => new RowItem
                 {
-                    Row = r,
-                    Summary = ExportNodes.Summary(r, Settings),
-                    Collapsed = r.Block == null && _collapsed.Contains(r.Item),
-                    HasInner = r.Block == null && (r.Item.Children.Count > 0 || ExportNodes.TaskBlocks(r.Item, Settings).Count > 0),
+                    Row = r, Summary = ExportNodes.Summary(r), Collapsed = _collapsed.Contains(r.Item), HasInner = r.Item.Children.Count > 0,
                 })
                 .ToList();
         }
@@ -186,7 +178,6 @@ namespace RASv2.ClashAnalysis.UI
             var parent = RowOf(sender).Item;
             var sub = parent.Add(new ExportTask { Name = "" });
             _collapsed.Remove(parent);
-            _collapsed.Add(sub);
             if (OpenSettings(sub)) SaveTop(ExportNodes.Root(parent));
             else parent.Remove(sub);
             Refresh();
@@ -205,7 +196,6 @@ namespace RASv2.ClashAnalysis.UI
             parent.Add(copy);
             parent.Children.Remove(copy);
             parent.Children.Insert(parent.Children.IndexOf(task) + 1, copy);
-            foreach (var t in copy.Self().Where(t => t.Children.Count == 0)) _collapsed.Add(t);
             if (OpenSettings(copy)) SaveTop(ExportNodes.Root(parent));
             else parent.Remove(copy);
             Refresh();
@@ -300,10 +290,10 @@ namespace RASv2.ClashAnalysis.UI
             MessageBox.Show(this, "Выгрузка — в следующей версии: сейчас задачи только настраиваются и хранятся.", Title,
                 MessageBoxButton.OK, MessageBoxImage.Information);
 
-        // перетаскивание строки: нажали на строку (не на кнопку) и повели мышью — перенос внутри своего уровня; блоки не переносятся
+        // перетаскивание строки: нажали на строку (не на кнопку) и повели мышью — перенос внутри своего уровня
         private void Row_MouseDown(object sender, MouseButtonEventArgs e)
         {
-            _dragArmed = !RowOf(sender).IsBlock && !(e.OriginalSource is DependencyObject d && FindButton(d));
+            _dragArmed = !(e.OriginalSource is DependencyObject d && FindButton(d));
             _dragStart = e.GetPosition(this);
         }
 
@@ -321,7 +311,7 @@ namespace RASv2.ClashAnalysis.UI
         {
             var item = e.Data.GetData(typeof(ExportTask)) as ExportTask;
             var row = RowOf(sender);
-            e.Effects = item != null && !row.IsBlock && item != row.Item && item.Parent == row.Item.Parent ? DragDropEffects.Move : DragDropEffects.None;
+            e.Effects = item != null && item != row.Item && item.Parent == row.Item.Parent ? DragDropEffects.Move : DragDropEffects.None;
             e.Handled = true;
         }
 
@@ -330,7 +320,7 @@ namespace RASv2.ClashAnalysis.UI
             var item = e.Data.GetData(typeof(ExportTask)) as ExportTask;
             var row = RowOf(sender);
             var target = row.Item;
-            if (item == null || row.IsBlock || item.Parent != target.Parent) return;
+            if (item == null || item.Parent != target.Parent) return;
             if (!ExportTask.MoveTo(SiblingsOf(item), item, target)) return;
             if (item.Parent != null) SaveTop(ExportNodes.Root(item));
             else

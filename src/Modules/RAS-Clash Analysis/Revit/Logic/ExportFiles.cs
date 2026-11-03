@@ -210,7 +210,6 @@ namespace RASv2.ClashAnalysis.Logic
             Clean(s);
             s.Models = s.Models ?? d.Models;
             s.TestsFiles = s.TestsFiles ?? d.TestsFiles;
-            s.NwfName = string.IsNullOrWhiteSpace(s.NwfName) ? d.NwfName : s.NwfName;
             s.Folder = s.Folder ?? d.Folder;
             s.NwcFolder = s.NwcFolder ?? d.NwcFolder;
             s.NwfFolder = s.NwfFolder ?? d.NwfFolder;
