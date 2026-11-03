@@ -5,10 +5,10 @@ using System.Linq;
 namespace RASv2.ClashAnalysis.Logic
 {
     /// <summary>
-    /// Строка «Задач выгрузки» (DECISIONS.md модуля, «Ручной порядок и модель разработчика (03.11.2026)»): верхняя — **проект**
-    /// (папка, папка для NWC, модели — Project, ModelFiles), под ним — **задачи** (например, «Высокая критичность»: файлы
-    /// проверок, имя NWF, папки, форматы — Options). Блоки задачи — не строки, плагин собирает их из моделей проекта по именам
-    /// (ExportNodes.Blocks). Вторая критичность — копия задачи. Без Revit API.
+    /// Строка «Задач выгрузки» (DECISIONS.md модуля, «Дерево задач с наследованием (03.11.2026)»): задача верхнего уровня и
+    /// подзадачи любой глубины. Любая настройка (модели, файлы проверок, имя NWF, папки, форматы, вид) задаётся на любом уровне;
+    /// не задана — берётся от уровня выше, заданная ниже перекрывает верхнюю (Settings: null — от уровня выше). Нижнюю строку
+    /// ветки плагин сам делит на блоки по именам моделей (ExportNodes.Blocks). Без Revit API.
     /// </summary>
     public sealed class ExportTask
     {
@@ -16,22 +16,20 @@ namespace RASv2.ClashAnalysis.Logic
         public ExportTask Parent { get; private set; }
         public List<ExportTask> Children { get; } = new List<ExportTask>();
 
-        /// <summary>Модели проекта — один раз на проект: блок и отдел — по имени, обе критичности берут одни модели.</summary>
-        public List<ExportModel> ModelFiles { get; set; } = new List<ExportModel>();
-        /// <summary>Моделей у самой строки.</summary>
-        public int Models => ModelFiles.Count;
-        /// <summary>Настройки проекта — у верхней строки.</summary>
-        public ProjectSettings Project { get; } = new ProjectSettings();
-        /// <summary>Настройки задачи — у строки под проектом.</summary>
-        public TaskSettings Options { get; set; } = new TaskSettings();
-        /// <summary>Проект в общем хранилище: ключ файла (null — ещё не записан) и время файла, когда прочитан или записан (ExportStore).</summary>
+        /// <summary>Свои настройки строки; null в поле — от уровня выше.</summary>
+        public NodeSettings Settings { get; set; } = new NodeSettings();
+
+        /// <summary>Задача в общем хранилище (у верхней строки): ключ файла (null — ещё не записана) и время файла, когда прочитана или записана (ExportStore).</summary>
         public string StoreId { get; set; }
         public DateTime StoreStamp { get; set; }
         /// <summary>
-        /// Порядковый номер проекта в списке — общий у всех (разработчик, 02.11.2026: «зачем по алфавиту — просто по порядковому
-        /// номеру»): новый — в конец, перетаскивание меняет; хранится в файле проекта.
+        /// Порядковый номер задачи в списке — общий у всех (разработчик, 02.11.2026: «зачем по алфавиту — просто по порядковому
+        /// номеру»): новая — в конец, перетаскивание меняет; хранится в файле задачи.
         /// </summary>
         public int StoreOrder { get; set; }
+
+        /// <summary>Новая задача верхнего уровня: все настройки свои, по умолчанию.</summary>
+        public static ExportTask NewTop(string name) => new ExportTask { Name = name, Settings = NodeSettings.Top() };
 
         public ExportTask Add(ExportTask child)
         {
@@ -46,7 +44,7 @@ namespace RASv2.ClashAnalysis.Logic
             if (Children.Remove(child)) child.Parent = null;
         }
 
-        /// <summary>Сосед по уровню: сдвинуть себя на место target (перетаскивание строки мышью — проекты между собой, задачи внутри проекта).</summary>
+        /// <summary>Сосед по уровню: сдвинуть себя на место target (перетаскивание строки мышью внутри своего уровня).</summary>
         public static bool MoveTo(List<ExportTask> siblings, ExportTask item, ExportTask target)
         {
             if (item == target || !siblings.Contains(item) || !siblings.Contains(target)) return false;
@@ -59,8 +57,19 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>Вложенных строк на всех уровнях.</summary>
         public int Descendants => Children.Sum(c => 1 + c.Descendants);
 
-        /// <summary>«задача», «задачи», «задач» — по числу.</summary>
-        public static string TasksWord(int n) => Word(n, "задача", "задачи", "задач");
+        /// <summary>Строки ветки сверху вниз: сама и все вложенные.</summary>
+        public IEnumerable<ExportTask> Self() => new[] { this }.Concat(Children.SelectMany(c => c.Self()));
+
+        /// <summary>Копия с вложенными (⧉): настройки — копией, без места в хранилище.</summary>
+        public ExportTask Copy()
+        {
+            var copy = new ExportTask { Name = Name, Settings = Settings.Clone() };
+            foreach (var c in Children) copy.Add(c.Copy());
+            return copy;
+        }
+
+        /// <summary>«подзадача», «подзадачи», «подзадач» — по числу.</summary>
+        public static string SubtasksWord(int n) => Word(n, "подзадача", "подзадачи", "подзадач");
 
         /// <summary>«блок», «блока», «блоков» — по числу.</summary>
         public static string BlocksWord(int n) => Word(n, "блок", "блока", "блоков");

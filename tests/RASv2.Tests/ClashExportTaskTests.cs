@@ -7,9 +7,9 @@ using RASv2.ClashAnalysis.Logic;
 namespace RASv2.Tests
 {
     /// <summary>
-    /// RAS-Clash Analysis: «Задачи выгрузки» — проект с моделями → задачи (критичности) → блоки из имён моделей (ExportTask,
-    /// ExportNodes): строки, краткая информация, где что лежит, проверки окон; имя NWC и папки с метками (ExportNames); файл
-    /// настроек и общее хранилище.
+    /// RAS-Clash Analysis: «Задачи выгрузки» — дерево задач с наследованием настроек (ExportTask, ExportNodes): строки, блоки у
+    /// нижней строки, краткая информация, где что лежит, проверки окна; имя NWC и папки с метками (ExportNames); файл настроек
+    /// (версии 1–3) и общее хранилище.
     /// </summary>
     internal static class ClashExportTaskTests
     {
@@ -21,84 +21,108 @@ namespace RASv2.Tests
         private static List<ExportModel> Models(string block, params string[] departments) =>
             departments.Select(d => new ExportModel { Path = "0000_01_01_" + block + "_" + d + "01_01_M3.rvt" }).ToList();
 
-        // ArmanQala: S1 (3 модели), S2 (2), S10 (1), Генплан без блока; задачи «Высокая критичность», «Средняя критичность».
-        // ЖК Нурлы: S1 (2), одна задача
-        private static List<ExportTask> Sample(out ExportTask high)
+        // ArmanQala: модели S10 (1), S1 (3), S2 (2), Генплан без блока; подзадачи «Высокая критичность» (модели — от задачи) и
+        // «Средняя критичность» (свои модели — S1 КЖ и АР). ЖК Нурлы: без подзадач, S1 (2)
+        private static List<ExportTask> Sample(out ExportTask high, out ExportTask mid)
         {
-            var project = new ExportTask { Name = "ArmanQala" };
-            project.ModelFiles.AddRange(Models("S10", "KJ"));
-            project.ModelFiles.AddRange(Models("S1", "KJ", "AR", "OV"));
-            project.ModelFiles.AddRange(Models("S2", "KJ", "AR"));
-            project.ModelFiles.Add(new ExportModel { Path = @"\\srv\Генплан.rvt" });
-            high = project.Add(new ExportTask { Name = "Высокая критичность" });
-            high.Options.TestsFiles.Add(@"\\srv\Проверки\КЖ-АР.xml");
-            project.Add(new ExportTask { Name = "Средняя критичность" });
-            var nurly = new ExportTask { Name = "ЖК Нурлы", ModelFiles = Models("S1", "KJ", "AR") };
-            nurly.Add(new ExportTask { Name = "Высокая критичность" });
-            return new List<ExportTask> { project, nurly };
+            var top = ExportTask.NewTop("ArmanQala");
+            top.Settings.Folder = @"\\srv\2025_Арман Кала 7 очередь";
+            top.Settings.Models.AddRange(Models("S10", "KJ"));
+            top.Settings.Models.AddRange(Models("S1", "KJ", "AR", "OV"));
+            top.Settings.Models.AddRange(Models("S2", "KJ", "AR"));
+            top.Settings.Models.Add(new ExportModel { Path = @"\\srv\Генплан.rvt" });
+            high = top.Add(new ExportTask { Name = "Высокая критичность" });
+            high.Settings.TestsFiles = new List<string> { @"\\srv\Проверки\КЖ-АР.xml" };
+            high.Settings.NwfName = "{Блок}_ВК";
+            mid = top.Add(new ExportTask { Name = "Средняя критичность" });
+            mid.Settings.TestsFiles = new List<string> { @"\\srv\Проверки\МЕР.xml" };
+            mid.Settings.NwfName = "{Блок}_СК";
+            mid.Settings.Models = Models("S1", "KJ", "AR");
+            var nurly = ExportTask.NewTop("ЖК Нурлы");
+            nurly.Settings.Models.AddRange(Models("S1", "KJ", "AR"));
+            return new List<ExportTask> { top, nurly };
         }
 
         public static IEnumerable<KeyValuePair<string, Action>> All()
         {
             var common = new ExportSettings();
-            yield return Case("строки: проект 1, задача 1.1, её блоки 1.1.1; свёрнутые — без вложенных", () =>
+            yield return Case("строки: задача 1, подзадача 1.1, блоки нижней строки 1.1.1; свёрнутые — без вложенных", () =>
             {
-                var roots = Sample(out var high);
+                var roots = Sample(out var high, out _);
                 var rows = ExportNodes.Rows(roots, new HashSet<ExportTask>(), common);
                 var numbers = string.Join(" ", rows.Select(r => r.Number + ":" + (r.Block?.Name ?? r.Item.Name)));
-                Check(numbers == "1:ArmanQala 1.1:Высокая критичность 1.1.1:S1 1.1.2:S2 1.1.3:S10 1.2:Средняя критичность 1.2.1:S1 1.2.2:S2 " +
-                      "1.2.3:S10 2:ЖК Нурлы 2.1:Высокая критичность 2.1.1:S1", numbers);
-                Check(rows.Where(r => r.Block != null).All(r => r.Level == 2) && rows[2].Item == high, "блок — строка своей задачи");
+                Check(numbers == "1:ArmanQala 1.1:Высокая критичность 1.1.1:S1 1.1.2:S2 1.1.3:S10 1.2:Средняя критичность 1.2.1:S1 " +
+                      "2:ЖК Нурлы 2.1:S1", numbers);
+                Check(rows[2].Level == 2 && rows[2].Item == high && rows[8].Level == 1, "блок — строка своей задачи, уровнем ниже");
                 rows = ExportNodes.Rows(roots, new HashSet<ExportTask> { high, roots[1] }, common);
                 numbers = string.Join(" ", rows.Select(r => r.Number));
-                Check(numbers == "1 1.1 1.2 1.2.1 1.2.2 1.2.3 2", "свёрнуты задача и проект: " + numbers);
+                Check(numbers == "1 1.1 1.2 1.2.1 2", "свёрнуты подзадача и задача: " + numbers);
             });
-            yield return Case("блоки — из имён моделей: по номерам, без блока — последним; вписанный руками; снятые задачей", () =>
+            yield return Case("наследование: не задано — от уровня выше, задано ниже — перекрывает; любая глубина", () =>
             {
-                var roots = Sample(out var high);
-                var project = roots[0];
-                var blocks = ExportNodes.Blocks(project, common);
+                var roots = Sample(out var high, out var mid);
+                var top = roots[0];
+                Check(ExportNodes.ModelsOf(high).Count == 7 && ExportNodes.OwnerOf(high, s => s.Models) == top, "модели — от задачи");
+                Check(ExportNodes.ModelsOf(mid).Count == 2 && ExportNodes.OwnerOf(mid, s => s.Models) == mid, "свои — вместо задачи");
+                Check(ExportNodes.FolderOf(mid) == @"\\srv\2025_Арман Кала 7 очередь" && ExportNodes.NwcFolderOf(high) == @"{Блок}\NWC" &&
+                      ExportNodes.NwfNameOf(high) == "{Блок}_ВК" && ExportNodes.NwfNameOf(top) == "{Блок}", "строки");
+                top.Settings.Xml = false;
+                Check(!ExportNodes.XmlOf(high) && ExportNodes.HtmlOf(high), "форматы — от задачи");
+                mid.Settings.Xml = true;
+                mid.Settings.Html = false;
+                Check(ExportNodes.XmlOf(mid) && !ExportNodes.HtmlOf(mid), "форматы — свои");
+                Check(ExportNodes.ViewOf(high, common) == "3D_Navisworks", "вид — из общих");
+                top.Settings.ViewName = "3D_NW";
+                Check(ExportNodes.ViewOf(high, common) == "3D_NW", "вид — от задачи");
+                var s1 = high.Add(new ExportTask { Name = "S1", Settings = { Models = Models("S1", "KJ") } });
+                Check(ExportNodes.TaskBlocks(high, common).Count == 0 && ExportNodes.TaskBlocks(s1, common).Single().Name == "S1",
+                    "блоки — только у нижней строки");
+                Check(ExportNodes.NwfNameOf(s1) == "{Блок}_ВК" && ExportNodes.TestsOf(s1).Single().EndsWith("КЖ-АР.xml") &&
+                      ExportNodes.FolderOf(s1) == @"\\srv\2025_Арман Кала 7 очередь", "третий уровень — от подзадачи и задачи");
+                top.Settings.ServerFolder = "RSN://srv/AQ";
+                Check(ExportNodes.StartServerFolder(s1) == "RSN://srv/AQ", "откуда добавлять модели — от задачи");
+            });
+            yield return Case("блоки — из имён моделей: по номерам, без блока — последним; вписанный руками", () =>
+            {
+                var roots = Sample(out var high, out _);
+                var blocks = ExportNodes.Blocks(ExportNodes.ModelsOf(high), common);
                 Check(string.Join(",", blocks.Select(b => (b.Name.Length == 0 ? "—" : b.Name) + b.Models.Count)) == "S13,S22,S101,—1",
                     string.Join(",", blocks.Select(b => b.Name + b.Models.Count)));
-                project.ModelFiles.Last().Block = " S1 ";
-                Check(ExportNodes.Blocks(project, common)[0].Models.Count == 4 && ExportNodes.Blocks(project, common).Count == 3, "Генплан — в S1 руками");
-                high.Options.SkippedBlocks.Add("s2");
-                Check(string.Join(",", ExportNodes.TaskBlocks(high, common).Select(b => b.Name)) == "S1,S10", "S2 задача не делает");
+                roots[0].Settings.Models.Last().Block = " S1 ";
+                Check(ExportNodes.TaskBlocks(high, common)[0].Models.Count == 4 && ExportNodes.Blocks(ExportNodes.ModelsOf(high), common).Count == 3,
+                    "Генплан — в S1 руками");
                 Check(ExportNodes.NaturalCompare("S2", "S10") < 0 && ExportNodes.NaturalCompare("S10", "S9") > 0, "S2 раньше S10");
             });
-            yield return Case("перенос — проекты между собой, задачи внутри своего проекта", () =>
+            yield return Case("перенос — внутри своего уровня; копия — с вложенными, настройки отдельно", () =>
             {
-                var roots = Sample(out var high);
-                var mid = roots[0].Children[1];
+                var roots = Sample(out var high, out var mid);
                 Check(ExportTask.MoveTo(roots[0].Children, mid, high) && roots[0].Children[0] == mid, "средняя — на место высокой");
-                Check(ExportTask.MoveTo(roots, roots[1], roots[0]) && roots[0].Name == "ЖК Нурлы", "проект — на место другого");
-                Check(!ExportTask.MoveTo(roots, high, roots[1]), "задача — не на уровень проектов");
+                Check(ExportTask.MoveTo(roots, roots[1], roots[0]) && roots[0].Name == "ЖК Нурлы", "задача — на место другой");
+                Check(!ExportTask.MoveTo(roots, high, roots[1]), "подзадача — не на уровень задач");
+                high.Add(new ExportTask { Name = "S1" });
+                var copy = high.Copy();
+                copy.Settings.TestsFiles.Add("другой.xml");
+                Check(copy.Children.Single().Name == "S1" && copy.Parent == null && high.Settings.TestsFiles.Count == 1 &&
+                      copy.Settings.Models == null, "копия");
+                Check(roots[1].Descendants == 3 && roots[1].Self().Count() == 4, "вложенные");
             });
-            yield return Case("краткая информация: проекта — задачи, модели, блоки; задачи — блоки и файлы; блока — модели", () =>
+            yield return Case("краткая информация: подзадачи, модели (свои или от кого), файлы, имя NWF, без блока; блок — модели", () =>
             {
-                var roots = Sample(out var high);
+                var roots = Sample(out _, out _);
                 var rows = ExportNodes.Rows(roots, new HashSet<ExportTask>(), common);
-                var s = ExportNodes.Summary(rows[0], common);
-                Check(s == "2 задачи · 7 моделей · 3 блока · без блока: 1", s);
-                s = ExportNodes.Summary(rows[1], common);
-                Check(s == "блоки S1–S10 (3) · КЖ-АР.xml", s);
-                s = ExportNodes.Summary(rows[2], common);
-                Check(s == "3 модели", s);
-                s = ExportNodes.Summary(rows[5], common);
-                Check(s == "блоки S1–S10 (3) · файлов проверок нет", s);
-                high.Options.SkippedBlocks.Add("S2");
-                s = ExportNodes.Summary(ExportNodes.Rows(roots, new HashSet<ExportTask>(), common)[1], common);
-                Check(s == "блоки S1, S10 · КЖ-АР.xml", s);
-                var empty = new ExportTask { Name = "Новый" };
-                var t = empty.Add(new ExportTask { Name = "Высокая" });
-                s = ExportNodes.Summary(new TreeRow { Item = t, Level = 1 }, common);
-                Check(s == "блоков нет · файлов проверок нет", s);
+                string S(int i) => ExportNodes.Summary(rows[i], common);
+                Check(S(0) == "2 подзадачи · 7 моделей", S(0));
+                Check(S(1) == "7 моделей от «ArmanQala» · КЖ-АР.xml · {Блок}_ВК · без блока: 1", S(1));
+                Check(S(2) == "3 модели", S(2));
+                Check(S(5) == "2 модели (свои) · МЕР.xml · {Блок}_СК", S(5));
+                Check(S(7) == "2 модели · {Блок}", "задача без подзадач: " + S(7));
             });
-            yield return Case("«модель / задача / блок» по числу", () =>
+            yield return Case("«модель / подзадача / блок» по числу", () =>
             {
                 var words = string.Join(" ", new[] { 1, 2, 4, 5, 11, 12, 14, 21, 22, 25, 111 }.Select(n => n + " " + ExportTask.ModelsWord(n)));
                 Check(words == "1 модель 2 модели 4 модели 5 моделей 11 моделей 12 моделей 14 моделей 21 модель 22 модели 25 моделей 111 моделей", words);
-                Check(ExportTask.TasksWord(1) == "задача" && ExportTask.TasksWord(3) == "задачи" && ExportTask.BlocksWord(9) == "блоков", "задачи, блоки");
+                Check(ExportTask.SubtasksWord(1) == "подзадача" && ExportTask.SubtasksWord(3) == "подзадачи" && ExportTask.BlocksWord(9) == "блоков",
+                    "подзадачи, блоки");
             });
             yield return Case("имя NWC: первые 7 частей, в последней — до пробела; частей меньше — как есть", () =>
             {
@@ -106,6 +130,7 @@ namespace RASv2.Tests
                 Check(Nwc("0000_01_01_S6_KJ01_01_M3 еще текст.rvt") == "0000_01_01_S6_KJ01_01_M3", Nwc("0000_01_01_S6_KJ01_01_M3 еще текст.rvt"));
                 Check(Nwc("0000_01_01_S6_KJ01_01_M3_еще текст.rvt") == "0000_01_01_S6_KJ01_01_M3", Nwc("0000_01_01_S6_KJ01_01_M3_еще текст.rvt"));
                 Check(Nwc(@"\server\Проект\0000_01_01_S6_KJ01_01_Р3.rvt") == "0000_01_01_S6_KJ01_01_Р3", "кириллица и путь");
+                Check(Nwc(@"\\srv\Генплан.rvt") == "Генплан", "«\\\\сервер\\файл» — не пусто (.NET 8)");
                 Check(Nwc("0000_01_01_S6_KJ01_01_M3 еще текст.rvt", trim: false) == "0000_01_01_S6_KJ01_01_M3 еще текст", "без обрезки");
                 Check(Nwc("0000_01_01_S6_KJ01_01_M3_x.rvt", parts: 6) == "0000_01_01_S6_KJ01_01", "6 частей");
                 var short_ = ExportNames.NwcName("Модель АР.rvt", true, 7, out var matches);
@@ -162,36 +187,31 @@ namespace RASv2.Tests
                 target.CopyFrom(s);
                 Check(target.HideNames.Single() == "временн", "взять на место — со скрытием");
             });
-            yield return Case("где что лежит: NWC — у проекта, NWF и отчёты — строки задачи с {Блок}, {Дата}, {Формат}", () =>
+            yield return Case("где что лежит: папки — строки по дереву с {Блок}, {Отдел}, {Дата}, {Формат}", () =>
             {
                 var c = new ExportSettings { Departments = { new DepartmentTemplate { Department = "KJ" } } };
-                var project = new ExportTask { Name = "ArmanQala" };
-                project.Project.Folder = @"\\srv\2025_Арман Кала 7 очередь\";
-                project.ModelFiles.Add(new ExportModel { Path = @"RSN://10.10.1.88/AQ/0000_01_01_S1_KJ01_01_M3 еще.rvt" });
-                var m = project.ModelFiles[0];
-                var high = project.Add(new ExportTask { Name = "Высокая критичность" });
-                Check(ExportNodes.NwcPath(high, m, c) == @"\\srv\2025_Арман Кала 7 очередь\S1\NWC\0000_01_01_S1_KJ01_01_M3.nwc", ExportNodes.NwcPath(high, m, c));
-                Check(ExportNodes.NwfPath(high, "S1", c) == @"\\srv\2025_Арман Кала 7 очередь\S1\S1.nwf", ExportNodes.NwfPath(high, "S1", c));
-                Check(ExportNodes.ReportPath(high, "S1", c, new DateTime(2026, 11, 2), "XML") == @"\\srv\2025_Арман Кала 7 очередь\S1\02.11.2026",
-                    "отчёты по умолчанию: " + ExportNodes.ReportPath(high, "S1", c, new DateTime(2026, 11, 2), "XML"));
-                high.Options.NwfName = "{Блок}_ВК";
-                high.Options.ReportFolder = @"Отчеты\{Дата}\{Блок}\Высокая критичность\{Формат}";
-                Check(ExportNodes.NwfPath(high, "S1", c).EndsWith(@"\S1\S1_ВК.nwf"), "регламент: " + ExportNodes.NwfPath(high, "S1", c));
-                Check(ExportNodes.ReportPath(high, "S1", c, new DateTime(2026, 11, 2), "HTML") ==
-                      @"\\srv\2025_Арман Кала 7 очередь\Отчеты\02.11.2026\S1\Высокая критичность\HTML", ExportNodes.ReportPath(high, "S1", c, new DateTime(2026, 11, 2), "HTML"));
-                project.Project.NwcFolder = @"{Блок}\NWC\{Отдел}";
+                var roots = Sample(out var high, out var mid);
+                var top = roots[0];
+                var m = top.Settings.Models[1];
+                const string root = @"\\srv\2025_Арман Кала 7 очередь";
+                Check(ExportNodes.NwcPath(high, m, c) == root + @"\S1\NWC\0000_01_01_S1_KJ01_01_M3.nwc", ExportNodes.NwcPath(high, m, c));
+                Check(ExportNodes.NwcPath(high, m, c) == ExportNodes.NwcPath(mid, mid.Settings.Models[0], c), "одна модель — один NWC на обе критичности");
+                Check(ExportNodes.NwfPath(high, "S1", c) == root + @"\S1\S1_ВК.nwf" && ExportNodes.NwfPath(mid, "S1", c) == root + @"\S1\S1_СК.nwf",
+                    ExportNodes.NwfPath(high, "S1", c));
+                Check(ExportNodes.ReportPath(high, "S1", c, new DateTime(2026, 11, 2), "XML") == root + @"\S1\02.11.2026", "отчёты по умолчанию");
+                top.Settings.ReportFolder = @"Отчеты\{Дата}\{Блок}\{Формат}";
+                high.Settings.ReportFolder = @"Отчеты\{Дата}\{Блок}\Высокая критичность\{Формат}";
+                Check(ExportNodes.ReportPath(high, "S1", c, new DateTime(2026, 11, 2), "HTML") == root + @"\Отчеты\02.11.2026\S1\Высокая критичность\HTML" &&
+                      ExportNodes.ReportPath(mid, "S1", c, new DateTime(2026, 11, 2), "XML") == root + @"\Отчеты\02.11.2026\S1\XML", "своя и от задачи");
+                top.Settings.NwcFolder = @"{Блок}\NWC\{Отдел}";
                 Check(ExportNodes.NwcPath(high, m, c).EndsWith(@"\S1\NWC\KJ\0000_01_01_S1_KJ01_01_M3.nwc"), "отдел — по модели");
-                high.Options.NwfFolder = @"D:\NWF\{Блок}";
+                high.Settings.NwfFolder = @"D:\NWF\{Блок}";
                 Check(ExportNodes.NwfPath(high, "S1", c) == @"D:\NWF\S1\S1_ВК.nwf", "полный путь — как есть");
                 Check(ExportNodes.InProject("", @"{Блок}") == "{Блок}" && ExportNodes.InProject(@"\\srv\P", "") == @"\\srv\P", "пустые части");
-                Check(ExportNodes.Short(@"\\srv\2025_Арман Кала 7 очередь\", @"\\srv\2025_Арман Кала 7 очередь\S1\NWC\a.nwc") == @"…\S1\NWC\a.nwc",
-                    "пример внутри папки проекта — с «…»");
+                Check(ExportNodes.Short(root + @"\", root + @"\S1\NWC\a.nwc") == @"…\S1\NWC\a.nwc", "пример внутри папки проекта — с «…»");
                 Check(ExportNodes.Short(@"\\srv\P", @"D:\NWF\S1\S1.nwf") == @"D:\NWF\S1\S1.nwf" &&
                       ExportNodes.Short(@"\\srv\P", @"\\srv\P2\a") == @"\\srv\P2\a" && ExportNodes.Short("", @"S1\NWC") == @"S1\NWC",
                     "вне папки проекта — целиком");
-                Check(ExportNodes.ViewOf(high, c) == "3D_Navisworks", "вид — из общих");
-                project.Project.ViewName = "3D_NW";
-                Check(ExportNodes.ViewOf(high, c) == "3D_NW", "вид — проекта");
             });
             yield return Case("проверки строк: NWC без даты, NWF постоянная с {Блок}, отчёты без отдела, неизвестная метка", () =>
             {
@@ -206,21 +226,23 @@ namespace RASv2.Tests
                 var bad = ExportNodes.CheckReportFolder(@"{Проект}\{Дата}");
                 Check(bad != null && bad.Contains("{Проект}"), "неизвестная метка: " + bad);
             });
-            yield return Case("задачи: название не повторяется; копия со старым именем NWF — одна NWF на двоих", () =>
+            yield return Case("название не повторяется рядом; копия со старым именем NWF — одна NWF на двоих", () =>
             {
-                var roots = Sample(out var high);
-                var mid = roots[0].Children[1];
-                Check(ExportNodes.CheckTaskName(mid, "Низкая") == null, "новое название");
-                Check(ExportNodes.CheckTaskName(mid, " высокая критичность ") != null && ExportNodes.CheckTaskName(mid, " ") != null, "повтор и пусто");
-                high.Options.NwfName = "{Блок}_ВК";
-                mid.Options = high.Options.Clone();
-                var taken = ExportNodes.CheckNwfTaken(mid, mid.Options.NwfFolder, mid.Options.NwfName, common);
-                Check(taken != null && taken.Contains("Высокая критичность"), "копия как есть: " + taken);
-                Check(ExportNodes.CheckNwfTaken(mid, mid.Options.NwfFolder, "{Блок}_СК", common) == null, "своё имя NWF");
-                Check(ExportNodes.CheckNwfTaken(mid, @"{Блок}\СК", "{Блок}_ВК", common) == null, "своя папка NWF");
-                Check(ExportNodes.CheckProjectName("ArmanQala", new[] { "ЖК Нурлы" }) == null, "новое название проекта");
-                Check(ExportNodes.CheckProjectName(" armanqala ", new[] { "ArmanQala" }) != null && ExportNodes.CheckProjectName(" ", new string[0]) != null,
-                    "повтор названия проекта и пусто");
+                var roots = Sample(out var high, out _);
+                Check(ExportNodes.CheckName("Низкая", new[] { "Высокая критичность" }) == null, "новое название");
+                Check(ExportNodes.CheckName(" высокая критичность ", new[] { "Высокая критичность" }) != null &&
+                      ExportNodes.CheckName(" ", new string[0]) != null, "повтор и пусто");
+                Check(ExportNodes.CheckNwfTaken(roots[0], common) == null, "у критичностей свои NWF");
+                var copy = high.Copy();
+                copy.Name = "Высокая критичность (2)";
+                roots[0].Add(copy);
+                var taken = ExportNodes.CheckNwfTaken(roots[0], common);
+                Check(taken != null && taken.Contains("Высокая критичность (2)") && taken.Contains("S1_ВК.nwf"), "копия как есть: " + taken);
+                copy.Settings.NwfName = "{Блок}_НК";
+                Check(ExportNodes.CheckNwfTaken(roots[0], common) == null, "своё имя NWF");
+                copy.Settings.NwfName = null;
+                copy.Settings.NwfFolder = @"{Блок}\НК";
+                Check(ExportNodes.CheckNwfTaken(roots[0], common) == null, "своя папка NWF");
             });
             yield return Case("файлы проверок: .xml, без повторов, одна проверка — в одном файле", () =>
             {
@@ -240,11 +262,11 @@ namespace RASv2.Tests
                 Check(ExportNodes.CheckTestsFiles(new[] { @"\\srv\a.nwf" }, Names) != null, "не .xml");
                 Check(ExportNodes.CheckTestsFiles(new[] { @"\\srv\МЕР.xml", @"\\SRV\мер.xml" }, Names) != null, "один файл дважды");
             });
-            yield return Case("модели проекта: добавить без повторов; имя NWC руками или из имени; два NWC в один файл; Revit Server", () =>
+            yield return Case("модели: добавить без повторов; имя NWC руками или из имени; два NWC в один файл; Revit Server", () =>
             {
-                var project = new ExportTask { Name = "ArmanQala" };
-                Check(ExportNodes.AddModels(project, new[] { "RSN://srv/AQ/a_S1_KJ01.rvt", "RSN://srv/AQ/b_S1_AR01.rvt", "rsn://SRV/aq/A_S1_KJ01.rvt", " " }) == 2 &&
-                      project.Models == 2, "повтор и пустое — мимо");
+                var list = new List<ExportModel>();
+                Check(ExportNodes.AddModels(list, new[] { "RSN://srv/AQ/a_S1_KJ01.rvt", "RSN://srv/AQ/b_S1_AR01.rvt", "rsn://SRV/aq/A_S1_KJ01.rvt", " " }) == 2 &&
+                      list.Count == 2, "повтор и пустое — мимо");
                 var m = new ExportModel { Path = @"\\srv\Проект\0000_01_01_S6_KJ01_01_M3 еще текст.rvt" };
                 Check(ExportNodes.NwcNameOf(m, common) == "0000_01_01_S6_KJ01_01_M3", "из имени");
                 m.NwcName = " КЖ_свой ";
@@ -253,17 +275,13 @@ namespace RASv2.Tests
                 Check(ExportNodes.NwcNameOf(rsn, common) == "0000_01_01_S6_AR01_01_M3", "Revit Server: " + ExportNodes.NwcNameOf(rsn, common));
                 Check(ExportNodes.IsServerPath(rsn.Path) && !ExportNodes.IsServerPath(@"\\srv\m.rvt") && !ExportNodes.IsServerPath("RSN://srv/папка"),
                     "путь Revit Server");
-                var roots = Sample(out _);
-                Check(ExportNodes.CheckNwcNames(roots[0], common) == null, "верные имена");
-                roots[0].ModelFiles.Add(new ExportModel { Path = @"\\другой\0000_01_01_S1_KJ01_01_M3 копия.rvt" });
-                var twin = ExportNodes.CheckNwcNames(roots[0], common);
+                var roots = Sample(out var high, out _);
+                Check(ExportNodes.CheckNwcNames(high, common) == null, "верные имена");
+                roots[0].Settings.Models.Add(new ExportModel { Path = @"\\другой\0000_01_01_S1_KJ01_01_M3 копия.rvt" });
+                var twin = ExportNodes.CheckNwcNames(high, common);
                 Check(twin != null && twin.Contains("копия"), "две модели — один NWC: " + twin);
-                roots[0].ModelFiles.Last().NwcName = "a:b";
-                Check(ExportNodes.CheckNwcNames(roots[0], common) != null, "недопустимые знаки");
-                roots[0].Project.NwcFolder = @"{Блок}\{Отдел}";
-                roots[0].ModelFiles.Last().NwcName = null;
-                Check(ExportNodes.CheckNwcNames(roots[0], new ExportSettings { Departments = { new DepartmentTemplate { Department = "KJ" } } }) != null,
-                    "одна папка — тот же файл");
+                roots[0].Settings.Models.Last().NwcName = "a:b";
+                Check(ExportNodes.CheckNwcNames(high, common) != null, "недопустимые знаки");
                 Check(ExportNodes.CheckDepartmentCodes(new[] { "KJ", "AR", "" }) == null, "коды верные");
                 Check(ExportNodes.CheckDepartmentCodes(new[] { "KJ01" }) != null && ExportNodes.CheckDepartmentCodes(new[] { "KJ", "kj" }) != null,
                     "цифры в коде и повтор");
@@ -271,7 +289,7 @@ namespace RASv2.Tests
                     ExportNodes.ServerFolderOf("RSN://10.10.1.88/2025_Ариал/01_AR/S03/ARL.rvt"));
                 Check(ExportNodes.ServerFolderOf("RSN://10.10.1.88/ARL.rvt") == "" && ExportNodes.ServerFolderOf(@"\\srv\a.rvt") == "", "нет папки / не сервер");
             });
-            yield return Case("файл настроек: общие, проект с моделями и задачами, задача — туда и обратно; версия 1 читается", () =>
+            yield return Case("файл настроек: общие, задача с подзадачами, подзадача — туда и обратно; версии 1 и 2 читаются", () =>
             {
                 var dir = Path.Combine(Path.GetTempPath(), "RASv2.Tests", "export-files");
                 Directory.CreateDirectory(dir);
@@ -284,43 +302,57 @@ namespace RASv2.Tests
                 Check(back.Kind == ExportFile.Common && back.Settings.BlockPrefix == "C" && back.Settings.Nwc.ViewName == "3D_NW" &&
                       back.Settings.Departments.Single().Etalon == @"\\srv\КЖ.rte" && back.Settings.HideNames.Single() == "временн", "общие");
 
-                var roots = Sample(out var high);
-                var project = roots[0];
-                project.Project.Folder = @"\\srv\Арман Кала";
-                project.ModelFiles.Last().Block = "S1";
-                high.Options.NwfName = "{Блок}_ВК";
-                high.Options.Html = false;
-                high.Options.SkippedBlocks.Add("S10");
-                path = Path.Combine(dir, "Проект.json");
-                ExportFiles.Save(path, ExportFiles.FromProject(project.Name, project.Project, project.ModelFiles, project.Children));
-                back = ExportFiles.Load(path);
-                var copy = ExportFiles.ToProject(back.ProjectData, new[] { "ArmanQala" });
-                Check(copy.Name == "ArmanQala (2)" && copy.Project.Folder == @"\\srv\Арман Кала" && copy.Models == 7 &&
-                      copy.ModelFiles.Last().Block == "S1", "проект с моделями: " + copy.Name);
-                var h = copy.Children[0];
-                Check(copy.Children.Count == 2 && h.Parent == copy && h.Options.NwfName == "{Блок}_ВК" && h.Options.Xml && !h.Options.Html &&
-                      h.Options.SkippedBlocks.Single() == "S10" && h.Options.TestsFiles.Single() == @"\\srv\Проверки\КЖ-АР.xml", "задачи проекта");
-                Check(h.Options != high.Options && copy.Project != project.Project, "копией");
-
+                var roots = Sample(out var high, out var mid);
+                var top = roots[0];
+                top.Settings.Models.Last().Block = "S1";
+                mid.Settings.Html = false;
+                mid.Settings.Xml = true;
+                high.Add(new ExportTask { Name = "S1", Settings = { Models = Models("S1", "KJ") } });
                 path = Path.Combine(dir, "Задача.json");
+                ExportFiles.Save(path, ExportFiles.FromTop(top));
+                back = ExportFiles.Load(path);
+                var copy = ExportFiles.ToTop(back.ProjectData, new[] { "ArmanQala" });
+                Check(copy.Name == "ArmanQala (2)" && copy.Settings.Folder == top.Settings.Folder && copy.Settings.Models.Count == 7 &&
+                      copy.Settings.Models.Last().Block == "S1" && copy.Settings.NwfName == "{Блок}", "задача: " + copy.Name);
+                var h = copy.Children[0];
+                var md = copy.Children[1];
+                Check(h.Parent == copy && h.Settings.Models == null && h.Settings.Xml == null && ExportNodes.ModelsOf(h).Count == 7 &&
+                      h.Settings.NwfName == "{Блок}_ВК" && h.Children.Single().Settings.Models.Count == 1, "от задачи — так и осталось от задачи");
+                Check(md.Settings.Models.Count == 2 && md.Settings.Xml == true && md.Settings.Html == false, "свои — свои");
+                Check(copy.Settings != top.Settings && h.Settings.TestsFiles != high.Settings.TestsFiles, "копией");
+
+                path = Path.Combine(dir, "Подзадача.json");
                 ExportFiles.Save(path, ExportFiles.FromTask(high));
                 back = ExportFiles.Load(path);
-                var task = ExportFiles.ToTask(back.TaskData, project.Children.Select(x => x.Name));
-                Check(back.Kind == ExportFile.Task && task.Name == "Высокая критичность (2)" && task.Options.NwfName == "{Блок}_ВК" && task.Models == 0,
-                    "задача — настройки без моделей: " + task.Name);
+                var sub = ExportFiles.ToTask(back.TaskData, top.Children.Select(x => x.Name));
+                Check(back.Kind == ExportFile.Task && sub.Name == "Высокая критичность (2)" && sub.Settings.NwfName == "{Блок}_ВК" &&
+                      sub.Settings.Models == null && sub.Children.Single().Name == "S1", "подзадача с вложенными: " + sub.Name);
                 Check(ExportFiles.UniqueName("S1", new[] { "S1", "s1 (2)" }) == "S1 (3)" && ExportFiles.UniqueName(" ", new string[0]) == "Без названия",
                     "уникальные названия");
 
-                // версия 1 (02.11.2026): задачи-блоки со своими моделями — модели переходят в проект, файлы проверок — в задачу
+                // версия 2 (03.11.2026, днём): проект с моделями → задачи с настройками
+                path = Path.Combine(dir, "Проект v2.json");
+                File.WriteAllText(path, "{\"Kind\":\"Проект\",\"Version\":2,\"ProjectData\":{\"Name\":\"Старый\",\"Settings\":{\"Folder\":\"\\\\\\\\srv\\\\П\"," +
+                    "\"NwcFolder\":\"{Блок}\\\\NWC\",\"ServerFolder\":\"RSN://a/b\",\"ViewName\":null},\"Tasks\":[{\"Name\":\"Высокая\",\"Options\":" +
+                    "{\"Html\":false,\"NwfFolder\":\"{Блок}\",\"NwfName\":\"{Блок}_ВК\",\"ReportFolder\":\"x\",\"SkippedBlocks\":[]," +
+                    "\"TestsFiles\":[\"t.xml\"],\"Xml\":true}}],\"Order\":3,\"Models\":[{\"Block\":null,\"NwcName\":null,\"Path\":\"a_S1_KJ01.rvt\"}]}}");
+                var v2 = ExportFiles.ToTop(ExportFiles.Load(path).ProjectData, new string[0]);
+                var hv2 = v2.Children.Single();
+                Check(v2.Settings.Folder == @"\\srv\П" && v2.Settings.Models.Count == 1 && v2.Settings.ServerFolder == "RSN://a/b" &&
+                      v2.Settings.NwfName == "{Блок}" && v2.Settings.Xml == true, "проект → задача");
+                Check(hv2.Settings.TestsFiles.Single() == "t.xml" && hv2.Settings.NwfName == "{Блок}_ВК" && hv2.Settings.Html == false &&
+                      ExportNodes.ModelsOf(hv2).Count == 1, "задача проекта → подзадача, модели — от задачи");
+
+                // версия 1 (02.11.2026): задачи-блоки со своими моделями — модели переходят в задачу, файлы проверок — свои у подзадачи
                 path = Path.Combine(dir, "Проект v1.json");
                 File.WriteAllText(path, "{\"Kind\":\"Проект\",\"Version\":1,\"ProjectData\":{\"Name\":\"Старый\",\"Settings\":{\"Folder\":\"\\\\\\\\srv\\\\П\"," +
                     "\"NwcFolder\":\"{Блок}\\\\NWC\",\"NwfFolder\":\"{Блок}\",\"ReportFolder\":\"{Блок}\\\\{Дата}\",\"TestsFiles\":[\"t.xml\"]}," +
                     "\"Tasks\":[{\"Name\":\"S1\",\"Models\":[{\"Path\":\"a_S1_KJ01.rvt\"},{\"Path\":\"b_S1_AR01.rvt\"}],\"TestsFiles\":[\"s1.xml\"]}," +
                     "{\"Name\":\"S2\",\"Models\":[{\"Path\":\"a_S2_KJ01.rvt\"},{\"Path\":\"A_S1_KJ01.rvt\"}]}]}}");
-                var old = ExportFiles.ToProject(ExportFiles.Load(path).ProjectData, new string[0]);
-                Check(old.Project.Folder == @"\\srv\П" && old.Models == 3 && old.Children.Count == 2, "модели — в проект, без повторов: " + old.Models);
-                Check(old.Children[0].Options.TestsFiles.Single() == "s1.xml" && old.Children[1].Options.TestsFiles.Count == 0 &&
-                      old.Children[0].Options.Xml && old.Children[0].Options.Html && old.Children[0].Options.NwfName == "{Блок}", "настройки задач");
+                var v1 = ExportFiles.ToTop(ExportFiles.Load(path).ProjectData, new string[0]);
+                Check(v1.Settings.Folder == @"\\srv\П" && v1.Settings.Models.Count == 3 && v1.Children.Count == 2, "модели — в задачу, без повторов");
+                Check(v1.Children[0].Settings.TestsFiles.Single() == "s1.xml" && ExportNodes.TestsOf(v1.Children[1]).Single() == "t.xml" &&
+                      v1.Children[0].Settings.Xml == null && ExportNodes.XmlOf(v1.Children[0]), "файлы проверок и форматы");
 
                 File.WriteAllText(Path.Combine(dir, "чужой.json"), "{\"a\":1}");
                 var refused = false;
@@ -331,7 +363,7 @@ namespace RASv2.Tests
                 try { ExportFiles.Load(Path.Combine(dir, "не json.json")); } catch (InvalidDataException) { refused = true; }
                 Check(refused, "не JSON — понятный отказ");
             });
-            yield return Case("общее хранилище: все видят все проекты; правку коллеги не затирает молча; копия .prev; удаление", () =>
+            yield return Case("общее хранилище: все видят все задачи; правку коллеги не затирает молча; копия .prev; удаление", () =>
             {
                 var dir = Path.Combine(Path.GetTempPath(), "RASv2.Tests", "export-store-" + Guid.NewGuid().ToString("N"));
                 try
@@ -343,15 +375,20 @@ namespace RASv2.Tests
                     ivanov.SaveCommon(new ExportSettings { BlockPrefix = "C" });
                     Check(petrov.LoadCommon().BlockPrefix == "C", "общие настройки — у всех");
 
-                    var mine = new ExportTask { Name = "Жк Нурлы", StoreOrder = 2, ModelFiles = Models("S1", "KJ", "AR") };
+                    var mine = ExportTask.NewTop("Жк Нурлы");
+                    mine.StoreOrder = 2;
+                    mine.Settings.Models.AddRange(Models("S1", "KJ", "AR"));
                     mine.Add(new ExportTask { Name = "Высокая критичность" });
-                    Check(ivanov.SaveProject(mine, false, out _, out _) == SaveResult.Saved && mine.StoreId != null, "новый проект записан");
-                    ivanov.SaveProject(new ExportTask { Name = "ArmanQala", StoreOrder = 1 }, false, out _, out _);
+                    Check(ivanov.SaveProject(mine, false, out _, out _) == SaveResult.Saved && mine.StoreId != null, "новая задача записана");
+                    var other = ExportTask.NewTop("ArmanQala");
+                    other.StoreOrder = 1;
+                    ivanov.SaveProject(other, false, out _, out _);
                     var seen = petrov.LoadProjects();
                     Check(string.Join(",", seen.Select(x => x.Name + x.StoreOrder)) == "ArmanQala1,Жк Нурлы2",
-                        "у коллеги — оба, по порядковому номеру: " + string.Join(",", seen.Select(x => x.Name)));
+                        "у коллеги — обе, по порядковому номеру: " + string.Join(",", seen.Select(x => x.Name)));
                     var his = seen.Single(x => x.Name == "Жк Нурлы");
-                    Check(his.StoreId == mine.StoreId && his.Models == 2 && his.Children.Single().Name == "Высокая критичность", "тот же проект с моделями и задачами");
+                    Check(his.StoreId == mine.StoreId && his.Settings.Models.Count == 2 && his.Children.Single().Name == "Высокая критичность",
+                        "та же задача с моделями и подзадачами");
 
                     System.Threading.Thread.Sleep(30);
                     his.Add(new ExportTask { Name = "Средняя критичность" });
@@ -372,8 +409,8 @@ namespace RASv2.Tests
                     Check(petrov.LoadProjects(broken).Count == 2 && broken.Single() == "битый.json", "битый файл — мимо, остальные читаются");
 
                     ivanov.DeleteProject(mine);
-                    Check(!File.Exists(path) && File.Exists(path + ".prev") && petrov.LoadProjects().Count == 1, "удалён, копия осталась");
-                    Check(ivanov.Reload(mine) == null, "удалённый — заново не открыть");
+                    Check(!File.Exists(path) && File.Exists(path + ".prev") && petrov.LoadProjects().Count == 1, "удалена, копия осталась");
+                    Check(ivanov.Reload(mine) == null, "удалённую — заново не открыть");
                 }
                 finally
                 {
@@ -404,10 +441,10 @@ namespace RASv2.Tests
                 var lines = RevitServers.Hosts(1999);
                 Check(lines.Count == 0, "нет RSN.ini — серверов нет");
             });
-            yield return Case("удаление: задачи проекта", () =>
+            yield return Case("удаление: подзадачи", () =>
             {
-                var roots = Sample(out var high);
-                Check(roots[0].Descendants == 2, "у проекта: " + roots[0].Descendants);
+                var roots = Sample(out var high, out _);
+                Check(roots[0].Descendants == 2, "у задачи: " + roots[0].Descendants);
                 roots[0].Remove(high);
                 Check(roots[0].Descendants == 1 && high.Parent == null, "после удаления: " + roots[0].Descendants);
             });

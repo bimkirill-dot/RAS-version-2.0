@@ -5,13 +5,13 @@ using System.Linq;
 
 namespace RASv2.ClashAnalysis.Logic
 {
-    /// <summary>Чем кончилась запись проекта.</summary>
+    /// <summary>Чем кончилась запись задачи.</summary>
     public enum SaveResult { Saved, Conflict }
 
     /// <summary>
     /// Общее хранилище «Задач выгрузки» на сервере (разработчик, 02.11.2026: «чтобы все специалисты видели все задачи»):
-    /// «Общие настройки.json» и «Проекты\&lt;ключ&gt;.json» — по файлу на проект с задачами, в формате экспорта (ExportFiles).
-    /// «Сохранить» пишет сразу; правку проекта, изменённого коллегой после открытия, не затирает молча (SaveResult.Conflict);
+    /// «Общие настройки.json» и «Проекты\&lt;ключ&gt;.json» — по файлу на задачу верхнего уровня с подзадачами (до 03.11.2026 — «проект»; папка так и называется), в формате экспорта (ExportFiles).
+    /// «Сохранить» пишет сразу; правку задачи, изменённой коллегой после открытия, не затирает молча (SaveResult.Conflict);
     /// перед записью — копия прежнего файла (.prev). Без Revit API — проверяется тестами на временной папке.
     /// </summary>
     public sealed class ExportStore
@@ -20,7 +20,7 @@ namespace RASv2.ClashAnalysis.Logic
         private readonly string _user;
 
         /// <param name="dir">Папка хранилища: …\Data\RAS-Clash Analysis\Задачи выгрузки.</param>
-        /// <param name="user">Кто правит — пишется в файл проекта («изменил Иванов в 14:20»).</param>
+        /// <param name="user">Кто правит — пишется в файл задачи («изменил Иванов в 14:20»).</param>
         public ExportStore(string dir, string user)
         {
             _dir = dir;
@@ -42,11 +42,11 @@ namespace RASv2.ClashAnalysis.Logic
             Write(CommonPath, ExportFiles.FromCommon(settings));
         }
 
-        /// <summary>Все проекты — по порядковому номеру (без номера — в конце, по названию); файл, который не читается, пропускается (в broken — его имя).</summary>
+        /// <summary>Все задачи верхнего уровня — по порядковому номеру (без номера — в конце, по названию); файл, который не читается, пропускается (в broken — его имя).</summary>
         public List<ExportTask> LoadProjects(List<string> broken = null)
         {
             var list = new List<ExportTask>();
-            // «папки нет» на недоступном сервере выглядело бы как «проектов нет»: создание папки там падает — окно скажет
+            // «папки нет» на недоступном сервере выглядело бы как «задач нет»: создание папки там падает — окно скажет
             // «сервер недоступен», а не покажет пустой список
             Directory.CreateDirectory(ProjectsDir);
             foreach (var path in Directory.GetFiles(ProjectsDir, "*.json"))
@@ -68,19 +68,19 @@ namespace RASv2.ClashAnalysis.Logic
         {
             var file = ExportFiles.Load(path);
             if (file.Kind != ExportFile.Project) throw new InvalidDataException("Не проект.");
-            var project = ExportFiles.ToProject(file.ProjectData, new string[0]);
+            var project = ExportFiles.ToTop(file.ProjectData, new string[0]);
             project.StoreId = Path.GetFileNameWithoutExtension(path);
             project.StoreStamp = File.GetLastWriteTimeUtc(path);
             project.StoreOrder = file.ProjectData.Order;
             return project;
         }
 
-        /// <summary>Проект заново с сервера (после «открыть заново»); файла уже нет — null.</summary>
+        /// <summary>Задача заново с сервера (после «открыть заново»); файла уже нет — null.</summary>
         public ExportTask Reload(ExportTask project) =>
             project.StoreId != null && File.Exists(ProjectPath(project)) ? LoadProject(ProjectPath(project)) : null;
 
         /// <summary>
-        /// Записать проект. Файл изменился после того, как проект прочитан (коллега сохранил своё), и force нет — не пишет:
+        /// Записать задачу. Файл изменился после того, как задача прочитана (коллега сохранил своё), и force нет — не пишет:
         /// Conflict, кто и когда — в changedBy, changedAt.
         /// </summary>
         public SaveResult SaveProject(ExportTask project, bool force, out string changedBy, out DateTime changedAt)
@@ -104,7 +104,7 @@ namespace RASv2.ClashAnalysis.Logic
                 }
                 return SaveResult.Conflict;
             }
-            var file = ExportFiles.FromProject(project.Name, project.Project, project.ModelFiles, project.Children);
+            var file = ExportFiles.FromTop(project);
             file.ProjectData.Order = project.StoreOrder;
             file.ProjectData.ChangedBy = _user;
             file.ProjectData.Changed = DateTime.Now;
@@ -113,7 +113,7 @@ namespace RASv2.ClashAnalysis.Logic
             return SaveResult.Saved;
         }
 
-        /// <summary>Удалить проект с сервера; прежний файл остаётся копией (.prev) — вернуть руками.</summary>
+        /// <summary>Удалить задачу с сервера; прежний файл остаётся копией (.prev) — вернуть руками.</summary>
         public void DeleteProject(ExportTask project)
         {
             if (project.StoreId == null) return;

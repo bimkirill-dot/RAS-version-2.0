@@ -8,14 +8,14 @@ using RASv2.ClashAnalysis.Logic;
 namespace RASv2.ClashAnalysis.UI
 {
     /// <summary>
-    /// «Задачи выгрузки» (DECISIONS.md модуля, модель разработчика 03.11.2026): проекты из общего хранилища на сервере, под
-    /// проектом — задачи (критичности), под задачей — её блоки. Строка — номер, название, краткая информация, «Запустить»; у
-    /// проекта — «+» (новая задача), у задачи — копия (вторая критичность), у обоих — карандаш и корзина; у блока — только
-    /// «Запустить». Перенос — перетаскиванием: проекты между собой (порядковый номер — общий), задачи внутри проекта.
+    /// «Задачи выгрузки» (DECISIONS.md модуля, «Дерево задач с наследованием (03.11.2026)»): задачи из общего хранилища на
+    /// сервере, под задачей — подзадачи любой глубины, у нижней строки ветки — её блоки. Строка — номер, название, краткая
+    /// информация, «Запустить», «+» (подзадача), копия (у подзадачи), карандаш, корзина; у блока — только «Запустить». Перенос —
+    /// перетаскиванием внутри своего уровня (порядковый номер задач — общий).
     /// </summary>
     public partial class ExportTasksWindow : Window
     {
-        /// <summary>Строка окна: проект, задача или блок задачи.</summary>
+        /// <summary>Строка окна: задача, подзадача или блок.</summary>
         public sealed class RowItem
         {
             public TreeRow Row { get; set; }
@@ -25,18 +25,17 @@ namespace RASv2.ClashAnalysis.UI
 
             public ExportTask Item => Row.Item;
             public string Number => Row.Number;
-            public bool IsProject => Row.Level == 0;
-            public bool IsTask => Row.Level == 1;
-            public bool IsBlock => Row.Level == 2;
+            public bool IsBlock => Row.Block != null;
+            public bool IsTop => !IsBlock && Item.Parent == null;
             public string Name => IsBlock ? Row.Block.Name : Item.Name;
-            public double NameSize => IsProject ? 18 : IsTask ? 15 : 13;
+            public double NameSize => IsTop ? 18 : IsBlock ? 13 : 15;
             public FontWeight NameWeight => IsBlock ? FontWeights.Normal : FontWeights.SemiBold;
             public Thickness Indent => new Thickness(Row.Level * 28, 0, 0, IsBlock ? 2 : 6);
             // Segoe MDL2 Assets: E70D — вниз (развёрнуто), E76C — вправо (свёрнуто)
             public string Arrow => Collapsed ? "\uE76C" : "\uE70D";
             public Visibility ArrowVisibility => HasInner ? Visibility.Visible : Visibility.Hidden;
-            public Visibility AddVisibility => IsProject ? Visibility.Visible : Visibility.Hidden;
-            public Visibility CopyVisibility => IsTask ? Visibility.Visible : Visibility.Hidden;
+            // места кнопок остаются и у строки, где их нет, — значки строк стоят ровно
+            public Visibility CopyVisibility => !IsBlock && !IsTop ? Visibility.Visible : Visibility.Hidden;
             public Visibility EditVisibility => IsBlock ? Visibility.Hidden : Visibility.Visible;
         }
 
@@ -63,7 +62,7 @@ namespace RASv2.ClashAnalysis.UI
                 var broken = new List<string>();
                 Settings = store.LoadCommon();
                 _roots.AddRange(store.LoadProjects(broken));
-                if (broken.Count > 0) ShowBanner("Не прочитаны файлы проектов: " + string.Join(", ", broken) + " — подробности в журнале плагина.");
+                if (broken.Count > 0) ShowBanner("Не прочитаны файлы задач: " + string.Join(", ", broken) + " — подробности в журнале плагина.");
             }
             catch (System.Exception ex)
             {
@@ -73,8 +72,8 @@ namespace RASv2.ClashAnalysis.UI
                 Toolbar.Visibility = Visibility.Collapsed;
                 RowsList.IsEnabled = false;
             }
-            // блоки свёрнуты: открыли окно — видно проекты и задачи
-            foreach (var p in _roots) foreach (var t in p.Children) _collapsed.Add(t);
+            // блоки свёрнуты: открыли окно — видно задачи и подзадачи
+            foreach (var t in _roots.SelectMany(r => r.Self()).Where(t => t.Children.Count == 0)) _collapsed.Add(t);
             Refresh();
         }
 
@@ -84,7 +83,7 @@ namespace RASv2.ClashAnalysis.UI
             Banner.Visibility = Visibility.Visible;
         }
 
-        // проекты — по порядковому номеру (разработчик, 02.11.2026: «зачем по алфавиту»): так прочитаны, новые — в конец
+        // задачи — по порядковому номеру (разработчик, 02.11.2026: «зачем по алфавиту»): так прочитаны, новые — в конец
         private void Refresh()
         {
             RowsList.ItemsSource = ExportNodes.Rows(_roots, _collapsed, Settings)
@@ -93,27 +92,27 @@ namespace RASv2.ClashAnalysis.UI
                     Row = r,
                     Summary = ExportNodes.Summary(r, Settings),
                     Collapsed = r.Block == null && _collapsed.Contains(r.Item),
-                    HasInner = r.Block == null && (r.Level == 0 ? r.Item.Children.Count > 0 : ExportNodes.TaskBlocks(r.Item, Settings).Count > 0),
+                    HasInner = r.Block == null && (r.Item.Children.Count > 0 || ExportNodes.TaskBlocks(r.Item, Settings).Count > 0),
                 })
                 .ToList();
         }
 
         /// <summary>
-        /// Проект — на сервер. Коллега сохранил его после того, как окно его прочитало, — спросить: записать поверх или открыть
-        /// заново. false — не записан (ошибка или «открыть заново»).
+        /// Задача — на сервер. Коллега сохранил её после того, как окно её прочитало, — спросить: записать поверх или открыть
+        /// заново. false — не записана (ошибка или «открыть заново»).
         /// </summary>
-        private bool SaveProject(ExportTask project)
+        private bool SaveTop(ExportTask top)
         {
             try
             {
-                if (_store.SaveProject(project, false, out var who, out var when) == SaveResult.Saved) return true;
-                var text = "Проект «" + project.Name + "» изменил " + (who ?? "коллега") + " в " + when.ToString("HH:mm") +
-                           ", пока он был открыт у вас.\n\nДа — записать ваши правки поверх.\nНет — открыть проект с сервера заново " +
+                if (_store.SaveProject(top, false, out var who, out var when) == SaveResult.Saved) return true;
+                var text = "Задачу «" + top.Name + "» изменил " + (who ?? "коллега") + " в " + when.ToString("HH:mm") +
+                           ", пока она была открыта у вас.\n\nДа — записать ваши правки поверх.\nНет — открыть задачу с сервера заново " +
                            "(ваши правки пропадут).";
                 if (MessageBox.Show(this, text, Title, MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes)
-                    return _store.SaveProject(project, true, out _, out _) == SaveResult.Saved;
-                var fresh = _store.Reload(project);
-                var at = _roots.IndexOf(project);
+                    return _store.SaveProject(top, true, out _, out _) == SaveResult.Saved;
+                var fresh = _store.Reload(top);
+                var at = _roots.IndexOf(top);
                 if (at >= 0)
                 {
                     if (fresh != null) _roots[at] = fresh;
@@ -124,8 +123,8 @@ namespace RASv2.ClashAnalysis.UI
             }
             catch (System.Exception ex)
             {
-                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: проект не записан на сервер — " + project.Name, ex);
-                MessageBox.Show(this, "Проект «" + project.Name + "» не сохранён на сервере: " + ex.Message +
+                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: задача не записана на сервер — " + top.Name, ex);
+                MessageBox.Show(this, "Задача «" + top.Name + "» не сохранена на сервере: " + ex.Message +
                                       "\n\nПравки остались в этом окне — закроете его, и они пропадут.", Title, MessageBoxButton.OK, MessageBoxImage.Error);
                 return false;
             }
@@ -137,16 +136,17 @@ namespace RASv2.ClashAnalysis.UI
 
         // «+» — сразу настройки новой строки (разбор настроек, 02.11.2026: без поиска строки и карандаша); «Отмена» — строки нет.
         // Названия вписывает человек (разработчик, 02.11.2026: «зачем автоматическое название»)
-        private void AddProject_Click(object sender, RoutedEventArgs e)
+        private void AddTop_Click(object sender, RoutedEventArgs e)
         {
-            var project = new ExportTask { Name = "", StoreOrder = NextOrder() };
-            _roots.Add(project);
-            if (OpenSettings(project)) SaveProject(project);
-            else _roots.Remove(project);
+            var top = ExportTask.NewTop("");
+            top.StoreOrder = NextOrder();
+            _roots.Add(top);
+            if (OpenSettings(top)) SaveTop(top);
+            else _roots.Remove(top);
             Refresh();
         }
 
-        /// <summary>Проект с задачами из файла — новым проектом; занятое название — «ArmanQala (2)».</summary>
+        /// <summary>Задача из файла — новой задачей; подзадача из файла — тоже, со своими настройками и по умолчанию; занятое название — «(2)».</summary>
         private void Import_Click(object sender, RoutedEventArgs e)
         {
             var dialog = new Microsoft.Win32.OpenFileDialog { Filter = ExportFiles.Filter };
@@ -154,23 +154,25 @@ namespace RASv2.ClashAnalysis.UI
             try
             {
                 var file = ExportFiles.Load(dialog.FileName);
-                if (file.Kind != ExportFile.Project)
+                if (file.Kind == ExportFile.Common)
                 {
-                    MessageBox.Show(this, file.Kind == ExportFile.Task
-                            ? "В файле — задача. Её добавляют в проект: карандаш проекта → «Импорт задач…»."
-                            : "В файле — общие настройки. Их открывают в шестерёнке → «Импорт…».",
-                        Title, MessageBoxButton.OK, MessageBoxImage.Information);
+                    MessageBox.Show(this, "В файле — общие настройки. Их открывают в шестерёнке → «Импорт…».", Title,
+                        MessageBoxButton.OK, MessageBoxImage.Information);
                     return;
                 }
-                var project = ExportFiles.ToProject(file.ProjectData, _roots.Select(r => r.Name));
-                project.StoreOrder = NextOrder();
-                _roots.Add(project);
-                SaveProject(project);
+                var taken = _roots.Select(r => r.Name);
+                var top = file.Kind == ExportFile.Project
+                    ? ExportFiles.ToTop(file.ProjectData, taken)
+                    : ExportFiles.ToTop(new ProjectFile { Name = file.TaskData.Name, Node = ExportFiles.ToTask(file.TaskData, new string[0]).Settings,
+                        Tasks = file.TaskData.Tasks }, taken);
+                top.StoreOrder = NextOrder();
+                _roots.Add(top);
+                SaveTop(top);
                 Refresh();
             }
             catch (System.Exception ex)
             {
-                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: импорт проекта не прочитан", ex);
+                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: импорт задачи не прочитан", ex);
                 MessageBox.Show(this, ex is System.IO.InvalidDataException ? ex.Message : "Файл не прочитан: " + ex.Message,
                     Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             }
@@ -178,33 +180,34 @@ namespace RASv2.ClashAnalysis.UI
 
         private int NextOrder() => _roots.Count == 0 ? 1 : _roots.Max(r => r.StoreOrder) + 1;
 
-        private void AddTask_Click(object sender, RoutedEventArgs e)
+        // новая подзадача — всё от строки выше
+        private void AddSub_Click(object sender, RoutedEventArgs e)
         {
-            var project = RowOf(sender).Item;
-            var task = project.Add(new ExportTask { Name = "" });
-            _collapsed.Remove(project);
-            if (OpenSettings(task)) SaveProject(project);
-            else project.Remove(task);
+            var parent = RowOf(sender).Item;
+            var sub = parent.Add(new ExportTask { Name = "" });
+            _collapsed.Remove(parent);
+            _collapsed.Add(sub);
+            if (OpenSettings(sub)) SaveTop(ExportNodes.Root(parent));
+            else parent.Remove(sub);
             Refresh();
         }
 
         /// <summary>
-        /// Копия задачи — сразу под ней и сразу в её настройки: переименовать, поменять файл проверок и имя NWF (разработчик,
-        /// 03.11.2026: «копируем, переименовываем на „Средняя критичность“»). «Отмена» — копии нет.
+        /// Копия подзадачи с вложенными — сразу под ней и сразу в её настройки: переименовать, поменять файл проверок и имя NWF
+        /// (разработчик, 03.11.2026: «копируем, переименовываем на „Средняя критичность“»). «Отмена» — копии нет.
         /// </summary>
         private void Copy_Click(object sender, RoutedEventArgs e)
         {
             var task = RowOf(sender).Item;
-            var project = task.Parent;
-            var copy = project.Add(new ExportTask
-            {
-                Name = ExportFiles.UniqueName(task.Name, project.Children.Select(c => c.Name)), Options = task.Options.Clone(),
-            });
-            project.Children.Remove(copy);
-            project.Children.Insert(project.Children.IndexOf(task) + 1, copy);
-            if (_collapsed.Contains(task)) _collapsed.Add(copy);
-            if (OpenSettings(copy)) SaveProject(project);
-            else project.Remove(copy);
+            var parent = task.Parent;
+            var copy = task.Copy();
+            copy.Name = ExportFiles.UniqueName(task.Name, parent.Children.Select(c => c.Name));
+            parent.Add(copy);
+            parent.Children.Remove(copy);
+            parent.Children.Insert(parent.Children.IndexOf(task) + 1, copy);
+            foreach (var t in copy.Self().Where(t => t.Children.Count == 0)) _collapsed.Add(t);
+            if (OpenSettings(copy)) SaveTop(ExportNodes.Root(parent));
+            else parent.Remove(copy);
             Refresh();
         }
 
@@ -219,14 +222,14 @@ namespace RASv2.ClashAnalysis.UI
         {
             var task = RowOf(sender).Item;
             var inner = task.Descendants;
-            var text = "Удалить «" + task.Name + "»" + (inner > 0 ? " и " + inner + " " + ExportTask.TasksWord(inner) : "") + "?";
+            var text = "Удалить «" + task.Name + "»" + (inner > 0 ? " и " + inner + " " + ExportTask.SubtasksWord(inner) : "") + "?";
             if (MessageBox.Show(this, text, Title, MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No)
                 != MessageBoxResult.Yes) return;
             if (task.Parent != null)
             {
-                var project = task.Parent;
-                project.Remove(task);
-                SaveProject(project);
+                var parent = task.Parent;
+                parent.Remove(task);
+                SaveTop(ExportNodes.Root(parent));
             }
             else
             {
@@ -237,8 +240,8 @@ namespace RASv2.ClashAnalysis.UI
                 }
                 catch (System.Exception ex)
                 {
-                    RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: проект не удалён с сервера — " + task.Name, ex);
-                    MessageBox.Show(this, "Проект «" + task.Name + "» не удалён с сервера: " + ex.Message, Title, MessageBoxButton.OK,
+                    RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: задача не удалена с сервера — " + task.Name, ex);
+                    MessageBox.Show(this, "Задача «" + task.Name + "» не удалена с сервера: " + ex.Message, Title, MessageBoxButton.OK,
                         MessageBoxImage.Error);
                 }
             }
@@ -248,7 +251,7 @@ namespace RASv2.ClashAnalysis.UI
         private void Edit_Click(object sender, RoutedEventArgs e)
         {
             var task = RowOf(sender).Item;
-            if (OpenSettings(task)) SaveProject(ExportNodes.Root(task));
+            if (OpenSettings(task)) SaveTop(ExportNodes.Root(task));
             Refresh();
         }
 
@@ -269,14 +272,12 @@ namespace RASv2.ClashAnalysis.UI
             Refresh();
         }
 
-        /// <summary>Настройки строки (карандаш): проекта или задачи; true — сохранены.</summary>
+        /// <summary>Настройки строки (карандаш); true — сохранены.</summary>
         private bool OpenSettings(ExportTask task) =>
-            task.Parent == null
-                ? Nested(() => new ExportProjectWindow(task, Settings)
-                {
-                    Owner = this, RevitYear = RevitYear, TakenNames = _roots.Where(r => r != task).Select(r => r.Name).ToList(),
-                }.ShowDialog(), "Настройки проекта")
-                : Nested(() => new ExportTaskWindow(task, Settings) { Owner = this }.ShowDialog(), "Настройки задачи");
+            Nested(() => new ExportTaskWindow(task, Settings)
+            {
+                Owner = this, RevitYear = RevitYear, TakenNames = SiblingsOf(task).Where(t => t != task).Select(t => t.Name).ToList(),
+            }.ShowDialog(), "Настройки задачи");
 
         /// <summary>Вложенное окно; исключение сквозь вложенный ShowDialog роняет Revit (CLAUDE.md, «Правила, о которые уже спотыкались»).</summary>
         private bool Nested(System.Func<bool?> show, string what)
@@ -320,7 +321,6 @@ namespace RASv2.ClashAnalysis.UI
         {
             var item = e.Data.GetData(typeof(ExportTask)) as ExportTask;
             var row = RowOf(sender);
-            // проекты — между собой, задачи — внутри своего проекта
             e.Effects = item != null && !row.IsBlock && item != row.Item && item.Parent == row.Item.Parent ? DragDropEffects.Move : DragDropEffects.None;
             e.Handled = true;
         }
@@ -332,15 +332,15 @@ namespace RASv2.ClashAnalysis.UI
             var target = row.Item;
             if (item == null || row.IsBlock || item.Parent != target.Parent) return;
             if (!ExportTask.MoveTo(SiblingsOf(item), item, target)) return;
-            if (item.Parent != null) SaveProject(item.Parent);
+            if (item.Parent != null) SaveTop(ExportNodes.Root(item));
             else
             {
-                // порядковые номера проектов — заново; на сервер — у кого номер поменялся
+                // порядковые номера задач — заново; на сервер — у кого номер поменялся
                 for (var i = 0; i < _roots.Count; i++)
                 {
                     if (_roots[i].StoreOrder == i + 1) continue;
                     _roots[i].StoreOrder = i + 1;
-                    SaveProject(_roots[i]);
+                    SaveTop(_roots[i]);
                 }
             }
             Refresh();

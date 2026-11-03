@@ -4,12 +4,13 @@
         Title="Задачи выгрузки" Width="1040" Height="600" MinWidth="760" MinHeight="320"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Fg}" FontFamily="Segoe UI" FontSize="13">
-    <!-- «Задачи выгрузки» (DECISIONS.md модуля, модель разработчика 03.11.2026): проект синей строкой, под ним задачи
-         (критичности), под задачей — её блоки (собираются сами из моделей проекта, у блока — только «Запустить»). Раскладка — по
-         рисунку разработчика (30.10.2026) и наброску 03.11.2026; номер, название и сводка — текстом, без рамок полей. Кнопки,
-         кисти — общие образцы ядра (подключаются до разметки); ключи своих стилей не совпадают с кистями ядра. -->
+    <!-- «Задачи выгрузки» (DECISIONS.md модуля, «Дерево задач с наследованием (03.11.2026)»): задача синей строкой, под ней
+         подзадачи любой глубины, у нижней строки ветки — её блоки (собираются сами по именам моделей, у блока — только
+         «Запустить»). Раскладка — по рисунку разработчика (30.10.2026) и наброскам 03.11.2026; номер, название и сводка — текстом,
+         без рамок полей. Кнопки, кисти — общие образцы ядра (подключаются до разметки); ключи своих стилей не совпадают с кистями
+         ядра. -->
     <Window.Resources>
-        <!-- строка: у проекта — акцент, у задачи — фон строки, у блока — без рамки; текст и значки берут цвет строки -->
+        <!-- строка: у задачи — акцент, у подзадачи — фон строки, у блока — без рамки; текст и значки берут цвет строки -->
         <Style x:Key="TaskRowBox" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource Row}" />
             <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
@@ -18,7 +19,7 @@
             <Setter Property="Padding" Value="6,6" />
             <Setter Property="TextElement.Foreground" Value="{DynamicResource Fg}" />
             <Style.Triggers>
-                <DataTrigger Binding="{Binding IsProject}" Value="True">
+                <DataTrigger Binding="{Binding IsTop}" Value="True">
                     <Setter Property="Background" Value="{DynamicResource Accent}" />
                     <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
                     <Setter Property="TextElement.Foreground" Value="{DynamicResource AccentFg}" />
@@ -43,9 +44,9 @@
         <TextBlock x:Name="Banner" DockPanel.Dock="Top" Foreground="{DynamicResource Error}" TextWrapping="Wrap" Margin="0,0,0,8"
                    Visibility="Collapsed" />
         <StackPanel x:Name="Toolbar" DockPanel.Dock="Top" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,12">
-            <!-- импорт проекта с задачами из файла коллеги (02.11.2026); Segoe MDL2: E8B5 — импорт -->
-            <Button Style="{StaticResource IconButton}" Content="&#xE8B5;" Click="Import_Click" ToolTip="Импорт проекта…" />
-            <Button Style="{StaticResource IconButton}" Content="&#xE710;" Margin="4,0,0,0" Click="AddProject_Click" ToolTip="Новый проект" />
+            <!-- импорт задачи из файла коллеги (02.11.2026); Segoe MDL2: E8B5 — импорт -->
+            <Button Style="{StaticResource IconButton}" Content="&#xE8B5;" Click="Import_Click" ToolTip="Импорт задачи…" />
+            <Button Style="{StaticResource IconButton}" Content="&#xE710;" Margin="4,0,0,0" Click="AddTop_Click" ToolTip="Новая задача" />
             <Button Style="{StaticResource IconButton}" Content="&#xE713;" Margin="4,0,0,0" Click="Settings_Click"
                     ToolTip="Общие настройки" />
         </StackPanel>
@@ -76,13 +77,11 @@
                                 <!-- места кнопок остаются и у строки, где их нет, — значки строк стоят ровно -->
                                 <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
                                     <Button Style="{StaticResource RowIcon}" Content="&#xE768;" Click="Run_Click" ToolTip="Запустить" />
-                                    <Grid>
-                                        <!-- у проекта — новая задача, у задачи — её копия (вторая критичность — копия задачи) -->
-                                        <Button Style="{StaticResource RowIcon}" Content="&#xE710;" Click="AddTask_Click" ToolTip="Новая задача"
-                                                Visibility="{Binding AddVisibility}" />
-                                        <Button Style="{StaticResource RowIcon}" Content="&#xE8C8;" Click="Copy_Click" ToolTip="Копия задачи"
-                                                Visibility="{Binding CopyVisibility}" />
-                                    </Grid>
+                                    <Button Style="{StaticResource RowIcon}" Content="&#xE710;" Click="AddSub_Click" ToolTip="Новая подзадача"
+                                            Visibility="{Binding EditVisibility}" />
+                                    <!-- копия подзадачи (вторая критичность — копия первой) -->
+                                    <Button Style="{StaticResource RowIcon}" Content="&#xE8C8;" Click="Copy_Click" ToolTip="Копия"
+                                            Visibility="{Binding CopyVisibility}" />
                                     <Button Style="{StaticResource RowIcon}" Content="&#xE70F;" Click="Edit_Click" ToolTip="Изменить"
                                             Visibility="{Binding EditVisibility}" />
                                     <Button Style="{StaticResource RowIcon}" Content="&#xE74D;" Click="Delete_Click" ToolTip="Удалить"
