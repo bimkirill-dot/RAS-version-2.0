@@ -392,7 +392,7 @@ namespace RASv2.ClashAnalysis.UI
         private void ShowTests()
         {
             TestsPanel.Visibility = _testsOwn ? Visibility.Visible : Visibility.Collapsed;
-            TestsInline.Visibility = !_testsOwn || _tests.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            ((FrameworkElement)TestsInline.Parent).Visibility = !_testsOwn || _tests.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             TestsInline.Text = _tests.Count == 0 ? "файлов нет" : string.Join(", ", _tests.Select(r => r.Name));
             TestsInline.Foreground = (System.Windows.Media.Brush)FindResource(_tests.Count == 0 ? "Muted" : "Fg");
             TestsFrom.Text = _testsOwn ? "" : Source(x => x.TestsFiles);
@@ -435,7 +435,7 @@ namespace RASv2.ClashAnalysis.UI
         private void ShowHide()
         {
             HidePanel.Visibility = _hideOwn ? Visibility.Visible : Visibility.Collapsed;
-            HideInline.Visibility = !_hideOwn || _hide.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            ((FrameworkElement)HideInline.Parent).Visibility = !_hideOwn || _hide.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             HideInline.Text = _hide.Count == 0 ? "ничего" : "имя содержит: " + string.Join(", ", _hide.Select(h => "«" + h.Text + "»"));
             HideInline.Foreground = (System.Windows.Media.Brush)FindResource(_hide.Count == 0 ? "Muted" : "Fg");
             HideFrom.Text = _hideOwn ? "" : Source(x => x.HideNames);

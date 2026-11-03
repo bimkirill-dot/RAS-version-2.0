@@ -1,14 +1,14 @@
 <Window x:Class="RASv2.ClashAnalysis.UI.ExportTaskWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Задача" Width="980" Height="760" MinWidth="780" MinHeight="400"
+        Title="Задача" Width="1000" Height="780" MinWidth="820" MinHeight="400"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Fg}" FontFamily="Segoe UI" FontSize="13">
     <!-- Настройки задачи или подзадачи «Задач выгрузки» (карандаш; DECISIONS.md модуля, «Разделы окна задачи — по разработчику
-         (03.11.2026)»): «Общее» — название, папка задачи; «Экспорт» — вид, папка для NWC, модели, параметры выгрузки («по общим
-         настройкам» / «Изменить»); «NWF и отчёты» — «Формировать NWF» и имя, проверки, скрыть в NWF, папки NWF и отчётов, форматы
-         (список с галочками — все форматы Navisworks). Каждая настройка — своя или от уровня выше («от «…»», «Изменить»). Кнопки,
-         поля, кисти — общие образцы ядра (подключаются до разметки); ключи своих стилей не совпадают с кистями ядра. -->
+         (03.11.2026)»): «Общее», «Экспорт», «NWF и отчёты». Одна сетка на все строки (разработчик: «надписи, поля — ровнее»):
+         подпись — 150, значение — на всю ширину (поле, «Обзор» за ним, пример — под ним), справа — колонка «от «…»» /
+         «Изменить» одной ширины. Кнопки, поля, кисти — общие образцы ядра (подключаются до разметки); ключи своих стилей не
+         совпадают с кистями ядра. -->
     <Window.Resources>
         <Style x:Key="Note" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource Muted}" />
@@ -20,34 +20,48 @@
             <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
             <Setter Property="BorderThickness" Value="0,0,0,1" />
             <Setter Property="Padding" Value="0,0,0,6" />
-            <Setter Property="Margin" Value="0,22,0,12" />
+            <Setter Property="Margin" Value="0,24,0,14" />
         </Style>
         <Style x:Key="SectionTitle" TargetType="TextBlock">
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="FontSize" Value="14" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
-        <!-- подпись слева в строке раздела -->
-        <Style x:Key="Caption" TargetType="TextBlock">
-            <Setter Property="Width" Value="150" />
+        <!-- строка: подпись | значение | от кого -->
+        <Style x:Key="RowGrid" TargetType="Grid">
+            <Setter Property="Margin" Value="0,0,0,14" />
+        </Style>
+        <!-- подпись — по высоте первой строки значения (поле — 30) -->
+        <Style x:Key="Cap" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="Margin" Value="0,6,12,0" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <!-- первая строка значения — высотой с поле: текст, ссылки, кнопки — по её середине -->
+        <Style x:Key="FirstLine" TargetType="DockPanel">
+            <Setter Property="MinHeight" Value="30" />
+        </Style>
+        <!-- правая колонка: «от «…»» и «Изменить» — вправо, по середине первой строки -->
+        <Style x:Key="Side" TargetType="StackPanel">
+            <Setter Property="Grid.Column" Value="3" />
+            <Setter Property="Orientation" Value="Horizontal" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Margin" Value="12,0,0,0" />
+        </Style>
+        <Style x:Key="From" TargetType="TextBlock" BasedOn="{StaticResource Note}">
+            <Setter Property="Margin" Value="0,0,8,0" />
+        </Style>
+        <Style x:Key="SideLink" TargetType="Button" BasedOn="{StaticResource LinkButton}">
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
-        <Style x:Key="TopCaption" TargetType="TextBlock" BasedOn="{StaticResource Caption}">
-            <Setter Property="VerticalAlignment" Value="Top" />
-            <Setter Property="Margin" Value="0,6,0,0" />
-        </Style>
-        <Style x:Key="Spaced" TargetType="FrameworkElement">
-            <Setter Property="Margin" Value="0,0,0,12" />
-        </Style>
+        <!-- пример — под полем -->
         <Style x:Key="Example" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource Muted}" />
             <Setter Property="FontSize" Value="12" />
             <Setter Property="TextWrapping" Value="Wrap" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-        </Style>
-        <!-- «от «…»» рядом со значением -->
-        <Style x:Key="From" TargetType="TextBlock" BasedOn="{StaticResource Note}">
-            <Setter Property="Margin" Value="12,0,8,0" />
+            <Setter Property="Margin" Value="0,4,0,0" />
         </Style>
         <Style x:Key="Chip" TargetType="Button" BasedOn="{StaticResource LinkButton}">
             <Setter Property="Margin" Value="8,0,0,0" />
@@ -55,6 +69,9 @@
             <Setter Property="ToolTip" Value="Вставить в строку" />
         </Style>
         <Style x:Key="Browse" TargetType="Button" BasedOn="{StaticResource IconButton}">
+            <Setter Property="Grid.Column" Value="2" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
             <Setter Property="Margin" Value="4,0,0,0" />
             <Setter Property="Content" Value="&#xF12B;" />
             <Setter Property="ToolTip" Value="Обзор" />
@@ -89,48 +106,53 @@
             <StackPanel Margin="20,0,20,16">
 
                 <!-- ══ Общее ══ -->
-                <Border Style="{StaticResource SectionHead}" Margin="0,16,0,12">
+                <Border Style="{StaticResource SectionHead}" Margin="0,16,0,14">
                     <DockPanel>
                         <!-- где строка в дереве -->
                         <TextBlock x:Name="PathInfo" DockPanel.Dock="Right" Style="{StaticResource Note}" />
                         <TextBlock Style="{StaticResource SectionTitle}" Text="Общее" />
                     </DockPanel>
                 </Border>
-                <DockPanel Style="{StaticResource Spaced}">
-                    <TextBlock Style="{StaticResource Caption}" Text="Название" />
-                    <TextBox x:Name="TaskName" TextChanged="Any_Changed" />
-                </DockPanel>
-                <DockPanel Style="{StaticResource Spaced}">
-                    <TextBlock Style="{StaticResource Caption}" Text="Папка задачи" />
-                    <Button x:Name="FolderLink" DockPanel.Dock="Right" Style="{StaticResource LinkButton}" />
-                    <TextBlock x:Name="FolderFrom" DockPanel.Dock="Right" Style="{StaticResource From}" />
-                    <Button x:Name="FolderBrowse" DockPanel.Dock="Right" Style="{StaticResource Browse}" Click="BrowseProject_Click" />
-                    <TextBox x:Name="Folder" TextChanged="Any_Changed" />
-                </DockPanel>
+                <Grid Style="{StaticResource RowGrid}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource Cap}" Text="Название" />
+                    <TextBox x:Name="TaskName" Grid.Column="1" TextChanged="Any_Changed" />
+                </Grid>
+                <Grid Style="{StaticResource RowGrid}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource Cap}" Text="Папка задачи" />
+                    <Button Grid.Column="2" x:Name="FolderBrowse" Style="{StaticResource Browse}" Click="BrowseProject_Click" />
+                    <DockPanel Grid.Column="1" VerticalAlignment="Top">
+                        <TextBox x:Name="Folder" TextChanged="Any_Changed" />
+                    </DockPanel>
+                    <StackPanel Style="{StaticResource Side}">
+                        <TextBlock x:Name="FolderFrom" Style="{StaticResource From}" />
+                        <Button x:Name="FolderLink" Style="{StaticResource SideLink}" />
+                    </StackPanel>
+                </Grid>
 
                 <!-- ══ Экспорт ══ -->
                 <Border Style="{StaticResource SectionHead}">
                     <TextBlock Style="{StaticResource SectionTitle}" Text="Экспорт" />
                 </Border>
                 <!-- вида нет, если в общих «Экспорт: Целый проект» -->
-                <DockPanel x:Name="ViewRow" Style="{StaticResource Spaced}">
-                    <TextBlock Style="{StaticResource Caption}" Text="Выгружать вид" />
-                    <StackPanel Orientation="Horizontal">
-                        <TextBox x:Name="ViewName" Width="260" />
+                <Grid x:Name="ViewRow" Style="{StaticResource RowGrid}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource Cap}" Text="Выгружать вид" />
+                    <TextBox x:Name="ViewName" Grid.Column="1" VerticalAlignment="Top" />
+                    <StackPanel Style="{StaticResource Side}">
                         <TextBlock x:Name="ViewFrom" Style="{StaticResource From}" />
-                        <Button x:Name="ViewLink" Style="{StaticResource LinkButton}" />
+                        <Button x:Name="ViewLink" Style="{StaticResource SideLink}" />
                     </StackPanel>
-                </DockPanel>
+                </Grid>
 
                 <!-- внутри папки задачи; полный путь — тоже можно -->
-                <DockPanel Style="{StaticResource Spaced}">
-                    <TextBlock Style="{StaticResource TopCaption}" Text="Папка для NWC" />
-                    <StackPanel>
+                <Grid Style="{StaticResource RowGrid}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource Cap}" Text="Папка для NWC" />
+                    <Button Grid.Column="2" x:Name="NwcBrowse" Style="{StaticResource Browse}" Tag="{Binding ElementName=NwcFolder}" Click="Browse_Click" />
+                    <StackPanel Grid.Column="1">
                         <DockPanel>
-                            <Button x:Name="NwcLink" DockPanel.Dock="Right" Style="{StaticResource LinkButton}" />
-                            <TextBlock x:Name="NwcFrom" DockPanel.Dock="Right" Style="{StaticResource From}" />
-                            <Button x:Name="NwcBrowse" DockPanel.Dock="Right" Style="{StaticResource Browse}" Tag="{Binding ElementName=NwcFolder}"
-                                    Click="Browse_Click" />
                             <TextBox x:Name="NwcFolder" TextChanged="Any_Changed" />
                         </DockPanel>
                         <StackPanel x:Name="NwcChips" Orientation="Horizontal" Margin="0,4,0,0">
@@ -140,21 +162,26 @@
                         </StackPanel>
                         <TextBlock x:Name="NwcExample" Style="{StaticResource Example}" />
                     </StackPanel>
-                </DockPanel>
+                    <StackPanel Style="{StaticResource Side}">
+                        <TextBlock x:Name="NwcFrom" Style="{StaticResource From}" />
+                        <Button x:Name="NwcLink" Style="{StaticResource SideLink}" />
+                    </StackPanel>
+                </Grid>
 
                 <!-- модели: одной строкой, список по блокам — по «Показать» -->
-                <DockPanel Style="{StaticResource Spaced}">
-                    <TextBlock Style="{StaticResource Caption}" Text="Модели" />
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button x:Name="AddModels" Content="Добавить модели…" Margin="12,0,0,0" Click="AddModels_Click" />
-                        <TextBlock x:Name="ModelsFrom" Style="{StaticResource From}" />
-                        <Button x:Name="ModelsLink" Style="{StaticResource LinkButton}" Click="ModelsLink_Click" />
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Grid Style="{StaticResource RowGrid}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource Cap}" Text="Модели" />
+                    <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
+                        <Button x:Name="AddModels" DockPanel.Dock="Right" Content="Добавить модели…" Margin="12,0,0,0" Click="AddModels_Click" />
+                        <Button x:Name="ModelsShow" DockPanel.Dock="Right" Style="{StaticResource SideLink}" Margin="12,0,0,0" Click="ModelsShow_Click" />
                         <TextBlock x:Name="ModelsSummary" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                        <Button x:Name="ModelsShow" Style="{StaticResource LinkButton}" Margin="12,0,0,0" Click="ModelsShow_Click" />
+                    </DockPanel>
+                    <StackPanel Style="{StaticResource Side}">
+                        <TextBlock x:Name="ModelsFrom" Style="{StaticResource From}" />
+                        <Button x:Name="ModelsLink" Style="{StaticResource SideLink}" Click="ModelsLink_Click" />
                     </StackPanel>
-                </DockPanel>
+                </Grid>
                 <StackPanel x:Name="ModelsPanel" Margin="150,0,0,16">
                     <Grid Margin="0,0,40,0">
                         <Grid.ColumnDefinitions>
@@ -210,43 +237,54 @@
                 </StackPanel>
 
                 <!-- параметры экспортёра и «Удалить перед выгрузкой» — по общим настройкам или свои (то же окно, что шестерёнка) -->
-                <DockPanel Style="{StaticResource Spaced}">
-                    <TextBlock Style="{StaticResource Caption}" Text="Настройки" />
-                    <StackPanel Orientation="Horizontal">
+                <Grid Style="{StaticResource RowGrid}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource Cap}" Text="Настройки" />
+                    <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
+                        <Button x:Name="ExportEdit" DockPanel.Dock="Right" Content="Изменить…" Margin="12,0,0,0" Click="ExportEdit_Click" />
                         <TextBlock x:Name="ExportFrom" VerticalAlignment="Center" />
-                        <Button x:Name="ExportEdit" Style="{StaticResource LinkButton}" Content="Изменить" Margin="12,0,0,0" Click="ExportEdit_Click" />
-                        <Button x:Name="ExportReset" Style="{StaticResource LinkButton}" Margin="12,0,0,0" Click="ExportReset_Click" />
+                    </DockPanel>
+                    <StackPanel Style="{StaticResource Side}">
+                        <Button x:Name="ExportReset" Style="{StaticResource SideLink}" Click="ExportReset_Click" />
                     </StackPanel>
-                </DockPanel>
+                </Grid>
 
                 <!-- ══ NWF и отчёты ══ -->
                 <Border Style="{StaticResource SectionHead}">
                     <TextBlock Style="{StaticResource SectionTitle}" Text="NWF и отчёты" />
                 </Border>
                 <!-- NWF собирает строка без подзадач; у строки с подзадачами галочка недоступна -->
-                <StackPanel Orientation="Horizontal" Style="{StaticResource Spaced}">
-                    <CheckBox x:Name="MakeNwf" Content="Формировать NWF" Width="150" VerticalAlignment="Center"
-                              Checked="Any_Changed" Unchecked="Any_Changed" />
-                    <TextBlock x:Name="NwfNameCaption" Text="Имя" VerticalAlignment="Center" Margin="0,0,8,0" />
-                    <TextBox x:Name="NwfName" Width="240" TextChanged="Any_Changed" />
-                    <TextBlock x:Name="NwfNameExample" Style="{StaticResource Example}" Margin="16,0,0,0" />
-                </StackPanel>
-
-                <DockPanel Style="{StaticResource Spaced}">
-                    <TextBlock Style="{StaticResource TopCaption}" Text="Проверки" />
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,6,0,0">
-                        <TextBlock x:Name="TestsFrom" Style="{StaticResource From}" />
-                        <Button x:Name="TestsLink" Style="{StaticResource LinkButton}" Click="TestsLink_Click" />
+                <Grid Style="{StaticResource RowGrid}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource Cap}" Text="Формировать NWF" />
+                    <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
+                        <CheckBox x:Name="MakeNwf" VerticalAlignment="Center" Checked="Any_Changed" Unchecked="Any_Changed" />
+                    </DockPanel>
+                </Grid>
+                <Grid Style="{StaticResource RowGrid}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource Cap}" Text="Имя NWF" />
+                    <StackPanel Grid.Column="1">
+                        <TextBox x:Name="NwfName" TextChanged="Any_Changed" />
+                        <TextBlock x:Name="NwfNameExample" Style="{StaticResource Example}" />
                     </StackPanel>
-                    <StackPanel>
+                </Grid>
+
+                <Grid Style="{StaticResource RowGrid}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource Cap}" Text="Проверки" />
+                    <!-- на две колонки: корзины — в колонке «Обзора», поля кончаются на одной линии с остальными -->
+                    <StackPanel Grid.Column="1" Grid.ColumnSpan="2">
                         <!-- от уровня выше — именами в строку; свои — списком с корзинами -->
-                        <TextBlock x:Name="TestsInline" Margin="0,6,0,0" TextTrimming="CharacterEllipsis" />
+                        <DockPanel Style="{StaticResource FirstLine}">
+                            <TextBlock x:Name="TestsInline" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                        </DockPanel>
                         <StackPanel x:Name="TestsPanel">
                             <ItemsControl x:Name="TestsList">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <DockPanel Margin="0,4,0,0">
-                                            <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE74D;" Margin="4,0,0,0"
+                                        <DockPanel MinHeight="30">
+                                            <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE74D;" Margin="4,0,0,0" Width="32"
                                                     Click="DeleteTests_Click" ToolTip="Убрать файл" />
                                             <TextBlock ToolTip="{Binding Path}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center">
                                                 <Run Text="{Binding Name, Mode=OneWay}" />
@@ -256,58 +294,67 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <Button Content="Добавить…" HorizontalAlignment="Left" Margin="0,6,0,0" Click="AddTests_Click"
+                            <Button Content="Добавить…" HorizontalAlignment="Left" Margin="0,4,0,0" Click="AddTests_Click"
                                     ToolTip="Файлы проверок .xml из Clash Detective — можно несколько" />
                         </StackPanel>
                     </StackPanel>
-                </DockPanel>
+                    <StackPanel Style="{StaticResource Side}">
+                        <TextBlock x:Name="TestsFrom" Style="{StaticResource From}" />
+                        <Button x:Name="TestsLink" Style="{StaticResource SideLink}" Click="TestsLink_Click" />
+                    </StackPanel>
+                </Grid>
 
                 <!-- скрыть в NWF по имени элемента (разработчик, 03.11.2026: в задаче, передаётся подзадачам) -->
-                <DockPanel Style="{StaticResource Spaced}">
-                    <TextBlock Style="{StaticResource TopCaption}" Text="Скрыть в NWF" />
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,6,0,0">
-                        <TextBlock x:Name="HideFrom" Style="{StaticResource From}" />
-                        <Button x:Name="HideLink" Style="{StaticResource LinkButton}" Click="HideLink_Click" />
-                    </StackPanel>
-                    <StackPanel>
-                        <TextBlock x:Name="HideInline" Margin="0,6,0,0" TextTrimming="CharacterEllipsis" />
+                <Grid Style="{StaticResource RowGrid}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource Cap}" Text="Скрыть в NWF" />
+                    <StackPanel Grid.Column="1" Grid.ColumnSpan="2">
+                        <DockPanel Style="{StaticResource FirstLine}">
+                            <TextBlock x:Name="HideInline" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                        </DockPanel>
                         <StackPanel x:Name="HidePanel">
                             <ItemsControl x:Name="HideList">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                            <TextBlock Text="имя элемента содержит" Style="{StaticResource Note}" Margin="0,0,8,0" />
-                                            <TextBox Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" Width="200" />
-                                            <Button Style="{StaticResource IconButton}" Content="&#xE74D;" Margin="4,0,0,0"
+                                        <DockPanel Margin="0,0,0,6">
+                                            <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE74D;" Margin="4,0,0,0" Width="32"
                                                     Click="DeleteHide_Click" ToolTip="Удалить правило" />
-                                        </StackPanel>
+                                            <TextBox Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" ToolTip="Часть имени элемента" />
+                                        </DockPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <Button Content="Добавить правило" HorizontalAlignment="Left" Margin="0,6,0,0" Click="AddHide_Click" />
+                            <Button Content="Добавить правило" HorizontalAlignment="Left" Click="AddHide_Click" />
                         </StackPanel>
                     </StackPanel>
-                </DockPanel>
-
-                <DockPanel Style="{StaticResource Spaced}">
-                    <TextBlock Style="{StaticResource Caption}" Text="Папка для NWF" />
-                    <StackPanel Orientation="Horizontal">
-                        <TextBox x:Name="NwfFolder" Width="260" TextChanged="Any_Changed" />
-                        <Button x:Name="NwfBrowse" Style="{StaticResource Browse}" Tag="{Binding ElementName=NwfFolder}" Click="Browse_Click" />
-                        <TextBlock x:Name="NwfFrom" Style="{StaticResource From}" />
-                        <Button x:Name="NwfLink" Style="{StaticResource LinkButton}" />
-                        <TextBlock x:Name="NwfExample" Style="{StaticResource Example}" Margin="16,0,0,0" />
+                    <StackPanel Style="{StaticResource Side}">
+                        <TextBlock x:Name="HideFrom" Style="{StaticResource From}" />
+                        <Button x:Name="HideLink" Style="{StaticResource SideLink}" Click="HideLink_Click" />
                     </StackPanel>
-                </DockPanel>
+                </Grid>
 
-                <DockPanel Style="{StaticResource Spaced}">
-                    <TextBlock Style="{StaticResource TopCaption}" Text="Папка для отчётов" />
-                    <StackPanel>
+                <Grid Style="{StaticResource RowGrid}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource Cap}" Text="Папка для NWF" />
+                    <Button Grid.Column="2" x:Name="NwfBrowse" Style="{StaticResource Browse}" Tag="{Binding ElementName=NwfFolder}" Click="Browse_Click" />
+                    <StackPanel Grid.Column="1">
                         <DockPanel>
-                            <Button x:Name="ReportLink" DockPanel.Dock="Right" Style="{StaticResource LinkButton}" />
-                            <TextBlock x:Name="ReportFrom" DockPanel.Dock="Right" Style="{StaticResource From}" />
-                            <Button x:Name="ReportBrowse" DockPanel.Dock="Right" Style="{StaticResource Browse}" Tag="{Binding ElementName=ReportFolder}"
-                                    Click="Browse_Click" />
+                            <TextBox x:Name="NwfFolder" TextChanged="Any_Changed" />
+                        </DockPanel>
+                        <TextBlock x:Name="NwfExample" Style="{StaticResource Example}" />
+                    </StackPanel>
+                    <StackPanel Style="{StaticResource Side}">
+                        <TextBlock x:Name="NwfFrom" Style="{StaticResource From}" />
+                        <Button x:Name="NwfLink" Style="{StaticResource SideLink}" />
+                    </StackPanel>
+                </Grid>
+
+                <Grid Style="{StaticResource RowGrid}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource Cap}" Text="Папка для отчётов" />
+                    <Button Grid.Column="2" x:Name="ReportBrowse" Style="{StaticResource Browse}" Tag="{Binding ElementName=ReportFolder}" Click="Browse_Click" />
+                    <StackPanel Grid.Column="1">
+                        <DockPanel>
                             <TextBox x:Name="ReportFolder" TextChanged="Any_Changed" />
                         </DockPanel>
                         <StackPanel x:Name="ReportChips" Orientation="Horizontal" Margin="0,4,0,0">
@@ -318,24 +365,29 @@
                         </StackPanel>
                         <TextBlock x:Name="ReportExample" Style="{StaticResource Example}" />
                     </StackPanel>
-                </DockPanel>
+                    <StackPanel Style="{StaticResource Side}">
+                        <TextBlock x:Name="ReportFrom" Style="{StaticResource From}" />
+                        <Button x:Name="ReportLink" Style="{StaticResource SideLink}" />
+                    </StackPanel>
+                </Grid>
 
                 <!-- форматы — выпадающий список с галочками: все форматы отчёта Clash Detective (разработчик, 03.11.2026) -->
-                <DockPanel Style="{StaticResource Spaced}">
-                    <TextBlock Style="{StaticResource Caption}" Text="Формат отчётов" />
-                    <StackPanel Orientation="Horizontal">
-                        <ComboBox x:Name="Formats" Width="320" IsEditable="True" IsReadOnly="True" StaysOpenOnEdit="True"
-                                  DropDownClosed="Formats_Closed">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <CheckBox Content="{Binding Name}" IsChecked="{Binding On}" Checked="Format_Changed" Unchecked="Format_Changed" />
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
+                <Grid Style="{StaticResource RowGrid}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource Cap}" Text="Формат отчётов" />
+                    <ComboBox x:Name="Formats" Grid.Column="1" VerticalAlignment="Top" MinHeight="30" VerticalContentAlignment="Center"
+                              IsEditable="True" IsReadOnly="True" StaysOpenOnEdit="True" DropDownClosed="Formats_Closed">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <CheckBox Content="{Binding Name}" IsChecked="{Binding On}" Checked="Format_Changed" Unchecked="Format_Changed" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <StackPanel Style="{StaticResource Side}">
                         <TextBlock x:Name="FormatsFrom" Style="{StaticResource From}" />
-                        <Button x:Name="FormatsLink" Style="{StaticResource LinkButton}" Click="FormatsLink_Click" />
+                        <Button x:Name="FormatsLink" Style="{StaticResource SideLink}" Click="FormatsLink_Click" />
                     </StackPanel>
-                </DockPanel>
+                </Grid>
             </StackPanel>
         </ScrollViewer>
     </DockPanel>
