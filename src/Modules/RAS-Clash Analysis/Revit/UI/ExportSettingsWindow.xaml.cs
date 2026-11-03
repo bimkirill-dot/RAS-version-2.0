@@ -16,8 +16,8 @@ namespace RASv2.ClashAnalysis.UI
     /// </summary>
     public partial class ExportSettingsWindow : Window
     {
-        // пример под «Обрезать имя NWC» — имя разработчика (03.11.2026)
-        private const string SampleModel = "0000_01_01_S01_01_М3_BIM_Alma";
+        // пример под «Обрезать имя NWC» и «Метками» — имя разработчика (03.11.2026)
+        private const string SampleModel = "0000_01_01_S01_KJ01_01_М3";
 
         private readonly ExportSettings _settings;
         private readonly ObservableCollection<DepartmentTemplate> _departments = new ObservableCollection<DepartmentTemplate>();
