@@ -79,6 +79,11 @@ namespace RASv2.Tests
                 Check(ExportNodes.ViewOf(s1, common) == "3D_NW", "вид — от задачи");
                 top.Settings.ServerFolder = "RSN://srv/AQ";
                 Check(ExportNodes.StartServerFolder(s1) == "RSN://srv/AQ", "откуда добавлять модели — от задачи");
+                Check(ExportNodes.HideNamesOf(s1).Count == 0, "скрыть в NWF — у новой задачи ничего, своих строк компании в коде нет");
+                top.Settings.HideNames.Add("временн");
+                Check(ExportNodes.HideNamesOf(s1).Single() == "временн", "скрыть в NWF — от задачи подзадачам");
+                high.Settings.HideNames = new List<string> { "временн", "черновик" };
+                Check(ExportNodes.HideNamesOf(s1).Count == 2 && ExportNodes.HideNamesOf(mid).Count == 1, "своё у подзадачи — ниже неё");
             });
             yield return Case("NWF: у строки без подзадач с галочкой; имя — своё или название строки, не наследуется", () =>
             {
@@ -170,7 +175,7 @@ namespace RASv2.Tests
                 var labels = string.Join(",", ExportNames.LabelsIn(@"{Шифр}_{Проект}\{Проект}\{Дата}"));
                 Check(labels == "Шифр,Проект,Дата", labels);
             });
-            yield return Case("общие настройки: экспортёр — как на снимке; удаление, скрытие, имя, дата; коэффициент фасетизации", () =>
+            yield return Case("общие настройки: экспортёр — как на снимке; удаление, имя, дата; коэффициент фасетизации", () =>
             {
                 var s = new ExportSettings();
                 var n = s.Nwc;
@@ -180,23 +185,19 @@ namespace RASv2.Tests
                 Check(!n.ConvertUrls && !n.ConvertLights && !n.ConvertLinkedCad && !n.ConvertLinkedFiles && !n.FindMissingMaterials &&
                       !n.RoomGeometry, "выключенное");
                 Check(s.RemoveRevitLinks && s.RemoveCad && s.RemovePointClouds && s.RemoveIfc, "перед выгрузкой удаляется всё внешнее");
-                Check(s.HideNames.Count == 0, "скрыть в NWF — своих строк компании в коде нет");
                 Check(s.TrimName && s.NameParts == 7 && s.BlockPrefix == "S" && s.DateFormat == "dd.MM.yyyy", "имя модели и дата");
                 Check(NwcOptions.TryFaceting("0,5", out var f) && f == 0.5, "запятая");
                 Check(NwcOptions.TryFaceting(" 2.5 ", out f) && f == 2.5, "точка");
                 Check(!NwcOptions.TryFaceting("0", out _) && !NwcOptions.TryFaceting("-1", out _) &&
                       !NwcOptions.TryFaceting("абв", out _) && !NwcOptions.TryFaceting("", out _), "не число или не больше нуля");
                 s.Departments.Add(new DepartmentTemplate { Department = "KJ" });
-                s.HideNames.Add("временн");
                 var copy = s.Clone();
                 copy.Nwc.ViewName = "другой";
                 copy.Departments[0].Department = "AR";
-                copy.HideNames[0] = "другое";
-                Check(s.Nwc.ViewName == "3D_Navisworks" && s.Departments[0].Department == "KJ" && s.HideNames[0] == "временн",
-                    "копия не трогает исходные");
+                Check(s.Nwc.ViewName == "3D_Navisworks" && s.Departments[0].Department == "KJ", "копия не трогает исходные");
                 var target = new ExportSettings();
                 target.CopyFrom(s);
-                Check(target.HideNames.Single() == "временн", "взять на место — со скрытием");
+                Check(target.Departments.Single().Department == "KJ", "взять на место");
             });
             yield return Case("где что лежит: папки — строки по дереву с {Блок}, {Отдел}, {Дата}, {Формат}", () =>
             {
@@ -316,16 +317,16 @@ namespace RASv2.Tests
                 Directory.CreateDirectory(dir);
                 var c = new ExportSettings { BlockPrefix = "C", Departments = { new DepartmentTemplate { Department = "KJ", Etalon = @"\\srv\КЖ.rte" } } };
                 c.Nwc.ViewName = "3D_NW";
-                c.HideNames.Add("временн");
                 var path = Path.Combine(dir, "Общие настройки.json");
                 ExportFiles.Save(path, ExportFiles.FromCommon(c));
                 var back = ExportFiles.Load(path);
                 Check(back.Kind == ExportFile.Common && back.Settings.BlockPrefix == "C" && back.Settings.Nwc.ViewName == "3D_NW" &&
-                      back.Settings.Departments.Single().Etalon == @"\\srv\КЖ.rte" && back.Settings.HideNames.Single() == "временн", "общие");
+                      back.Settings.Departments.Single().Etalon == @"\\srv\КЖ.rte", "общие");
 
                 var roots = Sample(out var high, out var mid);
                 var top = roots[0];
                 top.Settings.Models.Last().Block = "S1";
+                top.Settings.HideNames.Add("временн");
                 mid.Settings.Html = false;
                 mid.Settings.Xml = true;
                 path = Path.Combine(dir, "Задача.json");
@@ -333,7 +334,8 @@ namespace RASv2.Tests
                 back = ExportFiles.Load(path);
                 var copy = ExportFiles.ToTop(back.ProjectData, new[] { "ArmanQala" });
                 Check(copy.Name == "ArmanQala (2)" && copy.Settings.Folder == top.Settings.Folder && copy.Settings.Models.Count == 7 &&
-                      copy.Settings.Models.Last().Block == "S1" && copy.Settings.NwfName == null, "задача: " + copy.Name);
+                      copy.Settings.Models.Last().Block == "S1" && copy.Settings.NwfName == null &&
+                      copy.Settings.HideNames.Single() == "временн", "задача: " + copy.Name);
                 var h = copy.Children[0];
                 var md = copy.Children[1];
                 Check(h.Parent == copy && h.Settings.Models == null && h.Settings.Xml == null && ExportNodes.ModelsOf(h).Count == 7 &&

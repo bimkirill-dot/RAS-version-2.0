@@ -59,7 +59,7 @@ namespace RASv2.ClashAnalysis.Logic
 
     /// <summary>
     /// Общие настройки «Задач выгрузки» — шестерёнка главного окна: всё, что одно на компанию (разбор настроек, 02.11.2026):
-    /// параметры выгрузки NWC, что удалить из модели перед выгрузкой, что скрыть в NWF, правило имени модели и метки, отделы. У
+    /// параметры выгрузки NWC, что удалить из модели перед выгрузкой, правило имени модели и метки, отделы. У
     /// проекта и задач — только своё (ExportNode.cs). Хранятся на сервере (ExportStore).
     /// </summary>
     public sealed class ExportSettings
@@ -86,12 +86,6 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>Отделы — их коды ищутся в имени модели ({Отдел}), по ним же эталон и шаблон вида.</summary>
         public List<DepartmentTemplate> Departments { get; set; } = new List<DepartmentTemplate>();
 
-        /// <summary>
-        /// Скрыть в NWF элементы, имя которых содержит одну из строк (разработчик, 03.11.2026: «скрываем по имени — если имя
-        /// содержит „временн…“, объект скрывается в самой NWF»; скрытые в проверки не попадают). Своих строк компании в коде
-        /// нет — список задаёт человек.
-        /// </summary>
-        public List<string> HideNames { get; set; } = new List<string>();
 
         /// <summary>Форматы {Дата} на выбор.</summary>
         public static readonly string[] DateFormats = { "dd.MM.yyyy", "yyyy-MM-dd", "yyyyMMdd", "yyyy.MM.dd" };
@@ -109,7 +103,6 @@ namespace RASv2.ClashAnalysis.Logic
             BlockPrefix = s.BlockPrefix;
             DateFormat = s.DateFormat;
             Departments = s.Departments.Select(d => d.Clone()).ToList();
-            HideNames = (s.HideNames ?? new List<string>()).ToList();
         }
 
         public ExportSettings Clone()
@@ -117,7 +110,6 @@ namespace RASv2.ClashAnalysis.Logic
             var copy = (ExportSettings)MemberwiseClone();
             copy.Nwc = Nwc.Clone();
             copy.Departments = Departments.Select(d => d.Clone()).ToList();
-            copy.HideNames = (HideNames ?? new List<string>()).ToList();
             return copy;
         }
     }

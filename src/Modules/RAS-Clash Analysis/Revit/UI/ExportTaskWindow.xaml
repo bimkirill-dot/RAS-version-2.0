@@ -200,6 +200,33 @@
                     </StackPanel>
                 </DockPanel>
 
+                <!-- скрыть в NWF по имени элемента (разработчик, 03.11.2026: из общих настроек — в задачу, передаётся подзадачам) -->
+                <DockPanel Style="{StaticResource Spaced}">
+                    <TextBlock Style="{StaticResource TopCaption}" Text="Скрыть в NWF" />
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,6,0,0">
+                        <TextBlock x:Name="HideFrom" Style="{StaticResource From}" />
+                        <Button x:Name="HideLink" Style="{StaticResource LinkButton}" Click="HideLink_Click" />
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock x:Name="HideInline" Margin="0,6,0,0" TextTrimming="CharacterEllipsis" />
+                        <StackPanel x:Name="HidePanel">
+                            <ItemsControl x:Name="HideList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                            <TextBlock Text="имя элемента содержит" Style="{StaticResource Note}" Margin="0,0,8,0" />
+                                            <TextBox Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" Width="200" />
+                                            <Button Style="{StaticResource IconButton}" Content="&#xE74D;" Margin="4,0,0,0"
+                                                    Click="DeleteHide_Click" ToolTip="Удалить правило" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Button Content="Добавить правило" HorizontalAlignment="Left" Margin="0,6,0,0" Click="AddHide_Click" />
+                        </StackPanel>
+                    </StackPanel>
+                </DockPanel>
+
                 <!-- ── NWF (у строки без подзадач) ── -->
                 <StackPanel x:Name="NwfSection">
                     <Border Style="{StaticResource SectionHead}">

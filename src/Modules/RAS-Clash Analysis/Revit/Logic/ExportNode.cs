@@ -54,11 +54,16 @@ namespace RASv2.ClashAnalysis.Logic
         /// «подзадача — как отдельный блок, обычно 4 модели: добавляем их, ставим галочку — они объединяются в NWF»).
         /// </summary>
         [DataMember(Order = 12, EmitDefaultValue = false)] public bool MakeNwf { get; set; }
+        /// <summary>
+        /// Скрыть в NWF элементы, имя которых содержит одну из строк (разработчик, 03.11.2026: «временные» скрываем — скрытые в
+        /// проверки не попадают; «перенести в настройки задачи, передаётся подзадачам»). Своих строк компании в коде нет.
+        /// </summary>
+        [DataMember(Order = 13, EmitDefaultValue = false)] public List<string> HideNames { get; set; }
 
         /// <summary>Задача верхнего уровня: всё своё, по умолчанию — регламент 15.10 (вида нет — из общих настроек).</summary>
         public static NodeSettings Top() => new NodeSettings
         {
-            Models = new List<ExportModel>(), TestsFiles = new List<string>(), Folder = "", NwcFolder = @"{Блок}\NWC",
+            Models = new List<ExportModel>(), TestsFiles = new List<string>(), HideNames = new List<string>(), Folder = "", NwcFolder = @"{Блок}\NWC",
             NwfFolder = "{Блок}", ReportFolder = @"{Блок}\{Дата}", Xml = true, Html = true,
         };
 
@@ -67,6 +72,7 @@ namespace RASv2.ClashAnalysis.Logic
             Models = Models?.Select(m => new ExportModel { Path = m.Path, NwcName = m.NwcName, Block = m.Block }).ToList(),
             TestsFiles = TestsFiles?.ToList(), NwfName = NwfName, Folder = Folder, ServerFolder = ServerFolder, NwcFolder = NwcFolder,
             NwfFolder = NwfFolder, ReportFolder = ReportFolder, Xml = Xml, Html = Html, ViewName = ViewName, MakeNwf = MakeNwf,
+            HideNames = HideNames?.ToList(),
         };
     }
 
@@ -121,6 +127,7 @@ namespace RASv2.ClashAnalysis.Logic
 
         public static List<ExportModel> ModelsOf(ExportTask task) => Get(task, s => s.Models);
         public static List<string> TestsOf(ExportTask task) => Get(task, s => s.TestsFiles);
+        public static List<string> HideNamesOf(ExportTask task) => Get(task, s => s.HideNames);
         /// <summary>Имя NWF строки — своё (не наследуется), пусто — название строки.</summary>
         public static string NwfNameOf(ExportTask task) =>
             (string.IsNullOrWhiteSpace(task.Settings.NwfName) ? task.Name ?? "" : task.Settings.NwfName).Trim();

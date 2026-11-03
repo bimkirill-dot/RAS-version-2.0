@@ -104,6 +104,12 @@ namespace RASv2.ClashAnalysis.UI
             }
         }
 
+        /// <summary>Правило «Скрыть в NWF»: строка, которую ищут в имени элемента.</summary>
+        public sealed class HideRow
+        {
+            public string Text { get; set; }
+        }
+
         // пример, пока моделей нет
         private const string SampleModel = "0000_01_01_S1_KJ01_01_M3.rvt";
 
@@ -112,12 +118,13 @@ namespace RASv2.ClashAnalysis.UI
         private readonly ExportSettings _common;
         private readonly List<ModelRow> _models = new List<ModelRow>();
         private readonly ObservableCollection<FileRow> _tests = new ObservableCollection<FileRow>();
+        private readonly ObservableCollection<HideRow> _hide = new ObservableCollection<HideRow>();
         private readonly List<ExportTask> _imported = new List<ExportTask>();
         private readonly InheritField _folder, _nwc, _nwf, _report, _view;
         private readonly bool _hasView;
         private readonly bool _ready;
         private readonly string _opened;
-        private bool _modelsOwn, _testsOwn, _formatsOwn, _showModels, _whereOpen;
+        private bool _modelsOwn, _testsOwn, _hideOwn, _formatsOwn, _showModels, _whereOpen;
         private string _serverFolder;
 
         public event PropertyChangedEventHandler PropertyChanged;
@@ -148,6 +155,9 @@ namespace RASv2.ClashAnalysis.UI
             _testsOwn = _parent == null || s.TestsFiles != null;
             TestsList.ItemsSource = _tests;
             FillTests(_testsOwn ? s.TestsFiles ?? ExportNodes.TestsOf(task) : ExportNodes.TestsOf(_parent));
+            _hideOwn = _parent == null || s.HideNames != null;
+            HideList.ItemsSource = _hide;
+            FillHide(_hideOwn ? s.HideNames ?? ExportNodes.HideNamesOf(task) : ExportNodes.HideNamesOf(_parent));
             _formatsOwn = _parent == null || s.Xml != null;
             Xml.IsChecked = _formatsOwn ? s.Xml ?? true : ExportNodes.XmlOf(_parent);
             Html.IsChecked = _formatsOwn ? s.Html ?? true : ExportNodes.HtmlOf(_parent);
@@ -190,6 +200,7 @@ namespace RASv2.ClashAnalysis.UI
             _ready = true;
             ShowModels();
             ShowTests();
+            ShowHide();
             ShowFormats();
             ShowWhere();
             _opened = State();
@@ -222,7 +233,7 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Всё, что правится в окне, — строкой: «Отмена» с правками спрашивает.</summary>
         private string State() => string.Join("|", TaskName.Text, _modelsOwn,
             string.Join(";", _models.Select(m => m.Path + ">" + m.Model.NwcName + ">" + m.Model.Block)), _testsOwn,
-            string.Join(";", _tests.Select(r => r.Path)), _formatsOwn, Xml.IsChecked, Html.IsChecked,
+            string.Join(";", _tests.Select(r => r.Path)), _hideOwn, string.Join(";", _hide.Select(h => h.Text)), _formatsOwn, Xml.IsChecked, Html.IsChecked,
             MakeNwf.IsChecked, NwfName.Text, Own(_folder), Own(_nwc), Own(_nwf), Own(_report), Own(_view), _imported.Count);
 
         private static string Own(InheritField f) => f.Value ?? "\u0001";
@@ -409,6 +420,46 @@ namespace RASv2.ClashAnalysis.UI
             ShowTests();
         }
 
+        // ── скрыть в NWF: своё или от уровня выше ──
+
+        private void FillHide(IEnumerable<string> names)
+        {
+            _hide.Clear();
+            foreach (var n in names ?? new List<string>()) _hide.Add(new HideRow { Text = n });
+        }
+
+        // от уровня выше — строками через запятую; своё — правилами с корзинами
+        private void ShowHide()
+        {
+            HidePanel.Visibility = _hideOwn ? Visibility.Visible : Visibility.Collapsed;
+            HideInline.Visibility = !_hideOwn || _hide.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            HideInline.Text = _hide.Count == 0 ? "ничего" : "имя содержит: " + string.Join(", ", _hide.Select(h => "«" + h.Text + "»"));
+            HideInline.Foreground = (System.Windows.Media.Brush)FindResource(_hide.Count == 0 ? "Muted" : "Fg");
+            HideFrom.Text = _hideOwn ? "" : Source(x => x.HideNames);
+            HideLink.Content = _hideOwn ? "Вернуть " + Source(x => x.HideNames) : "Изменить";
+            HideLink.Visibility = _parent == null ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        // «Изменить» — свои, начиная с правил уровня выше; «Вернуть» — снова от уровня выше
+        private void HideLink_Click(object sender, RoutedEventArgs e)
+        {
+            _hideOwn = !_hideOwn;
+            FillHide(ExportNodes.HideNamesOf(_parent));
+            ShowHide();
+        }
+
+        private void AddHide_Click(object sender, RoutedEventArgs e)
+        {
+            _hide.Add(new HideRow { Text = "" });
+            ShowHide();
+        }
+
+        private void DeleteHide_Click(object sender, RoutedEventArgs e)
+        {
+            _hide.Remove((HideRow)((FrameworkElement)sender).DataContext);
+            ShowHide();
+        }
+
         // ── форматы: свои или от уровня выше ──
 
         private void ShowFormats()
@@ -534,6 +585,9 @@ namespace RASv2.ClashAnalysis.UI
         {
             Models = _modelsOwn ? _models.Select(m => m.Model).ToList() : null,
             TestsFiles = _testsOwn ? _tests.Select(r => r.Path).ToList() : null,
+            HideNames = _hideOwn
+                ? _hide.Select(h => (h.Text ?? "").Trim()).Where(h => h.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
+                : null,
             NwfName = NwfName.Text.Trim().Length > 0 ? NwfName.Text.Trim() : null,
             MakeNwf = MakeNwf.IsChecked == true,
             Folder = _folder.Value,

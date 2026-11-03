@@ -8,7 +8,7 @@
          настроек, 02.11.2026). Параметры выгрузки NWC — как в окне экспортёра Navisworks в Revit: подписи и значения списков —
          дословно из экспортёра Revit 2026 (`ru-RU\nwexportrevit.name`), порядок — по снимку разработчика; параметров, которых нет
          в Revit API («Внедрить текстуры», «Отделить пользовательские свойства», «Свойства типа для элементов», «Точное
-         сечение»), нет. Дальше — что удалить перед выгрузкой, имя модели и метки, отделы. Подпись — вправо до общей границы,
+         сечение»), нет; последним — обрезка имени NWC с примером. Дальше — что удалить перед выгрузкой, метки, отделы. Подпись — вправо до общей границы,
          значение — слева, строки разделены линиями. Кнопки, поля, кисти — общие образцы ядра (подключаются до разметки); ключи
          своих стилей не совпадают с кистями ядра. -->
     <Window.Resources>
@@ -213,6 +213,19 @@
                         <CheckBox Grid.Column="1" x:Name="RoomGeometry" />
                     </Grid>
                 </Border>
+                <!-- имя NWC — последним пунктом параметров выгрузки, пример — под ним (разработчик, 03.11.2026) -->
+                <Border Style="{StaticResource OptionRow}">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="380" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource OptionName}" Text="Обрезать имя NWC по шаблону" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <CheckBox x:Name="TrimName" Checked="Any_Changed" Unchecked="Any_Changed" />
+                            <TextBlock Style="{StaticResource Inline}" Text="частей через «_»" />
+                            <TextBox x:Name="NameParts" Width="56" HorizontalContentAlignment="Right" TextChanged="Any_Changed" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <TextBlock x:Name="NameExample" Foreground="{DynamicResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="394,6,0,0" />
 
                 <DockPanel Style="{StaticResource HeadBar}">
                     <TextBlock Style="{StaticResource Head}" Text="Удалить из модели перед выгрузкой" />
@@ -246,45 +259,11 @@
                     </Grid>
                 </Border>
 
-                <!-- скрыть в NWF по имени (разработчик, 03.11.2026: «временные» скрываем — скрытые в проверки не попадают); строк
-                     компании в коде нет — список задаёт человек -->
-                <DockPanel Style="{StaticResource HeadBar}">
-                    <TextBlock Style="{StaticResource Head}" Text="Скрыть в NWF" />
-                </DockPanel>
-                <ItemsControl x:Name="HideList" Margin="0,4,0,0">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Grid Margin="0,0,0,6">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="380" />
-                                    <ColumnDefinition Width="240" />
-                                    <ColumnDefinition Width="40" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Style="{StaticResource OptionName}" Text="Имя элемента содержит" />
-                                <TextBox Grid.Column="1" Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" />
-                                <Button Grid.Column="2" Style="{StaticResource IconButton}" Content="&#xE74D;" HorizontalAlignment="Right"
-                                        Click="DeleteHide_Click" ToolTip="Удалить правило" />
-                            </Grid>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-                <Button Content="Добавить правило" HorizontalAlignment="Left" Margin="380,0,0,0" Click="AddHide_Click" />
 
-                <!-- имя модели — один регламент на компанию: обрезка имени NWC и метки (разбор настроек, 02.11.2026) -->
+                <!-- метки — один регламент на компанию: что они значат (разбор настроек, 02.11.2026) -->
                 <DockPanel Style="{StaticResource HeadBar}">
-                    <TextBlock Style="{StaticResource Head}" Text="Имя модели и метки" />
+                    <TextBlock Style="{StaticResource Head}" Text="Метки" />
                 </DockPanel>
-                <Border Style="{StaticResource OptionRow}">
-                    <Grid>
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="380" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                        <TextBlock Style="{StaticResource OptionName}" Text="Обрезать имя NWC по шаблону" />
-                        <StackPanel Grid.Column="1" Orientation="Horizontal">
-                            <CheckBox x:Name="TrimName" Checked="Any_Changed" Unchecked="Any_Changed" />
-                            <TextBlock Style="{StaticResource Inline}" Text="частей через «_»" />
-                            <TextBox x:Name="NameParts" Width="56" HorizontalContentAlignment="Right" TextChanged="Any_Changed" />
-                        </StackPanel>
-                    </Grid>
-                </Border>
                 <Border Style="{StaticResource OptionRow}">
                     <Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="380" /><ColumnDefinition /></Grid.ColumnDefinitions>
@@ -310,7 +289,6 @@
                         <ComboBox Grid.Column="1" x:Name="DateFormat" Width="200" SelectionChanged="Any_Changed" />
                     </Grid>
                 </Border>
-                <TextBlock x:Name="NameExample" Foreground="{DynamicResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0" />
 
                 <DockPanel Style="{StaticResource HeadBar}">
                     <TextBlock Style="{StaticResource Head}" Text="Отделы" />

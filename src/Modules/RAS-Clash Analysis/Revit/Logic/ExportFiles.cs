@@ -139,7 +139,6 @@ namespace RASv2.ClashAnalysis.Logic
             if (string.IsNullOrEmpty(s.BlockPrefix)) s.BlockPrefix = d.BlockPrefix;
             if (string.IsNullOrEmpty(s.DateFormat)) s.DateFormat = d.DateFormat;
             if (s.Departments == null) s.Departments = new List<DepartmentTemplate>();
-            if (s.HideNames == null) s.HideNames = new List<string>();
         }
 
         public static ExportFile FromCommon(ExportSettings settings) =>
@@ -210,6 +209,7 @@ namespace RASv2.ClashAnalysis.Logic
             Clean(s);
             s.Models = s.Models ?? d.Models;
             s.TestsFiles = s.TestsFiles ?? d.TestsFiles;
+            s.HideNames = s.HideNames ?? d.HideNames;
             s.Folder = s.Folder ?? d.Folder;
             s.NwcFolder = s.NwcFolder ?? d.NwcFolder;
             s.NwfFolder = s.NwfFolder ?? d.NwfFolder;
