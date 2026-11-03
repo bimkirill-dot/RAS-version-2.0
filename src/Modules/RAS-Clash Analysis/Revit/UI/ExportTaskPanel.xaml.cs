@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using RASv2.ClashAnalysis.Export;
 using RASv2.ClashAnalysis.Logic;
 using RASv2.ClashAnalysis.Site.Logic;
 
@@ -21,9 +22,38 @@ namespace RASv2.ClashAnalysis.UI
     public partial class ExportTaskPanel : UserControl, INotifyPropertyChanged
     {
         /// <summary>Строка списка моделей: имя (без «.rvt») и путь (разработчик, 03.11.2026: «отдел, блок — не надо»).</summary>
-        public sealed class ModelRow
+        public sealed class ModelRow : INotifyPropertyChanged
         {
+            public event PropertyChangedEventHandler PropertyChanged;
             private readonly ExportSettings _common;
+            private DateTime? _modified;
+            private bool _grey;
+
+            /// <summary>Когда изменена модель (Revit Server — сведения о модели, файл — дата файла); не известна — null.</summary>
+            public DateTime? Modified
+            {
+                get => _modified;
+                set
+                {
+                    _modified = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DateText)));
+                }
+            }
+
+            /// <summary>Модель не изменялась в выбранный срок — NWC актуален, строка серая.</summary>
+            public bool Grey
+            {
+                get => _grey;
+                set
+                {
+                    if (_grey == value) return;
+                    _grey = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RowOpacity)));
+                }
+            }
+
+            public double RowOpacity => _grey ? 0.4 : 1;
+            public string DateText => _modified == null ? "" : "  ·  изм. " + _modified.Value.ToString("dd.MM.yyyy HH:mm");
             public ExportModel Model { get; }
 
             public ModelRow(ExportSettings common, ExportModel model)
@@ -70,7 +100,11 @@ namespace RASv2.ClashAnalysis.UI
         private readonly bool _hasView;
         private readonly bool _ready;
         private readonly string _opened;
-        private bool _modelsOwn, _testsOwn, _hideOwn, _formatsOwn, _showModels;
+        private bool _modelsOwn, _testsOwn, _hideOwn, _formatsOwn, _editedOwn, _showModels;
+        // строки списка моделей, как сейчас показаны (для дат и серых)
+        private List<ModelRow> _shownRows = new List<ModelRow>();
+        // даты изменения моделей — на время работы Revit (по пути)
+        private static readonly Dictionary<string, DateTime> KnownDates = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
         private readonly List<FormatItem> _formats = ExportNodes.ReportFormatNames.Select(n => new FormatItem { Name = n }).ToList();
         // свои параметры выгрузки (null — от уровня выше или общие); _exportEdits — для «Отмена с правками спрашивает»
         private ExportOverride _export;
@@ -107,6 +141,8 @@ namespace RASv2.ClashAnalysis.UI
             _hideOwn = _parent == null || s.HideSets != null;
             HideList.ItemsSource = _hide;
             FillHide(_hideOwn ? s.HideSets ?? ExportNodes.HideSetsOf(task) : ExportNodes.HideSetsOf(_parent));
+            _editedOwn = _parent == null || s.Edited != null;
+            FillEdited(_editedOwn ? s.Edited : ExportNodes.EditedOf(_parent));
             _formatsOwn = _parent == null || s.ReportFormats != null;
             FillFormats(_formatsOwn ? s.ReportFormats ?? ExportNodes.FormatsOf(task) : ExportNodes.FormatsOf(_parent));
             Formats.ItemsSource = _formats;
@@ -144,6 +180,7 @@ namespace RASv2.ClashAnalysis.UI
             ShowTests();
             ShowHide();
             ShowFormats();
+            ShowEdited();
             ShowExport();
             _opened = State();
         }
@@ -174,7 +211,8 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Всё, что правится в окне, — строкой: «Отмена» с правками спрашивает.</summary>
         private string State() => string.Join("|", TaskName.Text, _modelsOwn,
             string.Join(";", _models.Select(m => m.Path + ">" + m.Model.NwcName + ">" + m.Model.Block)), _testsOwn,
-            string.Join(";", _tests.Select(r => r.Path)), _hideOwn, string.Join(";", _hide.Select(h => h.Xml)), _formatsOwn, string.Join(";", Checked()), _export == null, _exportEdits,
+            string.Join(";", _tests.Select(r => r.Path)), _hideOwn, string.Join(";", _hide.Select(h => h.Xml)), _formatsOwn, string.Join(";", Checked()), _export == null, _exportEdits, _editedOwn, EditedOn.IsChecked, EditedMode.SelectedIndex,
+            EditedDate1.Text, EditedDate2.Text,
             MakeNwf.IsChecked, MakeReports.IsChecked, NwfName.Text, Own(_folder), Own(_nwc), Own(_nwf), Own(_report), Own(_view), _imported.Count);
 
         private static string Own(InheritField f) => f.Value ?? "\u0001";
@@ -184,7 +222,11 @@ namespace RASv2.ClashAnalysis.UI
             if (_ready) UpdateExamples();
         }
 
-        private void Any_Changed(object sender, RoutedEventArgs e) => Changed();
+        private void Any_Changed(object sender, RoutedEventArgs e)
+        {
+            Changed();
+            if (_ready) ShowEdited();
+        }
 
         private static IEnumerable<ExportModel> Copies(IEnumerable<ExportModel> models) =>
             models.Select(m => m.Clone());
@@ -236,6 +278,8 @@ namespace RASv2.ClashAnalysis.UI
             }
             ModelsList.ItemsSource = null;
             ModelsList.ItemsSource = sorted;
+            _shownRows = sorted;
+            LoadModelDates(sorted);
             ModelsSummary.Text = sorted.Count + " " + ExportTask.ModelsWord(sorted.Count);
             ModelsShow.Visibility = sorted.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             ModelsShow.Content = _showModels ? "Скрыть" : "Показать";
@@ -430,6 +474,138 @@ namespace RASv2.ClashAnalysis.UI
             ShowFormats();
         }
 
+        // ── отбор моделей по дате изменения: свой или от уровня выше ──
+
+        private static readonly string[] EditedModes = { ModelDateFilter.After, ModelDateFilter.Before, ModelDateFilter.Between };
+
+        private void FillEdited(ModelDateFilter f)
+        {
+            f = f ?? new ModelDateFilter();
+            EditedOn.IsChecked = f.On;
+            EditedMode.SelectedIndex = Math.Max(0, Array.IndexOf(EditedModes, f.Mode));
+            EditedDate1.Text = f.From?.ToString("dd.MM.yyyy") ?? "";
+            EditedDate2.Text = f.To?.ToString("dd.MM.yyyy") ?? "";
+        }
+
+        private ModelDateFilter CollectEdited() => new ModelDateFilter
+        {
+            On = EditedOn.IsChecked == true, Mode = EditedModes[Math.Max(0, EditedMode.SelectedIndex)],
+            From = DateOf(EditedDate1), To = EditedMode.SelectedIndex == 2 ? DateOf(EditedDate2) : null,
+        };
+
+        private void ShowEdited()
+        {
+            EditedOn.IsEnabled = _editedOwn;
+            var on = _editedOwn && EditedOn.IsChecked == true;
+            EditedMode.IsEnabled = EditedDate1.IsEnabled = EditedDate2.IsEnabled = EditedPick1.IsEnabled = EditedPick2.IsEnabled = on;
+            var period = EditedMode.SelectedIndex == 2;
+            EditedDash.Visibility = EditedDate2Box.Visibility = period ? Visibility.Visible : Visibility.Collapsed;
+            EditedFromText.Text = _editedOwn ? "" : Source(x => x.Edited);
+            EditedLink.Content = _editedOwn ? "Вернуть " + Source(x => x.Edited) : "Изменить";
+            EditedLink.Visibility = _parent == null ? Visibility.Collapsed : Visibility.Visible;
+            UpdateGrey();
+        }
+
+        /// <summary>Дата из поля «дд.мм.гггг»; не дата — null.</summary>
+        private static DateTime? DateOf(TextBox box) =>
+            DateTime.TryParseExact(box.Text.Trim(), "dd.MM.yyyy", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var d) ? d : (DateTime?)null;
+
+        /// <summary>Календарь под значком: выбрали день — он в поле.</summary>
+        private void PickDate_Click(object sender, RoutedEventArgs e)
+        {
+            var button = (Button)sender;
+            var box = (TextBox)button.Tag;
+            var calendar = new System.Windows.Controls.Calendar { SelectedDate = DateOf(box), DisplayDate = DateOf(box) ?? DateTime.Today };
+            var popup = new System.Windows.Controls.Primitives.Popup
+            {
+                PlacementTarget = button, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom, StaysOpen = false,
+                Child = new Border
+                {
+                    Background = (System.Windows.Media.Brush)FindResource("Bg"), BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
+                    BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(4), Child = calendar,
+                },
+            };
+            calendar.SelectedDatesChanged += (s, a) =>
+            {
+                if (calendar.SelectedDate != null) box.Text = calendar.SelectedDate.Value.ToString("dd.MM.yyyy");
+                popup.IsOpen = false;
+            };
+            popup.IsOpen = true;
+        }
+
+        private void EditedLink_Click(object sender, RoutedEventArgs e)
+        {
+            _editedOwn = !_editedOwn;
+            if (!_editedOwn) FillEdited(ExportNodes.EditedOf(_parent));
+            ShowEdited();
+        }
+
+        /// <summary>Строки моделей, не изменявшихся в выбранный срок, — серые (NWC актуален).</summary>
+        private void UpdateGrey()
+        {
+            var f = _editedOwn ? CollectEdited() : ExportNodes.EditedOf(_parent);
+            foreach (var r in _shownRows) r.Grey = f != null && !f.Passes(r.Modified);
+        }
+
+        /// <summary>
+        /// Даты изменения моделей — в фоне: Revit Server — из кэша окна выбора или сведений о модели (по версии модели; не известна
+        /// — версия этого Revit), файл — дата файла. Пришло — строка серая или нет по отбору.
+        /// </summary>
+        private async void LoadModelDates(List<ModelRow> rows)
+        {
+            try
+            {
+                // продолжение после ответа сервера — в потоке панели: без контекста WPF оно ушло бы в чужой поток и тронуло
+                // строки оттуда (вне Revit — переполнение стека, в Revit упал бы Revit; так же — окно выбора моделей)
+                if (!(System.Threading.SynchronizationContext.Current is System.Windows.Threading.DispatcherSynchronizationContext))
+                    System.Threading.SynchronizationContext.SetSynchronizationContext(new System.Windows.Threading.DispatcherSynchronizationContext(Dispatcher));
+                foreach (var r in rows)
+                {
+                    if (KnownDates.TryGetValue(r.Path, out var known))
+                    {
+                        r.Modified = known;
+                        continue;
+                    }
+                    DateTime? date = null;
+                    if (ExportNodes.IsServerPath(r.Path))
+                    {
+                        var parts = r.Path.Trim().Substring("RSN://".Length).Split('/');
+                        var host = parts[0];
+                        var folder = parts.Skip(1).Take(parts.Length - 2).ToList();
+                        var name = parts[parts.Length - 1];
+                        var year = r.Model.Year > 0 ? r.Model.Year : RevitYear;
+                        if (ServerCache.Of(host).TryGet(year, folder, out var contents, out _))
+                            date = contents.Models.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase))?.Modified;
+                        if (date == null)
+                        {
+                            try
+                            {
+                                date = (await RevitServerClient.ModelInfoAsync(host, year, folder, name)).DateModified;
+                            }
+                            catch (Exception)
+                            {
+                                // сервер не ответил — даты нет, строка не серая
+                            }
+                        }
+                    }
+                    else
+                    {
+                        var path = r.Path;
+                        date = await System.Threading.Tasks.Task.Run(() => File.Exists(path) ? File.GetLastWriteTime(path) : (DateTime?)null);
+                    }
+                    if (date == null) continue;
+                    KnownDates[r.Path] = date.Value;
+                    r.Modified = date;
+                }
+                UpdateGrey();
+            }
+            catch (Exception ex)
+            {
+                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: даты изменения моделей", ex);
+            }
+        }
+
         // ── параметры выгрузки: по общим настройкам или свои (то же окно, что шестерёнка) ──
 
         private void ShowExport()
@@ -563,6 +739,7 @@ namespace RASv2.ClashAnalysis.UI
             NwfFolder = _nwf.Value,
             ReportFolder = _report.Value,
             ReportFormats = _formatsOwn ? Checked() : null,
+            Edited = _editedOwn ? CollectEdited() : null,
             Export = _export?.Clone(),
             ViewName = _hasView ? _view.Value : _task.Settings.ViewName,
             ServerFolder = _serverFolder ?? _task.Settings.ServerFolder,
@@ -686,6 +863,13 @@ namespace RASv2.ClashAnalysis.UI
             if (name != null) return name;
             if (_parent == null && Folder.Text.Trim().Length == 0) return "Нужна папка проекта — в ней NWC, NWF и отчёты.";
             if (_formatsOwn && Checked().Count == 0) return "Нужен хотя бы один формат отчётов.";
+            if (_editedOwn && EditedOn.IsChecked == true)
+            {
+                if (DateOf(EditedDate1) == null || EditedMode.SelectedIndex == 2 && DateOf(EditedDate2) == null)
+                    return "Отредактированные модели: дата — дд.мм.гггг.";
+                if (EditedMode.SelectedIndex == 2 && DateOf(EditedDate1) > DateOf(EditedDate2))
+                    return "Отредактированные модели: начало периода позже конца.";
+            }
             if (_hasView && _view.Own && ViewName.Text.Trim().Length == 0) return "Нужно имя вида для выгрузки.";
             return (_testsOwn ? ExportNodes.CheckTestsFiles(_tests.Select(r => r.Path).ToList(), TestNames) : null)
                    ?? (MakeNwf.IsChecked == true ? ExportNodes.CheckNwfName(NwfNameText()) : null)

@@ -343,9 +343,15 @@ namespace RASv2.ClashAnalysis.UI
             if (closes) _panel = null;
             if (_pending != null && task.Self().Contains(_pending))
             {
+                // новая, ещё не сохранённая строка — убрать из дерева (на сервере её нет); удаляют её саму — на этом всё
+                var onlyNew = _pending == task;
                 DropPending();
-                Show(closes ? null : _selected);
-                return;
+                if (onlyNew)
+                {
+                    Refresh();
+                    Show(closes ? null : _selected);
+                    return;
+                }
             }
             if (task.Parent != null)
             {
@@ -367,8 +373,9 @@ namespace RASv2.ClashAnalysis.UI
                         MessageBoxImage.Error);
                 }
             }
+            // список — заново (строки больше нет), затем — панель
+            Refresh();
             if (closes) Show(null);
-            else Refresh();
         }
 
         private void Settings_Click(object sender, RoutedEventArgs e)

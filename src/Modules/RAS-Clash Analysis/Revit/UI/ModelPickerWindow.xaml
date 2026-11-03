@@ -6,8 +6,9 @@
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Fg}" FontFamily="Segoe UI" FontSize="13">
     <!-- Выбор моделей для строки «Задач выгрузки» (DECISIONS.md модуля): Revit Server — деревом с галочками (папки подгружаются
          при раскрытии; галочка на папке — все модели внутри), сетевые папки — окном Windows («Папка на диске или в сети…»).
-         Набросок принят разработчиком 02.11.2026 («ну так давай сделаем»). С 03.11.2026: версия Revit Server — любая («все
-         версии моделей из любого Revit»), содержимое папок — из кэша сразу, с сервера — в фоне; «Обновить» — заново с сервера.
+         Набросок принят разработчиком 02.11.2026 («ну так давай сделаем»). С 03.11.2026: «Откуда» — пары «сервер · Revit год»
+         из настроек установленных версий Revit (не отвечает — так и написано), содержимое папок — из кэша сразу, с сервера — в
+         фоне; «Обновить» — заново с сервера.
          Кнопки, поля, кисти — общие образцы ядра
          (подключаются до разметки); ключи своих стилей не совпадают с кистями ядра. -->
     <Window.Resources>
@@ -29,9 +30,6 @@
             <!-- Segoe MDL2 Assets: E72C — обновить -->
             <Button x:Name="RefreshButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE72C;" Margin="8,0,0,0"
                     ToolTip="Обновить с сервера" Click="Refresh_Click" />
-            <ComboBox x:Name="Year" DockPanel.Dock="Right" Width="120" MinHeight="28" VerticalContentAlignment="Center" Margin="12,0,0,0"
-                      SelectionChanged="Year_Changed" />
-            <TextBlock DockPanel.Dock="Right" Text="Версия" VerticalAlignment="Center" Margin="12,0,0,0" />
             <ComboBox x:Name="Source" MinHeight="28" VerticalContentAlignment="Center" SelectionChanged="Source_Changed" />
         </DockPanel>
 

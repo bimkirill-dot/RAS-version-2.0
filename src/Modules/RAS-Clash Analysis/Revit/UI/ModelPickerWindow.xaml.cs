@@ -15,9 +15,10 @@ namespace RASv2.ClashAnalysis.UI
 {
     /// <summary>
     /// «Добавить модели…» строки «Задач выгрузки»: Revit Server — деревом с галочками (папки подгружаются при раскрытии, галочка
-    /// на папке — все модели внутри), сетевые папки — окном Windows. Серверы — из настроек всех версий Revit на компьютере
-    /// (RSN.ini), версия Revit Server — на выбор (2023–2026; разработчик, 03.11.2026). Содержимое папок — из кэша сразу и с сервера
-    /// в фоне (ServerCache; «на сервер долго заходит»). Ответ — Picked: модели (RSN://… или файлы) с версией Revit.
+    /// на папке — все модели внутри), сетевые папки — окном Windows. «Откуда» — пары «сервер · Revit год» из настроек (RSN.ini)
+    /// версий Revit, установленных на компьютере (разработчик, 03.11.2026: «предлагает серверы тех Revit, которых нет»; модели 2023
+    /// — на одних серверах, 2026 — на других); не отвечает — так и написано. Содержимое папок — из кэша сразу и с сервера в фоне
+    /// (ServerCache). Ответ — Picked: модели (RSN://… или файлы) с версией Revit.
     /// </summary>
     public partial class ModelPickerWindow : Window
     {
@@ -103,17 +104,22 @@ namespace RASv2.ClashAnalysis.UI
             private void Notify([CallerMemberName] string name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
         }
 
+        /// <summary>Источник в «Откуда»: сервер и версия Revit Server; не ответил — так и написано.</summary>
+        private sealed class SourceItem
+        {
+            public string Host;
+            public int Year;
+            public bool Down;
+            public override string ToString() => Host + " · Revit " + Year + (Down ? " — не отвечает" : "");
+        }
+
         private const string FolderSource = "Папка на диске или в сети…";
-        // последние выбранные сервер и версия — до закрытия Revit
+        // последний выбранный источник — до закрытия Revit
         private static string _lastHost;
         private static int _lastYear;
-        // кэши серверов — на время работы Revit (с диска читаются один раз)
-        private static readonly Dictionary<string, ServerCache> Caches = new Dictionary<string, ServerCache>(StringComparer.OrdinalIgnoreCase);
-        private static readonly string CacheDir = System.IO.Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RAS_v_2.0", "RAS-Clash Analysis", "Кэш Revit Server");
 
         private int _year;
-        private readonly List<string> _hosts;
+        private readonly List<SourceItem> _sources;
         // папка проекта на сервере: раскрыть её после загрузки корня
         private readonly string _startHost;
         private readonly List<string> _startPath = new List<string>();
@@ -129,10 +135,7 @@ namespace RASv2.ClashAnalysis.UI
         {
             RASv2.Core.WindowTheme.Apply(this);
             InitializeComponent();
-            _year = _lastYear > 0 ? _lastYear : RevitServers.Years.Contains(revitYear) ? revitYear : RevitServers.Years.Last();
-            _hosts = RevitServers.AllHosts(revitYear);
-            foreach (var y in RevitServers.Years) Year.Items.Add("Revit " + y);
-            Year.SelectedIndex = Array.IndexOf(RevitServers.Years, _year);
+            _sources = RevitServers.Sources(RevitServers.InstalledYears(revitYear)).Select(s => new SourceItem { Host = s.Host, Year = s.Year }).ToList();
             var start = (startFolder ?? "").Trim();
             if (start.StartsWith("RSN://", StringComparison.OrdinalIgnoreCase))
             {
@@ -141,23 +144,55 @@ namespace RASv2.ClashAnalysis.UI
                 {
                     _startHost = parts[0];
                     _startPath.AddRange(parts.Skip(1));
-                    // сервер проекта — первым, даже если его нет в настройках Revit этой версии
-                    var known = _hosts.FindIndex(h => string.Equals(h, _startHost, StringComparison.OrdinalIgnoreCase));
-                    if (known >= 0) _hosts.RemoveAt(known);
-                    _hosts.Insert(0, _startHost);
-                    _lastHost = _startHost;
+                    // сервер проекта — первым (версии этого Revit, если такая пара есть), даже если его нет в настройках Revit
+                    var known = _sources.FirstOrDefault(s => Same(s.Host, _startHost) && s.Year == revitYear)
+                                ?? _sources.FirstOrDefault(s => Same(s.Host, _startHost))
+                                ?? new SourceItem { Host = _startHost, Year = revitYear };
+                    _sources.Remove(known);
+                    _sources.Insert(0, known);
+                    if (_lastHost == null) (_lastHost, _lastYear) = (known.Host, known.Year);
                 }
             }
-            // только адрес (разработчик, 02.11.2026: «слово Revit Server уберём, оставим просто адрес»)
-            foreach (var h in _hosts) Source.Items.Add(h);
+            foreach (var s in _sources) Source.Items.Add(s);
             Source.Items.Add(FolderSource);
             Tree.ItemsSource = _roots;
-            if (_hosts.Count == 0)
+            if (_sources.Count == 0)
                 Status.Text = "В Revit на этом компьютере не настроен ни один Revit Server — выберите «" + FolderSource + "».";
-            // сервер — когда окно уже показано: в конструкторе у потока ещё может не быть контекста WPF (см. UiContext)
+            // источник — когда окно уже показано: в конструкторе у потока ещё может не быть контекста WPF (см. UiContext)
             else
                 Loaded += (s, e) =>
-                    Source.SelectedIndex = Math.Max(0, _hosts.FindIndex(h => string.Equals(h, _lastHost, StringComparison.OrdinalIgnoreCase)));
+                {
+                    Source.SelectedIndex = Math.Max(0, _sources.FindIndex(x => Same(x.Host, _lastHost) && x.Year == _lastYear));
+                    Probe();
+                };
+        }
+
+        private static bool Same(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>Какие источники отвечают — все одновременно, в фоне; не ответил — «— не отвечает» в списке.</summary>
+        private async void Probe()
+        {
+            try
+            {
+                UiContext();
+                await Task.WhenAll(_sources.Select(async s =>
+                {
+                    try
+                    {
+                        var root = await RevitServerClient.ContentsAsync(s.Host, s.Year, new List<string>());
+                        ServerCache.Of(s.Host).Put(s.Year, new List<string>(), root, DateTime.Now);
+                    }
+                    catch (Exception)
+                    {
+                        s.Down = true;
+                        Source.Items.Refresh();
+                    }
+                }));
+            }
+            catch (Exception ex)
+            {
+                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: проверка серверов Revit Server", ex);
+            }
         }
 
         /// <summary>
@@ -177,7 +212,7 @@ namespace RASv2.ClashAnalysis.UI
                 UiContext();
                 var index = Source.SelectedIndex;
                 if (index < 0 || index == _sourceIndex) return;
-                if (index == _hosts.Count)
+                if (index == _sources.Count)
                 {
                     var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Модели Revit (*.rvt)|*.rvt", Multiselect = true };
                     if (dialog.ShowDialog(this) == true && dialog.FileNames.Length > 0)
@@ -190,30 +225,14 @@ namespace RASv2.ClashAnalysis.UI
                     return;
                 }
                 _sourceIndex = index;
-                _host = _hosts[index];
-                _lastHost = _host;
+                _host = _sources[index].Host;
+                _year = _sources[index].Year;
+                (_lastHost, _lastYear) = (_host, _year);
                 await LoadRoot(false);
             }
             catch (Exception ex)
             {
                 Fail("Задачи выгрузки: выбор моделей — источник", ex);
-            }
-        }
-
-        private async void Year_Changed(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
-        {
-            try
-            {
-                UiContext();
-                if (Year.SelectedIndex < 0) return;
-                var year = RevitServers.Years[Year.SelectedIndex];
-                if (year == _year && _roots.Count > 0) return;
-                _year = _lastYear = year;
-                if (_host != null) await LoadRoot(false);
-            }
-            catch (Exception ex)
-            {
-                Fail("Задачи выгрузки: выбор моделей — версия", ex);
             }
         }
 
@@ -231,11 +250,7 @@ namespace RASv2.ClashAnalysis.UI
             }
         }
 
-        private ServerCache CacheOf(string host)
-        {
-            if (!Caches.TryGetValue(host, out var cache)) Caches[host] = cache = ServerCache.Open(CacheDir, host);
-            return cache;
-        }
+        private static ServerCache CacheOf(string host) => ServerCache.Of(host);
 
         /// <summary>
         /// Содержимое папки: из кэша — сразу, а с сервера — в фоне (пришло другое — fresh); в кэше нет или force — с сервера. Ответ

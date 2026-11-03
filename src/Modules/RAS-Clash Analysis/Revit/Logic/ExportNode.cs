@@ -77,6 +77,8 @@ namespace RASv2.ClashAnalysis.Logic
         [DataMember(Order = 16, EmitDefaultValue = false)] public List<HideSet> HideSets { get; set; }
         /// <summary>«Формировать отчёты» — своё у строки, не наследуется; действует у строки, которая собирает NWF.</summary>
         [DataMember(Order = 17, EmitDefaultValue = false)] public bool MakeReports { get; set; }
+        /// <summary>Выгружать только модели, отредактированные в выбранный срок (остальные — NWC актуален); null — от уровня выше.</summary>
+        [DataMember(Order = 18, EmitDefaultValue = false)] public ModelDateFilter Edited { get; set; }
 
         /// <summary>Задача верхнего уровня: всё своё, по умолчанию — регламент 15.10 (вида нет — из общих настроек).</summary>
         public static NodeSettings Top() => new NodeSettings
@@ -91,8 +93,42 @@ namespace RASv2.ClashAnalysis.Logic
             TestsFiles = TestsFiles?.ToList(), NwfName = NwfName, Folder = Folder, ServerFolder = ServerFolder, NwcFolder = NwcFolder,
             NwfFolder = NwfFolder, ReportFolder = ReportFolder, Xml = Xml, Html = Html, ViewName = ViewName, MakeNwf = MakeNwf,
             HideNames = HideNames?.ToList(), ReportFormats = ReportFormats?.ToList(), Export = Export?.Clone(),
-            HideSets = HideSets?.Select(h => h.Clone()).ToList(), MakeReports = MakeReports,
+            HideSets = HideSets?.Select(h => h.Clone()).ToList(), MakeReports = MakeReports, Edited = Edited?.Clone(),
         };
+    }
+
+    /// <summary>
+    /// «Экспортировать модели, отредактированные после / до / за период» (разработчик, 03.11.2026: «если модель после этого не
+    /// обновлялась — NWC уже актуален, в списке — серой»). Даты — по дням, включительно.
+    /// </summary>
+    [DataContract]
+    public sealed class ModelDateFilter
+    {
+        public const string After = "после";
+        public const string Before = "до";
+        public const string Between = "за период";
+
+        [DataMember(Order = 1)] public bool On { get; set; }
+        [DataMember(Order = 2)] public string Mode { get; set; } = After;
+        /// <summary>«после» и «до» — эта дата; «за период» — начало.</summary>
+        [DataMember(Order = 3, EmitDefaultValue = false)] public DateTime? From { get; set; }
+        /// <summary>«за период» — конец.</summary>
+        [DataMember(Order = 4, EmitDefaultValue = false)] public DateTime? To { get; set; }
+
+        /// <summary>Модель выгружать: отбор выключен, дата не известна или изменена в срок.</summary>
+        public bool Passes(DateTime? modified)
+        {
+            if (!On || modified == null) return true;
+            var m = modified.Value;
+            switch (Mode)
+            {
+                case Before: return From == null || m < From.Value.Date.AddDays(1);
+                case Between: return (From == null || m >= From.Value.Date) && (To == null || m < To.Value.Date.AddDays(1));
+                default: return From == null || m >= From.Value.Date;
+            }
+        }
+
+        public ModelDateFilter Clone() => (ModelDateFilter)MemberwiseClone();
     }
 
     /// <summary>Параметры выгрузки строки дерева вместо общих: экспортёр NWC и что удалить из модели перед выгрузкой.</summary>
@@ -184,6 +220,8 @@ namespace RASv2.ClashAnalysis.Logic
         public static List<ExportModel> ModelsOf(ExportTask task) => Get(task, s => s.Models);
         public static List<string> TestsOf(ExportTask task) => Get(task, s => s.TestsFiles);
         public static List<HideSet> HideSetsOf(ExportTask task) => Get(task, s => s.HideSets);
+        /// <summary>Отбор моделей по дате изменения: свой или уровня выше; нигде — нет (выгружать все).</summary>
+        public static ModelDateFilter EditedOf(ExportTask task) => OwnerOf(task, s => s.Edited)?.Settings.Edited;
         /// <summary>Строка выгружает отчёты: собирает NWF и «Формировать отчёты».</summary>
         public static bool MakesReports(ExportTask task) => MakesNwf(task) && task.Settings.MakeReports;
         /// <summary>Имя NWF строки — своё (не наследуется), пусто — название строки.</summary>

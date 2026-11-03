@@ -366,6 +366,7 @@ namespace RASv2.Tests
                 var top = roots[0];
                 top.Settings.Models.Last().Block = "S1";
                 top.Settings.HideSets.Add(SearchSets.FromName("временн"));
+                top.Settings.Edited = new ModelDateFilter { On = true, Mode = ModelDateFilter.Between, From = new DateTime(2026, 11, 1), To = new DateTime(2026, 11, 3) };
                 mid.Settings.ReportFormats = new List<string> { "XML" };
                 high.Settings.Export = ExportOverride.From(new ExportSettings { RemoveIfc = false });
                 path = Path.Combine(dir, "Задача.json");
@@ -374,7 +375,8 @@ namespace RASv2.Tests
                 var copy = ExportFiles.ToTop(back.ProjectData, new[] { "ArmanQala" });
                 Check(copy.Name == "ArmanQala (2)" && copy.Settings.Folder == top.Settings.Folder && copy.Settings.Models.Count == 7 &&
                       copy.Settings.Models.Last().Block == "S1" && copy.Settings.NwfName == null &&
-                      copy.Settings.HideSets.Single().Text == "Элемент › Имя содержит «временн»", "задача: " + copy.Name);
+                      copy.Settings.HideSets.Single().Text == "Элемент › Имя содержит «временн»" &&
+                      copy.Settings.Edited.Mode == ModelDateFilter.Between && copy.Settings.Edited.To.Value.Day == 3, "задача: " + copy.Name);
                 var h = copy.Children[0];
                 var md = copy.Children[1];
                 Check(h.Parent == copy && h.Settings.Models == null && h.Settings.ReportFormats == null && ExportNodes.ModelsOf(h).Count == 7 &&
@@ -564,6 +566,32 @@ namespace RASv2.Tests
                 var fresh = new ServerContents { Models = { new ServerModel { Name = "a.rvt", ModelSize = 1 }, new ServerModel { Name = "b.rvt", ModelSize = 3 } } };
                 RevitServers.KeepDates(old, fresh);
                 Check(fresh.Models[0].Modified != null && fresh.Models[1].Modified == null, "дата — у той же модели; поменялась — заново");
+            });
+            yield return Case("выгружать отредактированные после / до / за период; наследуется; откуда брать модели — установленные Revit", () =>
+            {
+                var f = new ModelDateFilter { On = true, Mode = ModelDateFilter.After, From = new DateTime(2026, 11, 1) };
+                Check(f.Passes(new DateTime(2026, 11, 1, 0, 5, 0)) && !f.Passes(new DateTime(2026, 10, 31, 23, 59, 0)) && f.Passes(null),
+                      "после — с начала дня; дата не известна — выгружать");
+                f.Mode = ModelDateFilter.Before;
+                Check(f.Passes(new DateTime(2026, 11, 1, 23, 0, 0)) && !f.Passes(new DateTime(2026, 11, 2)), "до — включая этот день");
+                f.Mode = ModelDateFilter.Between;
+                f.To = new DateTime(2026, 11, 3);
+                Check(f.Passes(new DateTime(2026, 11, 3, 18, 0, 0)) && !f.Passes(new DateTime(2026, 11, 4)) && !f.Passes(new DateTime(2026, 10, 30)),
+                      "за период — включительно");
+                f.On = false;
+                Check(f.Passes(new DateTime(2020, 1, 1)), "выключен — все");
+
+                var roots = Sample(out var high, out _);
+                Check(ExportNodes.EditedOf(high.Children[0]) == null, "нигде не задан — нет отбора");
+                roots[0].Settings.Edited = new ModelDateFilter { On = true, From = new DateTime(2026, 11, 1) };
+                Check(ExportNodes.EditedOf(high.Children[0]).On, "от задачи — подзадачам");
+
+                var years = RevitServers.InstalledYears(2026, y => y == 2023);
+                Check(string.Join(",", years) == "2026,2023", "сначала этот Revit, затем установленные: " + string.Join(",", years));
+                var hosts = new Dictionary<int, List<string>> { [2026] = new List<string> { "10.10.1.88" }, [2023] = new List<string> { "192.168.1.250", "10.10.1.88" } };
+                var sources = RevitServers.Sources(years, y => hosts[y]);
+                Check(string.Join(";", sources.Select(s => s.Host + "/" + s.Year)) == "10.10.1.88/2026;192.168.1.250/2023;10.10.1.88/2023",
+                      "пары «сервер · версия» — из настроек каждой версии");
             });
             yield return Case("удаление: подзадачи", () =>
             {

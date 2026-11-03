@@ -59,14 +59,24 @@ namespace RASv2.ClashAnalysis.Logic
             return File.Exists(path) ? ParseRsn(File.ReadAllText(path)) : new List<string>();
         }
 
-        /// <summary>Серверы из настроек всех версий Revit на компьютере (RSN.ini каждой), без повторов; первыми — версии thisYear.</summary>
-        public static List<string> AllHosts(int thisYear)
+        /// <summary>
+        /// Версии Revit, установленные на компьютере (разработчик, 03.11.2026: «предлагает серверы тех Revit, которых даже нет»):
+        /// %ProgramFiles%\Autodesk\Revit {год}\Revit.exe; первой — та, из которой открыто окно. installed — для проверок.
+        /// </summary>
+        public static List<int> InstalledYears(int thisYear, Func<int, bool> installed = null)
         {
-            var all = Hosts(thisYear);
-            foreach (var y in Years.Where(y => y != thisYear))
-                foreach (var h in Hosts(y))
-                    if (!all.Contains(h, StringComparer.OrdinalIgnoreCase)) all.Add(h);
-            return all;
+            installed = installed ?? (y => File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                "Autodesk", "Revit " + y, "Revit.exe")));
+            var list = new List<int> { thisYear };
+            list.AddRange(Years.Where(y => y != thisYear && installed(y)));
+            return list;
+        }
+
+        /// <summary>Откуда брать модели: пары «сервер · версия» — из настроек (RSN.ini) каждой установленной версии, по порядку версий.</summary>
+        public static List<(string Host, int Year)> Sources(IEnumerable<int> years, Func<int, List<string>> hosts = null)
+        {
+            hosts = hosts ?? Hosts;
+            return years.SelectMany(y => hosts(y).Select(h => (h, y))).ToList();
         }
 
         /// <summary>RSN.ini — по серверу в строке; пустые и комментарии («;», «#») — мимо, повторы — один раз.</summary>

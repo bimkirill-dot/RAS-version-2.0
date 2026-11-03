@@ -28,6 +28,22 @@ namespace RASv2.ClashAnalysis.Logic
 
         private ServerCache(string file) => _file = file;
 
+        /// <summary>Папка кэша на компьютере.</summary>
+        public static readonly string DefaultDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "RAS_v_2.0", "RAS-Clash Analysis", "Кэш Revit Server");
+
+        private static readonly Dictionary<string, ServerCache> Opened = new Dictionary<string, ServerCache>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Кэш сервера — один на время работы Revit (с диска читается один раз).</summary>
+        public static ServerCache Of(string host)
+        {
+            lock (Opened)
+            {
+                if (!Opened.TryGetValue(host, out var cache)) Opened[host] = cache = Open(DefaultDir, host);
+                return cache;
+            }
+        }
+
         /// <summary>Кэш сервера host в папке dir (файл «{host}.json»); нет файла или он испорчен — пустой.</summary>
         public static ServerCache Open(string dir, string host)
         {
