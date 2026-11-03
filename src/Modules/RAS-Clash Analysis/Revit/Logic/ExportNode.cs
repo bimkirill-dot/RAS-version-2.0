@@ -47,9 +47,9 @@ namespace RASv2.ClashAnalysis.Logic
         [DataMember(Order = 5, EmitDefaultValue = false)] public string ServerFolder { get; set; }
         /// <summary>NWC — метки {Блок}, {Отдел}; даты нет — NWF ищет NWC по постоянному пути.</summary>
         [DataMember(Order = 6, EmitDefaultValue = false)] public string NwcFolder { get; set; }
-        /// <summary>Папка для NWF — строка с {Блок}; NWF постоянная (регламент 22.10): обновляется, а не собирается заново.</summary>
+        /// <summary>Папка для NWF; NWF постоянная (регламент 22.10): обновляется, а не собирается заново. Меток нет (03.11.2026).</summary>
         [DataMember(Order = 7, EmitDefaultValue = false)] public string NwfFolder { get; set; }
-        /// <summary>Папка для отчётов — строка с {Блок}, {Дата}, {Формат}.</summary>
+        /// <summary>Папка для отчётов — строка с {Дата}, {Формат}.</summary>
         [DataMember(Order = 8, EmitDefaultValue = false)] public string ReportFolder { get; set; }
         /// <summary>Только прежние файлы (до 03.11.2026): форматы XML / HTML — при чтении переходят в ReportFormats.</summary>
         [DataMember(Order = 9, EmitDefaultValue = false)] public bool? Xml { get; set; }
@@ -82,7 +82,7 @@ namespace RASv2.ClashAnalysis.Logic
         public static NodeSettings Top() => new NodeSettings
         {
             Models = new List<ExportModel>(), TestsFiles = new List<string>(), HideSets = new List<HideSet>(), Folder = "", NwcFolder = @"{Блок}\NWC",
-            NwfFolder = "{Блок}", ReportFolder = @"{Блок}\{Дата}", ReportFormats = new List<string> { "XML", "HTML" },
+            NwfFolder = "NWF", ReportFolder = @"Отчеты\{Дата}", ReportFormats = new List<string> { "XML", "HTML" },
         };
 
         public NodeSettings Clone() => new NodeSettings
@@ -150,9 +150,11 @@ namespace RASv2.ClashAnalysis.Logic
     {
         /// <summary>Метки, которые можно ставить в строки (подсказка под полем и проверка при сохранении).</summary>
         public static readonly string[] NwcFolderLabels = { "Блок", "Отдел" };
-        public static readonly string[] NwfFolderLabels = { "Блок" };
-        public static readonly string[] NwfNameLabels = { "Блок" };
-        public static readonly string[] ReportFolderLabels = { "Блок", "Дата", "Формат" };
+        // {Блок} — только в папке для NWC (по каждой модели): в NWF и отчётах его нет (разработчик, 03.11.2026: «метку блок и
+        // проверку „из разных блоков“ — убрать»)
+        public static readonly string[] NwfFolderLabels = new string[0];
+        public static readonly string[] NwfNameLabels = new string[0];
+        public static readonly string[] ReportFolderLabels = { "Дата", "Формат" };
 
         // верхняя задача без значения (файл от прежней версии) — по умолчанию
         private static readonly NodeSettings Defaults = NodeSettings.Top();
@@ -219,16 +221,6 @@ namespace RASv2.ClashAnalysis.Logic
                 .Select(g => new BlockGroup { Name = g.Key, Models = g.ToList() }).ToList();
             groups.Sort((a, b) => a.Name.Length == 0 ? 1 : b.Name.Length == 0 ? -1 : NaturalCompare(a.Name, b.Name));
             return groups;
-        }
-
-        /// <summary>
-        /// {Блок} строки — для папок NWF и отчётов: блок, общий у всех её моделей (S1_ВК — модели S1 → «S1»); разные блоки или
-        /// моделей нет — пусто.
-        /// </summary>
-        public static string BlockOfTask(ExportTask task, ExportSettings common)
-        {
-            var blocks = ModelsOf(task).Select(m => BlockOf(m, common)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            return blocks.Count == 1 ? blocks[0] : "";
         }
 
         /// <summary>Сравнение «по-человечески»: S2 раньше S10.</summary>
@@ -319,16 +311,16 @@ namespace RASv2.ClashAnalysis.Logic
             InProject(FolderOf(task), ExportNames.Fill(NwcFolderOf(task), Labels(BlockOf(model, common), model, common, DateTime.Today))) + "\\" +
             NwcNameOf(model, common) + ".nwc";
 
-        /// <summary>Постоянная NWF строки: папка — строка по дереву ({Блок} — общий блок моделей строки), имя — своё или название строки.</summary>
+        /// <summary>Постоянная NWF строки: папка — строка по дереву, имя — своё или название строки.</summary>
         public static string NwfPath(ExportTask task, ExportSettings common)
         {
-            var labels = Labels(BlockOfTask(task, common), null, common, DateTime.Today);
+            var labels = Labels("", null, common, DateTime.Today);
             return InProject(FolderOf(task), ExportNames.Fill(NwfFolderOf(task), labels)) + "\\" + ExportNames.Fill(NwfNameOf(task), labels).Trim() + ".nwf";
         }
 
         /// <summary>Папка отчётов строки на дату запуска (одна на весь запуск) и формат («XML», «HTML»).</summary>
         public static string ReportPath(ExportTask task, ExportSettings common, DateTime runDate, string format) =>
-            InProject(FolderOf(task), ExportNames.Fill(ReportFolderOf(task), Labels(BlockOfTask(task, common), null, common, runDate, format)));
+            InProject(FolderOf(task), ExportNames.Fill(ReportFolderOf(task), Labels("", null, common, runDate, format)));
 
         // ── модели ──
 
@@ -375,40 +367,30 @@ namespace RASv2.ClashAnalysis.Logic
         public static string CheckNwcFolder(string folder) =>
             CheckLabels(folder, "Папка для NWC", NwcFolderLabels, "даты в папке NWC быть не должно: NWF ищет NWC по постоянному пути");
 
-        /// <summary>Папка для NWF: только {Блок} — NWF постоянная (регламент), одна на блок; null — всё верно.</summary>
+        /// <summary>Папка для NWF: без меток — NWF постоянная (регламент); null — всё верно.</summary>
         public static string CheckNwfFolder(string folder) =>
-            CheckLabels(folder, "Папка для NWF", NwfFolderLabels, "NWF постоянная — одна на блок, без даты и отдела");
+            CheckLabels(folder, "Папка для NWF", NwfFolderLabels, "NWF постоянная — папка без меток");
 
-        /// <summary>Имя NWF (уже с названием строки, если поле пусто): метка — только {Блок}, знаки — как в имени файла; null — всё верно.</summary>
+        /// <summary>Имя NWF (уже с названием строки, если поле пусто): без меток, знаки — как в имени файла; null — всё верно.</summary>
         public static string CheckNwfName(string name)
         {
             if (string.IsNullOrWhiteSpace(name)) return "Нужно имя NWF.";
-            var labels = CheckLabels(name, "Имя NWF", NwfNameLabels, "NWF постоянная — без даты и отдела");
+            var labels = CheckLabels(name, "Имя NWF", NwfNameLabels, "NWF постоянная — имя без меток");
             if (labels != null) return labels;
             var plain = ExportNames.Fill(name, NwfNameLabels.ToDictionary(l => l, l => "x"));
             return plain.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ? "Имя NWF: недопустимые знаки в имени файла." : null;
         }
 
         /// <summary>
-        /// Строки, которые собирают NWF, — по всему дереву: есть модели; {Блок} в имени и папках NWF и отчётов — только когда модели
-        /// строки из одного блока; две строки не пишут в одну NWF (копия со старым именем). null — всё верно.
+        /// Строки, которые собирают NWF, — по всему дереву: есть модели; две строки не пишут в одну NWF (копия со старым именем).
+        /// null — всё верно.
         /// </summary>
         public static string CheckNwf(ExportTask root, ExportSettings common)
         {
             var seen = new Dictionary<string, ExportTask>(StringComparer.OrdinalIgnoreCase);
             foreach (var t in root.Self().Where(MakesNwf))
             {
-                var models = ModelsOf(t);
-                if (models.Count == 0) return "«" + t.Name + "»: моделей нет — NWF не из чего собрать.";
-                var withBlock = new[] { NwfNameOf(t), NwfFolderOf(t), ReportFolderOf(t) }
-                    .Any(s => ExportNames.LabelsIn(s).Contains("Блок", StringComparer.OrdinalIgnoreCase));
-                if (withBlock && BlockOfTask(t, common).Length == 0)
-                {
-                    var blocks = models.Select(m => BlockOf(m, common)).Select(b => b.Length == 0 ? "без блока" : b)
-                        .Distinct(StringComparer.OrdinalIgnoreCase);
-                    return "«" + t.Name + "»: модели из разных блоков (" + string.Join(", ", blocks) +
-                           ") — {Блок} в имени или папках NWF и отчётов не подставить.";
-                }
+                if (ModelsOf(t).Count == 0) return "«" + t.Name + "»: моделей нет — NWF не из чего собрать.";
                 var path = NwfPath(t, common);
                 if (seen.TryGetValue(path, out var other))
                     return "NWF «" + FileName(path) + "» — и у «" + other.Name + "», и у «" + t.Name + "»: поменяйте имя или папку NWF.";
@@ -417,9 +399,9 @@ namespace RASv2.ClashAnalysis.Logic
             return null;
         }
 
-        /// <summary>Папка для отчётов: только {Блок}, {Дата}, {Формат} — отчёт на блок, не на модель отдела; null — всё верно.</summary>
+        /// <summary>Папка для отчётов: только {Дата}, {Формат}; null — всё верно.</summary>
         public static string CheckReportFolder(string folder) =>
-            CheckLabels(folder, "Папка для отчётов", ReportFolderLabels, "отчёт один на блок, а не на модель отдела");
+            CheckLabels(folder, "Папка для отчётов", ReportFolderLabels, "в папке отчётов — только {Дата} и {Формат}");
 
         private static string CheckLabels(string text, string what, string[] allowed, string why)
         {

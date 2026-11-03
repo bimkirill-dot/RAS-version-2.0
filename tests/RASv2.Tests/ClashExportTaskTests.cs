@@ -118,7 +118,7 @@ namespace RASv2.Tests
                 var blocks = ExportNodes.Blocks(ExportNodes.ModelsOf(high), common);
                 Check(string.Join(",", blocks.Select(b => (b.Name.Length == 0 ? "—" : b.Name) + b.Models.Count)) == "S13,S22,S101,—1",
                     string.Join(",", blocks.Select(b => b.Name + b.Models.Count)));
-                Check(ExportNodes.BlockOfTask(high.Children[0], common) == "S1" && ExportNodes.BlockOfTask(high, common) == "",
+                Check(ExportNodes.BlockOf(high.Children[0].Settings.Models[0], common) == "S1",
                     "{Блок} — общий у моделей строки; разные — пусто");
                 roots[0].Settings.Models.Last().Block = " S1 ";
                 Check(ExportNodes.Blocks(ExportNodes.ModelsOf(high), common)[0].Models.Count == 4, "Генплан — в S1 руками");
@@ -225,16 +225,16 @@ namespace RASv2.Tests
                 const string root = @"\\srv\2025_Арман Кала 7 очередь";
                 Check(ExportNodes.NwcPath(s1, m, c) == root + @"\S1\NWC\0000_01_01_S1_KJ01_01_M3.nwc", ExportNodes.NwcPath(s1, m, c));
                 Check(ExportNodes.NwcPath(s1, m, c) == ExportNodes.NwcPath(mid, mid.Settings.Models[0], c), "одна модель — один NWC на обе критичности");
-                Check(ExportNodes.NwfPath(s1, c) == root + @"\S1\S1_ВК.nwf" && ExportNodes.NwfPath(mid, c) == root + @"\S1\S1_СК.nwf",
+                Check(ExportNodes.NwfPath(s1, c) == root + @"\NWF\S1_ВК.nwf" && ExportNodes.NwfPath(mid, c) == root + @"\NWF\S1_СК.nwf",
                     ExportNodes.NwfPath(s1, c));
-                Check(ExportNodes.ReportPath(s1, c, new DateTime(2026, 11, 2), "XML") == root + @"\S1\02.11.2026", "отчёты по умолчанию");
-                top.Settings.ReportFolder = @"Отчеты\{Дата}\{Блок}\{Формат}";
-                high.Settings.ReportFolder = @"Отчеты\{Дата}\{Блок}\Высокая критичность\{Формат}";
+                Check(ExportNodes.ReportPath(s1, c, new DateTime(2026, 11, 2), "XML") == root + @"\Отчеты\02.11.2026", "отчёты по умолчанию");
+                top.Settings.ReportFolder = @"Отчеты\{Дата}\{Формат}";
+                s1.Settings.ReportFolder = @"Отчеты\{Дата}\S1\Высокая критичность\{Формат}";
                 Check(ExportNodes.ReportPath(s1, c, new DateTime(2026, 11, 2), "HTML") == root + @"\Отчеты\02.11.2026\S1\Высокая критичность\HTML" &&
-                      ExportNodes.ReportPath(mid, c, new DateTime(2026, 11, 2), "XML") == root + @"\Отчеты\02.11.2026\S1\XML", "своя и от задачи");
+                      ExportNodes.ReportPath(mid, c, new DateTime(2026, 11, 2), "XML") == root + @"\Отчеты\02.11.2026\XML", "своя и от задачи");
                 top.Settings.NwcFolder = @"{Блок}\NWC\{Отдел}";
                 Check(ExportNodes.NwcPath(s1, m, c).EndsWith(@"\S1\NWC\KJ\0000_01_01_S1_KJ01_01_M3.nwc"), "отдел — по модели");
-                high.Settings.NwfFolder = @"D:\NWF\{Блок}";
+                high.Settings.NwfFolder = @"D:\NWF\S1";
                 Check(ExportNodes.NwfPath(s1, c) == @"D:\NWF\S1\S1_ВК.nwf", "полный путь — как есть");
                 Check(ExportNodes.InProject("", @"{Блок}") == "{Блок}" && ExportNodes.InProject(@"\\srv\P", "") == @"\\srv\P", "пустые части");
                 Check(ExportNodes.Short(root + @"\", root + @"\S1\NWC\a.nwc") == @"…\S1\NWC\a.nwc", "пример внутри папки проекта — с «…»");
@@ -245,12 +245,12 @@ namespace RASv2.Tests
             yield return Case("проверки строк: NWC без даты, NWF постоянная, отчёты без отдела, неизвестная метка", () =>
             {
                 Check(ExportNodes.CheckNwcFolder(@"{Блок}\NWC\{Отдел}") == null && ExportNodes.CheckNwcFolder(@"{Блок}\{Дата}") != null, "NWC — без даты");
-                Check(ExportNodes.CheckNwfFolder("{Блок}") == null && ExportNodes.CheckNwfFolder(@"{Блок}\{Дата}") != null &&
-                      ExportNodes.CheckNwfFolder("{Отдел}") != null, "папка NWF — без даты и отдела");
-                Check(ExportNodes.CheckNwfName("S1_ВК") == null && ExportNodes.CheckNwfName("{Блок}_ВК") == null, "имя NWF — как есть или с {Блок}");
-                Check(ExportNodes.CheckNwfName(" ") != null, "пусто");
-                Check(ExportNodes.CheckNwfName("{Блок}_{Дата}") != null && ExportNodes.CheckNwfName("{Блок}:ВК") != null, "дата и недопустимые знаки");
-                Check(ExportNodes.CheckReportFolder(@"Отчеты\{Дата}\{Блок}\ВК\{Формат}") == null && ExportNodes.CheckReportFolder(@"{Отдел}") != null,
+                Check(ExportNodes.CheckNwfFolder(@"NWF\S1") == null && ExportNodes.CheckNwfFolder("{Блок}") != null &&
+                      ExportNodes.CheckNwfFolder(@"NWF\{Дата}") != null, "папка NWF — без меток");
+                Check(ExportNodes.CheckNwfName("S1_ВК") == null && ExportNodes.CheckNwfName("{Блок}_ВК") != null, "имя NWF — без меток");
+                Check(ExportNodes.CheckNwfName(" ") != null && ExportNodes.CheckNwfName("S1:ВК") != null, "пусто и недопустимые знаки");
+                Check(ExportNodes.CheckReportFolder(@"Отчеты\{Дата}\S1\ВК\{Формат}") == null && ExportNodes.CheckReportFolder(@"{Отдел}") != null &&
+                      ExportNodes.CheckReportFolder(@"{Блок}\{Дата}") != null,
                     "отчёты — с форматом, без отдела");
                 var bad = ExportNodes.CheckReportFolder(@"{Проект}\{Дата}");
                 Check(bad != null && bad.Contains("{Проект}"), "неизвестная метка: " + bad);
@@ -275,12 +275,8 @@ namespace RASv2.Tests
                 copy.Settings.Models = new List<ExportModel>();
                 Check(ExportNodes.CheckNwf(top, common)?.Contains("моделей нет") == true, "без моделей");
                 high.Remove(copy);
-                var all = top.Add(new ExportTask { Name = "Всё вместе", Settings = { MakeNwf = true } });
-                var mixed = ExportNodes.CheckNwf(top, common);
-                Check(mixed != null && mixed.Contains("разных блоков") && mixed.Contains("без блока"), "{Блок} при моделях разных блоков: " + mixed);
-                all.Settings.NwfFolder = "NWF";
-                all.Settings.ReportFolder = @"Отчеты\{Дата}";
-                Check(ExportNodes.CheckNwf(top, common) == null, "без {Блок} — одна NWF на всё");
+                top.Add(new ExportTask { Name = "Всё вместе", Settings = { MakeNwf = true } });
+                Check(ExportNodes.CheckNwf(top, common) == null, "модели разных блоков в одной NWF — можно");
             });
             yield return Case("скрыть: поисковые наборы Navisworks из файла экспорта; простые наборы выбора — мимо; прежние строки", () =>
             {
@@ -407,7 +403,7 @@ namespace RASv2.Tests
                 var hv2 = v2.Children.Single();
                 Check(v2.Settings.Folder == @"\\srv\П" && v2.Settings.Models.Count == 1 && v2.Settings.ServerFolder == "RSN://a/b" &&
                       v2.Settings.NwfName == null && string.Join(",", v2.Settings.ReportFormats) == "XML,HTML", "проект → задача");
-                Check(hv2.Settings.TestsFiles.Single() == "t.xml" && hv2.Settings.NwfName == "{Блок}_ВК" && string.Join(",", hv2.Settings.ReportFormats) == "XML" &&
+                Check(hv2.Settings.TestsFiles.Single() == "t.xml" && hv2.Settings.NwfName == "ВК" && hv2.Settings.NwfFolder == "NWF" && string.Join(",", hv2.Settings.ReportFormats) == "XML" &&
                       ExportNodes.ModelsOf(hv2).Count == 1, "задача проекта → подзадача, модели — от задачи");
 
                 // 03.11.2026, днём: «скрыть» — строками «имя содержит»
@@ -425,6 +421,8 @@ namespace RASv2.Tests
                     "{\"Name\":\"S2\",\"Models\":[{\"Path\":\"a_S2_KJ01.rvt\"},{\"Path\":\"A_S1_KJ01.rvt\"}]}]}}");
                 var v1 = ExportFiles.ToTop(ExportFiles.Load(path).ProjectData, new string[0]);
                 Check(v1.Settings.Folder == @"\\srv\П" && v1.Settings.Models.Count == 3 && v1.Children.Count == 2, "модели — в задачу, без повторов");
+                Check(v1.Settings.NwfFolder == "NWF" && v1.Settings.ReportFolder == @"Отчеты\{Дата}" && v1.Settings.NwcFolder == @"{Блок}\NWC",
+                    "{Блок} в NWF и отчётах — прежние значения по умолчанию заменены, в NWC — остался");
                 Check(v1.Children[0].Settings.TestsFiles.Single() == "s1.xml" && ExportNodes.TestsOf(v1.Children[1]).Single() == "t.xml" &&
                       v1.Children[0].Settings.ReportFormats == null && ExportNodes.FormatsOf(v1.Children[0]).Count == 2, "файлы проверок и форматы");
 

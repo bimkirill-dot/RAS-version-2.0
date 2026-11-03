@@ -227,6 +227,18 @@ namespace RASv2.ClashAnalysis.Logic
             if (s.HideSets == null && s.HideNames != null) s.HideSets = s.HideNames.Where(n => !string.IsNullOrWhiteSpace(n)).Select(SearchSets.FromName).ToList();
             s.HideNames = null;
             if (s.Export != null && s.Export.Nwc == null) s.Export.Nwc = new NwcOptions();
+            // {Блок} в NWF и отчётах больше нет (03.11.2026): прежние значения по умолчанию — новые, свои — без метки
+            s.NwfFolder = s.NwfFolder == "{Блок}" ? "NWF" : WithoutBlock(s.NwfFolder);
+            s.ReportFolder = s.ReportFolder == @"{Блок}\{Дата}" ? @"Отчеты\{Дата}" : WithoutBlock(s.ReportFolder);
+            s.NwfName = WithoutBlock(s.NwfName);
+            if (s.NwfName != null && s.NwfName.Trim().Trim('_', '-', ' ').Length == 0) s.NwfName = null;
+        }
+
+        private static string WithoutBlock(string s)
+        {
+            if (s == null || s.IndexOf("{Блок}", StringComparison.OrdinalIgnoreCase) < 0) return s;
+            var r = System.Text.RegularExpressions.Regex.Replace(s, @"\{\s*Блок\s*\}[\\_\- ]?", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            return r.Trim().TrimEnd('\\');
         }
 
         /// <summary>Название, которого ещё нет: «X», «X (2)», «X (3)»…</summary>

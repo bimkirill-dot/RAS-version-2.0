@@ -377,7 +377,6 @@
                             <TextBox x:Name="ReportFolder" TextChanged="Any_Changed" />
                             <StackPanel x:Name="ReportChips" Orientation="Horizontal" Margin="0,4,0,0">
                                 <TextBlock Style="{StaticResource Note}" Text="Метки:" />
-                                <Button Style="{StaticResource Chip}" Content="{}{Блок}" Tag="{Binding ElementName=ReportFolder}" Click="Chip_Click" />
                                 <Button Style="{StaticResource Chip}" Content="{}{Дата}" Tag="{Binding ElementName=ReportFolder}" Click="Chip_Click" />
                                 <Button Style="{StaticResource Chip}" Content="{}{Формат}" Tag="{Binding ElementName=ReportFolder}" Click="Chip_Click" />
                             </StackPanel>
