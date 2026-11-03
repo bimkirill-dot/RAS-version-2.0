@@ -69,7 +69,7 @@ namespace RASv2.ClashAnalysis.UI
             LinkedFiles.IsChecked, Parts.IsChecked, MissingMaterials.IsChecked, Levels.IsChecked, Scope.SelectedIndex, ViewName.Text,
             RoomGeometry.IsChecked, RemoveRevitLinks.IsChecked, RemoveCad.IsChecked, RemovePointClouds.IsChecked, RemoveIfc.IsChecked,
             TrimName.IsChecked, BlockPrefix.Text, DateFormat.SelectedIndex,
-            string.Join(";", _departments.Select(d => d.Department + ">" + d.Etalon + ">" + d.ViewTemplate)));
+            string.Join(";", _departments.Select(d => d.Department)));
 
         /// <summary>Окно — из настроек (открытие и «Импорт…»).</summary>
         private void FillAll(ExportSettings s)
@@ -139,14 +139,6 @@ namespace RASv2.ClashAnalysis.UI
             UpdateExample();
         }
 
-        private void BrowseEtalon_Click(object sender, RoutedEventArgs e)
-        {
-            var row = (DepartmentTemplate)((FrameworkElement)sender).DataContext;
-            var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Шаблон проекта Revit (*.rte)|*.rte", FileName = row.Etalon ?? "" };
-            if (dialog.ShowDialog(this) != true) return;
-            row.Etalon = dialog.FileName;
-            DepartmentsList.Items.Refresh();
-        }
 
         private void Save_Click(object sender, RoutedEventArgs e)
         {
@@ -231,7 +223,7 @@ namespace RASv2.ClashAnalysis.UI
             result.BlockPrefix = BlockPrefix.Text.Trim();
             result.DateFormat = SelectedDateFormat;
             result.Departments = _departments.Where(d => !string.IsNullOrWhiteSpace(d.Department))
-                .Select(d => new DepartmentTemplate { Department = d.Department.Trim(), Etalon = d.Etalon?.Trim(), ViewTemplate = d.ViewTemplate?.Trim() })
+                .Select(d => new DepartmentTemplate { Department = d.Department.Trim() })
                 .ToList();
             return result;
         }

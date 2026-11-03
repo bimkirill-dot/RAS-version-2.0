@@ -354,13 +354,13 @@ namespace RASv2.Tests
             {
                 var dir = Path.Combine(Path.GetTempPath(), "RASv2.Tests", "export-files");
                 Directory.CreateDirectory(dir);
-                var c = new ExportSettings { BlockPrefix = "C", Departments = { new DepartmentTemplate { Department = "KJ", Etalon = @"\\srv\КЖ.rte" } } };
+                var c = new ExportSettings { BlockPrefix = "C", Departments = { new DepartmentTemplate { Department = "KJ" } } };
                 c.Nwc.ViewName = "3D_NW";
                 var path = Path.Combine(dir, "Общие настройки.json");
                 ExportFiles.Save(path, ExportFiles.FromCommon(c));
                 var back = ExportFiles.Load(path);
                 Check(back.Kind == ExportFile.Common && back.Settings.BlockPrefix == "C" && back.Settings.Nwc.ViewName == "3D_NW" &&
-                      back.Settings.Departments.Single().Etalon == @"\\srv\КЖ.rte", "общие");
+                      back.Settings.Departments.Single().Department == "KJ", "общие");
 
                 var roots = Sample(out var high, out var mid);
                 var top = roots[0];

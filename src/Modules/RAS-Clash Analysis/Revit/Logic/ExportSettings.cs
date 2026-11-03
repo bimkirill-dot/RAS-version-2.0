@@ -46,14 +46,13 @@ namespace RASv2.ClashAnalysis.Logic
             double.TryParse((text ?? "").Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out value) && value > 0;
     }
 
-    /// <summary>Отдел: код в имени модели («KJ» — в «…_KJ01_…») → эталон → шаблон вида для выгрузки.</summary>
+    /// <summary>
+    /// Отдел: код в имени модели («KJ» — в «…_KJ01_…») — для {Отдел}. Эталона и шаблона вида больше нет (разработчик, 03.11.2026:
+    /// «лабуду с rvt / rte убираем — просто проверяем свой вид Navisworks перед выгрузкой»); в прежних файлах эти поля не читаются.
+    /// </summary>
     public sealed class DepartmentTemplate
     {
         public string Department { get; set; }
-        /// <summary>Путь к файлу шаблона проекта отдела (.rte).</summary>
-        public string Etalon { get; set; }
-        /// <summary>Имя шаблона вида для выгрузки в эталоне.</summary>
-        public string ViewTemplate { get; set; }
         public DepartmentTemplate Clone() => (DepartmentTemplate)MemberwiseClone();
     }
 
@@ -82,7 +81,7 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>{Дата} — формат (.NET); как в папках отчётов сейчас — «01.10.2026».</summary>
         public string DateFormat { get; set; } = "dd.MM.yyyy";
 
-        /// <summary>Отделы — их коды ищутся в имени модели ({Отдел}), по ним же эталон и шаблон вида.</summary>
+        /// <summary>Отделы — их коды ищутся в имени модели ({Отдел}).</summary>
         public List<DepartmentTemplate> Departments { get; set; } = new List<DepartmentTemplate>();
 
 

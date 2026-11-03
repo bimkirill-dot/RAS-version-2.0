@@ -293,40 +293,23 @@
                 <DockPanel Style="{StaticResource HeadBar}">
                     <TextBlock Style="{StaticResource Head}" Text="Отделы" />
                 </DockPanel>
-                <Grid Margin="0,4,40,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="90" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="200" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Style="{StaticResource ColHead}" Text="Код" />
-                    <TextBlock Grid.Column="1" Style="{StaticResource ColHead}" Text="Эталон (.rte)" />
-                    <TextBlock Grid.Column="2" Style="{StaticResource ColHead}" Text="Шаблон вида" />
-                </Grid>
-                <ItemsControl x:Name="DepartmentsList">
+                <!-- коды отделов — для {Отдел}; эталона и шаблона вида нет (разработчик, 03.11.2026) -->
+                <ItemsControl x:Name="DepartmentsList" Margin="380,4,0,0">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="90" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="200" />
+                                    <ColumnDefinition Width="120" />
                                     <ColumnDefinition Width="40" />
                                 </Grid.ColumnDefinitions>
-                                <TextBox Text="{Binding Department, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,0" TextChanged="Any_Changed" />
-                                <DockPanel Grid.Column="1" Margin="0,0,8,0">
-                                    <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE8E5;" Margin="4,0,0,0"
-                                            Click="BrowseEtalon_Click" ToolTip="Выбрать файл" />
-                                    <TextBox Text="{Binding Etalon, UpdateSourceTrigger=PropertyChanged}" />
-                                </DockPanel>
-                                <TextBox Grid.Column="2" Text="{Binding ViewTemplate, UpdateSourceTrigger=PropertyChanged}" />
-                                <Button Grid.Column="3" Style="{StaticResource IconButton}" Content="&#xE74D;" HorizontalAlignment="Right"
+                                <TextBox Text="{Binding Department, UpdateSourceTrigger=PropertyChanged}" TextChanged="Any_Changed" ToolTip="Код отдела, например KJ" />
+                                <Button Grid.Column="1" Style="{StaticResource IconButton}" Content="&#xE74D;" HorizontalAlignment="Right"
                                         Click="DeleteDepartment_Click" ToolTip="Удалить отдел" />
                             </Grid>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <Button Content="Добавить отдел" HorizontalAlignment="Left" Click="AddDepartment_Click" />
+                <Button Content="Добавить отдел" HorizontalAlignment="Left" Margin="380,0,0,0" Click="AddDepartment_Click" />
             </StackPanel>
         </ScrollViewer>
     </DockPanel>
