@@ -22,8 +22,6 @@ namespace RASv2.ClashAnalysis.UI
         private readonly ExportSettings _settings;
         private readonly ObservableCollection<DepartmentTemplate> _departments = new ObservableCollection<DepartmentTemplate>();
         private readonly bool _ready;
-        // частей имени NWC при обрезке — в окне не правится (разработчик, 03.11.2026: «просто галочка»), хранится в общих настройках
-        private int _nameParts;
 
         public ExportSettingsWindow(ExportSettings settings)
         {
@@ -59,7 +57,6 @@ namespace RASv2.ClashAnalysis.UI
             RemovePointClouds.IsChecked = s.RemovePointClouds;
             RemoveIfc.IsChecked = s.RemoveIfc;
             TrimName.IsChecked = s.TrimName;
-            _nameParts = s.NameParts;
             BlockPrefix.Text = s.BlockPrefix;
             DateFormat.SelectedIndex = Math.Max(0, Array.IndexOf(ExportSettings.DateFormats, s.DateFormat));
             _departments.Clear();
@@ -101,7 +98,7 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Пример под «Обрезать имя NWC»: имя модели → имя NWC — по тому, что сейчас в окне (разработчик, 03.11.2026: без меток).</summary>
         private void UpdateExample()
         {
-            var nwc = ExportNames.NwcName(SampleModel, TrimName.IsChecked == true, _nameParts, out var matches);
+            var nwc = ExportNames.NwcName(SampleModel, TrimName.IsChecked == true, out var matches);
             NameExample.Text = "Пример: " + SampleModel + " → " + nwc + (matches || TrimName.IsChecked != true ? "" : " (не по шаблону)");
         }
 
@@ -202,7 +199,6 @@ namespace RASv2.ClashAnalysis.UI
             result.RemovePointClouds = RemovePointClouds.IsChecked == true;
             result.RemoveIfc = RemoveIfc.IsChecked == true;
             result.TrimName = TrimName.IsChecked == true;
-            result.NameParts = _nameParts;
             result.BlockPrefix = BlockPrefix.Text.Trim();
             result.DateFormat = SelectedDateFormat;
             result.Departments = _departments.Where(d => !string.IsNullOrWhiteSpace(d.Department))

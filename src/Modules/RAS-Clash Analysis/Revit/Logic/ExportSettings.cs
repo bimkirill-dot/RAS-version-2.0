@@ -73,9 +73,8 @@ namespace RASv2.ClashAnalysis.Logic
         public bool RemovePointClouds { get; set; } = true;
         public bool RemoveIfc { get; set; } = true;
 
-        /// <summary>Обрезать имя NWC: первые NameParts частей через «_», в последней — до пробела.</summary>
+        /// <summary>Обрезать имя NWC: всё после части «М3» (разработчик, 03.11.2026) — ExportNames.NwcName.</summary>
         public bool TrimName { get; set; } = true;
-        public int NameParts { get; set; } = 7;
 
         /// <summary>{Блок} — часть имени модели вида «буква и цифры»: «S6», «S10» (разработчик, 02.11.2026: «зачем по частям делить»).</summary>
         public string BlockPrefix { get; set; } = "S";
@@ -99,7 +98,6 @@ namespace RASv2.ClashAnalysis.Logic
             RemovePointClouds = s.RemovePointClouds;
             RemoveIfc = s.RemoveIfc;
             TrimName = s.TrimName;
-            NameParts = s.NameParts;
             BlockPrefix = s.BlockPrefix;
             DateFormat = s.DateFormat;
             Departments = s.Departments.Select(d => d.Clone()).ToList();
@@ -172,21 +170,25 @@ namespace RASv2.ClashAnalysis.Logic
         }
 
         /// <summary>
-        /// Имя NWC из имени модели. trim — первые parts частей через «_», в последней — до первого пробела:
-        /// «0000_01_01_S6_KJ01_01_M3 еще текст.rvt» и «…_M3_еще текст.rvt» → «0000_01_01_S6_KJ01_01_M3». По счёту частей, а не
-        /// по «M3» — на этом месте бывает и «Р3». Частей меньше — имя как есть, matches = false («не по шаблону»).
+        /// Имя NWC из имени модели. trim — до части «М3» включительно, остальное отрезается (разработчик, 03.11.2026: пример
+        /// «0000_01_01_S01_01_М3_BIM_Alma → 0000_01_01_S01_01_М3»; «части Р3 не будет»): «…_M3 еще текст.rvt» и «…_M3_еще
+        /// текст.rvt» → «…_M3». Буква «М» — латинская или русская, без учёта регистра; так режется по смыслу, а не по счёту частей —
+        /// с отделом в имени и без. Части «М3» нет — имя как есть, matches = false («не по шаблону»).
         /// </summary>
-        public static string NwcName(string modelFile, bool trim, int parts, out bool matches)
+        public static string NwcName(string modelFile, bool trim, out bool matches)
         {
             var name = BareName(modelFile).Trim();
             var split = name.Split('_');
-            matches = parts > 0 && split.Length >= parts;
+            var at = Array.FindIndex(split, p => StageRx.IsMatch(p));
+            matches = at >= 0;
             if (!trim || !matches) return name;
-            var kept = split.Take(parts).ToArray();
-            var last = kept[parts - 1];
-            var space = last.IndexOf(' ');
-            if (space >= 0) kept[parts - 1] = last.Substring(0, space);
+            var kept = split.Take(at + 1).ToArray();
+            var space = kept[at].IndexOf(' ');
+            if (space >= 0) kept[at] = kept[at].Substring(0, space);
             return string.Join("_", kept);
         }
+
+        // часть «М3» — сама или с текстом через пробел («М3 еще текст»); М — латинская или русская
+        private static readonly Regex StageRx = new Regex(@"^[MМ]3(\s|$)", RegexOptions.IgnoreCase);
     }
 }

@@ -140,18 +140,19 @@ namespace RASv2.Tests
                 Check(ExportTask.SubtasksWord(1) == "подзадача" && ExportTask.SubtasksWord(3) == "подзадачи" && ExportTask.BlocksWord(9) == "блоков",
                     "подзадачи, блоки");
             });
-            yield return Case("имя NWC: первые 7 частей, в последней — до пробела; частей меньше — как есть", () =>
+            yield return Case("имя NWC: до части «М3» включительно, остальное отрезается; «М3» нет — как есть", () =>
             {
-                string Nwc(string file, bool trim = true, int parts = 7) => ExportNames.NwcName(file, trim, parts, out _);
+                string Nwc(string file, bool trim = true) => ExportNames.NwcName(file, trim, out _);
+                Check(Nwc("0000_01_01_S01_01_М3_BIM_Alma") == "0000_01_01_S01_01_М3", "образец разработчика (русская М): " + Nwc("0000_01_01_S01_01_М3_BIM_Alma"));
                 Check(Nwc("0000_01_01_S6_KJ01_01_M3 еще текст.rvt") == "0000_01_01_S6_KJ01_01_M3", Nwc("0000_01_01_S6_KJ01_01_M3 еще текст.rvt"));
-                Check(Nwc("0000_01_01_S6_KJ01_01_M3_еще текст.rvt") == "0000_01_01_S6_KJ01_01_M3", Nwc("0000_01_01_S6_KJ01_01_M3_еще текст.rvt"));
-                Check(Nwc(@"\server\Проект\0000_01_01_S6_KJ01_01_Р3.rvt") == "0000_01_01_S6_KJ01_01_Р3", "кириллица и путь");
+                Check(Nwc("0000_01_01_S6_KJ01_01_M3_еще текст.rvt") == "0000_01_01_S6_KJ01_01_M3", "с отделом и хвостом через «_»");
+                Check(Nwc(@"\server\Проект\0000_01_01_S6_KJ01_01_m3.rvt") == "0000_01_01_S6_KJ01_01_m3", "путь и регистр");
                 Check(Nwc(@"\\srv\Генплан.rvt") == "Генплан", "«\\\\сервер\\файл» — не пусто (.NET 8)");
                 Check(Nwc("0000_01_01_S6_KJ01_01_M3 еще текст.rvt", trim: false) == "0000_01_01_S6_KJ01_01_M3 еще текст", "без обрезки");
-                Check(Nwc("0000_01_01_S6_KJ01_01_M3_x.rvt", parts: 6) == "0000_01_01_S6_KJ01_01", "6 частей");
-                var short_ = ExportNames.NwcName("Модель АР.rvt", true, 7, out var matches);
+                Check(Nwc("0000_01_01_S6_KJ01_01_M31_x.rvt") == "0000_01_01_S6_KJ01_01_M31_x", "«M31» — не «М3»");
+                var short_ = ExportNames.NwcName("Модель АР.rvt", true, out var matches);
                 Check(short_ == "Модель АР" && !matches, "не по шаблону: " + short_);
-                ExportNames.NwcName("0000_01_01_S6_KJ01_01_M3.rvt", true, 7, out matches);
+                ExportNames.NwcName("0000_01_01_S6_KJ01_01_M3.rvt", true, out matches);
                 Check(matches, "по шаблону");
             });
             yield return Case("{Блок} и {Отдел} — найденные в имени модели, не по номеру части", () =>
@@ -185,7 +186,7 @@ namespace RASv2.Tests
                 Check(!n.ConvertUrls && !n.ConvertLights && !n.ConvertLinkedCad && !n.ConvertLinkedFiles && !n.FindMissingMaterials &&
                       !n.RoomGeometry, "выключенное");
                 Check(s.RemoveRevitLinks && s.RemoveCad && s.RemovePointClouds && s.RemoveIfc, "перед выгрузкой удаляется всё внешнее");
-                Check(s.TrimName && s.NameParts == 7 && s.BlockPrefix == "S" && s.DateFormat == "dd.MM.yyyy", "имя модели и дата");
+                Check(s.TrimName && s.BlockPrefix == "S" && s.DateFormat == "dd.MM.yyyy", "имя модели и дата");
                 Check(NwcOptions.TryFaceting("0,5", out var f) && f == 0.5, "запятая");
                 Check(NwcOptions.TryFaceting(" 2.5 ", out f) && f == 2.5, "точка");
                 Check(!NwcOptions.TryFaceting("0", out _) && !NwcOptions.TryFaceting("-1", out _) &&

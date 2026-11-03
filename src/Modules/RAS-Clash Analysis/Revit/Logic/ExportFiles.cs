@@ -135,7 +135,6 @@ namespace RASv2.ClashAnalysis.Logic
             if (s.Nwc == null) s.Nwc = d.Nwc;
             if (string.IsNullOrEmpty(s.Nwc.ViewName)) s.Nwc.ViewName = d.Nwc.ViewName;
             if (s.Nwc.FacetingFactor <= 0) s.Nwc.FacetingFactor = d.Nwc.FacetingFactor;
-            if (s.NameParts <= 0) s.NameParts = d.NameParts;
             if (string.IsNullOrEmpty(s.BlockPrefix)) s.BlockPrefix = d.BlockPrefix;
             if (string.IsNullOrEmpty(s.DateFormat)) s.DateFormat = d.DateFormat;
             if (s.Departments == null) s.Departments = new List<DepartmentTemplate>();

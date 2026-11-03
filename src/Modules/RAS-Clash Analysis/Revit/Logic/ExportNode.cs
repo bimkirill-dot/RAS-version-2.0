@@ -296,7 +296,7 @@ namespace RASv2.ClashAnalysis.Logic
         public static string NwcNameOf(ExportModel model, ExportSettings common) =>
             !string.IsNullOrWhiteSpace(model.NwcName)
                 ? model.NwcName.Trim()
-                : ExportNames.NwcName(model.Path, common.TrimName, common.NameParts, out _);
+                : ExportNames.NwcName(model.Path, common.TrimName, out _);
 
         /// <summary>Путь Revit Server: «RSN://сервер/папка/модель.rvt».</summary>
         public static bool IsServerPath(string path) =>

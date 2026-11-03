@@ -72,7 +72,7 @@ namespace RASv2.ClashAnalysis.UI
             public Visibility ShowVisibility => _editing ? Visibility.Collapsed : Visibility.Visible;
             public Visibility EditVisibility => _editing ? Visibility.Visible : Visibility.Collapsed;
 
-            private string Auto => ExportNames.NwcName(Path, _common.TrimName, _common.NameParts, out _);
+            private string Auto => ExportNames.NwcName(Path, _common.TrimName, out _);
 
             public string Name
             {
@@ -89,7 +89,7 @@ namespace RASv2.ClashAnalysis.UI
             {
                 get
                 {
-                    ExportNames.NwcName(Path, _common.TrimName, _common.NameParts, out var matches);
+                    ExportNames.NwcName(Path, _common.TrimName, out var matches);
                     return _common.TrimName && Model.NwcName == null && !matches ? Visibility.Visible : Visibility.Collapsed;
                 }
             }
