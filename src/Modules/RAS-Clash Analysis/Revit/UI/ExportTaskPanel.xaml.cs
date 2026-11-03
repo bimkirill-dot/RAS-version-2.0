@@ -12,13 +12,13 @@ using RASv2.ClashAnalysis.Site.Logic;
 namespace RASv2.ClashAnalysis.UI
 {
     /// <summary>
-    /// Настройки задачи или подзадачи «Задач выгрузки» (карандаш; разделы — по разработчику, 03.11.2026): «Общее» — название,
-    /// папка задачи; «Экспорт» — вид, папка для NWC, модели (одной строкой, список — по «Показать»), параметры выгрузки (по общим
-    /// настройкам или свои — то же окно, что шестерёнка); «NWF и отчёты» — «Формировать NWF», проверки, скрыть в NWF, папки NWF и
-    /// отчётов, форматы. Каждая настройка — своя или от уровня выше; у задачи верхнего уровня всё своё. Правятся копии: «Отмена»
-    /// оставляет как было.
+    /// Настройки задачи или подзадачи «Задач выгрузки» — боковая панель главного окна (разработчик, 03.11.2026; разделы — по
+    /// разработчику): «Общее» — название, папка задачи; «Экспорт» — вид, папка для NWC, модели, «Настройки NWC Exporter»; «NWF» —
+    /// «Формировать NWF», имя, проверки, скрыть, папка; «Отчёты» — «Формировать отчёты», формат, папка. Каждая настройка — своя или
+    /// от уровня выше; у задачи верхнего уровня всё своё. Правятся копии: «Сохранить» применяет к строке (Saved — главное окно пишет
+    /// на сервер), «Отменить» — Cancelled.
     /// </summary>
-    public partial class ExportTaskWindow : Window, INotifyPropertyChanged
+    public partial class ExportTaskPanel : UserControl, INotifyPropertyChanged
     {
         /// <summary>Строка списка моделей: имя (без «.rvt») и путь (разработчик, 03.11.2026: «отдел, блок — не надо»).</summary>
         public sealed class ModelRow
@@ -80,7 +80,7 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Версия Revit — серверы Revit Server для «Добавить модели…» берутся из её настроек (RSN.ini).</summary>
         public int RevitYear { get; set; } = 2026;
 
-        public ExportTaskWindow(ExportTask task, ExportSettings common)
+        public ExportTaskPanel(ExportTask task, ExportSettings common)
         {
             RASv2.Core.WindowTheme.Apply(this);
             InitializeComponent();
@@ -88,7 +88,6 @@ namespace RASv2.ClashAnalysis.UI
             _parent = task.Parent;
             _common = common;
             var s = task.Settings;
-            Title = string.IsNullOrEmpty(task.Name) ? (_parent == null ? "Новая задача" : "Новая подзадача") : task.Name;
             TaskName.Text = task.Name;
             DataContext = this;
 
@@ -126,11 +125,12 @@ namespace RASv2.ClashAnalysis.UI
             PathInfo.Text = _parent == null ? "задача" : "в " + string.Join(" · ", Ancestors().Select((a, i) => i == 0 ? "«" + a.Name + "»" : a.Name));
 
             // новая строка и копия: сразу печатать название
-            Loaded += (o, e) =>
-            {
-                TaskName.Focus();
-                TaskName.SelectAll();
-            };
+            if (string.IsNullOrEmpty(task.Name))
+                Loaded += (o, e) =>
+                {
+                    TaskName.Focus();
+                    TaskName.SelectAll();
+                };
             _ready = true;
             ShowModels();
             ShowTests();
@@ -138,7 +138,6 @@ namespace RASv2.ClashAnalysis.UI
             ShowFormats();
             ShowExport();
             _opened = State();
-            Closing += (o, e) => e.Cancel = !MayClose(this, DialogResult == true || State() == _opened);
         }
 
         /// <summary>Закрыть окно настроек: сохранено или правок нет — да; иначе — спросить (разбор 02.11.2026: «Отмена» молча теряла правки).</summary>
@@ -244,7 +243,7 @@ namespace RASv2.ClashAnalysis.UI
             {
                 // окно Revit «Открыть» из плагина Revit Server не показывает (проверка разработчика, 02.11.2026) — своё окно; с
                 // папки, откуда добавляли в прошлый раз
-                var picker = new ModelPickerWindow(RevitYear, _serverFolder ?? ExportNodes.StartServerFolder(_task)) { Owner = this };
+                var picker = new ModelPickerWindow(RevitYear, _serverFolder ?? ExportNodes.StartServerFolder(_task)) { Owner = Owner };
                 if (picker.ShowDialog() != true) return;
                 picked = picker.Picked;
                 var server = picked.Select(m => ExportNodes.ServerFolderOf(m.Path)).FirstOrDefault(f => f.Length > 0);
@@ -302,7 +301,7 @@ namespace RASv2.ClashAnalysis.UI
         private void AddTests_Click(object sender, RoutedEventArgs e)
         {
             var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Проверки Navisworks (*.xml)|*.xml", Multiselect = true };
-            if (dialog.ShowDialog(this) != true) return;
+            if (dialog.ShowDialog(Owner) != true) return;
             foreach (var f in dialog.FileNames)
                 if (!_tests.Any(r => string.Equals(r.Path, f, StringComparison.OrdinalIgnoreCase))) _tests.Add(new FileRow(f));
             ShowTests();
@@ -350,7 +349,7 @@ namespace RASv2.ClashAnalysis.UI
         private void AddHide_Click(object sender, RoutedEventArgs e)
         {
             var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Поисковые наборы Navisworks (*.xml)|*.xml" };
-            if (dialog.ShowDialog(this) != true) return;
+            if (dialog.ShowDialog(Owner) != true) return;
             try
             {
                 List<HideSet> sets;
@@ -440,8 +439,8 @@ namespace RASv2.ClashAnalysis.UI
             var current = _export != null ? _export.ApplyTo(_common) : (_parent == null ? _common : ExportNodes.ExportOf(_parent, _common)).Clone();
             try
             {
-                var name = TaskName.Text.Trim().Length > 0 ? TaskName.Text.Trim() : Title;
-                if (new ExportSettingsWindow(current, name) { Owner = this }.ShowDialog() != true) return;
+                var name = TaskName.Text.Trim().Length > 0 ? TaskName.Text.Trim() : "новая строка";
+                if (new ExportSettingsWindow(current, name) { Owner = Owner }.ShowDialog() != true) return;
             }
             catch (Exception ex)
             {
@@ -524,7 +523,7 @@ namespace RASv2.ClashAnalysis.UI
 
         private void BrowseProject_Click(object sender, RoutedEventArgs e)
         {
-            var path = FolderDialog.Pick(this, Folder.Text, "Папка проекта");
+            var path = FolderDialog.Pick(Owner, Folder.Text, "Папка проекта");
             if (path != null) Folder.Text = path;
         }
 
@@ -533,7 +532,7 @@ namespace RASv2.ClashAnalysis.UI
         {
             var box = (TextBox)((Button)sender).Tag;
             var root = Folder.Text.Trim().TrimEnd('\\');
-            var path = FolderDialog.Pick(this, root, "Папка внутри проекта");
+            var path = FolderDialog.Pick(Owner, root, "Папка внутри проекта");
             if (path == null) return;
             box.Text = root.Length > 0 && path.StartsWith(root + "\\", StringComparison.OrdinalIgnoreCase)
                 ? path.Substring(root.Length + 1)
@@ -571,7 +570,7 @@ namespace RASv2.ClashAnalysis.UI
                 Filter = ExportFiles.Filter,
                 FileName = string.Concat(TaskName.Text.Trim().Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c)) + ".json",
             };
-            if (dialog.ShowDialog(this) != true) return;
+            if (dialog.ShowDialog(Owner) != true) return;
             try
             {
                 var copy = _task.Copy();
@@ -592,7 +591,7 @@ namespace RASv2.ClashAnalysis.UI
         private void Import_Click(object sender, RoutedEventArgs e)
         {
             var dialog = new Microsoft.Win32.OpenFileDialog { Filter = ExportFiles.Filter };
-            if (dialog.ShowDialog(this) != true) return;
+            if (dialog.ShowDialog(Owner) != true) return;
             try
             {
                 var file = ExportFiles.Load(dialog.FileName);
@@ -613,13 +612,32 @@ namespace RASv2.ClashAnalysis.UI
             }
         }
 
-        // ── сохранить ──
+        // ── сохранить и отменить: решает главное окно (запись на сервер, перестройка дерева) ──
+
+        /// <summary>Строка записана в дерево (настройки применены) — главное окно пишет задачу на сервер.</summary>
+        public event EventHandler Saved;
+        /// <summary>«Отменить» — главное окно открывает строку заново (новую несохранённую — убирает).</summary>
+        public event EventHandler Cancelled;
+
+        /// <summary>В панели есть несохранённые правки.</summary>
+        public bool Dirty => State() != _opened;
+
+        /// <summary>Окно, где стоит панель, — хозяин диалогов.</summary>
+        private new Window Owner => Window.GetWindow(this);
 
         private void Save_Click(object sender, RoutedEventArgs e)
         {
+            if (TrySave()) Saved?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void Cancel_Click(object sender, RoutedEventArgs e) => Cancelled?.Invoke(this, EventArgs.Empty);
+
+        /// <summary>Проверить и применить к строке дерева; ошибка — строкой внизу панели и false.</summary>
+        public bool TrySave()
+        {
             var error = Validate();
             Error.Text = error ?? "";
-            if (error != null) return;
+            if (error != null) return false;
 
             // проверки по всему дереву (имена NWC, строки с NWF) — на уже применённых настройках; ошибка — вернуть как было
             var name = _task.Name;
@@ -636,9 +654,10 @@ namespace RASv2.ClashAnalysis.UI
                 _task.Name = name;
                 _task.Settings = settings;
                 Error.Text = error;
-                return;
+                return false;
             }
-            DialogResult = true;
+            _imported.Clear();
+            return true;
         }
 
         /// <summary>Что не так в окне — первой ошибкой; null — всё верно.</summary>

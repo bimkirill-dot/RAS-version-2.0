@@ -35,7 +35,7 @@ namespace RASv2.ClashAnalysis.UI
             _ready = true;
             UpdateExample();
             _opened = State();
-            Closing += (s, e) => e.Cancel = !ExportTaskWindow.MayClose(this, DialogResult == true || State() == _opened);
+            Closing += (s, e) => e.Cancel = !ExportTaskPanel.MayClose(this, DialogResult == true || State() == _opened);
         }
 
         private readonly string _opened;

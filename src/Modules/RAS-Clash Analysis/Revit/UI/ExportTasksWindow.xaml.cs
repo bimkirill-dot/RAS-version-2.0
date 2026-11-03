@@ -8,10 +8,11 @@ using RASv2.ClashAnalysis.Logic;
 namespace RASv2.ClashAnalysis.UI
 {
     /// <summary>
-    /// «Задачи выгрузки» (DECISIONS.md модуля, «Дерево задач с наследованием (03.11.2026)»): задачи из общего хранилища на
-    /// сервере, под задачей — подзадачи любой глубины. Строка — номер, название, краткая информация, «Запустить», «+»
-    /// (подзадача), копия (у подзадачи), карандаш, корзина. Перенос — перетаскиванием внутри своего уровня (порядковый номер
-    /// задач — общий).
+    /// «Задачи выгрузки» (DECISIONS.md модуля, «Дерево задач с наследованием», «Боковая панель» — 03.11.2026): слева — задачи из
+    /// общего хранилища на сервере, под задачей — подзадачи любой глубины; справа — настройки выбранной строки (ExportTaskPanel).
+    /// Строка — номер, название, краткая информация, «Запустить», «+» (подзадача), копия (у подзадачи), корзина; щелчок — её
+    /// настройки справа. Новая строка («+», копия) — сразу в панели, на сервер — по «Сохранить». Ушли со строки или закрыли окно с
+    /// несохранёнными правками — вопрос. Перенос — перетаскиванием внутри своего уровня (порядковый номер задач — общий).
     /// </summary>
     public partial class ExportTasksWindow : Window
     {
@@ -22,6 +23,7 @@ namespace RASv2.ClashAnalysis.UI
             public string Summary { get; set; }
             public bool Collapsed { get; set; }
             public bool HasInner { get; set; }
+            public bool IsSelected { get; set; }
 
             public ExportTask Item => Row.Item;
             public string Number => Row.Number;
@@ -47,6 +49,10 @@ namespace RASv2.ClashAnalysis.UI
         private readonly HashSet<ExportTask> _collapsed = new HashSet<ExportTask>();
         private Point _dragStart;
         private bool _dragArmed;
+        // выбранная строка и её панель; новая строка, ещё не сохранённая на сервер («+», копия) — _pending
+        private ExportTask _selected;
+        private ExportTaskPanel _panel;
+        private ExportTask _pending;
 
         /// <summary>Задачи и общие настройки — из общего хранилища на сервере: открыли окно — видно свежее у всех.</summary>
         public ExportTasksWindow(ExportStore store)
@@ -70,6 +76,8 @@ namespace RASv2.ClashAnalysis.UI
                 RowsList.IsEnabled = false;
             }
             Refresh();
+            // закрыть окно с несохранёнными правками — спросить
+            Closing += (s, e) => e.Cancel = !Leave();
         }
 
         private void ShowBanner(string text)
@@ -85,6 +93,7 @@ namespace RASv2.ClashAnalysis.UI
                 .Select(r => new RowItem
                 {
                     Row = r, Summary = ExportNodes.Summary(r), Collapsed = _collapsed.Contains(r.Item), HasInner = r.Item.Children.Count > 0,
+                    IsSelected = r.Item == _selected,
                 })
                 .ToList();
         }
@@ -126,21 +135,108 @@ namespace RASv2.ClashAnalysis.UI
 
         private List<ExportTask> SiblingsOf(ExportTask task) => task.Parent?.Children ?? _roots;
 
-        // «+» — сразу настройки новой строки (разбор настроек, 02.11.2026: без поиска строки и карандаша); «Отмена» — строки нет.
-        // Названия вписывает человек (разработчик, 02.11.2026: «зачем автоматическое название»)
+        // ── выбор строки и панель настроек ──
+
+        /// <summary>
+        /// Уйти со строки: правок нет — да; есть (или строка новая) — «Сохранить изменения?»: Да — сохранить (не прошла проверка —
+        /// остаться), Нет — правки пропадают (новая строка исчезает), Отмена — остаться.
+        /// </summary>
+        private bool Leave()
+        {
+            if (_panel == null || !_panel.Dirty && _pending == null) return true;
+            var name = string.IsNullOrWhiteSpace(_selected?.Name) ? "новую строку" : "«" + _selected.Name + "»";
+            var answer = MessageBox.Show(this, "Сохранить изменения в " + name + "?", Title, MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+            if (answer == MessageBoxResult.Cancel) return false;
+            if (answer == MessageBoxResult.Yes)
+            {
+                if (!_panel.TrySave()) return false;
+                Commit();
+                return true;
+            }
+            DropPending();
+            return true;
+        }
+
+        /// <summary>Открыть настройки строки справа (после Leave); null — пусто.</summary>
+        private void Show(ExportTask task)
+        {
+            _selected = task;
+            _panel = null;
+            if (task == null) Side.Content = SideEmpty;
+            else
+            {
+                try
+                {
+                    var panel = new ExportTaskPanel(task, Settings)
+                    {
+                        RevitYear = RevitYear, TakenNames = SiblingsOf(task).Where(t => t != task).Select(t => t.Name).ToList(),
+                    };
+                    panel.Saved += (s, e) =>
+                    {
+                        Commit();
+                        Show(_selected);
+                    };
+                    panel.Cancelled += (s, e) =>
+                    {
+                        DropPending();
+                        Show(_selected);
+                    };
+                    _panel = panel;
+                    Side.Content = panel;
+                }
+                catch (System.Exception ex)
+                {
+                    // исключение сквозь разметку панели роняло бы окно (CLAUDE.md, «Правила, о которые уже спотыкались»)
+                    RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: настройки строки не открылись — " + task.Name, ex);
+                    _selected = null;
+                    Side.Content = SideEmpty;
+                    MessageBox.Show(this, "Настройки не открылись — подробности в журнале плагина («О плагине» → «Показать журнал ошибок»).",
+                        Title, MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+            Refresh();
+        }
+
+        /// <summary>Строка сохранена в панели — задача на сервер; строка уже не новая. Коллега поменял, а открыли заново — её нет в дереве.</summary>
+        private void Commit()
+        {
+            var top = ExportNodes.Root(_selected);
+            _pending = null;
+            SaveTop(top);
+            if (!_roots.SelectMany(r => r.Self()).Contains(_selected)) _selected = null;
+        }
+
+        /// <summary>Новая несохранённая строка — убрать (выбранной становится строка выше).</summary>
+        private void DropPending()
+        {
+            if (_pending == null) return;
+            var parent = _pending.Parent;
+            if (parent != null) parent.Remove(_pending);
+            else _roots.Remove(_pending);
+            if (_selected == _pending) _selected = parent;
+            _pending = null;
+        }
+
+        /// <summary>Новая строка — в дерево и сразу в панель (название вписывает человек, разработчик, 02.11.2026); на сервер — по «Сохранить».</summary>
+        private void Open(ExportTask fresh)
+        {
+            _pending = fresh;
+            Show(fresh);
+        }
+
         private void AddTop_Click(object sender, RoutedEventArgs e)
         {
+            if (!Leave()) return;
             var top = ExportTask.NewTop("");
             top.StoreOrder = NextOrder();
             _roots.Add(top);
-            if (OpenSettings(top)) SaveTop(top);
-            else _roots.Remove(top);
-            Refresh();
+            Open(top);
         }
 
         /// <summary>Задача из файла — новой задачей; подзадача из файла — тоже, со своими настройками и по умолчанию; занятое название — «(2)».</summary>
         private void Import_Click(object sender, RoutedEventArgs e)
         {
+            if (!Leave()) return;
             var dialog = new Microsoft.Win32.OpenFileDialog { Filter = ExportFiles.Filter };
             if (dialog.ShowDialog(this) != true) return;
             try
@@ -160,7 +256,7 @@ namespace RASv2.ClashAnalysis.UI
                 top.StoreOrder = NextOrder();
                 _roots.Add(top);
                 SaveTop(top);
-                Refresh();
+                Show(top);
             }
             catch (System.Exception ex)
             {
@@ -176,29 +272,27 @@ namespace RASv2.ClashAnalysis.UI
         private void AddSub_Click(object sender, RoutedEventArgs e)
         {
             var parent = RowOf(sender).Item;
+            if (!Leave()) return;
             var sub = parent.Add(new ExportTask { Name = "" });
             _collapsed.Remove(parent);
-            if (OpenSettings(sub)) SaveTop(ExportNodes.Root(parent));
-            else parent.Remove(sub);
-            Refresh();
+            Open(sub);
         }
 
         /// <summary>
-        /// Копия подзадачи с вложенными — сразу под ней и сразу в её настройки: переименовать, поменять файл проверок и имя NWF
-        /// (разработчик, 03.11.2026: «копируем, переименовываем на „Средняя критичность“»). «Отмена» — копии нет.
+        /// Копия подзадачи с вложенными — сразу под ней и сразу в панели: переименовать, поменять файл проверок и имя NWF
+        /// (разработчик, 03.11.2026: «копируем, переименовываем на „Средняя критичность“»). «Отменить» — копии нет.
         /// </summary>
         private void Copy_Click(object sender, RoutedEventArgs e)
         {
             var task = RowOf(sender).Item;
+            if (!Leave()) return;
             var parent = task.Parent;
             var copy = task.Copy();
             copy.Name = ExportFiles.UniqueName(task.Name, parent.Children.Select(c => c.Name));
             parent.Add(copy);
             parent.Children.Remove(copy);
             parent.Children.Insert(parent.Children.IndexOf(task) + 1, copy);
-            if (OpenSettings(copy)) SaveTop(ExportNodes.Root(parent));
-            else parent.Remove(copy);
-            Refresh();
+            Open(copy);
         }
 
         private void Toggle_Click(object sender, RoutedEventArgs e)
@@ -215,6 +309,15 @@ namespace RASv2.ClashAnalysis.UI
             var text = "Удалить «" + task.Name + "»" + (inner > 0 ? " и " + inner + " " + ExportTask.SubtasksWord(inner) : "") + "?";
             if (MessageBox.Show(this, text, Title, MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No)
                 != MessageBoxResult.Yes) return;
+            // удаляется выбранная строка или ветка над ней — панель закрывается без вопроса о правках
+            var closes = _selected != null && task.Self().Contains(_selected);
+            if (closes) _panel = null;
+            if (_pending != null && task.Self().Contains(_pending))
+            {
+                DropPending();
+                Show(closes ? null : _selected);
+                return;
+            }
             if (task.Parent != null)
             {
                 var parent = task.Parent;
@@ -235,14 +338,8 @@ namespace RASv2.ClashAnalysis.UI
                         MessageBoxImage.Error);
                 }
             }
-            Refresh();
-        }
-
-        private void Edit_Click(object sender, RoutedEventArgs e)
-        {
-            var task = RowOf(sender).Item;
-            if (OpenSettings(task)) SaveTop(ExportNodes.Root(task));
-            Refresh();
+            if (closes) Show(null);
+            else Refresh();
         }
 
         private void Settings_Click(object sender, RoutedEventArgs e)
@@ -258,16 +355,11 @@ namespace RASv2.ClashAnalysis.UI
                     RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: общие настройки не записаны на сервер", ex);
                     MessageBox.Show(this, "Общие настройки не сохранены на сервере: " + ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
                 }
+                // примеры в панели — по общим настройкам: открыть строку заново, если в ней нет правок
+                if (_panel != null && !_panel.Dirty) Show(_selected);
             }
             Refresh();
         }
-
-        /// <summary>Настройки строки (карандаш); true — сохранены.</summary>
-        private bool OpenSettings(ExportTask task) =>
-            Nested(() => new ExportTaskWindow(task, Settings)
-            {
-                Owner = this, RevitYear = RevitYear, TakenNames = SiblingsOf(task).Where(t => t != task).Select(t => t.Name).ToList(),
-            }.ShowDialog(), "Настройки задачи");
 
         /// <summary>Вложенное окно; исключение сквозь вложенный ShowDialog роняет Revit (CLAUDE.md, «Правила, о которые уже спотыкались»).</summary>
         private bool Nested(System.Func<bool?> show, string what)
@@ -290,11 +382,21 @@ namespace RASv2.ClashAnalysis.UI
             MessageBox.Show(this, "Выгрузка — в следующей версии: сейчас задачи только настраиваются и хранятся.", Title,
                 MessageBoxButton.OK, MessageBoxImage.Information);
 
-        // перетаскивание строки: нажали на строку (не на кнопку) и повели мышью — перенос внутри своего уровня
+        // перетаскивание строки: нажали на строку (не на кнопку) и повели мышью — перенос внутри своего уровня; нажатие — выбор
         private void Row_MouseDown(object sender, MouseButtonEventArgs e)
         {
-            _dragArmed = !(e.OriginalSource is DependencyObject d && FindButton(d));
+            var onButton = e.OriginalSource is DependencyObject d && FindButton(d);
+            _dragArmed = !onButton;
             _dragStart = e.GetPosition(this);
+            // щелчок по строке (не по кнопке) — её настройки справа
+            var item = RowOf(sender).Item;
+            if (onButton || item == _selected) return;
+            if (!Leave())
+            {
+                _dragArmed = false;
+                return;
+            }
+            Show(item);
         }
 
         private void Row_MouseMove(object sender, MouseEventArgs e)
