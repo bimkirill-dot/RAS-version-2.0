@@ -15,8 +15,9 @@ namespace RASv2.ClashAnalysis.UI
 {
     /// <summary>
     /// «Добавить модели…» строки «Задач выгрузки»: Revit Server — деревом с галочками (папки подгружаются при раскрытии, галочка
-    /// на папке — все модели внутри), сетевые папки — окном Windows. Серверы — из настроек Revit своей версии (RSN.ini). Ответ —
-    /// Picked: пути моделей (RSN://… или файлы).
+    /// на папке — все модели внутри), сетевые папки — окном Windows. Серверы — из настроек всех версий Revit на компьютере
+    /// (RSN.ini), версия Revit Server — на выбор (2023–2026; разработчик, 03.11.2026). Содержимое папок — из кэша сразу и с сервера
+    /// в фоне (ServerCache; «на сервер долго заходит»). Ответ — Picked: модели (RSN://… или файлы) с версией Revit.
     /// </summary>
     public partial class ModelPickerWindow : Window
     {
@@ -90,10 +91,15 @@ namespace RASv2.ClashAnalysis.UI
         }
 
         private const string FolderSource = "Папка на диске или в сети…";
-        // последний выбранный сервер — до закрытия Revit
+        // последние выбранные сервер и версия — до закрытия Revit
         private static string _lastHost;
+        private static int _lastYear;
+        // кэши серверов — на время работы Revit (с диска читаются один раз)
+        private static readonly Dictionary<string, ServerCache> Caches = new Dictionary<string, ServerCache>(StringComparer.OrdinalIgnoreCase);
+        private static readonly string CacheDir = System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RAS_v_2.0", "RAS-Clash Analysis", "Кэш Revit Server");
 
-        private readonly int _year;
+        private int _year;
         private readonly List<string> _hosts;
         // папка проекта на сервере: раскрыть её после загрузки корня
         private readonly string _startHost;
@@ -102,16 +108,18 @@ namespace RASv2.ClashAnalysis.UI
         private string _host;
         private int _sourceIndex = -1;
 
-        /// <summary>Выбранные модели: «RSN://сервер/папка/модель.rvt» или пути файлов.</summary>
-        public List<string> Picked { get; } = new List<string>();
+        /// <summary>Выбранные модели: «RSN://сервер/папка/модель.rvt» (с версией Revit Server) или пути файлов (версия — 0).</summary>
+        public List<ExportModel> Picked { get; } = new List<ExportModel>();
 
         /// <param name="startFolder">Папка проекта на Revit Server (RSN://сервер/папка) — окно открывается в ней; пусто — корень.</param>
         public ModelPickerWindow(int revitYear, string startFolder = null)
         {
             RASv2.Core.WindowTheme.Apply(this);
             InitializeComponent();
-            _year = revitYear;
-            _hosts = RevitServers.Hosts(revitYear);
+            _year = _lastYear > 0 ? _lastYear : RevitServers.Years.Contains(revitYear) ? revitYear : RevitServers.Years.Last();
+            _hosts = RevitServers.AllHosts(revitYear);
+            foreach (var y in RevitServers.Years) Year.Items.Add("Revit " + y);
+            Year.SelectedIndex = Array.IndexOf(RevitServers.Years, _year);
             var start = (startFolder ?? "").Trim();
             if (start.StartsWith("RSN://", StringComparison.OrdinalIgnoreCase))
             {
@@ -132,7 +140,7 @@ namespace RASv2.ClashAnalysis.UI
             Source.Items.Add(FolderSource);
             Tree.ItemsSource = _roots;
             if (_hosts.Count == 0)
-                Status.Text = "В Revit " + revitYear + " не настроен ни один Revit Server — выберите «" + FolderSource + "».";
+                Status.Text = "В Revit на этом компьютере не настроен ни один Revit Server — выберите «" + FolderSource + "».";
             // сервер — когда окно уже показано: в конструкторе у потока ещё может не быть контекста WPF (см. UiContext)
             else
                 Loaded += (s, e) =>
@@ -161,7 +169,7 @@ namespace RASv2.ClashAnalysis.UI
                     var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Модели Revit (*.rvt)|*.rvt", Multiselect = true };
                     if (dialog.ShowDialog(this) == true && dialog.FileNames.Length > 0)
                     {
-                        Picked.AddRange(dialog.FileNames);
+                        Picked.AddRange(dialog.FileNames.Select(f => new ExportModel { Path = f }));
                         DialogResult = true;
                         return;
                     }
@@ -171,7 +179,7 @@ namespace RASv2.ClashAnalysis.UI
                 _sourceIndex = index;
                 _host = _hosts[index];
                 _lastHost = _host;
-                await LoadRoot();
+                await LoadRoot(false);
             }
             catch (Exception ex)
             {
@@ -179,25 +187,102 @@ namespace RASv2.ClashAnalysis.UI
             }
         }
 
-        private async Task LoadRoot()
+        private async void Year_Changed(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
-            var host = _host;
-            _roots.Clear();
-            UpdateCount();
-            Status.Text = "Загрузка Revit Server " + host + "…";
             try
             {
-                var contents = await RevitServerClient.ContentsAsync(host, _year, new List<string>());
-                if (host != _host) return;   // пока грузилось, выбрали другой сервер
+                UiContext();
+                if (Year.SelectedIndex < 0) return;
+                var year = RevitServers.Years[Year.SelectedIndex];
+                if (year == _year && _roots.Count > 0) return;
+                _year = _lastYear = year;
+                if (_host != null) await LoadRoot(false);
+            }
+            catch (Exception ex)
+            {
+                Fail("Задачи выгрузки: выбор моделей — версия", ex);
+            }
+        }
+
+        // «Обновить» — всё заново с сервера, мимо кэша
+        private async void Refresh_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                UiContext();
+                if (_host != null) await LoadRoot(true);
+            }
+            catch (Exception ex)
+            {
+                Fail("Задачи выгрузки: выбор моделей — обновить", ex);
+            }
+        }
+
+        private ServerCache CacheOf(string host)
+        {
+            if (!Caches.TryGetValue(host, out var cache)) Caches[host] = cache = ServerCache.Open(CacheDir, host);
+            return cache;
+        }
+
+        /// <summary>
+        /// Содержимое папки: из кэша — сразу, а с сервера — в фоне (пришло другое — fresh); в кэше нет или force — с сервера. Ответ
+        /// сервера — в кэш.
+        /// </summary>
+        private async Task<ServerContents> Contents(string host, int year, List<string> path, bool force, Action<ServerContents> fresh)
+        {
+            var cache = CacheOf(host);
+            if (!force && cache.TryGet(year, path, out var saved, out _))
+            {
+                RefreshLater(host, year, path, saved, fresh);
+                return saved;
+            }
+            var contents = await RevitServerClient.ContentsAsync(host, year, path);
+            cache.Put(year, path, contents, DateTime.Now);
+            return contents;
+        }
+
+        private async void RefreshLater(string host, int year, List<string> path, ServerContents saved, Action<ServerContents> fresh)
+        {
+            try
+            {
+                UiContext();
+                var contents = await RevitServerClient.ContentsAsync(host, year, path);
+                CacheOf(host).Put(year, path, contents, DateTime.Now);
+                if (host == _host && year == _year && !RevitServers.Same(saved, contents)) fresh(contents);
+            }
+            catch (Exception ex)
+            {
+                // сервер не ответил — остаётся сохранённое; в журнал — для разбора
+                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: Revit Server " + host + " (Revit " + year + ") — кэш не обновлён", ex);
+            }
+        }
+
+        private async Task LoadRoot(bool force)
+        {
+            var host = _host;
+            var year = _year;
+            _roots.Clear();
+            UpdateCount();
+            Status.Text = "Загрузка Revit Server " + host + " (Revit " + year + ")…";
+            try
+            {
+                var contents = await Contents(host, year, new List<string>(), force, c =>
+                {
+                    // на сервере поменялось: корень — заново, если ничего ещё не отмечено
+                    if (CheckedModels(_roots).Any()) return;
+                    _roots.Clear();
+                    Fill(_roots, null, new List<string>(), c);
+                });
+                if (host != _host || year != _year) return;   // пока грузилось, выбрали другой сервер или версию
                 Fill(_roots, null, new List<string>(), contents);
                 Status.Text = _roots.Count == 0 ? "На сервере пусто." : "";
                 if (string.Equals(host, _startHost, StringComparison.OrdinalIgnoreCase)) await OpenStart(host);
             }
             catch (Exception ex)
             {
-                if (host != _host) return;
-                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: Revit Server " + host + " (Revit " + _year + ") не ответил", ex);
-                Status.Text = "Revit Server " + host + " не отвечает для Revit " + _year + ".";
+                if (host != _host || year != _year) return;
+                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: Revit Server " + host + " (Revit " + year + ") не ответил", ex);
+                Status.Text = "Revit Server " + host + " не отвечает для Revit " + year + ".";
             }
         }
 
@@ -245,10 +330,17 @@ namespace RASv2.ClashAnalysis.UI
         {
             node.Loaded = true;
             var host = _host;
+            var year = _year;
             try
             {
-                var contents = await RevitServerClient.ContentsAsync(host, _year, node.Path);
-                if (host != _host) return;
+                var contents = await Contents(host, year, node.Path, false, c =>
+                {
+                    // на сервере поменялось: папка — заново, если в ней ничего не отмечено
+                    if (node.IsChecked || CheckedModels(node.Children).Any()) return;
+                    node.Children.Clear();
+                    Fill(node.Children, node, node.Path, c);
+                });
+                if (host != _host || year != _year) return;
                 node.Children.Clear();
                 Fill(node.Children, node, node.Path, contents);
                 if (node.IsChecked) SetDeep(node, true);   // папка уже отмечена — и её содержимое
@@ -295,11 +387,11 @@ namespace RASv2.ClashAnalysis.UI
             }
         }
 
+        // вложенные папки — одновременно, а не по одной (быстрее на больших проектах)
         private async Task LoadDeep(Node folder)
         {
             if (!folder.Loaded) await LoadChildren(folder);
-            foreach (var child in folder.Children.Where(c => c.IsFolder).ToList())
-                if (child.IsChecked) await LoadDeep(child);
+            await Task.WhenAll(folder.Children.Where(c => c.IsFolder && c.IsChecked).ToList().Select(LoadDeep));
         }
 
         private static void SetDeep(Node folder, bool value)
@@ -330,7 +422,7 @@ namespace RASv2.ClashAnalysis.UI
 
         private void Add_Click(object sender, RoutedEventArgs e)
         {
-            Picked.AddRange(CheckedModels(_roots).Select(m => RevitServers.RsnPath(_host, m.Path, m.Name)));
+            Picked.AddRange(CheckedModels(_roots).Select(m => new ExportModel { Path = RevitServers.RsnPath(_host, m.Path, m.Name), Year = _year }));
             DialogResult = true;
         }
 

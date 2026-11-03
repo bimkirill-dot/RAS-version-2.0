@@ -15,6 +15,13 @@ namespace RASv2.ClashAnalysis.Logic
         public string NwcName { get; set; }
         /// <summary>Блок, вписанный руками (в имени модели его нет — «Генплан.rvt»); null — из имени модели.</summary>
         public string Block { get; set; }
+        /// <summary>
+        /// Версия Revit модели (разработчик, 03.11.2026: «добавлять модели всех версий из любого Revit»): Revit Server, откуда взята
+        /// (у каждой версии — свой); 0 — не известна (файл из сетевой папки). Выгружать — в Revit этой версии или новее.
+        /// </summary>
+        public int Year { get; set; }
+
+        public ExportModel Clone() => (ExportModel)MemberwiseClone();
     }
 
     /// <summary>
@@ -80,7 +87,7 @@ namespace RASv2.ClashAnalysis.Logic
 
         public NodeSettings Clone() => new NodeSettings
         {
-            Models = Models?.Select(m => new ExportModel { Path = m.Path, NwcName = m.NwcName, Block = m.Block }).ToList(),
+            Models = Models?.Select(m => m.Clone()).ToList(),
             TestsFiles = TestsFiles?.ToList(), NwfName = NwfName, Folder = Folder, ServerFolder = ServerFolder, NwcFolder = NwcFolder,
             NwfFolder = NwfFolder, ReportFolder = ReportFolder, Xml = Xml, Html = Html, ViewName = ViewName, MakeNwf = MakeNwf,
             HideNames = HideNames?.ToList(), ReportFormats = ReportFormats?.ToList(), Export = Export?.Clone(),
@@ -326,14 +333,18 @@ namespace RASv2.ClashAnalysis.Logic
         // ── модели ──
 
         /// <summary>Добавить модели в список без повторов; сколько добавлено.</summary>
-        public static int AddModels(List<ExportModel> models, IEnumerable<string> paths)
+        public static int AddModels(List<ExportModel> models, IEnumerable<string> paths) =>
+            AddModels(models, paths.Select(p => new ExportModel { Path = p }));
+
+        /// <summary>Добавить модели (с версией Revit) без повторов по пути; сколько добавлено.</summary>
+        public static int AddModels(List<ExportModel> models, IEnumerable<ExportModel> picked)
         {
             var added = 0;
-            foreach (var path in paths)
+            foreach (var m in picked)
             {
-                if (string.IsNullOrWhiteSpace(path) ||
-                    models.Any(m => string.Equals(m.Path, path, StringComparison.OrdinalIgnoreCase))) continue;
-                models.Add(new ExportModel { Path = path });
+                if (string.IsNullOrWhiteSpace(m.Path) ||
+                    models.Any(x => string.Equals(x.Path, m.Path, StringComparison.OrdinalIgnoreCase))) continue;
+                models.Add(m.Clone());
                 added++;
             }
             return added;

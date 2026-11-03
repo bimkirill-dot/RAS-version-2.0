@@ -38,12 +38,25 @@ namespace RASv2.ClashAnalysis.Logic
     /// </summary>
     public static class RevitServers
     {
+        /// <summary>Версии Revit Server, из которых добавляются модели (разработчик, 03.11.2026: «все версии — из любого Revit»).</summary>
+        public static readonly int[] Years = { 2023, 2024, 2025, 2026 };
+
         /// <summary>Серверы, настроенные у Revit этой версии: %ProgramData%\Autodesk\Revit Server {год}\Config\RSN.ini.</summary>
         public static List<string> Hosts(int year)
         {
             var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
                 "Autodesk", "Revit Server " + year, "Config", "RSN.ini");
             return File.Exists(path) ? ParseRsn(File.ReadAllText(path)) : new List<string>();
+        }
+
+        /// <summary>Серверы из настроек всех версий Revit на компьютере (RSN.ini каждой), без повторов; первыми — версии thisYear.</summary>
+        public static List<string> AllHosts(int thisYear)
+        {
+            var all = Hosts(thisYear);
+            foreach (var y in Years.Where(y => y != thisYear))
+                foreach (var h in Hosts(y))
+                    if (!all.Contains(h, StringComparer.OrdinalIgnoreCase)) all.Add(h);
+            return all;
         }
 
         /// <summary>RSN.ini — по серверу в строке; пустые и комментарии («;», «#») — мимо, повторы — один раз.</summary>
@@ -74,6 +87,11 @@ namespace RASv2.ClashAnalysis.Logic
                 return c;
             }
         }
+
+        /// <summary>Ответы одинаковые — то же содержимое папки (кэш обновлять незачем).</summary>
+        public static bool Same(ServerContents a, ServerContents b) =>
+            a.Folders.Select(f => f.Name + "|" + f.HasContents).SequenceEqual(b.Folders.Select(f => f.Name + "|" + f.HasContents)) &&
+            a.Models.Select(m => m.Name + "|" + m.ModelSize).SequenceEqual(b.Models.Select(m => m.Name + "|" + m.ModelSize));
 
         /// <summary>Размер модели: «734 МБ», «1,2 ГБ».</summary>
         public static string SizeText(long bytes)

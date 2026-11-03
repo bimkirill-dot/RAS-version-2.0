@@ -20,102 +20,22 @@ namespace RASv2.ClashAnalysis.UI
     /// </summary>
     public partial class ExportTaskWindow : Window, INotifyPropertyChanged
     {
-        /// <summary>
-        /// Строка списка моделей (разработчик, 03.11.2026: «компактнее, лаконичнее»): над первой моделью блока — «S1 · 4 модели»; имя
-        /// модели без пути и «.rvt»; имя NWC — только если отличается (двойной щелчок — поправить); отдел; корзина — при наведении.
-        /// </summary>
-        public sealed class ModelRow : INotifyPropertyChanged
+        /// <summary>Строка списка моделей: имя (без «.rvt») и путь (разработчик, 03.11.2026: «отдел, блок — не надо»).</summary>
+        public sealed class ModelRow
         {
-            public event PropertyChangedEventHandler PropertyChanged;
-
-            private readonly ExportSettings _common;
             public ExportModel Model { get; }
 
-            public ModelRow(ExportSettings common, ExportModel model)
-            {
-                _common = common;
-                Model = model;
-            }
+            public ModelRow(ExportSettings common, ExportModel model) => Model = model;
 
             public string Path => Model.Path;
-            public string FileName => new FileRow(Path).Name;
             public string Folder => new FileRow(Path).Folder;
 
-            /// <summary>Блока в имени модели нет — вписывается руками («Генплан.rvt»).</summary>
-            public bool Manual => ExportNames.Block(Path, _common.BlockPrefix).Length == 0;
-            public string Effective => ExportNodes.BlockOf(Model, _common);
-
-            public string Block
-            {
-                get => Model.Block ?? "";
-                set => Model.Block = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-            }
-
-            /// <summary>Первая строка блока — над ней заголовок блока (GroupTitle — ставит окно: «S1 · 4 модели»).</summary>
-            public bool First { get; set; }
-            public string GroupTitle { get; set; }
-            public Visibility HeaderVisibility => First ? Visibility.Visible : Visibility.Collapsed;
-            public Visibility BoxVisibility => Manual ? Visibility.Visible : Visibility.Collapsed;
-
-            /// <summary>Имя модели без папки и «.rvt».</summary>
             public string DisplayName
             {
                 get
                 {
-                    var n = FileName;
+                    var n = new FileRow(Path).Name;
                     return n.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase) ? n.Substring(0, n.Length - 4) : n;
-                }
-            }
-
-            /// <summary>Имя NWC — только если не совпадает с именем модели; «не по шаблону» — если «М3» в имени нет.</summary>
-            public string NwcHint
-            {
-                get
-                {
-                    ExportNames.NwcName(Path, _common.TrimName, out var matches);
-                    var hint = Name == DisplayName ? "" : "→ " + Name;
-                    if (_common.TrimName && Model.NwcName == null && !matches) hint += (hint.Length > 0 ? " · " : "") + "не по шаблону";
-                    return hint;
-                }
-            }
-
-            /// <summary>Имя NWC правится (двойной щелчок) — поле вместо текста.</summary>
-            public bool Editing
-            {
-                get => _editing;
-                set
-                {
-                    _editing = value;
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowVisibility)));
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(EditVisibility)));
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Name)));
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(NwcHint)));
-                }
-            }
-
-            private bool _editing;
-            public Visibility ShowVisibility => _editing ? Visibility.Collapsed : Visibility.Visible;
-            public Visibility EditVisibility => _editing ? Visibility.Visible : Visibility.Collapsed;
-
-            private string Auto => ExportNames.NwcName(Path, _common.TrimName, out _);
-
-            public string Name
-            {
-                get => ExportNodes.NwcNameOf(Model, _common);
-                // пусто или как из имени модели — снова «само»
-                set
-                {
-                    var v = (value ?? "").Trim();
-                    Model.NwcName = v.Length == 0 || v == Auto ? null : v;
-                }
-            }
-
-            public string Department
-            {
-                get
-                {
-                    var d = ExportNames.Department(Path, _common.Departments.Select(x => x.Department));
-                    return string.IsNullOrEmpty(d) ? "—" : d;
                 }
             }
         }
@@ -260,7 +180,7 @@ namespace RASv2.ClashAnalysis.UI
         private void Any_Changed(object sender, RoutedEventArgs e) => Changed();
 
         private static IEnumerable<ExportModel> Copies(IEnumerable<ExportModel> models) =>
-            models.Select(m => new ExportModel { Path = m.Path, NwcName = m.NwcName, Block = m.Block });
+            models.Select(m => m.Clone());
 
         // ── модели: свои или от уровня выше ──
 
@@ -281,21 +201,6 @@ namespace RASv2.ClashAnalysis.UI
             Regroup();
         }
 
-        /// <summary>Модели одной строкой: «4 модели · S1 · KJ, AR, OV, VK»; блоков больше трёх — «S1–S9 (9)».</summary>
-        private string ModelsText(List<ExportModel> models)
-        {
-            var text = models.Count + " " + ExportTask.ModelsWord(models.Count);
-            if (models.Count == 0) return text;
-            var groups = ExportNodes.Blocks(models, _common);
-            var named = groups.Where(g => g.Name.Length > 0).Select(g => g.Name).ToList();
-            if (named.Count > 0) text += " · " + (named.Count > 3 ? named[0] + "–" + named[named.Count - 1] + " (" + named.Count + ")" : string.Join(", ", named));
-            var loose = groups.Where(g => g.Name.Length == 0).Sum(g => g.Models.Count);
-            if (loose > 0) text += " · без блока: " + loose;
-            var departments = models.Select(m => ExportNames.Department(m.Path, _common.Departments.Select(d => d.Department)))
-                .Where(d => d.Length > 0).Distinct().ToList();
-            if (departments.Count > 0) text += " · " + string.Join(", ", departments);
-            return text;
-        }
 
         private void ModelsShow_Click(object sender, RoutedEventArgs e)
         {
@@ -312,31 +217,11 @@ namespace RASv2.ClashAnalysis.UI
             ShowModels();
         }
 
-        /// <summary>
-        /// Модели — по блокам (S1, S2, S10; без блока — в конце), в блоке — сначала с блоком в имени; от уровня выше — только смотреть.
-        /// </summary>
+        /// <summary>Модели — по имени (разработчик, 03.11.2026: «только имя и путь»); от уровня выше — только смотреть.</summary>
         private void Regroup()
         {
             var rows = _modelsOwn ? _models : Copies(ExportNodes.ModelsOf(_parent)).Select(m => new ModelRow(_common, m)).ToList();
-            var sorted = rows
-                .OrderBy(m => m.Effective, Comparer<string>.Create((a, b) =>
-                    a.Length == 0 ? (b.Length == 0 ? 0 : 1) : b.Length == 0 ? -1 : ExportNodes.NaturalCompare(a, b)))
-                .ThenBy(m => m.Manual)
-                .ThenBy(m => m.FileName, StringComparer.CurrentCultureIgnoreCase)
-                .ToList();
-            string last = null;
-            foreach (var m in sorted)
-            {
-                m.First = last == null || !string.Equals(last, m.Effective, StringComparison.OrdinalIgnoreCase);
-                last = m.Effective;
-                if (!m.First) continue;
-                var n = sorted.Count(x => string.Equals(x.Effective, m.Effective, StringComparison.OrdinalIgnoreCase));
-                m.GroupTitle = (m.Effective.Length == 0 ? "Без блока" : m.Effective) + " · " + n + " " + ExportTask.ModelsWord(n);
-            }
-            // общая папка моделей — одной строкой сверху, а не в каждой строке
-            var folders = sorted.Select(m => m.Folder).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            ModelsFolder.Text = folders.Count == 1 && folders[0].Length > 0 ? folders[0] : "";
-            ModelsFolder.Visibility = ModelsFolder.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            var sorted = rows.OrderBy(m => m.DisplayName, StringComparer.CurrentCultureIgnoreCase).ToList();
             if (_modelsOwn)
             {
                 _models.Clear();
@@ -344,29 +229,17 @@ namespace RASv2.ClashAnalysis.UI
             }
             ModelsList.ItemsSource = null;
             ModelsList.ItemsSource = sorted;
-            ModelsSummary.Text = ModelsText(sorted.Select(m => m.Model).ToList());
+            ModelsSummary.Text = sorted.Count + " " + ExportTask.ModelsWord(sorted.Count);
             ModelsShow.Visibility = sorted.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             ModelsShow.Content = _showModels ? "Скрыть" : "Показать";
             ModelsPanel.Visibility = _showModels && sorted.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             UpdateExamples();
         }
 
-        // вписали блок — модель переходит в свой блок, когда курсор ушёл из поля
-        private void Block_LostFocus(object sender, RoutedEventArgs e) => Regroup();
-
-        // имя NWC — двойным щелчком (только у своих моделей)
-        private void NwcName_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            if (e.ClickCount < 2 || !_modelsOwn) return;
-            ((ModelRow)((FrameworkElement)sender).DataContext).Editing = true;
-            e.Handled = true;
-        }
-
-        private void NwcName_LostFocus(object sender, RoutedEventArgs e) => ((ModelRow)((FrameworkElement)sender).DataContext).Editing = false;
 
         private void AddModels_Click(object sender, RoutedEventArgs e)
         {
-            List<string> picked;
+            List<ExportModel> picked;
             try
             {
                 // окно Revit «Открыть» из плагина Revit Server не показывает (проверка разработчика, 02.11.2026) — своё окно; с
@@ -374,7 +247,7 @@ namespace RASv2.ClashAnalysis.UI
                 var picker = new ModelPickerWindow(RevitYear, _serverFolder ?? ExportNodes.StartServerFolder(_task)) { Owner = this };
                 if (picker.ShowDialog() != true) return;
                 picked = picker.Picked;
-                var server = picked.Select(ExportNodes.ServerFolderOf).FirstOrDefault(f => f.Length > 0);
+                var server = picked.Select(m => ExportNodes.ServerFolderOf(m.Path)).FirstOrDefault(f => f.Length > 0);
                 if (server != null) _serverFolder = server;
             }
             catch (Exception ex)

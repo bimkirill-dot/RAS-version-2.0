@@ -515,6 +515,36 @@ namespace RASv2.Tests
                 var lines = RevitServers.Hosts(1999);
                 Check(lines.Count == 0, "нет RSN.ini — серверов нет");
             });
+            yield return Case("Revit Server: кэш содержимого папок — по версии и пути, переживает перезапуск; версии моделей", () =>
+            {
+                var dir = Path.Combine(Path.GetTempPath(), "RASv2.Tests", "server-cache-" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    var c = new ServerContents { Folders = { new ServerFolder { Name = "2025_Ариал", HasContents = true } },
+                        Models = { new ServerModel { Name = "a.rvt", ModelSize = 10 } } };
+                    var cache = ServerCache.Open(dir, "10.10.1.88");
+                    Check(!cache.TryGet(2026, new List<string>(), out _, out _), "пусто");
+                    var when = new DateTime(2026, 11, 3, 14, 20, 0);
+                    cache.Put(2026, new List<string> { "2025_Ариал", "01_AR" }, c, when);
+                    var again = ServerCache.Open(dir, "10.10.1.88");
+                    Check(again.TryGet(2026, new List<string> { "2025_Ариал", "01_AR" }, out var back, out var at) && at == when &&
+                          back.Folders.Single().Name == "2025_Ариал" && back.Models.Single().ModelSize == 10, "с диска после перезапуска");
+                    Check(!again.TryGet(2023, new List<string> { "2025_Ариал", "01_AR" }, out _, out _), "у другой версии — своё");
+                    Check(RevitServers.Same(c, back), "тот же ответ");
+                    back.Models.Add(new ServerModel { Name = "b.rvt" });
+                    Check(!RevitServers.Same(c, back), "на сервере поменялось");
+                    File.WriteAllText(Path.Combine(dir, "сломанный.json"), "не json");
+                    Check(!ServerCache.Open(dir, "сломанный").TryGet(2026, new List<string>(), out _, out _), "испорченный файл — как пустой");
+                    Check(RevitServers.Years.SequenceEqual(new[] { 2023, 2024, 2025, 2026 }), "версии Revit Server");
+                    var list = new List<ExportModel>();
+                    ExportNodes.AddModels(list, new[] { new ExportModel { Path = "RSN://srv/a.rvt", Year = 2023 }, new ExportModel { Path = "rsn://SRV/a.rvt", Year = 2026 } });
+                    Check(list.Single().Year == 2023, "версия модели — с выбора, повтор — мимо");
+                }
+                finally
+                {
+                    try { Directory.Delete(dir, true); } catch (IOException) { }
+                }
+            });
             yield return Case("удаление: подзадачи", () =>
             {
                 var roots = Sample(out var high, out _);
