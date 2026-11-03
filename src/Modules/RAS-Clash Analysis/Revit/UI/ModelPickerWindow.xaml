@@ -56,6 +56,8 @@
                                    Foreground="{DynamicResource Muted}" Margin="0,0,6,0" />
                         <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding Size}" Style="{StaticResource Note}" Margin="10,0,0,0" />
+                        <!-- дата изменения — из сведений о модели, подгружается в фоне (разработчик, 03.11.2026) -->
+                        <TextBlock Text="{Binding Date}" Style="{StaticResource Note}" Margin="10,0,0,0" />
                     </StackPanel>
                 </HierarchicalDataTemplate>
             </TreeView.ItemTemplate>

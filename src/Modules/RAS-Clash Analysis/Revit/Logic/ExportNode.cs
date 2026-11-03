@@ -266,7 +266,7 @@ namespace RASv2.ClashAnalysis.Logic
             var models = ModelsOf(task);
             var owner = OwnerOf(task, s => s.Models);
             parts.Add(models.Count + " " + ExportTask.ModelsWord(models.Count) +
-                      (task.Parent == null ? "" : owner == task ? " (свои)" : owner != null ? " от «" + owner.Name + "»" : ""));
+                      (task.Parent == null || owner == task || owner == null ? "" : " от «" + owner.Name + "»"));
             var tests = TestsOf(task);
             if (tests.Count > 0) parts.Add(string.Join(", ", tests.Select(FileName)));
             if (MakesNwf(task)) parts.Add(NwfNameOf(task) + ".nwf");
@@ -338,6 +338,29 @@ namespace RASv2.ClashAnalysis.Logic
                     models.Any(x => string.Equals(x.Path, m.Path, StringComparison.OrdinalIgnoreCase))) continue;
                 models.Add(m.Clone());
                 added++;
+            }
+            return added;
+        }
+
+        /// <summary>
+        /// Свои модели строки — и в списки уровней выше (разработчик, 03.11.2026: «модели из подзадач передаются в задачу»): у
+        /// каждой строки выше со своим списком — чего в нём нет. Сколько добавлено.
+        /// </summary>
+        public static int PushModelsUp(ExportTask task)
+        {
+            var own = task.Settings.Models;
+            if (own == null) return 0;
+            var added = 0;
+            for (var up = task.Parent; up != null; up = up.Parent)
+            {
+                var list = up.Settings.Models;
+                if (list == null) continue;
+                foreach (var m in own)
+                    if (!list.Any(x => string.Equals(x.Path, m.Path, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        list.Add(m.Clone());
+                        added++;
+                    }
             }
             return added;
         }

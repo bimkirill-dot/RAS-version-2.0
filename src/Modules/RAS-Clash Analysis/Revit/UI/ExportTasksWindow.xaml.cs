@@ -17,20 +17,36 @@ namespace RASv2.ClashAnalysis.UI
     public partial class ExportTasksWindow : Window
     {
         /// <summary>Строка окна: задача или подзадача.</summary>
-        public sealed class RowItem
+        public sealed class RowItem : System.ComponentModel.INotifyPropertyChanged
         {
+            public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
+
             public TreeRow Row { get; set; }
             public string Summary { get; set; }
             public bool Collapsed { get; set; }
             public bool HasInner { get; set; }
-            public bool IsSelected { get; set; }
+            private bool _selected;
+
+            /// <summary>Выбрана — меняется без перестройки списка (строки не прыгают, прокрутка на месте).</summary>
+            public bool IsSelected
+            {
+                get => _selected;
+                set
+                {
+                    if (_selected == value) return;
+                    _selected = value;
+                    PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(IsSelected)));
+                }
+            }
 
             public ExportTask Item => Row.Item;
             public string Number => Row.Number;
             public bool IsTop => Item.Parent == null;
             public string Name => Item.Name;
-            public double NameSize => IsTop ? 18 : 15;
-            public Thickness Indent => new Thickness(Row.Level * 28, 0, 0, 6);
+            public double NameSize => IsTop ? 14 : 13;
+            public FontWeight NameWeight => Row.Level <= 1 ? FontWeights.SemiBold : FontWeights.Normal;
+            // задачи — с промежутком сверху, подзадачи — плотно, отступ уровня — 22
+            public Thickness Indent => new Thickness(Row.Level * 22, IsTop ? 8 : 0, 0, 2);
             // Segoe MDL2 Assets: E70D — вниз (развёрнуто), E76C — вправо (свёрнуто)
             public string Arrow => Collapsed ? "\uE76C" : "\uE70D";
             public Visibility ArrowVisibility => HasInner ? Visibility.Visible : Visibility.Hidden;
@@ -53,6 +69,7 @@ namespace RASv2.ClashAnalysis.UI
         private ExportTask _selected;
         private ExportTaskPanel _panel;
         private ExportTask _pending;
+        private List<RowItem> _items = new List<RowItem>();
 
         /// <summary>Задачи и общие настройки — из общего хранилища на сервере: открыли окно — видно свежее у всех.</summary>
         public ExportTasksWindow(ExportStore store)
@@ -89,13 +106,16 @@ namespace RASv2.ClashAnalysis.UI
         // задачи — по порядковому номеру (разработчик, 02.11.2026: «зачем по алфавиту»): так прочитаны, новые — в конец
         private void Refresh()
         {
-            RowsList.ItemsSource = ExportNodes.Rows(_roots, _collapsed)
+            // перестройка списка — с прокруткой на месте
+            var offset = TreeScroll.VerticalOffset;
+            RowsList.ItemsSource = _items = ExportNodes.Rows(_roots, _collapsed)
                 .Select(r => new RowItem
                 {
                     Row = r, Summary = ExportNodes.Summary(r), Collapsed = _collapsed.Contains(r.Item), HasInner = r.Item.Children.Count > 0,
                     IsSelected = r.Item == _selected,
                 })
                 .ToList();
+            Dispatcher.BeginInvoke(new System.Action(() => TreeScroll.ScrollToVerticalOffset(offset)), System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
         /// <summary>
@@ -151,9 +171,11 @@ namespace RASv2.ClashAnalysis.UI
             {
                 if (!_panel.TrySave()) return false;
                 Commit();
+                Refresh();
                 return true;
             }
             DropPending();
+            Refresh();
             return true;
         }
 
@@ -174,11 +196,13 @@ namespace RASv2.ClashAnalysis.UI
                     panel.Saved += (s, e) =>
                     {
                         Commit();
+                        Refresh();
                         Show(_selected);
                     };
                     panel.Cancelled += (s, e) =>
                     {
                         DropPending();
+                        Refresh();
                         Show(_selected);
                     };
                     _panel = panel;
@@ -194,7 +218,10 @@ namespace RASv2.ClashAnalysis.UI
                         Title, MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
-            Refresh();
+            // строка уже в списке — только отметить; новой ещё нет — перестроить
+            if (_selected == null || _items.Any(i => i.Item == _selected))
+                foreach (var i in _items) i.IsSelected = i.Item == _selected;
+            else Refresh();
         }
 
         /// <summary>Строка сохранена в панели — задача на сервер; строка уже не новая. Коллега поменял, а открыли заново — её нет в дереве.</summary>
@@ -202,6 +229,8 @@ namespace RASv2.ClashAnalysis.UI
         {
             var top = ExportNodes.Root(_selected);
             _pending = null;
+            // модели подзадач — и в задачу (разработчик, 03.11.2026: «модели из подзадач передаются в задачу»)
+            foreach (var t in _selected.Self()) ExportNodes.PushModelsUp(t);
             SaveTop(top);
             if (!_roots.SelectMany(r => r.Self()).Contains(_selected)) _selected = null;
         }

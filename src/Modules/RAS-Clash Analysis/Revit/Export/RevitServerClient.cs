@@ -14,9 +14,16 @@ namespace RASv2.ClashAnalysis.Export
     {
         private static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
 
-        public static async Task<ServerContents> ContentsAsync(string host, int year, IList<string> folder)
+        public static async Task<ServerContents> ContentsAsync(string host, int year, IList<string> folder) =>
+            RevitServers.ParseContents(await GetAsync(RevitServers.ContentsUrl(host, year, folder)).ConfigureAwait(false));
+
+        /// <summary>Сведения о модели — дата изменения.</summary>
+        public static async Task<ServerModelInfo> ModelInfoAsync(string host, int year, IList<string> folder, string model) =>
+            RevitServers.ParseModelInfo(await GetAsync(RevitServers.ModelInfoUrl(host, year, folder, model)).ConfigureAwait(false));
+
+        private static async Task<string> GetAsync(string url)
         {
-            using (var request = new HttpRequestMessage(HttpMethod.Get, RevitServers.ContentsUrl(host, year, folder)))
+            using (var request = new HttpRequestMessage(HttpMethod.Get, url))
             {
                 request.Headers.Add("User-Name", Environment.UserName);
                 request.Headers.Add("User-Machine-Name", Environment.MachineName);
@@ -24,7 +31,7 @@ namespace RASv2.ClashAnalysis.Export
                 using (var response = await Http.SendAsync(request).ConfigureAwait(false))
                 {
                     response.EnsureSuccessStatusCode();
-                    return RevitServers.ParseContents(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+                    return await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 }
             }
         }

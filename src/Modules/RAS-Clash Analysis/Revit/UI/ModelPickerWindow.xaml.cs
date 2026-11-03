@@ -48,6 +48,19 @@ namespace RASv2.ClashAnalysis.UI
             public bool IsPlaceholder { get; }
             public string Size { get; }
             public bool Loaded { get; set; }
+
+            /// <summary>Когда изменена модель: «03.11.2026 14:20»; пока не пришло — пусто.</summary>
+            public string Date
+            {
+                get => _date;
+                set
+                {
+                    _date = value;
+                    Notify();
+                }
+            }
+
+            private string _date = "";
             public ObservableCollection<Node> Children { get; } = new ObservableCollection<Node>();
 
             public string Glyph => IsPlaceholder ? "" : IsFolder ? "\uF12B" : "\uE7C3";
@@ -247,6 +260,7 @@ namespace RASv2.ClashAnalysis.UI
             {
                 UiContext();
                 var contents = await RevitServerClient.ContentsAsync(host, year, path);
+                RevitServers.KeepDates(saved, contents);
                 CacheOf(host).Put(year, path, contents, DateTime.Now);
                 if (host == _host && year == _year && !RevitServers.Same(saved, contents)) fresh(contents);
             }
@@ -310,7 +324,48 @@ namespace RASv2.ClashAnalysis.UI
                 into.Add(folder);
             }
             foreach (var m in contents.Models.OrderBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase))
-                into.Add(new Node(this, parent, m.Name, path, false, RevitServers.SizeText(m.ModelSize)));
+                into.Add(new Node(this, parent, m.Name, path, false, RevitServers.SizeText(m.ModelSize)) { Date = DateText(m.Modified) });
+            LoadDates(into, path, contents);
+        }
+
+        private static string DateText(DateTime? d) => d == null ? "" : "изм. " + d.Value.ToString("dd.MM.yyyy HH:mm");
+
+        // даты моделей — по одной на запрос (в ответе о папке их нет): одновременно до шести, полученные — в кэш
+        private static readonly SemaphoreSlim DateGate = new SemaphoreSlim(6);
+
+        private async void LoadDates(ObservableCollection<Node> nodes, List<string> path, ServerContents contents)
+        {
+            var host = _host;
+            var year = _year;
+            var missing = contents.Models.Where(m => m.Modified == null).ToList();
+            if (missing.Count == 0) return;
+            try
+            {
+                UiContext();
+                await Task.WhenAll(missing.Select(async m =>
+                {
+                    await DateGate.WaitAsync();
+                    try
+                    {
+                        m.Modified = (await RevitServerClient.ModelInfoAsync(host, year, path, m.Name)).DateModified;
+                    }
+                    catch (Exception)
+                    {
+                        // дата не пришла — модель всё равно можно выбрать
+                    }
+                    finally
+                    {
+                        DateGate.Release();
+                    }
+                    var node = nodes.FirstOrDefault(n => !n.IsFolder && n.Name == m.Name);
+                    if (node != null) node.Date = DateText(m.Modified);
+                }));
+                CacheOf(host).Put(year, path, contents, DateTime.Now);
+            }
+            catch (Exception ex)
+            {
+                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: даты моделей Revit Server не получены", ex);
+            }
         }
 
         internal async void Expand(Node node)

@@ -23,9 +23,17 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Строка списка моделей: имя (без «.rvt») и путь (разработчик, 03.11.2026: «отдел, блок — не надо»).</summary>
         public sealed class ModelRow
         {
+            private readonly ExportSettings _common;
             public ExportModel Model { get; }
 
-            public ModelRow(ExportSettings common, ExportModel model) => Model = model;
+            public ModelRow(ExportSettings common, ExportModel model)
+            {
+                _common = common;
+                Model = model;
+            }
+
+            /// <summary>Какой получится NWC: «0000_01_01_S1_KJ01_01_M3.nwc».</summary>
+            public string Nwc => "NWC: " + ExportNodes.NwcNameOf(Model, _common) + ".nwc";
 
             public string Path => Model.Path;
             public string Folder => new FileRow(Path).Folder;
@@ -618,6 +626,17 @@ namespace RASv2.ClashAnalysis.UI
         public event EventHandler Saved;
         /// <summary>«Отменить» — главное окно открывает строку заново (новую несохранённую — убирает).</summary>
         public event EventHandler Cancelled;
+
+        /// <summary>Панель узкая — «от «…»» и «Изменить» под значением, а не справа (разработчик, 03.11.2026: «на любой ширине — удобно»).</summary>
+        public bool Narrow { get; private set; }
+
+        private void Panel_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            var narrow = e.NewSize.Width < 760;
+            if (narrow == Narrow) return;
+            Narrow = narrow;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Narrow)));
+        }
 
         /// <summary>В панели есть несохранённые правки.</summary>
         public bool Dirty => State() != _opened;

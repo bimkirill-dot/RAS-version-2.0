@@ -144,8 +144,8 @@ namespace RASv2.Tests
                 string S(int i) => ExportNodes.Summary(rows[i]);
                 Check(S(0) == "2 подзадачи · 7 моделей", S(0));
                 Check(S(1) == "2 подзадачи · 7 моделей от «ArmanQala» · КЖ-АР.xml", S(1));
-                Check(S(2) == "3 модели (свои) · КЖ-АР.xml · S1_ВК.nwf", S(2));
-                Check(S(4) == "2 модели (свои) · МЕР.xml · S1_СК.nwf", S(4));
+                Check(S(2) == "3 модели · КЖ-АР.xml · S1_ВК.nwf", "свои — без пометки: " + S(2));
+                Check(S(4) == "2 модели · МЕР.xml · S1_СК.nwf", S(4));
                 Check(S(5) == "2 модели", "задача без подзадач, без NWF: " + S(5));
             });
             yield return Case("«модель / подзадача / блок» по числу", () =>
@@ -542,6 +542,28 @@ namespace RASv2.Tests
                 {
                     try { Directory.Delete(dir, true); } catch (IOException) { }
                 }
+            });
+            yield return Case("модели подзадачи — и в задачу; дата изменения модели Revit Server", () =>
+            {
+                var roots = Sample(out var high, out _);
+                var top = roots[0];
+                var s1 = high.Children[0];
+                s1.Settings.Models.Add(new ExportModel { Path = "RSN://srv/AQ/0000_01_01_S1_VK01_01_M3.rvt", Year = 2026 });
+                Check(ExportNodes.PushModelsUp(s1) == 1 && top.Settings.Models.Count == 8 && top.Settings.Models.Last().Year == 2026,
+                      "новая модель подзадачи — в задачу (у «Высокой» своих нет — мимо)");
+                Check(ExportNodes.PushModelsUp(s1) == 0, "повтор — мимо");
+                high.Settings.Models = new List<ExportModel>();
+                Check(ExportNodes.PushModelsUp(s1) == 4 && high.Settings.Models.Count == 4, "у строки выше со своим списком — тоже");
+                var info = RevitServers.ParseModelInfo(@"{""Path"":""a\\b.rvt"",""DateCreated"":""\/Date(1788420371177)\/"",""DateModified"":""\/Date(1788766343000)\/"",""LastModifiedBy"":""Dulat-KJ-Shymkent"",""ModelSize"":1}");
+                Check(info.DateModified.ToUniversalTime() == new DateTime(2026, 9, 7, 7, 32, 23, DateTimeKind.Utc) && info.LastModifiedBy == "Dulat-KJ-Shymkent",
+                      "дата из ответа службы: " + info.DateModified.ToUniversalTime().ToString("u"));
+                Check(RevitServers.ModelInfoUrl("10.10.1.88", 2026, new List<string> { "2025_Ариал" }, "a b.rvt") ==
+                      "http://10.10.1.88/RevitServerAdminRESTService2026/AdminRESTService.svc/2025_%D0%90%D1%80%D0%B8%D0%B0%D0%BB%7Ca%20b.rvt/modelInfo", "адрес");
+                var old = new ServerContents { Models = { new ServerModel { Name = "a.rvt", ModelSize = 1, Modified = new DateTime(2026, 11, 1) },
+                    new ServerModel { Name = "b.rvt", ModelSize = 2, Modified = new DateTime(2026, 11, 1) } } };
+                var fresh = new ServerContents { Models = { new ServerModel { Name = "a.rvt", ModelSize = 1 }, new ServerModel { Name = "b.rvt", ModelSize = 3 } } };
+                RevitServers.KeepDates(old, fresh);
+                Check(fresh.Models[0].Modified != null && fresh.Models[1].Modified == null, "дата — у той же модели; поменялась — заново");
             });
             yield return Case("удаление: подзадачи", () =>
             {

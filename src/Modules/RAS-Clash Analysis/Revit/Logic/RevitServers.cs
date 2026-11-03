@@ -29,6 +29,16 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>Имя с «.rvt».</summary>
         [DataMember] public string Name { get; set; }
         [DataMember] public long ModelSize { get; set; }
+        /// <summary>Когда изменена — не из ответа о папке, а из сведений о модели (…/modelInfo; кэш хранит).</summary>
+        [DataMember(EmitDefaultValue = false)] public DateTime? Modified { get; set; }
+    }
+
+    /// <summary>Сведения о модели Revit Server (…/{папка|модель}/modelInfo): когда изменена и кем.</summary>
+    [DataContract]
+    public sealed class ServerModelInfo
+    {
+        [DataMember] public DateTime DateModified { get; set; }
+        [DataMember] public string LastModifiedBy { get; set; }
     }
 
     /// <summary>
@@ -72,6 +82,32 @@ namespace RASv2.ClashAnalysis.Logic
         public static string ContentsUrl(string host, int year, IList<string> folder) =>
             "http://" + host + "/RevitServerAdminRESTService" + year + "/AdminRESTService.svc/" +
             (folder.Count == 0 ? "%7C" : string.Join("%7C", folder.Select(Uri.EscapeDataString))) + "/contents";
+
+        /// <summary>Адрес сведений о модели (дата изменения): «…/AdminRESTService.svc/a|b|модель.rvt/modelInfo».</summary>
+        public static string ModelInfoUrl(string host, int year, IList<string> folder, string model) =>
+            "http://" + host + "/RevitServerAdminRESTService" + year + "/AdminRESTService.svc/" +
+            string.Join("%7C", folder.Concat(new[] { model }).Select(Uri.EscapeDataString)) + "/modelInfo";
+
+        /// <summary>Сведения о модели; дата — местным временем (служба отдаёт «/Date(мс)/»).</summary>
+        public static ServerModelInfo ParseModelInfo(string json)
+        {
+            using (var ms = new MemoryStream(Encoding.UTF8.GetBytes(json ?? "")))
+            {
+                var info = (ServerModelInfo)new DataContractJsonSerializer(typeof(ServerModelInfo)).ReadObject(ms);
+                if (info.DateModified.Kind == DateTimeKind.Utc) info.DateModified = info.DateModified.ToLocalTime();
+                return info;
+            }
+        }
+
+        /// <summary>Даты моделей из прежнего ответа — в новый, у тех же моделей (имя и размер те же — не менялись).</summary>
+        public static void KeepDates(ServerContents from, ServerContents to)
+        {
+            foreach (var m in to.Models)
+            {
+                var old = from.Models.FirstOrDefault(x => x.Name == m.Name && x.ModelSize == m.ModelSize);
+                if (old?.Modified != null && m.Modified == null) m.Modified = old.Modified;
+            }
+        }
 
         /// <summary>Путь модели, как его пишет Revit: «RSN://10.10.1.88/2025_Ариал/01_AR/S03/модель.rvt».</summary>
         public static string RsnPath(string host, IList<string> folder, string model) =>
