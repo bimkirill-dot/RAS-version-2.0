@@ -12,16 +12,18 @@ using RASv2.ClashAnalysis.Site.Logic;
 namespace RASv2.ClashAnalysis.UI
 {
     /// <summary>
-    /// Настройки задачи или подзадачи «Задач выгрузки» (карандаш; «Дерево задач с наследованием», 03.11.2026): название, модели,
-    /// файлы проверок, «Формировать NWF» и имя NWF (свои у строки), папка проекта, папки NWC / NWF / отчётов, форматы, вид — свои
-    /// или от уровня выше (бледным, «от «…»», «Изменить»); у задачи верхнего уровня всё своё. Правятся копии: «Отмена» оставляет
-    /// как было.
+    /// Настройки задачи или подзадачи «Задач выгрузки» (карандаш; «Окно настроек — по смыслу», 03.11.2026): разделы «Проект»
+    /// (папка проекта — у задачи верхнего уровня), «Что входит» (модели одной строкой, список — по «Показать»; проверки), «NWF» (у
+    /// строки без подзадач), «Куда класть» (свёрнуто — строка итоговых путей, пока у строки там своего нет). Каждая настройка —
+    /// своя или от уровня выше; у задачи верхнего уровня всё своё. Правятся копии: «Отмена» оставляет как было.
     /// </summary>
     public partial class ExportTaskWindow : Window, INotifyPropertyChanged
     {
         /// <summary>Строка списка моделей: блок (у первой модели блока; без блока в имени — поле), имя NWC, отдел.</summary>
-        public sealed class ModelRow
+        public sealed class ModelRow : INotifyPropertyChanged
         {
+            public event PropertyChangedEventHandler PropertyChanged;
+
             private readonly ExportSettings _common;
             public ExportModel Model { get; }
 
@@ -51,6 +53,24 @@ namespace RASv2.ClashAnalysis.UI
             public Visibility TitleVisibility => First && !Manual ? Visibility.Visible : Visibility.Collapsed;
             public Visibility BoxVisibility => Manual ? Visibility.Visible : Visibility.Collapsed;
             public Thickness Gap => new Thickness(0, First ? 10 : 0, 0, 4);
+
+            /// <summary>Имя NWC правится (двойной щелчок) — поле вместо текста.</summary>
+            public bool Editing
+            {
+                get => _editing;
+                set
+                {
+                    _editing = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowVisibility)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(EditVisibility)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Name)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(MismatchVisibility)));
+                }
+            }
+
+            private bool _editing;
+            public Visibility ShowVisibility => _editing ? Visibility.Collapsed : Visibility.Visible;
+            public Visibility EditVisibility => _editing ? Visibility.Visible : Visibility.Collapsed;
 
             private string Auto => ExportNames.NwcName(Path, _common.TrimName, _common.NameParts, out _);
 
@@ -97,13 +117,13 @@ namespace RASv2.ClashAnalysis.UI
         private readonly bool _hasView;
         private readonly bool _ready;
         private readonly string _opened;
-        private bool _modelsOwn, _testsOwn, _formatsOwn;
+        private bool _modelsOwn, _testsOwn, _formatsOwn, _showModels, _whereOpen;
         private string _serverFolder;
 
         public event PropertyChangedEventHandler PropertyChanged;
 
-        /// <summary>Корзина у файла проверок — только у своего списка.</summary>
-        public Visibility TestsEditVisibility => _testsOwn ? Visibility.Visible : Visibility.Collapsed;
+        /// <summary>Корзина и правка имени NWC у моделей — только у своего списка.</summary>
+        public Visibility ModelsEditVisibility => _modelsOwn ? Visibility.Visible : Visibility.Collapsed;
 
         /// <summary>Названия соседей по уровню — название не должно повторяться (две одинаковые строки не различить).</summary>
         public IReadOnlyCollection<string> TakenNames { get; set; } = new string[0];
@@ -134,7 +154,6 @@ namespace RASv2.ClashAnalysis.UI
 
             // «Формировать NWF» и имя NWF — свои у строки; у строки с подзадачами галочка недоступна
             MakeNwf.IsChecked = s.MakeNwf && task.Children.Count == 0;
-            MakeNwf.IsEnabled = task.Children.Count == 0;
             NwfName.Text = s.NwfName ?? "";
             _folder = Field(Folder, FolderFrom, FolderLink, x => x.Folder, ExportNodes.FolderOf, FolderBrowse);
             _nwc = Field(NwcFolder, NwcFrom, NwcLink, x => x.NwcFolder, ExportNodes.NwcFolderOf, NwcBrowse, NwcChips);
@@ -146,8 +165,21 @@ namespace RASv2.ClashAnalysis.UI
                 _parent == null ? common.Nwc.ViewName : ExportNodes.ViewOf(_parent, common),
                 viewOwner == null ? "по общим настройкам" : "от «" + viewOwner.Name + "»", Changed);
             _hasView = common.Nwc.Scope == NwcScope.View;
-            foreach (var e in new FrameworkElement[] { ViewCaption, ViewRow })
-                e.Visibility = _hasView ? Visibility.Visible : Visibility.Collapsed;
+            ViewRow.Visibility = _hasView ? Visibility.Visible : Visibility.Collapsed;
+
+            // где строка в дереве: «в «Высокая критичность» · ArmanQala»
+            PathInfo.Text = _parent == null ? "задача" : "в " + string.Join(" · ", Ancestors().Select((a, i) => i == 0 ? "«" + a.Name + "»" : a.Name));
+            // у задачи верхнего уровня папка проекта — в разделе «Проект»; у подзадачи — в «Куда класть»
+            if (_parent == null)
+            {
+                WherePanel.Children.Remove(FolderRow);
+                ProjectSection.Children.Add(FolderRow);
+            }
+            else ProjectSection.Visibility = Visibility.Collapsed;
+            // NWF собирает строка без подзадач
+            NwfSection.Visibility = task.Children.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            // «Куда класть» раскрыт, если у строки там есть своё (у задачи верхнего уровня — всё своё)
+            _whereOpen = _parent == null || new[] { _folder, _nwc, _nwf, _report, _view }.Any(f => f.Own) || _formatsOwn;
 
             // новая строка и копия: сразу печатать название
             Loaded += (o, e) =>
@@ -159,6 +191,7 @@ namespace RASv2.ClashAnalysis.UI
             ShowModels();
             ShowTests();
             ShowFormats();
+            ShowWhere();
             _opened = State();
             Closing += (o, e) => e.Cancel = !MayClose(this, DialogResult == true || State() == _opened);
         }
@@ -208,14 +241,40 @@ namespace RASv2.ClashAnalysis.UI
 
         private List<ExportModel> EffectiveModels() => _modelsOwn ? _models.Select(m => m.Model).ToList() : ExportNodes.ModelsOf(_parent);
 
+        private IEnumerable<ExportTask> Ancestors()
+        {
+            for (var a = _parent; a != null; a = a.Parent) yield return a;
+        }
+
         private void ShowModels()
         {
-            var count = EffectiveModels().Count;
-            ModelsInfo.Text = count + " " + ExportTask.ModelsWord(count);
             AddModels.Visibility = _modelsOwn ? Visibility.Visible : Visibility.Collapsed;
             ModelsFrom.Text = _modelsOwn ? "" : Source(x => x.Models);
             ModelsLink.Content = _modelsOwn ? "Вернуть " + Source(x => x.Models) : "Изменить";
             ModelsLink.Visibility = _parent == null ? Visibility.Collapsed : Visibility.Visible;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ModelsEditVisibility)));
+            Regroup();
+        }
+
+        /// <summary>Модели одной строкой: «4 модели · S1 · KJ, AR, OV, VK»; блоков больше трёх — «S1–S9 (9)».</summary>
+        private string ModelsText(List<ExportModel> models)
+        {
+            var text = models.Count + " " + ExportTask.ModelsWord(models.Count);
+            if (models.Count == 0) return text;
+            var groups = ExportNodes.Blocks(models, _common);
+            var named = groups.Where(g => g.Name.Length > 0).Select(g => g.Name).ToList();
+            if (named.Count > 0) text += " · " + (named.Count > 3 ? named[0] + "–" + named[named.Count - 1] + " (" + named.Count + ")" : string.Join(", ", named));
+            var loose = groups.Where(g => g.Name.Length == 0).Sum(g => g.Models.Count);
+            if (loose > 0) text += " · без блока: " + loose;
+            var departments = models.Select(m => ExportNames.Department(m.Path, _common.Departments.Select(d => d.Department)))
+                .Where(d => d.Length > 0).Distinct().ToList();
+            if (departments.Count > 0) text += " · " + string.Join(", ", departments);
+            return text;
+        }
+
+        private void ModelsShow_Click(object sender, RoutedEventArgs e)
+        {
+            _showModels = !_showModels;
             Regroup();
         }
 
@@ -228,10 +287,13 @@ namespace RASv2.ClashAnalysis.UI
             ShowModels();
         }
 
-        /// <summary>Свои модели — по блокам (S1, S2, S10; без блока — в конце), в блоке — сначала с блоком в имени.</summary>
+        /// <summary>
+        /// Модели — по блокам (S1, S2, S10; без блока — в конце), в блоке — сначала с блоком в имени; от уровня выше — только смотреть.
+        /// </summary>
         private void Regroup()
         {
-            var sorted = _models
+            var rows = _modelsOwn ? _models : Copies(ExportNodes.ModelsOf(_parent)).Select(m => new ModelRow(_common, m)).ToList();
+            var sorted = rows
                 .OrderBy(m => m.Effective, Comparer<string>.Create((a, b) =>
                     a.Length == 0 ? (b.Length == 0 ? 0 : 1) : b.Length == 0 ? -1 : ExportNodes.NaturalCompare(a, b)))
                 .ThenBy(m => m.Manual)
@@ -243,17 +305,32 @@ namespace RASv2.ClashAnalysis.UI
                 m.First = last == null || !string.Equals(last, m.Effective, StringComparison.OrdinalIgnoreCase);
                 last = m.Effective;
             }
-            _models.Clear();
-            _models.AddRange(sorted);
+            if (_modelsOwn)
+            {
+                _models.Clear();
+                _models.AddRange(sorted);
+            }
             ModelsList.ItemsSource = null;
-            ModelsList.ItemsSource = _models;
-            ModelsPanel.Visibility = _modelsOwn && _models.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-            if (_modelsOwn) ModelsInfo.Text = _models.Count + " " + ExportTask.ModelsWord(_models.Count);
+            ModelsList.ItemsSource = sorted;
+            ModelsSummary.Text = ModelsText(sorted.Select(m => m.Model).ToList());
+            ModelsShow.Visibility = sorted.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            ModelsShow.Content = _showModels ? "Скрыть" : "Показать";
+            ModelsPanel.Visibility = _showModels && sorted.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             UpdateExamples();
         }
 
         // вписали блок — модель переходит в свой блок, когда курсор ушёл из поля
         private void Block_LostFocus(object sender, RoutedEventArgs e) => Regroup();
+
+        // имя NWC — двойным щелчком (только у своих моделей)
+        private void NwcName_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (e.ClickCount < 2 || !_modelsOwn) return;
+            ((ModelRow)((FrameworkElement)sender).DataContext).Editing = true;
+            e.Handled = true;
+        }
+
+        private void NwcName_LostFocus(object sender, RoutedEventArgs e) => ((ModelRow)((FrameworkElement)sender).DataContext).Editing = false;
 
         private void AddModels_Click(object sender, RoutedEventArgs e)
         {
@@ -279,6 +356,7 @@ namespace RASv2.ClashAnalysis.UI
             var added = ExportNodes.AddModels(list, picked);
             foreach (var m in list.Skip(_models.Count)) _models.Add(new ModelRow(_common, m));
             Info.Text = added == picked.Count ? "" : "Уже есть: " + (picked.Count - added) + " " + ExportTask.ModelsWord(picked.Count - added) + ".";
+            _showModels = true;
             Regroup();
         }
 
@@ -296,15 +374,16 @@ namespace RASv2.ClashAnalysis.UI
             foreach (var f in files ?? new List<string>()) _tests.Add(new FileRow(f));
         }
 
+        // от уровня выше — именами в строку; свои — списком с корзинами
         private void ShowTests()
         {
-            TestsList.Opacity = _testsOwn ? 1 : 0.5;   // от уровня выше — бледным
-            AddTests.Visibility = _testsOwn ? Visibility.Visible : Visibility.Collapsed;
-            NoTests.Visibility = _tests.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            TestsPanel.Visibility = _testsOwn ? Visibility.Visible : Visibility.Collapsed;
+            TestsInline.Visibility = !_testsOwn || _tests.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            TestsInline.Text = _tests.Count == 0 ? "файлов нет" : string.Join(", ", _tests.Select(r => r.Name));
+            TestsInline.Foreground = (System.Windows.Media.Brush)FindResource(_tests.Count == 0 ? "Muted" : "Fg");
             TestsFrom.Text = _testsOwn ? "" : Source(x => x.TestsFiles);
             TestsLink.Content = _testsOwn ? "Вернуть " + Source(x => x.TestsFiles) : "Изменить";
             TestsLink.Visibility = _parent == null ? Visibility.Collapsed : Visibility.Visible;
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(TestsEditVisibility)));
         }
 
         // «Изменить» — свои, начиная с файлов уровня выше; «Вернуть» — снова от уровня выше
@@ -338,6 +417,27 @@ namespace RASv2.ClashAnalysis.UI
             FormatsFrom.Text = _formatsOwn ? "" : Source(x => x.Xml);
             FormatsLink.Content = _formatsOwn ? "Вернуть " + Source(x => x.Xml) : "Изменить";
             FormatsLink.Visibility = _parent == null ? Visibility.Collapsed : Visibility.Visible;
+            if (_ready) UpdateExamples();
+        }
+
+        // ── «Куда класть»: свёрнуто — строка итоговых путей ──
+
+        private void ShowWhere()
+        {
+            WherePanel.Visibility = _whereOpen ? Visibility.Visible : Visibility.Collapsed;
+            WhereSummary.Visibility = _whereOpen ? Visibility.Collapsed : Visibility.Visible;
+            WhereToggle.Content = _whereOpen ? "Свернуть" : "Изменить";
+            // от кого — одной подписью на раздел, когда своего нет и всё — от одной строки
+            var sources = new Func<NodeSettings, object>[] { x => x.Folder, x => x.NwcFolder, x => x.NwfFolder, x => x.ReportFolder, x => x.Xml }
+                .Select(Source).Distinct().ToList();
+            WhereFrom.Text = _whereOpen || _parent == null ? "" : sources.Count == 1 ? sources[0] : "от уровней выше";
+        }
+
+        private void WhereToggle_Click(object sender, RoutedEventArgs e)
+        {
+            _whereOpen = !_whereOpen;
+            UpdateExamples();
+            ShowWhere();
         }
 
         private void FormatsLink_Click(object sender, RoutedEventArgs e)
@@ -369,8 +469,9 @@ namespace RASv2.ClashAnalysis.UI
             var root = Folder.Text.Trim();
             var labels = ExportNodes.Labels(block, null, _common, DateTime.Today);
             var name = ExportNames.Fill(NwfNameText(), labels) + ".nwf";
-            NwfNameExample.Text = "Пример: " + name;
-            var nwf = ExportNodes.InProject(root, ExportNames.Fill(NwfFolder.Text, labels)) + (makes ? "\\" + name : "");
+            var nwfFolder = ExportNodes.InProject(root, ExportNames.Fill(NwfFolder.Text, labels));
+            var nwf = nwfFolder + (makes ? "\\" + name : "");
+            NwfNameExample.Text = "→ " + ExportNodes.Short(root, nwfFolder + "\\" + name);
             NwfExample.Text = "Пример: " + ExportNodes.Short(root, nwf);
             NwfExample.ToolTip = nwf;
 
@@ -383,6 +484,11 @@ namespace RASv2.ClashAnalysis.UI
             var format = Html.IsChecked == true ? "HTML" : Xml.IsChecked == true ? "XML" : "";
             var report = ExportNodes.InProject(root, ExportNames.Fill(ReportFolder.Text, ExportNodes.Labels(block, null, _common, DateTime.Today, format)));
             ReportExample.Text = report.Length == 0 ? "Папка не задана" : "Пример: " + ExportNodes.Short(root, report);
+            WhereLine1.Text = "NWC " + ExportNodes.Short(root, ExportNodes.InProject(root, ExportNames.Fill(NwcFolder.Text, ExportNodes.Labels(ExportNodes.BlockOf(model, _common), model, _common, DateTime.Today)))) + " · NWF " + ExportNodes.Short(root, nwfFolder) +
+                              " · отчёты " + ExportNodes.Short(root, report);
+            WhereLine1.ToolTip = "Папка проекта: " + root;
+            var formats = string.Join(", ", new[] { Xml.IsChecked == true ? "XML" : null, Html.IsChecked == true ? "HTML" : null }.Where(f => f != null));
+            WhereLine2.Text = (formats.Length == 0 ? "форматов нет" : formats) + (_hasView ? " · вид " + ViewName.Text.Trim() : "");
             ReportExample.ToolTip = report;
         }
 
