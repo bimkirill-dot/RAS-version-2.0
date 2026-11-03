@@ -44,7 +44,7 @@ namespace RASv2.ClashAnalysis.Logic
         [DataMember(Order = 7, EmitDefaultValue = false)] public string NwfFolder { get; set; }
         /// <summary>Папка для отчётов — строка с {Блок}, {Дата}, {Формат}.</summary>
         [DataMember(Order = 8, EmitDefaultValue = false)] public string ReportFolder { get; set; }
-        /// <summary>Форматы отчётов — оба свои или оба от уровня выше.</summary>
+        /// <summary>Только прежние файлы (до 03.11.2026): форматы XML / HTML — при чтении переходят в ReportFormats.</summary>
         [DataMember(Order = 9, EmitDefaultValue = false)] public bool? Xml { get; set; }
         [DataMember(Order = 10, EmitDefaultValue = false)] public bool? Html { get; set; }
         /// <summary>Вид для выгрузки; нигде не задан — из общих настроек.</summary>
@@ -59,12 +59,19 @@ namespace RASv2.ClashAnalysis.Logic
         /// проверки не попадают; «перенести в настройки задачи, передаётся подзадачам»). Своих строк компании в коде нет.
         /// </summary>
         [DataMember(Order = 13, EmitDefaultValue = false)] public List<string> HideNames { get; set; }
+        /// <summary>Форматы отчётов — названия, как в Navisworks (ExportNodes.ReportFormatNames).</summary>
+        [DataMember(Order = 14, EmitDefaultValue = false)] public List<string> ReportFormats { get; set; }
+        /// <summary>
+        /// Свои параметры выгрузки NWC и «Удалить перед выгрузкой» (разработчик, 03.11.2026: «Настройки — по общим настройкам и
+        /// „Изменить“, то же, что шестерёнка»); null — от уровня выше, нигде — из общих настроек.
+        /// </summary>
+        [DataMember(Order = 15, EmitDefaultValue = false)] public ExportOverride Export { get; set; }
 
         /// <summary>Задача верхнего уровня: всё своё, по умолчанию — регламент 15.10 (вида нет — из общих настроек).</summary>
         public static NodeSettings Top() => new NodeSettings
         {
             Models = new List<ExportModel>(), TestsFiles = new List<string>(), HideNames = new List<string>(), Folder = "", NwcFolder = @"{Блок}\NWC",
-            NwfFolder = "{Блок}", ReportFolder = @"{Блок}\{Дата}", Xml = true, Html = true,
+            NwfFolder = "{Блок}", ReportFolder = @"{Блок}\{Дата}", ReportFormats = new List<string> { "XML", "HTML" },
         };
 
         public NodeSettings Clone() => new NodeSettings
@@ -72,7 +79,42 @@ namespace RASv2.ClashAnalysis.Logic
             Models = Models?.Select(m => new ExportModel { Path = m.Path, NwcName = m.NwcName, Block = m.Block }).ToList(),
             TestsFiles = TestsFiles?.ToList(), NwfName = NwfName, Folder = Folder, ServerFolder = ServerFolder, NwcFolder = NwcFolder,
             NwfFolder = NwfFolder, ReportFolder = ReportFolder, Xml = Xml, Html = Html, ViewName = ViewName, MakeNwf = MakeNwf,
-            HideNames = HideNames?.ToList(),
+            HideNames = HideNames?.ToList(), ReportFormats = ReportFormats?.ToList(), Export = Export?.Clone(),
+        };
+    }
+
+    /// <summary>Параметры выгрузки строки дерева вместо общих: экспортёр NWC и что удалить из модели перед выгрузкой.</summary>
+    [DataContract]
+    public sealed class ExportOverride
+    {
+        [DataMember(Order = 1)] public NwcOptions Nwc { get; set; } = new NwcOptions();
+        [DataMember(Order = 2)] public bool RemoveRevitLinks { get; set; }
+        [DataMember(Order = 3)] public bool RemoveCad { get; set; }
+        [DataMember(Order = 4)] public bool RemovePointClouds { get; set; }
+        [DataMember(Order = 5)] public bool RemoveIfc { get; set; }
+
+        public static ExportOverride From(ExportSettings s) => new ExportOverride
+        {
+            Nwc = s.Nwc.Clone(), RemoveRevitLinks = s.RemoveRevitLinks, RemoveCad = s.RemoveCad, RemovePointClouds = s.RemovePointClouds,
+            RemoveIfc = s.RemoveIfc,
+        };
+
+        /// <summary>Общие настройки с этими параметрами выгрузки (метки, отделы, обрезка имени — общие).</summary>
+        public ExportSettings ApplyTo(ExportSettings common)
+        {
+            var s = common.Clone();
+            s.Nwc = (Nwc ?? new NwcOptions()).Clone();
+            s.RemoveRevitLinks = RemoveRevitLinks;
+            s.RemoveCad = RemoveCad;
+            s.RemovePointClouds = RemovePointClouds;
+            s.RemoveIfc = RemoveIfc;
+            return s;
+        }
+
+        public ExportOverride Clone() => new ExportOverride
+        {
+            Nwc = (Nwc ?? new NwcOptions()).Clone(), RemoveRevitLinks = RemoveRevitLinks, RemoveCad = RemoveCad,
+            RemovePointClouds = RemovePointClouds, RemoveIfc = RemoveIfc,
         };
     }
 
@@ -138,8 +180,14 @@ namespace RASv2.ClashAnalysis.Logic
         public static string NwfFolderOf(ExportTask task) => Get(task, s => s.NwfFolder);
         public static string ReportFolderOf(ExportTask task) => Get(task, s => s.ReportFolder);
         public static string StartServerFolder(ExportTask task) => Get(task, s => s.ServerFolder) ?? "";
-        public static bool XmlOf(ExportTask task) => OwnerOf(task, s => s.Xml)?.Settings.Xml ?? true;
-        public static bool HtmlOf(ExportTask task) => OwnerOf(task, s => s.Html)?.Settings.Html ?? true;
+        public static List<string> FormatsOf(ExportTask task) => Get(task, s => s.ReportFormats);
+
+        /// <summary>Параметры выгрузки строки: свои или уровня выше поверх общих; нигде — общие.</summary>
+        public static ExportSettings ExportOf(ExportTask task, ExportSettings common) =>
+            OwnerOf(task, s => s.Export)?.Settings.Export.ApplyTo(common) ?? common;
+
+        /// <summary>Форматы отчётов Clash Detective — как в Navisworks 2023 (ru-RU\LcOdpClash.name); значение {Формат} — это название.</summary>
+        public static readonly string[] ReportFormatNames = { "XML", "HTML", "HTML (Табличное представление)", "Текст", "Как точки обзора" };
 
         /// <summary>Вид для выгрузки: заданный в дереве или из общих.</summary>
         public static string ViewOf(ExportTask task, ExportSettings common) => OwnerOf(task, s => s.ViewName)?.Settings.ViewName ?? common.Nwc.ViewName;

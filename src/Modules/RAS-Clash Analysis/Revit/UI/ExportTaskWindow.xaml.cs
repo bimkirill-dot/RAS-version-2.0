@@ -12,10 +12,11 @@ using RASv2.ClashAnalysis.Site.Logic;
 namespace RASv2.ClashAnalysis.UI
 {
     /// <summary>
-    /// Настройки задачи или подзадачи «Задач выгрузки» (карандаш; «Окно настроек — по смыслу», 03.11.2026): разделы «Проект»
-    /// (папка проекта — у задачи верхнего уровня), «Что входит» (модели одной строкой, список — по «Показать»; проверки), «NWF» (у
-    /// строки без подзадач), «Куда класть» (свёрнуто — строка итоговых путей, пока у строки там своего нет). Каждая настройка —
-    /// своя или от уровня выше; у задачи верхнего уровня всё своё. Правятся копии: «Отмена» оставляет как было.
+    /// Настройки задачи или подзадачи «Задач выгрузки» (карандаш; разделы — по разработчику, 03.11.2026): «Общее» — название,
+    /// папка задачи; «Экспорт» — вид, папка для NWC, модели (одной строкой, список — по «Показать»), параметры выгрузки (по общим
+    /// настройкам или свои — то же окно, что шестерёнка); «NWF и отчёты» — «Формировать NWF», проверки, скрыть в NWF, папки NWF и
+    /// отчётов, форматы. Каждая настройка — своя или от уровня выше; у задачи верхнего уровня всё своё. Правятся копии: «Отмена»
+    /// оставляет как было.
     /// </summary>
     public partial class ExportTaskWindow : Window, INotifyPropertyChanged
     {
@@ -104,6 +105,13 @@ namespace RASv2.ClashAnalysis.UI
             }
         }
 
+        /// <summary>Формат отчёта в выпадающем списке: название, как в Navisworks, и галочка.</summary>
+        public sealed class FormatItem
+        {
+            public string Name { get; set; }
+            public bool On { get; set; }
+        }
+
         /// <summary>Правило «Скрыть в NWF»: строка, которую ищут в имени элемента.</summary>
         public sealed class HideRow
         {
@@ -124,7 +132,11 @@ namespace RASv2.ClashAnalysis.UI
         private readonly bool _hasView;
         private readonly bool _ready;
         private readonly string _opened;
-        private bool _modelsOwn, _testsOwn, _hideOwn, _formatsOwn, _showModels, _whereOpen;
+        private bool _modelsOwn, _testsOwn, _hideOwn, _formatsOwn, _showModels;
+        private readonly List<FormatItem> _formats = ExportNodes.ReportFormatNames.Select(n => new FormatItem { Name = n }).ToList();
+        // свои параметры выгрузки (null — от уровня выше или общие); _exportEdits — для «Отмена с правками спрашивает»
+        private ExportOverride _export;
+        private int _exportEdits;
         private string _serverFolder;
 
         public event PropertyChangedEventHandler PropertyChanged;
@@ -158,12 +170,14 @@ namespace RASv2.ClashAnalysis.UI
             _hideOwn = _parent == null || s.HideNames != null;
             HideList.ItemsSource = _hide;
             FillHide(_hideOwn ? s.HideNames ?? ExportNodes.HideNamesOf(task) : ExportNodes.HideNamesOf(_parent));
-            _formatsOwn = _parent == null || s.Xml != null;
-            Xml.IsChecked = _formatsOwn ? s.Xml ?? true : ExportNodes.XmlOf(_parent);
-            Html.IsChecked = _formatsOwn ? s.Html ?? true : ExportNodes.HtmlOf(_parent);
+            _formatsOwn = _parent == null || s.ReportFormats != null;
+            FillFormats(_formatsOwn ? s.ReportFormats ?? ExportNodes.FormatsOf(task) : ExportNodes.FormatsOf(_parent));
+            Formats.ItemsSource = _formats;
+            _export = s.Export?.Clone();
 
             // «Формировать NWF» и имя NWF — свои у строки; у строки с подзадачами галочка недоступна
             MakeNwf.IsChecked = s.MakeNwf && task.Children.Count == 0;
+            MakeNwf.IsEnabled = task.Children.Count == 0;
             NwfName.Text = s.NwfName ?? "";
             _folder = Field(Folder, FolderFrom, FolderLink, x => x.Folder, ExportNodes.FolderOf, FolderBrowse);
             _nwc = Field(NwcFolder, NwcFrom, NwcLink, x => x.NwcFolder, ExportNodes.NwcFolderOf, NwcBrowse, NwcChips);
@@ -179,17 +193,6 @@ namespace RASv2.ClashAnalysis.UI
 
             // где строка в дереве: «в «Высокая критичность» · ArmanQala»
             PathInfo.Text = _parent == null ? "задача" : "в " + string.Join(" · ", Ancestors().Select((a, i) => i == 0 ? "«" + a.Name + "»" : a.Name));
-            // у задачи верхнего уровня папка проекта — в разделе «Проект»; у подзадачи — в «Куда класть»
-            if (_parent == null)
-            {
-                WherePanel.Children.Remove(FolderRow);
-                ProjectSection.Children.Add(FolderRow);
-            }
-            else ProjectSection.Visibility = Visibility.Collapsed;
-            // NWF собирает строка без подзадач
-            NwfSection.Visibility = task.Children.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-            // «Куда класть» раскрыт, если у строки там есть своё (у задачи верхнего уровня — всё своё)
-            _whereOpen = _parent == null || new[] { _folder, _nwc, _nwf, _report, _view }.Any(f => f.Own) || _formatsOwn;
 
             // новая строка и копия: сразу печатать название
             Loaded += (o, e) =>
@@ -202,7 +205,7 @@ namespace RASv2.ClashAnalysis.UI
             ShowTests();
             ShowHide();
             ShowFormats();
-            ShowWhere();
+            ShowExport();
             _opened = State();
             Closing += (o, e) => e.Cancel = !MayClose(this, DialogResult == true || State() == _opened);
         }
@@ -233,7 +236,7 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Всё, что правится в окне, — строкой: «Отмена» с правками спрашивает.</summary>
         private string State() => string.Join("|", TaskName.Text, _modelsOwn,
             string.Join(";", _models.Select(m => m.Path + ">" + m.Model.NwcName + ">" + m.Model.Block)), _testsOwn,
-            string.Join(";", _tests.Select(r => r.Path)), _hideOwn, string.Join(";", _hide.Select(h => h.Text)), _formatsOwn, Xml.IsChecked, Html.IsChecked,
+            string.Join(";", _tests.Select(r => r.Path)), _hideOwn, string.Join(";", _hide.Select(h => h.Text)), _formatsOwn, string.Join(";", Checked()), _export == null, _exportEdits,
             MakeNwf.IsChecked, NwfName.Text, Own(_folder), Own(_nwc), Own(_nwf), Own(_report), Own(_view), _imported.Count);
 
         private static string Own(InheritField f) => f.Value ?? "\u0001";
@@ -460,46 +463,84 @@ namespace RASv2.ClashAnalysis.UI
             ShowHide();
         }
 
-        // ── форматы: свои или от уровня выше ──
+        // ── форматы: выпадающий список с галочками; свои или от уровня выше ──
+
+        private void FillFormats(IEnumerable<string> names)
+        {
+            var set = new HashSet<string>(names ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+            foreach (var f in _formats) f.On = set.Contains(f.Name);
+            Formats.Items.Refresh();
+        }
+
+        private List<string> Checked() => _formats.Where(f => f.On).Select(f => f.Name).ToList();
 
         private void ShowFormats()
         {
-            Xml.IsEnabled = Html.IsEnabled = _formatsOwn;
-            FormatsFrom.Text = _formatsOwn ? "" : Source(x => x.Xml);
-            FormatsLink.Content = _formatsOwn ? "Вернуть " + Source(x => x.Xml) : "Изменить";
+            Formats.IsEnabled = _formatsOwn;
+            var on = Checked();
+            Formats.Text = on.Count == 0 ? "не выбраны" : string.Join(", ", on);
+            FormatsFrom.Text = _formatsOwn ? "" : Source(x => x.ReportFormats);
+            FormatsLink.Content = _formatsOwn ? "Вернуть " + Source(x => x.ReportFormats) : "Изменить";
             FormatsLink.Visibility = _parent == null ? Visibility.Collapsed : Visibility.Visible;
             if (_ready) UpdateExamples();
         }
 
-        // ── «Куда класть»: свёрнуто — строка итоговых путей ──
-
-        private void ShowWhere()
+        private void Format_Changed(object sender, RoutedEventArgs e)
         {
-            WherePanel.Visibility = _whereOpen ? Visibility.Visible : Visibility.Collapsed;
-            WhereSummary.Visibility = _whereOpen ? Visibility.Collapsed : Visibility.Visible;
-            WhereToggle.Content = _whereOpen ? "Свернуть" : "Изменить";
-            // от кого — одной подписью на раздел, когда своего нет и всё — от одной строки
-            var sources = new Func<NodeSettings, object>[] { x => x.Folder, x => x.NwcFolder, x => x.NwfFolder, x => x.ReportFolder, x => x.Xml }
-                .Select(Source).Distinct().ToList();
-            WhereFrom.Text = _whereOpen || _parent == null ? "" : sources.Count == 1 ? sources[0] : "от уровней выше";
+            if (_ready) ShowFormats();
         }
 
-        private void WhereToggle_Click(object sender, RoutedEventArgs e)
+        // выбор строки списка подставил бы её название в поле — вместо него список отмеченных
+        private void Formats_Closed(object sender, EventArgs e)
         {
-            _whereOpen = !_whereOpen;
-            UpdateExamples();
-            ShowWhere();
+            Formats.SelectedItem = null;
+            ShowFormats();
         }
 
         private void FormatsLink_Click(object sender, RoutedEventArgs e)
         {
             _formatsOwn = !_formatsOwn;
-            if (!_formatsOwn)
-            {
-                Xml.IsChecked = ExportNodes.XmlOf(_parent);
-                Html.IsChecked = ExportNodes.HtmlOf(_parent);
-            }
+            if (!_formatsOwn) FillFormats(ExportNodes.FormatsOf(_parent));
             ShowFormats();
+        }
+
+        // ── параметры выгрузки: по общим настройкам или свои (то же окно, что шестерёнка) ──
+
+        private void ShowExport()
+        {
+            var owner = _parent == null ? null : ExportNodes.OwnerOf(_parent, x => x.Export);
+            var inherited = owner == null ? "по общим настройкам" : "от «" + owner.Name + "»";
+            ExportFrom.Text = _export != null ? "свои" : inherited;
+            ExportReset.Content = "Вернуть " + inherited;
+            ExportReset.Visibility = _export != null ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void ExportEdit_Click(object sender, RoutedEventArgs e)
+        {
+            // начать с того, что действует сейчас: своих, уровня выше или общих
+            var current = _export != null ? _export.ApplyTo(_common) : (_parent == null ? _common : ExportNodes.ExportOf(_parent, _common)).Clone();
+            try
+            {
+                var name = TaskName.Text.Trim().Length > 0 ? TaskName.Text.Trim() : Title;
+                if (new ExportSettingsWindow(current, name) { Owner = this }.ShowDialog() != true) return;
+            }
+            catch (Exception ex)
+            {
+                // исключение сквозь вложенный ShowDialog роняет Revit (CLAUDE.md, «Правила, о которые уже спотыкались»)
+                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: параметры выгрузки задачи не открылись", ex);
+                Error.Text = "Окно параметров выгрузки не открылось — подробности в журнале плагина.";
+                return;
+            }
+            _export = ExportOverride.From(current);
+            _exportEdits++;
+            ShowExport();
+        }
+
+        private void ExportReset_Click(object sender, RoutedEventArgs e)
+        {
+            _export = null;
+            _exportEdits++;
+            ShowExport();
         }
 
         // ── примеры ──
@@ -532,14 +573,10 @@ namespace RASv2.ClashAnalysis.UI
             NwcExample.Text = "Пример: " + ExportNodes.Short(root, nwc);
             NwcExample.ToolTip = nwc;
 
-            var format = Html.IsChecked == true ? "HTML" : Xml.IsChecked == true ? "XML" : "";
+            var on = Checked();
+            var format = on.Contains("HTML") ? "HTML" : on.FirstOrDefault() ?? "";
             var report = ExportNodes.InProject(root, ExportNames.Fill(ReportFolder.Text, ExportNodes.Labels(block, null, _common, DateTime.Today, format)));
             ReportExample.Text = report.Length == 0 ? "Папка не задана" : "Пример: " + ExportNodes.Short(root, report);
-            WhereLine1.Text = "NWC " + ExportNodes.Short(root, ExportNodes.InProject(root, ExportNames.Fill(NwcFolder.Text, ExportNodes.Labels(ExportNodes.BlockOf(model, _common), model, _common, DateTime.Today)))) + " · NWF " + ExportNodes.Short(root, nwfFolder) +
-                              " · отчёты " + ExportNodes.Short(root, report);
-            WhereLine1.ToolTip = "Папка проекта: " + root;
-            var formats = string.Join(", ", new[] { Xml.IsChecked == true ? "XML" : null, Html.IsChecked == true ? "HTML" : null }.Where(f => f != null));
-            WhereLine2.Text = (formats.Length == 0 ? "форматов нет" : formats) + (_hasView ? " · вид " + ViewName.Text.Trim() : "");
             ReportExample.ToolTip = report;
         }
 
@@ -594,8 +631,8 @@ namespace RASv2.ClashAnalysis.UI
             NwcFolder = _nwc.Value,
             NwfFolder = _nwf.Value,
             ReportFolder = _report.Value,
-            Xml = _formatsOwn ? Xml.IsChecked == true : (bool?)null,
-            Html = _formatsOwn ? Html.IsChecked == true : (bool?)null,
+            ReportFormats = _formatsOwn ? Checked() : null,
+            Export = _export?.Clone(),
             ViewName = _hasView ? _view.Value : _task.Settings.ViewName,
             ServerFolder = _serverFolder ?? _task.Settings.ServerFolder,
         };
@@ -686,7 +723,7 @@ namespace RASv2.ClashAnalysis.UI
             var name = ExportNodes.CheckName(TaskName.Text, TakenNames);
             if (name != null) return name;
             if (_parent == null && Folder.Text.Trim().Length == 0) return "Нужна папка проекта — в ней NWC, NWF и отчёты.";
-            if (_formatsOwn && Xml.IsChecked != true && Html.IsChecked != true) return "Нужен хотя бы один формат отчётов.";
+            if (_formatsOwn && Checked().Count == 0) return "Нужен хотя бы один формат отчётов.";
             if (_hasView && _view.Own && ViewName.Text.Trim().Length == 0) return "Нужно имя вида для выгрузки.";
             return (_testsOwn ? ExportNodes.CheckTestsFiles(_tests.Select(r => r.Path).ToList(), TestNames) : null)
                    ?? (MakeNwf.IsChecked == true ? ExportNodes.CheckNwfName(NwfNameText()) : null)

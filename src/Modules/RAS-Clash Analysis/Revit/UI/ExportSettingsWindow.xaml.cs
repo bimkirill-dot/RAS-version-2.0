@@ -40,6 +40,29 @@ namespace RASv2.ClashAnalysis.UI
 
         private readonly string _opened;
 
+        /// <summary>
+        /// Параметры выгрузки задачи (карандаш задачи → «Настройки» → «Изменить»; разработчик, 03.11.2026: «то же, что шестерёнка»):
+        /// экспортёр NWC и «Удалить из модели перед выгрузкой»; вид — в самой задаче, обрезка имени, метки и отделы — только общие.
+        /// </summary>
+        public ExportSettingsWindow(ExportSettings settings, string taskName) : this(settings)
+        {
+            Title = "Параметры выгрузки — " + taskName;
+            FileButtons.Visibility = Visibility.Collapsed;
+            OptionRowOf(Scope).Visibility = Visibility.Collapsed;
+            OptionRowOf(TrimName).Visibility = Visibility.Collapsed;
+            NameExample.Visibility = Visibility.Collapsed;
+            // всё после «Удалить из модели перед выгрузкой» (метки, отделы) — общее для компании
+            var row = OptionRowOf(RemoveIfc);
+            var panel = (Panel)row.Parent;
+            for (var i = panel.Children.IndexOf(row) + 1; i < panel.Children.Count; i++) panel.Children[i].Visibility = Visibility.Collapsed;
+        }
+
+        private static FrameworkElement OptionRowOf(FrameworkElement e)
+        {
+            while (!(e is Border) || e.Parent is Grid) e = (FrameworkElement)e.Parent;
+            return e;
+        }
+
         /// <summary>Всё, что правится в окне, — строкой: «Отмена» с правками спрашивает.</summary>
         private string State() => string.Join("|", Parameters.SelectedIndex, Coordinates.SelectedIndex, Faceting.Text,
             ElementProperties.IsChecked, Urls.IsChecked, Lights.IsChecked, RoomAsAttribute.IsChecked, LinkedCad.IsChecked,

@@ -213,15 +213,17 @@ namespace RASv2.ClashAnalysis.Logic
             s.NwcFolder = s.NwcFolder ?? d.NwcFolder;
             s.NwfFolder = s.NwfFolder ?? d.NwfFolder;
             s.ReportFolder = s.ReportFolder ?? d.ReportFolder;
-            s.Xml = s.Xml ?? d.Xml;
-            s.Html = s.Html ?? d.Html;
+            s.ReportFormats = s.ReportFormats ?? d.ReportFormats;
         }
 
-        // пустые записи моделей — мимо; форматы — оба свои или оба от уровня выше
+        // пустые записи моделей — мимо; прежние галочки XML / HTML — в список форматов
         private static void Clean(NodeSettings s)
         {
             if (s.Models != null) s.Models = s.Models.Where(m => m != null && !string.IsNullOrWhiteSpace(m.Path)).ToList();
-            if (s.Xml == null || s.Html == null) s.Xml = s.Html = null;
+            if (s.ReportFormats == null && s.Xml != null && s.Html != null)
+                s.ReportFormats = new[] { s.Xml == true ? "XML" : null, s.Html == true ? "HTML" : null }.Where(f => f != null).ToList();
+            s.Xml = s.Html = null;
+            if (s.Export != null && s.Export.Nwc == null) s.Export.Nwc = new NwcOptions();
         }
 
         /// <summary>Название, которого ещё нет: «X», «X (2)», «X (3)»…</summary>

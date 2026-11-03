@@ -69,11 +69,21 @@ namespace RASv2.Tests
                 Check(ExportNodes.ModelsOf(s1).Count == 3 && ExportNodes.OwnerOf(s1, s => s.Models) == s1, "свои — вместо уровня выше");
                 Check(ExportNodes.FolderOf(s1) == @"\\srv\2025_Арман Кала 7 очередь" && ExportNodes.NwcFolderOf(s1) == @"{Блок}\NWC" &&
                       ExportNodes.TestsOf(s1).Single().EndsWith("КЖ-АР.xml"), "третий уровень — от подзадачи и задачи");
-                top.Settings.Xml = false;
-                Check(!ExportNodes.XmlOf(s1) && ExportNodes.HtmlOf(s1), "форматы — от задачи");
-                mid.Settings.Xml = true;
-                mid.Settings.Html = false;
-                Check(ExportNodes.XmlOf(mid) && !ExportNodes.HtmlOf(mid), "форматы — свои");
+                Check(string.Join(",", ExportNodes.FormatsOf(s1)) == "XML,HTML", "форматы по умолчанию — XML и HTML");
+                top.Settings.ReportFormats = new List<string> { "HTML" };
+                Check(string.Join(",", ExportNodes.FormatsOf(s1)) == "HTML", "форматы — от задачи");
+                mid.Settings.ReportFormats = new List<string> { "XML", "HTML (Табличное представление)" };
+                Check(ExportNodes.FormatsOf(mid).Count == 2, "форматы — свои");
+                Check(ExportNodes.ReportFormatNames.Length == 5 && ExportNodes.ReportFormatNames.Contains("Как точки обзора"),
+                    "все форматы отчёта Navisworks");
+                Check(ExportNodes.ExportOf(s1, common) == common, "параметры выгрузки — общие");
+                high.Settings.Export = ExportOverride.From(common);
+                high.Settings.Export.Nwc.FacetingFactor = 2;
+                high.Settings.Export.RemoveCad = false;
+                var ex = ExportNodes.ExportOf(s1, common);
+                Check(ex.Nwc.FacetingFactor == 2 && !ex.RemoveCad && common.Nwc.FacetingFactor == 1 && common.RemoveCad,
+                    "параметры выгрузки — от подзадачи, общие не тронуты");
+                Check(ExportNodes.ExportOf(mid, common) == common, "у соседней ветки — общие");
                 Check(ExportNodes.ViewOf(s1, common) == "3D_Navisworks", "вид — из общих");
                 top.Settings.ViewName = "3D_NW";
                 Check(ExportNodes.ViewOf(s1, common) == "3D_NW", "вид — от задачи");
@@ -328,8 +338,8 @@ namespace RASv2.Tests
                 var top = roots[0];
                 top.Settings.Models.Last().Block = "S1";
                 top.Settings.HideNames.Add("временн");
-                mid.Settings.Html = false;
-                mid.Settings.Xml = true;
+                mid.Settings.ReportFormats = new List<string> { "XML" };
+                high.Settings.Export = ExportOverride.From(new ExportSettings { RemoveIfc = false });
                 path = Path.Combine(dir, "Задача.json");
                 ExportFiles.Save(path, ExportFiles.FromTop(top));
                 back = ExportFiles.Load(path);
@@ -339,9 +349,10 @@ namespace RASv2.Tests
                       copy.Settings.HideNames.Single() == "временн", "задача: " + copy.Name);
                 var h = copy.Children[0];
                 var md = copy.Children[1];
-                Check(h.Parent == copy && h.Settings.Models == null && h.Settings.Xml == null && ExportNodes.ModelsOf(h).Count == 7 &&
+                Check(h.Parent == copy && h.Settings.Models == null && h.Settings.ReportFormats == null && ExportNodes.ModelsOf(h).Count == 7 &&
+                      h.Settings.Export != null && !h.Settings.Export.RemoveIfc && h.Settings.Export.Nwc.ViewName == "3D_Navisworks" &&
                       h.Children.Count == 2 && h.Children[0].Settings.Models.Count == 3 && h.Children[0].Settings.MakeNwf, "от задачи — так и осталось от задачи");
-                Check(md.Settings.Models.Count == 2 && md.Settings.Xml == true && md.Settings.Html == false && md.Settings.MakeNwf &&
+                Check(md.Settings.Models.Count == 2 && string.Join(",", md.Settings.ReportFormats) == "XML" && md.Settings.MakeNwf &&
                       md.Settings.NwfName == "S1_СК", "свои — свои");
                 Check(copy.Settings != top.Settings && h.Settings.TestsFiles != high.Settings.TestsFiles, "копией");
 
@@ -363,8 +374,8 @@ namespace RASv2.Tests
                 var v2 = ExportFiles.ToTop(ExportFiles.Load(path).ProjectData, new string[0]);
                 var hv2 = v2.Children.Single();
                 Check(v2.Settings.Folder == @"\\srv\П" && v2.Settings.Models.Count == 1 && v2.Settings.ServerFolder == "RSN://a/b" &&
-                      v2.Settings.NwfName == null && v2.Settings.Xml == true, "проект → задача");
-                Check(hv2.Settings.TestsFiles.Single() == "t.xml" && hv2.Settings.NwfName == "{Блок}_ВК" && hv2.Settings.Html == false &&
+                      v2.Settings.NwfName == null && string.Join(",", v2.Settings.ReportFormats) == "XML,HTML", "проект → задача");
+                Check(hv2.Settings.TestsFiles.Single() == "t.xml" && hv2.Settings.NwfName == "{Блок}_ВК" && string.Join(",", hv2.Settings.ReportFormats) == "XML" &&
                       ExportNodes.ModelsOf(hv2).Count == 1, "задача проекта → подзадача, модели — от задачи");
 
                 // версия 1 (02.11.2026): задачи-блоки со своими моделями — модели переходят в задачу, файлы проверок — свои у подзадачи
@@ -376,7 +387,7 @@ namespace RASv2.Tests
                 var v1 = ExportFiles.ToTop(ExportFiles.Load(path).ProjectData, new string[0]);
                 Check(v1.Settings.Folder == @"\\srv\П" && v1.Settings.Models.Count == 3 && v1.Children.Count == 2, "модели — в задачу, без повторов");
                 Check(v1.Children[0].Settings.TestsFiles.Single() == "s1.xml" && ExportNodes.TestsOf(v1.Children[1]).Single() == "t.xml" &&
-                      v1.Children[0].Settings.Xml == null && ExportNodes.XmlOf(v1.Children[0]), "файлы проверок и форматы");
+                      v1.Children[0].Settings.ReportFormats == null && ExportNodes.FormatsOf(v1.Children[0]).Count == 2, "файлы проверок и форматы");
 
                 File.WriteAllText(Path.Combine(dir, "чужой.json"), "{\"a\":1}");
                 var refused = false;
