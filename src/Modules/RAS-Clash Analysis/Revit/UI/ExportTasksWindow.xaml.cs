@@ -57,6 +57,9 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Версия Revit — для выбора моделей с Revit Server (настройки серверов — свои у каждой версии).</summary>
         public int RevitYear { get; set; } = 2026;
 
+        /// <summary>Revit (UIApplication) — для выгрузки; вне Revit (снимки окна) — null. object — чтобы окно открывалось без Revit API.</summary>
+        public object Revit { get; set; }
+
         /// <summary>Общие настройки — шестерёнка (из общего хранилища).</summary>
         public ExportSettings Settings { get; private set; } = new ExportSettings();
 
@@ -414,9 +417,24 @@ namespace RASv2.ClashAnalysis.UI
         }
 
         // выгрузка — следующим шагом; молчащая кнопка выглядела бы сломанной (разбор 02.11.2026)
-        private void Run_Click(object sender, RoutedEventArgs e) =>
-            MessageBox.Show(this, "Выгрузка — в следующей версии: сейчас задачи только настраиваются и хранятся.", Title,
-                MessageBoxButton.OK, MessageBoxImage.Information);
+        /// <summary>«Запустить»: выгрузка NWC строки и её подзадач (Export\NwcRunner); несохранённые правки — сначала вопрос.</summary>
+        private void Run_Click(object sender, RoutedEventArgs e)
+        {
+            var task = RowOf(sender).Item;
+            if (!Leave()) return;
+            // новая строка, от сохранения которой отказались, — исчезла
+            if (!_roots.SelectMany(r => r.Self()).Contains(task)) return;
+            try
+            {
+                Export.NwcRunner.Start(this, Revit as Autodesk.Revit.UI.UIApplication, task, Settings, RevitYear);
+            }
+            catch (System.Exception ex)
+            {
+                RASv2.Core.Log.Write("ClashAnalysis", "Выгрузка NWC: не запустилась — " + task.Name, ex);
+                MessageBox.Show(this, "Выгрузка не запустилась: " + ex.Message + "\nПодробности — в журнале плагина.", Title,
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
 
         // перетаскивание строки: нажали на строку (не на кнопку) и повели мышью — перенос внутри своего уровня; нажатие — выбор
         private void Row_MouseDown(object sender, MouseButtonEventArgs e)

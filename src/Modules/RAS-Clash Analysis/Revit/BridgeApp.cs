@@ -164,11 +164,12 @@ namespace RASv2.ClashAnalysis
         }
 
         /// <summary>«Задачи выгрузки» — окно дерева задач.</summary>
-        internal void ShowExportTasks(IntPtr owner)
+        internal void ShowExportTasks(UIApplication app)
         {
             try
             {
-                var window = new ExportTasksWindow(new ExportStore(_exportDir, Environment.UserName)) { RevitYear = _year };
+                var window = new ExportTasksWindow(new ExportStore(_exportDir, Environment.UserName)) { RevitYear = _year, Revit = app };
+                var owner = app.MainWindowHandle;
                 if (owner != IntPtr.Zero) new WindowInteropHelper(window).Owner = owner;
                 window.ShowDialog();
             }

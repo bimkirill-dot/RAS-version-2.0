@@ -593,6 +593,92 @@ namespace RASv2.Tests
                 Check(string.Join(";", sources.Select(s => s.Host + "/" + s.Year)) == "10.10.1.88/2026;192.168.1.250/2023;10.10.1.88/2023",
                       "пары «сервер · версия» — из настроек каждой версии");
             });
+            yield return Case("выгрузка NWC: план — модели строк без подзадач, одна NWC один раз, модели задачи без подзадач, несостыковки", () =>
+            {
+                var roots = Sample(out var high, out var mid);
+                var notes = new List<string>();
+                var jobs = NwcRunPlan.Build(roots[0], common, 2026, notes);
+                // S1 (3) + S2 (2) из подзадач; S1 КЖ и АР «Средней» — те же NWC; S10 и Генплан есть только у задачи
+                Check(jobs.Count == 7, "NWC: " + jobs.Count);
+                Check(jobs.Count(j => j.Rows.Count == 2) == 2 && jobs.Where(j => j.Rows.Count == 2).All(j => j.Rows.Contains("Средняя критичность")),
+                      "одна NWC — для двух строк");
+                Check(notes.Count == 2 && notes.All(n => n.Contains("ни у одной подзадачи")), "модели только у задачи: " + string.Join(" | ", notes));
+                var s1kj = jobs.First(j => j.ModelName == "0000_01_01_S1_KJ01_01_M3");
+                Check(s1kj.NwcPath == @"\\srv\2025_Арман Кала 7 очередь\S1\NWC\0000_01_01_S1_KJ01_01_M3.nwc", s1kj.NwcPath);
+                Check(s1kj.View == "3D_Navisworks" && s1kj.Skip == null, "вид из общих");
+
+                // у «Средней» свой вид — у той же NWC разные настройки: несостыковка, выгружается по первой строке
+                mid.Settings.ViewName = "3D_Другой";
+                notes.Clear();
+                jobs = NwcRunPlan.Build(roots[0], common, 2026, notes);
+                Check(notes.Count(n => n.Contains("разные вид")) == 2 && jobs.First(j => j.ModelName == "0000_01_01_S1_KJ01_01_M3").View == "3D_Navisworks",
+                      "разные настройки: " + string.Join(" | ", notes));
+
+                // запуск у подзадачи — только её модели; Revit Server другой версии — пропуск с причиной
+                var s2 = high.Children[1];
+                s2.Settings.Models = new List<ExportModel>
+                {
+                    new ExportModel { Path = "RSN://192.168.1.250/Проект/0000_01_01_S2_KJ01_01_M3.rvt", Year = 2023 },
+                    new ExportModel { Path = "RSN://10.10.1.88/Проект/0000_01_01_S2_AR01_01_M3.rvt", Year = 2026 },
+                };
+                notes.Clear();
+                jobs = NwcRunPlan.Build(s2, common, 2026, notes);
+                Check(jobs.Count == 2 && notes.Count == 0, "подзадача: " + jobs.Count);
+                Check(jobs[0].Skip == "модель Revit Server 2023 — выгружается в Revit 2023" && jobs[1].Skip == null, "версия: " + jobs[0].Skip);
+
+                // одна модель — в две разные папки: несостыковка
+                mid.Settings.ViewName = null;
+                mid.Settings.NwcFolder = @"Средняя\NWC";
+                notes.Clear();
+                NwcRunPlan.Build(roots[0], common, 2026, notes);
+                Check(notes.Count(n => n.Contains("выгружается 2 раза")) == 2, "две папки: " + string.Join(" | ", notes));
+
+                // отбор «отредактированные»: нет NWC — всегда; модель не менялась в срок — пропуск
+                var job = new NwcJob { Edited = new ModelDateFilter { On = true, Mode = ModelDateFilter.After, From = new DateTime(2026, 11, 1) } };
+                Check(NwcRunPlan.Due(job, new DateTime(2026, 10, 1), false), "нет NWC — выгружать");
+                Check(!NwcRunPlan.Due(job, new DateTime(2026, 10, 1), true), "не менялась — не выгружать");
+                Check(NwcRunPlan.Due(job, new DateTime(2026, 11, 2), true) && NwcRunPlan.Due(job, null, true), "менялась или дата не известна — выгружать");
+            });
+            yield return Case("выгрузка NWC: сравнение с прошлой выгрузкой, история в файле, журнал со временем шагов", () =>
+            {
+                var before = new NwcHistory.Entry { Nwc = @"\\srv\a.nwc", Size = 300 << 20, Elements = 10000, Seconds = 120, At = new DateTime(2026, 11, 1) };
+                Check(NwcHistory.Compare(before, new NwcHistory.Entry { Size = 290 << 20, Elements = 9900, Seconds = 130 }).Count == 0, "как прежде — тихо");
+                var notes = NwcHistory.Compare(before, new NwcHistory.Entry { Size = 100 << 20, Elements = 5000, Seconds = 400 });
+                Check(notes.Count == 3, "меньше, без элементов, дольше: " + string.Join(" | ", notes));
+                Check(NwcHistory.Compare(null, before).Count == 0, "первый раз — сравнивать не с чем");
+
+                var dir = Path.Combine(Path.GetTempPath(), "ras-tests-" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    var history = new NwcHistory();
+                    history.Put(before);
+                    history.Put(new NwcHistory.Entry { Nwc = @"\\SRV\A.nwc", Size = 1 });
+                    history.Save(Path.Combine(dir, "история.json"));
+                    var back = NwcHistory.Load(Path.Combine(dir, "история.json"));
+                    Check(back.Entries.Count == 1 && back.Last(@"\\srv\a.nwc").Size == 1, "одна запись на NWC, последняя");
+                    Check(NwcHistory.Load(Path.Combine(dir, "нет.json")).Entries.Count == 0, "нет файла — пусто");
+
+                    var path = Path.Combine(dir, "журнал.log");
+                    using (var j = new ExportJournal(path))
+                    {
+                        j.StepStart("Открытие");
+                        j.StepDone("Открытие", 12.5, true, "память Revit 2 ГБ");
+                        j.StepStart("Выгрузка NWC");
+                        j.StepDone("Выгрузка NWC", 3, false);
+                        j.Warn("в виде было включено — рамка 3D-вида");
+                        j.Error("нет 3D-вида");
+                        Check(j.StepTotals().Contains("Открытие") && j.Errors.Count == 1 && j.Warnings.Count == 1, "итог шагов");
+                        var text = j.ReadAll();   // пишется сразу — читается и до закрытия
+                        Check(text.Contains("✓ Открытие — 0:12") && text.Contains("✗ Выгрузка NWC") && text.Contains("НЕСОСТЫКОВКА") && text.Contains("ОШИБКА"),
+                              "строки журнала");
+                    }
+                    Check(NwcHistory.Duration(3725) == "1:02:05" && NwcHistory.SizeText(3L << 30) == "3,0 ГБ", "время и размер");
+                }
+                finally
+                {
+                    if (Directory.Exists(dir)) Directory.Delete(dir, true);
+                }
+            });
             yield return Case("удаление: подзадачи", () =>
             {
                 var roots = Sample(out var high, out _);

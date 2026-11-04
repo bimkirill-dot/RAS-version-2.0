@@ -56,9 +56,10 @@
     <Grid>
         <Grid.ColumnDefinitions>
             <!-- пределы ширины дерева и панели в сумме меньше окна наименьшей ширины — иначе панель уходит за край -->
-            <ColumnDefinition Width="*" MinWidth="260" />
+            <!-- дерево шире панели, 1,2 : 1 — по снимку разработчика (04.11.2026: «ширина левого окна по стандарту — вот такой») -->
+            <ColumnDefinition Width="1.2*" MinWidth="260" />
             <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="1.5*" MinWidth="480" />
+            <ColumnDefinition Width="*" MinWidth="480" />
         </Grid.ColumnDefinitions>
 
         <!-- ══ дерево ══ -->

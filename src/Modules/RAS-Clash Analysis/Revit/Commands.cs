@@ -37,13 +37,16 @@ namespace RASv2.ClashAnalysis
         }
     }
 
-    /// <summary>«Задачи выгрузки»: дерево задач выгрузки NWC — окном; работает и без открытой модели.</summary>
-    [Transaction(TransactionMode.ReadOnly)]
+    /// <summary>
+    /// «Задачи выгрузки»: дерево задач выгрузки NWC — окном; работает и без открытой модели. Manual — выгрузка открывает копии
+    /// моделей и меняет их своими транзакциями (удаляет связи, чистит вид).
+    /// </summary>
+    [Transaction(TransactionMode.Manual)]
     public sealed class ExportTasksCommand : IExternalCommand
     {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            BridgeApp.Instance?.ShowExportTasks(commandData.Application.MainWindowHandle);
+            BridgeApp.Instance?.ShowExportTasks(commandData.Application);
             return Result.Succeeded;
         }
     }

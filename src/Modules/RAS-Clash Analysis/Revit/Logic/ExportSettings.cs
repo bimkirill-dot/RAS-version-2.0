@@ -132,7 +132,7 @@ namespace RASv2.ClashAnalysis.Logic
         /// Имя модели без папки и расширения. Не Path.GetFileNameWithoutExtension: в .NET 8 у «\\сервер\файл.rvt» он отдаёт пусто
         /// (считает его корнем сетевой папки).
         /// </summary>
-        private static string BareName(string modelFile)
+        public static string BareName(string modelFile)
         {
             var name = ExportNodes.FileName(modelFile);
             var dot = name.LastIndexOf('.');
