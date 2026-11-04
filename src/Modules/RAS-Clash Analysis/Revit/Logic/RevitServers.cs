@@ -113,6 +113,13 @@ namespace RASv2.ClashAnalysis.Logic
             "http://" + host + "/RevitServerAdminRESTService" + year + "/AdminRESTService.svc/" +
             (folder.Count == 0 ? "%7C" : string.Join("%7C", folder.Select(Uri.EscapeDataString))) + "/contents";
 
+        /// <summary>
+        /// Адрес сведений о сервере — отвечает ли служба: мгновенно, в отличие от содержимого корня (10.10.1.88, Revit 2023 —
+        /// 67 с: служба считает размер каждой папки, 04.11.2026).
+        /// </summary>
+        public static string PropertiesUrl(string host, int year) =>
+            "http://" + host + "/RevitServerAdminRESTService" + year + "/AdminRESTService.svc/serverProperties";
+
         /// <summary>Адрес сведений о модели (дата изменения): «…/AdminRESTService.svc/a|b|модель.rvt/modelInfo».</summary>
         public static string ModelInfoUrl(string host, int year, IList<string> folder, string model) =>
             "http://" + host + "/RevitServerAdminRESTService" + year + "/AdminRESTService.svc/" +

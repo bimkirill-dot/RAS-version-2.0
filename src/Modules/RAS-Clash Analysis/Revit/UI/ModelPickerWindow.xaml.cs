@@ -230,12 +230,12 @@ namespace RASv2.ClashAnalysis.UI
             try
             {
                 UiContext();
+                // по сведениям о сервере — мгновенно; содержимое корня у большого хранилища — минуту и дольше
                 await Task.WhenAll(_hosts.SelectMany(h => _years.Select(y => (h.Host, y.Year))).Select(async p =>
                 {
                     try
                     {
-                        var root = await RevitServerClient.ContentsAsync(p.Host, p.Year, new List<string>());
-                        ServerCache.Of(p.Host).Put(p.Year, new List<string>(), root, DateTime.Now);
+                        await RevitServerClient.PingAsync(p.Host, p.Year);
                         _alive[PairKey(p.Host, p.Year)] = true;
                     }
                     catch (Exception)
@@ -422,7 +422,7 @@ namespace RASv2.ClashAnalysis.UI
             var year = _year;
             _roots.Clear();
             UpdateCount();
-            Status.Text = "Загрузка Revit Server " + host + " (Revit " + year + ")…";
+            Status.Text = "Загрузка Revit Server " + host + " (Revit " + year + ")… Сервер считает размеры папок — у большого хранилища до 2–3 минут; потом — из кэша сразу.";
             try
             {
                 var contents = await Contents(host, year, new List<string>(), force, c =>
