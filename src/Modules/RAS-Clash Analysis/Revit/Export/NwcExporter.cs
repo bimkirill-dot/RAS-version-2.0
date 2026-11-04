@@ -381,15 +381,16 @@ namespace RASv2.ClashAnalysis.Export
         /// <summary>Удалить связи Revit, IFC, DWG и другие CAD (связанные и импортированные), облака точек — по настройкам строки; что осталось — несостыковка.</summary>
         private void RemoveExternal(Document doc, ExportSettings s)
         {
-            var revit = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkType)).ToElements();
-            var ifc = revit.Where(IsIfc).ToList();
-            var groups = new List<(string Name, bool On, List<Element> Items)>
+            // номера и имена — до удаления: удалили тип связи DWG — Revit удалил и его вставки, и имя удалённого элемента уже не
+            // прочитать (04.11.2026: «The referenced object is not valid» — выгрузка падала на этом шаге)
+            var revit = Snap(new FilteredElementCollector(doc).OfClass(typeof(RevitLinkType)));
+            var groups = new List<(string Name, bool On, List<(ElementId Id, string Name)> Items)>
             {
-                ("связи Revit", s.RemoveRevitLinks, revit.Where(e => !IsIfc(e)).ToList()),
-                ("связи IFC", s.RemoveIfc, ifc),
-                ("DWG и CAD — связи", s.RemoveCad, new FilteredElementCollector(doc).OfClass(typeof(CADLinkType)).ToElements().ToList()),
-                ("DWG и CAD — вставки", s.RemoveCad, new FilteredElementCollector(doc).OfClass(typeof(ImportInstance)).ToElements().ToList()),
-                ("облака точек", s.RemovePointClouds, new FilteredElementCollector(doc).OfClass(typeof(PointCloudType)).ToElements().ToList()),
+                ("связи Revit", s.RemoveRevitLinks, revit.Where(e => !IsIfc(e.Name)).ToList()),
+                ("связи IFC", s.RemoveIfc, revit.Where(e => IsIfc(e.Name)).ToList()),
+                ("DWG и CAD — связи", s.RemoveCad, Snap(new FilteredElementCollector(doc).OfClass(typeof(CADLinkType)))),
+                ("DWG и CAD — вставки", s.RemoveCad, Snap(new FilteredElementCollector(doc).OfClass(typeof(ImportInstance)))),
+                ("облака точек", s.RemovePointClouds, Snap(new FilteredElementCollector(doc).OfClass(typeof(PointCloudType)))),
             };
             using (var t = new Transaction(doc, "RAS: удалить внешнее перед выгрузкой NWC"))
             {
@@ -403,12 +404,19 @@ namespace RASv2.ClashAnalysis.Export
                         _j.Line($"   {g.Name}: {g.Items.Count} — не удаляются (настройка): {names}");
                         continue;
                     }
-                    var failed = 0;
+                    int deleted = 0, already = 0, failed = 0;
                     foreach (var e in g.Items)
                     {
+                        // уже удалён вместе с другим (вставка — с типом связи DWG, вложенная связь — с родительской)
+                        if (doc.GetElement(e.Id) == null)
+                        {
+                            already++;
+                            continue;
+                        }
                         try
                         {
-                            if (e.IsValidObject) doc.Delete(e.Id);
+                            doc.Delete(e.Id);
+                            deleted++;
                         }
                         catch (Exception ex)
                         {
@@ -416,7 +424,8 @@ namespace RASv2.ClashAnalysis.Export
                             _j.Line($"     не удалён «{e.Name}»: {ex.Message}");
                         }
                     }
-                    _j.Line($"   {g.Name}: удалено {g.Items.Count - failed} из {g.Items.Count}: {names}");
+                    _j.Line($"   {g.Name}: {g.Items.Count} — удалено {deleted}{(already > 0 ? $", уже удалены вместе со связью {already}" : "")}" +
+                            $"{(failed > 0 ? $", не удалось {failed}" : "")}: {names}");
                 }
                 var status = t.Commit();
                 if (status != TransactionStatus.Committed) throw new NwcError("удаление связей не применилось: " + status);
@@ -435,7 +444,11 @@ namespace RASv2.ClashAnalysis.Export
             if (left.Count > 0) _j.Warn($"{doc.Title}: после удаления остались — " + string.Join(", ", left));
         }
 
-        private static bool IsIfc(Element e) => (e.Name ?? "").IndexOf(".ifc", StringComparison.OrdinalIgnoreCase) >= 0;
+        private static bool IsIfc(string name) => (name ?? "").IndexOf(".ifc", StringComparison.OrdinalIgnoreCase) >= 0;
+
+        /// <summary>Номера и имена элементов — снимком, пока все целы.</summary>
+        private static List<(ElementId Id, string Name)> Snap(FilteredElementCollector collector) =>
+            collector.ToElements().Select(e => (e.Id, e.Name ?? "")).ToList();
 
         /// <summary>
         /// Вид для выгрузки (разработчик, 03.11.2026: «просто проверяем свой вид Navisworks перед выгрузкой»): найти по имени, в журнал —
