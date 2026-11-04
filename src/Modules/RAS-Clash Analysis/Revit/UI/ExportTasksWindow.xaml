@@ -18,7 +18,7 @@
             <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="6" />
-            <Setter Property="Padding" Value="6,7,8,7" />
+            <Setter Property="Padding" Value="6,4,8,4" />
             <Setter Property="TextElement.Foreground" Value="{DynamicResource Fg}" />
             <Setter Property="Cursor" Value="Hand" />
             <Style.Triggers>
@@ -36,6 +36,8 @@
         </Style>
         <Style x:Key="RowIcon" TargetType="Button" BasedOn="{StaticResource IconButton}">
             <Setter Property="Margin" Value="2,0,0,0" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="MinHeight" Value="0" />
         </Style>
         <!-- кнопки строки — у строки под мышью и у выбранной; места остаются — строки не прыгают -->
         <Style x:Key="RowActions" TargetType="StackPanel">
@@ -63,7 +65,7 @@
             <!-- сервер недоступен или файл проекта не прочитан — строкой сверху -->
             <TextBlock x:Name="Banner" DockPanel.Dock="Top" Foreground="{DynamicResource Error}" TextWrapping="Wrap" Margin="0,0,0,8"
                        Visibility="Collapsed" />
-            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
                 <StackPanel x:Name="Toolbar" DockPanel.Dock="Right" Orientation="Horizontal">
                     <!-- импорт задачи из файла коллеги (02.11.2026); Segoe MDL2: E8B5 — импорт -->
                     <Button Style="{StaticResource IconButton}" Content="&#xE8B5;" Click="Import_Click" ToolTip="Импорт задачи…" />
@@ -73,7 +75,7 @@
                 </StackPanel>
                 <TextBlock Text="Задачи" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
             </DockPanel>
-            <Border DockPanel.Dock="Top" Height="1" Background="{DynamicResource Line}" Margin="0,0,0,8" />
+            <Border DockPanel.Dock="Top" Height="1" Background="{DynamicResource Line}" Margin="0,0,0,6" />
 
             <ScrollViewer x:Name="TreeScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <ItemsControl x:Name="RowsList" Margin="0,0,4,0">

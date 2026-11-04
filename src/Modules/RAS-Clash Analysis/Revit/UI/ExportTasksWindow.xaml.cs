@@ -46,7 +46,7 @@ namespace RASv2.ClashAnalysis.UI
             public double NameSize => IsTop ? 14 : 13;
             public FontWeight NameWeight => Row.Level <= 1 ? FontWeights.SemiBold : FontWeights.Normal;
             // задачи — с промежутком сверху, подзадачи — плотно, отступ уровня — 22
-            public Thickness Indent => new Thickness(Row.Level * 22, IsTop ? 8 : 0, 0, 2);
+            public Thickness Indent => new Thickness(Row.Level * 22, IsTop ? 6 : 0, 0, 1);
             // Segoe MDL2 Assets: E70D — вниз (развёрнуто), E76C — вправо (свёрнуто)
             public string Arrow => Collapsed ? "\uE76C" : "\uE70D";
             public Visibility ArrowVisibility => HasInner ? Visibility.Visible : Visibility.Hidden;

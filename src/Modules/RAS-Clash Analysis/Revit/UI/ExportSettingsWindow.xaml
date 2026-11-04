@@ -18,13 +18,13 @@
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
         <Style x:Key="HeadBar" TargetType="DockPanel">
-            <Setter Property="Margin" Value="0,22,0,4" />
+            <Setter Property="Margin" Value="0,14,0,2" />
         </Style>
         <Style x:Key="OptionRow" TargetType="Border">
             <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
             <Setter Property="BorderThickness" Value="0,0,0,1" />
-            <Setter Property="Padding" Value="0,6" />
-            <Setter Property="MinHeight" Value="40" />
+            <Setter Property="Padding" Value="0,2" />
+            <Setter Property="MinHeight" Value="34" />
         </Style>
         <Style x:Key="OptionName" TargetType="TextBlock">
             <Setter Property="HorizontalAlignment" Value="Right" />
@@ -56,6 +56,8 @@
             <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
         <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
             <Style.Triggers>
                 <Trigger Property="IsEnabled" Value="False">
                     <Setter Property="Opacity" Value="0.45" />
@@ -65,7 +67,7 @@
     </Window.Resources>
 
     <DockPanel>
-        <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="20,12">
+        <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="20,10">
             <DockPanel>
                 <!-- поделиться с коллегой (разработчик, 02.11.2026): импорт заполняет окно, сохраняется по «Сохранить» -->
                 <StackPanel x:Name="FileButtons" DockPanel.Dock="Left" Orientation="Horizontal">
@@ -297,7 +299,7 @@
                 <ItemsControl x:Name="DepartmentsList" Margin="380,4,0,0">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Grid Margin="0,0,0,6">
+                            <Grid Margin="0,0,0,4">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="120" />
                                     <ColumnDefinition Width="40" />

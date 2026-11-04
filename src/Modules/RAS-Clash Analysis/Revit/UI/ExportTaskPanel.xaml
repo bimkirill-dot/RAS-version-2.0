@@ -29,8 +29,8 @@
         <Style x:Key="SectionHead" TargetType="Border">
             <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
             <Setter Property="BorderThickness" Value="0,0,0,1" />
-            <Setter Property="Padding" Value="0,0,0,6" />
-            <Setter Property="Margin" Value="0,24,0,14" />
+            <Setter Property="Padding" Value="0,0,0,4" />
+            <Setter Property="Margin" Value="0,16,0,8" />
         </Style>
         <Style x:Key="SectionTitle" TargetType="TextBlock">
             <Setter Property="FontWeight" Value="SemiBold" />
@@ -39,7 +39,7 @@
         </Style>
         <!-- строка: подпись | значение | от кого -->
         <Style x:Key="RowGrid" TargetType="Grid">
-            <Setter Property="Margin" Value="0,0,0,14" />
+            <Setter Property="Margin" Value="0,0,0,8" />
         </Style>
         <!-- подпись — по высоте первой строки значения (поле — 30) -->
         <Style x:Key="Cap" TargetType="TextBlock">
@@ -65,7 +65,8 @@
                     <Setter Property="Grid.Column" Value="1" />
                     <Setter Property="Grid.Row" Value="1" />
                     <Setter Property="HorizontalAlignment" Value="Left" />
-                    <Setter Property="Height" Value="22" />
+                    <!-- по содержимому: пустая (нечего вернуть) — без пустой строки -->
+                    <Setter Property="Height" Value="Auto" />
                     <Setter Property="Margin" Value="0,2,0,0" />
                 </DataTrigger>
             </Style.Triggers>
@@ -81,7 +82,7 @@
             <Setter Property="Foreground" Value="{DynamicResource Muted}" />
             <Setter Property="FontSize" Value="12" />
             <Setter Property="TextWrapping" Value="Wrap" />
-            <Setter Property="Margin" Value="0,4,0,0" />
+            <Setter Property="Margin" Value="0,2,0,0" />
         </Style>
         <Style x:Key="Chip" TargetType="Button" BasedOn="{StaticResource LinkButton}">
             <Setter Property="Margin" Value="8,0,0,0" />
@@ -104,7 +105,7 @@
     </UserControl.Resources>
 
     <DockPanel>
-        <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="20,10,20,12">
+        <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="20,8">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Top">
                     <TextBlock x:Name="Info" Style="{StaticResource Msg}" Foreground="{DynamicResource Muted}" FontSize="12" />
@@ -129,7 +130,7 @@
             <StackPanel Margin="20,0,20,16" Grid.IsSharedSizeScope="True">
 
                 <!-- ══ Общее ══ -->
-                <Border Style="{StaticResource SectionHead}" Margin="0,16,0,14">
+                <Border Style="{StaticResource SectionHead}" Margin="0,10,0,8">
                     <DockPanel>
                         <!-- где строка в дереве -->
                         <TextBlock x:Name="PathInfo" DockPanel.Dock="Right" Style="{StaticResource Note}" />
@@ -182,7 +183,7 @@
                         <DockPanel>
                             <TextBox x:Name="NwcFolder" TextChanged="Any_Changed" />
                         </DockPanel>
-                        <StackPanel x:Name="NwcChips" Orientation="Horizontal" Margin="0,4,0,0">
+                        <StackPanel x:Name="NwcChips" Orientation="Horizontal" Margin="0,2,0,0">
                             <TextBlock Style="{StaticResource Note}" Text="Метки:" />
                             <Button Style="{StaticResource Chip}" Content="{}{Блок}" Tag="{Binding ElementName=NwcFolder}" Click="Chip_Click" />
                             <Button Style="{StaticResource Chip}" Content="{}{Отдел}" Tag="{Binding ElementName=NwcFolder}" Click="Chip_Click" />
@@ -202,7 +203,7 @@
                     <TextBlock Style="{StaticResource Cap}" Text="Модели" />
                     <!-- тесно — кнопка переносится на следующую строку, а не обрезается -->
                     <WrapPanel Grid.Column="1" VerticalAlignment="Top">
-                        <TextBlock x:Name="ModelsSummary" VerticalAlignment="Center" Margin="0,6,12,6" />
+                        <TextBlock x:Name="ModelsSummary" VerticalAlignment="Center" Margin="0,4,12,4" />
                         <Button x:Name="ModelsShow" Style="{StaticResource SideLink}" Margin="0,0,12,0" Click="ModelsShow_Click" />
                         <Button x:Name="AddModels" Content="Добавить модели…" Click="AddModels_Click" />
                     </WrapPanel>
@@ -212,16 +213,16 @@
                     </StackPanel>
                 </Grid>
                 <!-- модели: только имя и путь (разработчик, 03.11.2026: «отдел, блок — не надо»); корзина — при наведении -->
-                <Grid x:Name="ModelsPanel" Margin="0,0,0,16">
+                <Grid x:Name="ModelsPanel" Margin="0,0,0,8">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
                     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                 <Border Grid.Column="1" Background="{DynamicResource Row}" BorderBrush="{DynamicResource Line}"
-                        BorderThickness="1" CornerRadius="4" Padding="12,6">
+                        BorderThickness="1" CornerRadius="4" Padding="12,4">
                     <ScrollViewer MaxHeight="320" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <ItemsControl x:Name="ModelsList">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Background="Transparent" Margin="0,3" Opacity="{Binding RowOpacity}">
+                                    <Grid Background="Transparent" Margin="0,2" Opacity="{Binding RowOpacity}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition />
                                             <ColumnDefinition Width="32" />
@@ -264,7 +265,7 @@
                     <TextBlock Style="{StaticResource Cap}" Text="" />
                     <WrapPanel Grid.Column="1" VerticalAlignment="Top">
                         <CheckBox x:Name="EditedOn" Content="Экспортировать модели, отредактированные" VerticalAlignment="Center"
-                                  Margin="0,6,10,6" Checked="Any_Changed" Unchecked="Any_Changed" />
+                                  Margin="0,4,10,4" Checked="Any_Changed" Unchecked="Any_Changed" />
                         <ComboBox x:Name="EditedMode" Width="110" MinHeight="28" VerticalContentAlignment="Center" Margin="0,0,8,0"
                                   SelectionChanged="Any_Changed">
                             <ComboBoxItem Content="после" />
@@ -296,7 +297,7 @@
                     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                     <TextBlock Style="{StaticResource Cap}" Text="Настройки NWC Exporter" />
                     <WrapPanel Grid.Column="1" VerticalAlignment="Top">
-                        <TextBlock x:Name="ExportFrom" VerticalAlignment="Center" Margin="0,6,10,6" />
+                        <TextBlock x:Name="ExportFrom" VerticalAlignment="Center" Margin="0,4,10,4" />
                         <Button x:Name="ExportEdit" Style="{StaticResource SideLink}" Content="изменить" FontSize="12" Click="ExportEdit_Click" />
                     </WrapPanel>
                     <StackPanel Style="{StaticResource Side}">
@@ -340,7 +341,7 @@
                                 <ItemsControl x:Name="TestsList">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <DockPanel MinHeight="30">
+                                            <DockPanel MinHeight="28">
                                                 <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE74D;" Margin="4,0,0,0" Width="32"
                                                         Click="DeleteTests_Click" ToolTip="Убрать файл" />
                                                 <TextBlock ToolTip="{Binding Path}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center">
@@ -351,7 +352,7 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <Button Content="Добавить…" HorizontalAlignment="Left" Margin="0,4,0,0" Click="AddTests_Click"
+                                <Button Content="Добавить…" HorizontalAlignment="Left" Margin="0,2,0,0" Click="AddTests_Click"
                                         ToolTip="Файлы проверок .xml из Clash Detective — можно несколько" />
                             </StackPanel>
                         </StackPanel>
@@ -374,7 +375,7 @@
                                 <ItemsControl x:Name="HideList">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <DockPanel MinHeight="30" Margin="0,0,0,4">
+                                            <DockPanel MinHeight="28" Margin="0,0,0,2">
                                                 <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE74D;" Margin="4,0,0,0" Width="32"
                                                         VerticalAlignment="Center" Click="DeleteHide_Click" ToolTip="Удалить правило" />
                                                 <StackPanel VerticalAlignment="Center">
@@ -386,7 +387,7 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <Button Content="Добавить правила…" HorizontalAlignment="Left" Margin="0,4,0,0" Click="AddHide_Click"
+                                <Button Content="Добавить правила…" HorizontalAlignment="Left" Margin="0,2,0,0" Click="AddHide_Click"
                                         ToolTip="Файл поисковых наборов Navisworks: «Наборы» → «Экспорт поисковых наборов»" />
                             </StackPanel>
                         </StackPanel>
@@ -451,7 +452,7 @@
                         <Button Grid.Column="2" x:Name="ReportBrowse" Style="{StaticResource Browse}" Tag="{Binding ElementName=ReportFolder}" Click="Browse_Click" />
                         <StackPanel Grid.Column="1">
                             <TextBox x:Name="ReportFolder" TextChanged="Any_Changed" />
-                            <StackPanel x:Name="ReportChips" Orientation="Horizontal" Margin="0,4,0,0">
+                            <StackPanel x:Name="ReportChips" Orientation="Horizontal" Margin="0,2,0,0">
                                 <TextBlock Style="{StaticResource Note}" Text="Метки:" />
                                 <Button Style="{StaticResource Chip}" Content="{}{Дата}" Tag="{Binding ElementName=ReportFolder}" Click="Chip_Click" />
                                 <Button Style="{StaticResource Chip}" Content="{}{Формат}" Tag="{Binding ElementName=ReportFolder}" Click="Chip_Click" />
