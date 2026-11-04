@@ -81,6 +81,12 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>{Дата} — формат (.NET); как в папках отчётов сейчас — «01.10.2026».</summary>
         public string DateFormat { get; set; } = "dd.MM.yyyy";
 
+        /// <summary>
+        /// Копий моделей Revit Server одновременно — наперёд, пока Revit выгружает текущую (разработчик, 04.11.2026: «по умолчанию
+        /// 4»), от 1 до 8. Больше — быстрее, пока успевает Revit (~1 модель в минуту), но нагружает сервер коллег.
+        /// </summary>
+        public int ParallelCopies { get; set; } = 4;
+
         /// <summary>Отделы — их коды ищутся в имени модели ({Отдел}).</summary>
         public List<DepartmentTemplate> Departments { get; set; } = new List<DepartmentTemplate>();
 
@@ -99,6 +105,7 @@ namespace RASv2.ClashAnalysis.Logic
             TrimName = s.TrimName;
             BlockPrefix = s.BlockPrefix;
             DateFormat = s.DateFormat;
+            ParallelCopies = s.ParallelCopies;
             Departments = s.Departments.Select(d => d.Clone()).ToList();
         }
 

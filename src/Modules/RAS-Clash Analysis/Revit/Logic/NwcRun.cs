@@ -67,7 +67,8 @@ namespace RASv2.ClashAnalysis.Logic
                     if (!leaf)
                         notes.Add($"Модель «{job.ModelName}» есть у «{row.Name}», но ни у одной подзадачи — выгружается по настройкам «{row.Name}».");
                     job.Rows.Add(row.Name);
-                    job.Skip = SkipReason(model, revitYear);
+                    job.Skip = SkipReason(model, revitYear) ??
+                               (IsRooted(job.NwcPath) ? null : $"не задана папка: ни «Папки задачи», ни полного пути в «Папке для NWC» у «{row.Name}»");
                     byPath[job.NwcPath] = job;
                     jobs.Add(job);
                 }
@@ -86,6 +87,13 @@ namespace RASv2.ClashAnalysis.Logic
             ExportNodes.IsServerPath(model.Path) && model.Year > 0 && model.Year != revitYear
                 ? $"модель Revit Server {model.Year} — выгружается в Revit {model.Year}"
                 : null;
+
+        /// <summary>Полный путь: диск («C:\…») или сетевая папка («\\сервер\…»).</summary>
+        public static bool IsRooted(string path)
+        {
+            var p = (path ?? "").Trim();
+            return p.StartsWith(@"\\") || p.Length >= 3 && char.IsLetter(p[0]) && p[1] == ':' && p[2] == '\\';
+        }
 
         /// <summary>Вид и параметры выгрузки одной строкой — сравнить две строки дерева.</summary>
         public static string Signature(NwcJob job)

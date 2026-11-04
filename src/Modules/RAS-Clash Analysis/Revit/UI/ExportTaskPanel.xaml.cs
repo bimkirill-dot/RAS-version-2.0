@@ -866,7 +866,7 @@ namespace RASv2.ClashAnalysis.UI
         {
             var name = ExportNodes.CheckName(TaskName.Text, TakenNames);
             if (name != null) return name;
-            if (_parent == null && Folder.Text.Trim().Length == 0) return "Нужна папка проекта — в ней NWC, NWF и отчёты.";
+            if (_parent == null && Folder.Text.Trim().Length == 0) return "Нужна папка задачи — в ней NWC, NWF и отчёты.";
             if (_formatsOwn && Checked().Count == 0) return "Нужен хотя бы один формат отчётов.";
             if (_editedOwn && EditedOn.IsChecked == true)
             {

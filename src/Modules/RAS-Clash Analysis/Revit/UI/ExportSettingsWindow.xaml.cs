@@ -69,7 +69,7 @@ namespace RASv2.ClashAnalysis.UI
             ElementProperties.IsChecked, Urls.IsChecked, Lights.IsChecked, RoomAsAttribute.IsChecked, LinkedCad.IsChecked,
             LinkedFiles.IsChecked, Parts.IsChecked, MissingMaterials.IsChecked, Levels.IsChecked, Scope.SelectedIndex, ViewName.Text,
             RoomGeometry.IsChecked, RemoveRevitLinks.IsChecked, RemoveCad.IsChecked, RemovePointClouds.IsChecked, RemoveIfc.IsChecked,
-            TrimName.IsChecked, BlockPrefix.Text, DateFormat.SelectedIndex,
+            TrimName.IsChecked, BlockPrefix.Text, DateFormat.SelectedIndex, ParallelCopies.Text,
             string.Join(";", _departments.Select(d => d.Department)));
 
         /// <summary>Окно — из настроек (открытие и «Импорт…»).</summary>
@@ -83,6 +83,7 @@ namespace RASv2.ClashAnalysis.UI
             TrimName.IsChecked = s.TrimName;
             BlockPrefix.Text = s.BlockPrefix;
             DateFormat.SelectedIndex = Math.Max(0, Array.IndexOf(ExportSettings.DateFormats, s.DateFormat));
+            ParallelCopies.Text = s.ParallelCopies.ToString(CultureInfo.InvariantCulture);
             _departments.Clear();
             foreach (var d in s.Departments) _departments.Add(d.Clone());
         }
@@ -223,6 +224,7 @@ namespace RASv2.ClashAnalysis.UI
             result.TrimName = TrimName.IsChecked == true;
             result.BlockPrefix = BlockPrefix.Text.Trim();
             result.DateFormat = SelectedDateFormat;
+            result.ParallelCopies = int.Parse(ParallelCopies.Text.Trim(), CultureInfo.InvariantCulture);
             result.Departments = _departments.Where(d => !string.IsNullOrWhiteSpace(d.Department))
                 .Select(d => new DepartmentTemplate { Department = d.Department.Trim() })
                 .ToList();
@@ -236,6 +238,8 @@ namespace RASv2.ClashAnalysis.UI
             if (Scope.SelectedIndex == 1 && string.IsNullOrWhiteSpace(ViewName.Text)) return "Нужно имя вида для выгрузки.";
             var prefix = BlockPrefix.Text.Trim();
             if (prefix.Length == 0 || !prefix.All(char.IsLetter)) return "{Блок}: часть имени — буквы перед цифрами блока (например, S).";
+            if (!int.TryParse(ParallelCopies.Text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var copies) || copies < 1 || copies > 8)
+                return "Копий с Revit Server одновременно — число от 1 до 8.";
             return ExportNodes.CheckDepartmentCodes(_departments.Select(d => d.Department));
         }
     }

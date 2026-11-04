@@ -259,6 +259,19 @@
                     </Grid>
                 </Border>
 
+                <!-- копии моделей Revit Server наперёд, пока Revit выгружает текущую (разработчик, 04.11.2026: «по умолчанию 4») -->
+                <DockPanel Style="{StaticResource HeadBar}">
+                    <TextBlock Style="{StaticResource Head}" Text="Копирование моделей" />
+                </DockPanel>
+                <Border Style="{StaticResource OptionRow}">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="380" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource OptionName}" Text="Копий с Revit Server одновременно" />
+                        <TextBox Grid.Column="1" x:Name="ParallelCopies" Width="60" HorizontalAlignment="Left"
+                                 ToolTip="От 1 до 8: больше — быстрее, но сильнее нагружает Revit Server" />
+                    </Grid>
+                </Border>
+
 
                 <!-- метки — один регламент на компанию: что они значат (разбор настроек, 02.11.2026) -->
                 <DockPanel Style="{StaticResource HeadBar}">

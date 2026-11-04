@@ -138,6 +138,8 @@ namespace RASv2.ClashAnalysis.Logic
             if (string.IsNullOrEmpty(s.BlockPrefix)) s.BlockPrefix = d.BlockPrefix;
             if (string.IsNullOrEmpty(s.DateFormat)) s.DateFormat = d.DateFormat;
             if (s.Departments == null) s.Departments = new List<DepartmentTemplate>();
+            // в файле до 04.11.2026 поля нет — читается 0; допустимо 1–8
+            if (s.ParallelCopies <= 0) s.ParallelCopies = d.ParallelCopies;
         }
 
         public static ExportFile FromCommon(ExportSettings settings) =>

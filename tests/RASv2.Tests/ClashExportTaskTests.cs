@@ -28,6 +28,10 @@ namespace RASv2.Tests
         {
             var top = ExportTask.NewTop("ArmanQala");
             top.Settings.Folder = @"\\srv\2025_Арман Кала 7 очередь";
+            // пути по регламенту — у новой задачи они пустые (04.11.2026), здесь заданы
+            top.Settings.NwcFolder = @"{Блок}\NWC";
+            top.Settings.NwfFolder = "NWF";
+            top.Settings.ReportFolder = @"Отчеты\{Дата}";
             top.Settings.Models.AddRange(Models("S10", "KJ"));
             top.Settings.Models.AddRange(Models("S1", "KJ", "AR", "OV"));
             top.Settings.Models.AddRange(Models("S2", "KJ", "AR"));
@@ -708,6 +712,41 @@ namespace RASv2.Tests
                 Check(NwcRunPlan.Fresh(job, null, nwc, same) == null, "дата модели не известна — выгружать");
                 Check(NwcRunPlan.Fresh(job, model, null, same) == null, "NWC нет — выгружать");
                 Check(NwcRunPlan.Fresh(job, model, nwc, new NwcHistory.Entry { Signature = "другой вид" }) == null, "вид или параметры поменялись — выгружать");
+            });
+            yield return Case("новая задача — пути пустые: NWC, NWF, отчёты — в папке задачи; без папки — модель пропускается с причиной", () =>
+            {
+                var task = ExportTask.NewTop("Новая");
+                Check(task.Settings.Folder == "" && task.Settings.NwcFolder == "" && task.Settings.NwfFolder == "" && task.Settings.ReportFolder == "",
+                      "пути пустые");
+                task.Settings.Models.Add(new ExportModel { Path = "0000_01_01_S1_KJ01_01_M3.rvt" });
+                var notes = new List<string>();
+                var job = NwcRunPlan.Build(task, common, 2026, notes).Single();
+                Check(job.Skip != null && job.Skip.StartsWith("не задана папка"), "без папки: " + job.Skip);
+                task.Settings.Folder = @"\\srv\Новая";
+                job = NwcRunPlan.Build(task, common, 2026, notes).Single();
+                Check(job.Skip == null && job.NwcPath == @"\\srv\Новая\0000_01_01_S1_KJ01_01_M3.nwc", job.NwcPath);
+                Check(ExportNodes.NwfPath(task, common) == @"\\srv\Новая\Новая.nwf", ExportNodes.NwfPath(task, common));
+                Check(NwcRunPlan.IsRooted(@"C:\a") && NwcRunPlan.IsRooted(@"\\srv\a") && !NwcRunPlan.IsRooted(@"\a") && !NwcRunPlan.IsRooted("NWC"), "полный путь");
+            });
+            yield return Case("копий с Revit Server одновременно: по умолчанию 4; в прежнем файле поля нет — 4; заданное — сохраняется", () =>
+            {
+                Check(new ExportSettings().ParallelCopies == 4, "по умолчанию");
+                var dir = Path.Combine(Path.GetTempPath(), "ras-tests-" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    var store = new ExportStore(dir, "Poletayev_BIM");
+                    store.SaveCommon(new ExportSettings { ParallelCopies = 0 });   // как прежний файл: читается 0
+                    Check(store.LoadCommon().ParallelCopies == 4, "прежний файл — 4");
+                    store.SaveCommon(new ExportSettings { ParallelCopies = 6 });
+                    Check(store.LoadCommon().ParallelCopies == 6, "заданное — 6");
+                    var copy = new ExportSettings();
+                    copy.CopyFrom(new ExportSettings { ParallelCopies = 2 });
+                    Check(copy.ParallelCopies == 2, "CopyFrom");
+                }
+                finally
+                {
+                    if (Directory.Exists(dir)) Directory.Delete(dir, true);
+                }
             });
             yield return Case("удаление: подзадачи", () =>
             {

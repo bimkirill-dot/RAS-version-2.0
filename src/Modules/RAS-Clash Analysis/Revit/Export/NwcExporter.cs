@@ -24,6 +24,8 @@ namespace RASv2.ClashAnalysis.Export
         public string Step { get; set; } = "ждёт";
         public string Note { get; set; }
         public TimeSpan Time { get; set; }
+        /// <summary>Когда менялась модель (проверка до открытия) — в историю выгрузок.</summary>
+        public DateTime? ModelModified { get; set; }
     }
 
     /// <summary>Понятная ошибка модели — в журнал и окно без стека (стек — у непредвиденных, и они же — в ras.log).</summary>
@@ -59,16 +61,20 @@ namespace RASv2.ClashAnalysis.Export
         private int _dialogs;
         // Shift при «Запустить» — выгрузить и актуальные NWC
         private readonly bool _force;
+        // копий моделей Revit Server наперёд одновременно (ModelPrefetch)
+        private readonly int _parallel;
+        private ModelPrefetch _prefetch;
         // дата изменения текущей модели — в историю
         private DateTime? _modified;
 
-        public NwcExporter(UIApplication ui, ExportJournal journal, int year, bool force)
+        public NwcExporter(UIApplication ui, ExportJournal journal, int year, bool force, int parallel)
         {
             _ui = ui;
             _app = ui.Application;
             _j = journal;
             _year = year;
             _force = force;
+            _parallel = parallel;
         }
 
         /// <summary>Шапка журнала: где, кто, что и с какими настройками; план — что выгружается и что нет.</summary>
@@ -103,11 +109,50 @@ namespace RASv2.ClashAnalysis.Export
             _app.FailuresProcessing += OnFailures;
             try
             {
+                // проверка до открытия — у всех сразу: наперёд копируются только те, что будут выгружаться
+                _j.Line($"══ Проверка до открытия — {items.Count(p => p.Job.Skip == null)} {ExportTask.ModelsWord(items.Count(p => p.Job.Skip == null))}");
+                foreach (var p in items)
+                {
+                    if (cancelled()) break;
+                    _current = p;
+                    if (p.Job.Skip != null)
+                    {
+                        p.State = NwcState.Skipped;
+                        p.Step = p.Note = p.Job.Skip;
+                        _j.Line($"── {p.Job.ModelName}: пропущена — {p.Job.Skip}");
+                        changed(p);
+                        continue;
+                    }
+                    _j.Line("── " + p.Job.ModelName);
+                    try
+                    {
+                        var skip = false;
+                        Step("Проверка до открытия", () => skip = Before(p.Job));
+                        p.ModelModified = _modified;
+                        if (skip) p.State = NwcState.Skipped;
+                    }
+                    catch (Exception ex)
+                    {
+                        p.State = NwcState.Failed;
+                        p.Note = ex is NwcError ? ex.Message : "Проверка до открытия: " + ex.Message;
+                        _j.Error(p.Job.ModelName + " — " + p.Note, ex is NwcError ? null : ex);
+                    }
+                    changed(p);
+                }
+                _j.Line("");
+
+                var due = items.Where(p => p.State == NwcState.Waiting).ToList();
+                _prefetch = new ModelPrefetch(due.Select(p => p.Job), _parallel, _year, TempRoot, _j);
+                _prefetch.Start(due.FirstOrDefault()?.Job);
+                _j.Line("");
+
                 for (var i = 0; i < items.Count; i++)
                 {
                     var p = items[i];
+                    if (p.State != NwcState.Waiting) continue;
                     if (cancelled())
                     {
+                        _prefetch.Dispose();
                         p.State = NwcState.Skipped;
                         p.Step = "отменено";
                         changed(p);
@@ -127,6 +172,7 @@ namespace RASv2.ClashAnalysis.Export
             }
             finally
             {
+                _prefetch?.Dispose();
                 _ui.DialogBoxShowing -= OnDialog;
                 _app.FailuresProcessing -= OnFailures;
                 _current = null;
@@ -139,13 +185,6 @@ namespace RASv2.ClashAnalysis.Export
         private void One(NwcProgress p)
         {
             var job = p.Job;
-            if (job.Skip != null)
-            {
-                p.State = NwcState.Skipped;
-                p.Step = p.Note = job.Skip;
-                _j.Line("   пропущена: " + job.Skip);
-                return;
-            }
             p.State = NwcState.Working;
             var temp = System.IO.Path.Combine(TempRoot, DateTime.Now.ToString("HHmmss") + "_" + Guid.NewGuid().ToString("N").Substring(0, 6));
             var copy = System.IO.Path.Combine(temp, ExportNodes.FileName(job.Model.Path));
@@ -154,18 +193,30 @@ namespace RASv2.ClashAnalysis.Export
             Document doc = null;
             var entry = new NwcHistory.Entry { Nwc = job.NwcPath, At = DateTime.Now };
             var clock = Stopwatch.StartNew();
+            ModelPrefetch.Copy ahead = null;
             try
             {
-                var skip = false;
-                Step("Проверка до открытия", () => skip = Before(job));
-                if (skip)
-                {
-                    p.State = NwcState.Skipped;
-                    return;
-                }
-
                 Step("Копия модели", () =>
                 {
+                    ahead = _prefetch?.Take(job);
+                    if (ahead != null)
+                    {
+                        var wait = Stopwatch.StartNew();
+                        while (!ahead.Task.IsCompleted)
+                        {
+                            _current.Step = "Копия модели — ждём копию наперёд";
+                            _changed(_current);
+                            ahead.Task.Wait(300);
+                        }
+                        if (ahead.Error == null)
+                        {
+                            copy = ahead.File;
+                            _j.Line($"   копия наперёд: {copy}, {NwcHistory.SizeText(ahead.Size)}, копировалась {NwcHistory.Duration(ahead.Seconds)}, " +
+                                    (wait.Elapsed.TotalSeconds < 1 ? "была готова" : $"ждали {NwcHistory.Duration(wait.Elapsed.TotalSeconds)}"));
+                            return;
+                        }
+                        _j.Line("   копия наперёд не вышла (" + ahead.Error + ") — копирует Revit");
+                    }
                     Directory.CreateDirectory(temp);
                     var source = ModelPathUtils.ConvertUserVisiblePathToModelPath(job.Model.Path);
                     try
@@ -231,7 +282,7 @@ namespace RASv2.ClashAnalysis.Export
 
                 entry.Seconds = clock.Elapsed.TotalSeconds;
                 entry.Signature = NwcRunPlan.Signature(job);
-                entry.ModelModified = _modified;
+                entry.ModelModified = p.ModelModified;
                 foreach (var note in NwcHistory.Compare(_history.Last(job.NwcPath), entry)) _j.Warn(job.ModelName + ": " + note);
                 _history.Put(entry);
                 p.State = NwcState.Done;
@@ -252,6 +303,8 @@ namespace RASv2.ClashAnalysis.Export
                     try { Step("Закрытие", () => doc.Close(false)); }
                     catch (Exception ex) { _j.Error(job.ModelName + " — модель не закрылась: " + ex.Message, ex); }
                 }
+                // копия наперёд — удалить и освободить место следующей
+                if (ahead != null) _prefetch.Done(ahead);
                 try
                 {
                     if (Directory.Exists(temp)) Directory.Delete(temp, true);

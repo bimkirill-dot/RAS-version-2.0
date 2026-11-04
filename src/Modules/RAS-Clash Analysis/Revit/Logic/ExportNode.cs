@@ -81,10 +81,14 @@ namespace RASv2.ClashAnalysis.Logic
         [DataMember(Order = 18, EmitDefaultValue = false)] public ModelDateFilter Edited { get; set; }
 
         /// <summary>Задача верхнего уровня: всё своё, по умолчанию — регламент 15.10 (вида нет — из общих настроек).</summary>
+        /// <summary>
+        /// Новая задача: пути пустые (разработчик, 04.11.2026: «все пути по умолчанию пустые»; было «{Блок}\NWC», «NWF»,
+        /// «Отчеты\{Дата}») — папку задачи человек задаёт сам (обязательна), пустая папка NWC, NWF или отчётов — сама папка задачи.
+        /// </summary>
         public static NodeSettings Top() => new NodeSettings
         {
-            Models = new List<ExportModel>(), TestsFiles = new List<string>(), HideSets = new List<HideSet>(), Folder = "", NwcFolder = @"{Блок}\NWC",
-            NwfFolder = "NWF", ReportFolder = @"Отчеты\{Дата}", ReportFormats = new List<string> { "XML", "HTML" },
+            Models = new List<ExportModel>(), TestsFiles = new List<string>(), HideSets = new List<HideSet>(), Folder = "", NwcFolder = "",
+            NwfFolder = "", ReportFolder = "", ReportFormats = new List<string> { "XML", "HTML" },
         };
 
         public NodeSettings Clone() => new NodeSettings

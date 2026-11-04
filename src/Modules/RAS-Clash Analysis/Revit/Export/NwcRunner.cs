@@ -63,7 +63,7 @@ namespace RASv2.ClashAnalysis.Export
             }
             using (journal)
             {
-                var exporter = new NwcExporter(ui, journal, year, force);
+                var exporter = new NwcExporter(ui, journal, year, force, common.ParallelCopies);
                 exporter.Header(task, common, jobs, notes);
                 var items = jobs.Select(j => new NwcProgress { Job = j }).ToList();
                 var nwcFolder = items.Select(p => Path.GetDirectoryName(p.Job.NwcPath)).FirstOrDefault();
