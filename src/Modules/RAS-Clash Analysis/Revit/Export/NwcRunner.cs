@@ -12,7 +12,7 @@ using RASv2.ClashAnalysis.UI;
 namespace RASv2.ClashAnalysis.Export
 {
     /// <summary>
-    /// «Запустить» у строки «Задач выгрузки»: план (что выгружается, что нет и почему, несостыковки) → вопрос «Начать?» → журнал →
+    /// «Запустить» у строки «Задач выгрузки»: план (что выгружается, что нет и почему, несостыковки) → сразу журнал →
     /// окно хода → копия журнала в папку задачи. Журналы — %LocalAppData%\RAS_v_2.0\Logs\Выгрузка NWC (у каждого свои) и
     /// «Журналы выгрузки» в папке задачи (видны всем).
     /// </summary>
@@ -45,25 +45,8 @@ namespace RASv2.ClashAnalysis.Export
                 return;
             }
 
-            var ask = new StringBuilder();
-            ask.AppendLine($"Выгрузить NWC «{task.Name}»: {todo} {ExportTask.ModelsWord(todo)}.");
-            ask.AppendLine("Revit будет занят до конца выгрузки; модели открываются копиями, сами модели не меняются.");
-            var skipped = jobs.Where(j => j.Skip != null).ToList();
-            if (skipped.Count > 0)
-            {
-                ask.AppendLine().AppendLine($"Пропускаются ({skipped.Count}):");
-                foreach (var j in skipped.Take(8)) ask.AppendLine($"• {j.ModelName} — {j.Skip}");
-                if (skipped.Count > 8) ask.AppendLine($"• … ещё {skipped.Count - 8}");
-            }
-            if (notes.Count > 0)
-            {
-                ask.AppendLine().AppendLine("Обратите внимание:");
-                foreach (var n in notes.Take(6)) ask.AppendLine("• " + n);
-                if (notes.Count > 6) ask.AppendLine($"• … ещё {notes.Count - 6} — в журнале");
-            }
-            ask.AppendLine().Append("Начать?");
-            if (MessageBox.Show(owner, ask.ToString(), title, MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-
+            // без вопроса «Начать?» (разработчик, 04.11.2026: «после нажатия сразу выгрузка начинается»): пропуски с причинами — строками
+            // окна хода, несостыковки — в журнале
             var root = ExportNodes.Root(task);
             var journalPath = Path.Combine(JournalDir, $"{DateTime.Now:yyyy-MM-dd HH-mm-ss} {Safe(root.Name)}{(root == task ? "" : " — " + Safe(task.Name))}.log");
             ExportJournal journal;
