@@ -79,6 +79,26 @@ namespace RASv2.ClashAnalysis.Logic
             return years.SelectMany(y => hosts(y).Select(h => (h, y))).ToList();
         }
 
+        /// <summary>
+        /// Список «Сервер» (разработчик, 04.11.2026: «два разных окна — сервер и версия Revit»): серверы из настроек всех
+        /// установленных версий, без повторов, по порядку версий (этого Revit — первыми). Сервер и версия выбираются отдельно:
+        /// один сервер обычно держит службы нескольких версий (192.168.1.250 — и 2023, и 2026), а в RSN.ini версии его может не быть.
+        /// </summary>
+        public static List<string> AllHosts(IEnumerable<int> years, Func<int, List<string>> hosts = null) =>
+            Sources(years, hosts).Select(s => s.Host).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+        /// <summary>
+        /// Что выбрать при открытии окна: заданный сервер (последний или папка проекта) с этой версией; не задан — первый сервер,
+        /// который уже отвечал для этой версии (есть в кэше), иначе первый. answered(сервер, год) — отвечал ли раньше.
+        /// </summary>
+        public static string StartHost(IList<string> hosts, string wanted, int year, Func<string, int, bool> answered)
+        {
+            if (!string.IsNullOrEmpty(wanted)) return hosts.FirstOrDefault(h => Same(h, wanted)) ?? wanted;
+            return hosts.FirstOrDefault(h => answered(h, year)) ?? hosts.FirstOrDefault();
+        }
+
+        private static bool Same(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
         /// <summary>RSN.ini — по серверу в строке; пустые и комментарии («;», «#») — мимо, повторы — один раз.</summary>
         public static List<string> ParseRsn(string text) =>
             (text ?? "").Split('\r', '\n').Select(l => l.Trim())

@@ -679,6 +679,22 @@ namespace RASv2.Tests
                     if (Directory.Exists(dir)) Directory.Delete(dir, true);
                 }
             });
+            yield return Case("выбор моделей: сервер и версия отдельно — серверы всех версий без повторов; при открытии — отвечавший для версии", () =>
+            {
+                var hosts = new Dictionary<int, List<string>>
+                {
+                    [2023] = new List<string> { "10.10.1.88", "192.168.100.72", "192.168.1.250" },
+                    [2026] = new List<string> { "10.10.1.88", "26.219.177.116" },
+                };
+                var all = RevitServers.AllHosts(new[] { 2023, 2026 }, y => hosts[y]);
+                Check(string.Join(",", all) == "10.10.1.88,192.168.100.72,192.168.1.250,26.219.177.116", string.Join(",", all));
+                // Revit 2023: 10.10.1.88 первый, но службы 2023 на нём нет — берётся тот, что уже отвечал
+                Func<string, int, bool> answered = (h, y) => h == "192.168.1.250" || (h == "10.10.1.88" && y == 2026);
+                Check(RevitServers.StartHost(all, null, 2023, answered) == "192.168.1.250", "2023 — отвечавший");
+                Check(RevitServers.StartHost(all, null, 2026, answered) == "10.10.1.88", "2026 — первый отвечавший");
+                Check(RevitServers.StartHost(all, "192.168.100.72", 2023, answered) == "192.168.100.72", "последний выбранный — он");
+                Check(RevitServers.StartHost(all, null, 2024, (h, y) => false) == "10.10.1.88", "никто не отвечал — первый");
+            });
             yield return Case("удаление: подзадачи", () =>
             {
                 var roots = Sample(out var high, out _);
