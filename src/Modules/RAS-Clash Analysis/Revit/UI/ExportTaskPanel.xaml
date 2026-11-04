@@ -212,11 +212,12 @@
                         <Button x:Name="ModelsLink" Style="{StaticResource SideLink}" Click="ModelsLink_Click" />
                     </StackPanel>
                 </Grid>
-                <!-- модели: только имя и путь (разработчик, 03.11.2026: «отдел, блок — не надо»); корзина — при наведении -->
+                <!-- модели: только имя и путь (разработчик, 03.11.2026: «отдел, блок — не надо»); корзина — при наведении.
+                     Список — до правого края (места больше), строки переносятся, а не обрезаются (разработчик, 04.11.2026) -->
                 <Grid x:Name="ModelsPanel" Margin="0,0,0,8">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
                     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                <Border Grid.Column="1" Background="{DynamicResource Row}" BorderBrush="{DynamicResource Line}"
+                <Border Grid.Column="1" Grid.ColumnSpan="3" Background="{DynamicResource Row}" BorderBrush="{DynamicResource Line}"
                         BorderThickness="1" CornerRadius="4" Padding="12,4">
                     <ScrollViewer MaxHeight="320" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <ItemsControl x:Name="ModelsList">
@@ -228,14 +229,12 @@
                                             <ColumnDefinition Width="32" />
                                         </Grid.ColumnDefinitions>
                                         <StackPanel VerticalAlignment="Center" ToolTip="{Binding Path}">
-                                            <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
-                                            <!-- под именем — какой получится NWC (разработчик, 03.11.2026) и путь -->
-                                            <TextBlock Style="{StaticResource Note}" TextTrimming="CharacterEllipsis" Margin="0,1,0,0">
-                                                <Run Text="{Binding Nwc, Mode=OneWay}" />
-                                                <Run Text="{Binding DateText, Mode=OneWay}" />
-                                                <Run Text="  ·  " />
-                                                <Run Text="{Binding Folder, Mode=OneWay}" />
+                                            <TextBlock Text="{Binding DisplayName}" TextWrapping="Wrap" />
+                                            <!-- под именем — какой получится NWC (разработчик, 03.11.2026) и дата изменения, ниже — путь -->
+                                            <TextBlock Style="{StaticResource Note}" TextTrimming="None" TextWrapping="Wrap" Margin="0,1,0,0">
+                                                <Run Text="{Binding Nwc, Mode=OneWay}" /><Run Text="{Binding DateText, Mode=OneWay}" />
                                             </TextBlock>
+                                            <TextBlock Style="{StaticResource Note}" TextTrimming="None" TextWrapping="Wrap" Text="{Binding Folder}" />
                                         </StackPanel>
                                         <Button Grid.Column="1" Content="&#xE74D;" ToolTip="Убрать модель" Click="DeleteModel_Click"
                                                 Visibility="{Binding DataContext.ModelsEditVisibility, RelativeSource={RelativeSource AncestorType=UserControl}}">
@@ -264,8 +263,9 @@
                     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                     <TextBlock Style="{StaticResource Cap}" Text="" />
                     <WrapPanel Grid.Column="1" VerticalAlignment="Top">
-                        <CheckBox x:Name="EditedOn" Content="Экспортировать модели, отредактированные" VerticalAlignment="Center"
-                                  Margin="0,4,10,4" Checked="Any_Changed" Unchecked="Any_Changed" />
+                        <CheckBox x:Name="EditedOn" VerticalAlignment="Center" Margin="0,4,10,4" Checked="Any_Changed" Unchecked="Any_Changed">
+                            <TextBlock Text="Экспортировать модели, отредактированные" TextWrapping="Wrap" />
+                        </CheckBox>
                         <ComboBox x:Name="EditedMode" Width="110" MinHeight="28" VerticalContentAlignment="Center" Margin="0,0,8,0"
                                   SelectionChanged="Any_Changed">
                             <ComboBoxItem Content="после" />
