@@ -20,7 +20,8 @@ namespace RASv2.ClashAnalysis.Export
     {
         public static string JournalDir => Path.Combine(Path.GetDirectoryName(RASv2.Core.Log.FilePath), "Выгрузка NWC");
 
-        public static void Start(Window owner, UIApplication ui, ExportTask task, ExportSettings common, int year)
+        /// <param name="force">Shift при «Запустить»: выгрузить и NWC, модели которых не менялись.</param>
+        public static void Start(Window owner, UIApplication ui, ExportTask task, ExportSettings common, int year, bool force)
         {
             const string title = "Выгрузка NWC";
             if (ui == null)
@@ -62,7 +63,7 @@ namespace RASv2.ClashAnalysis.Export
             }
             using (journal)
             {
-                var exporter = new NwcExporter(ui, journal, year);
+                var exporter = new NwcExporter(ui, journal, year, force);
                 exporter.Header(task, common, jobs, notes);
                 var items = jobs.Select(j => new NwcProgress { Job = j }).ToList();
                 var nwcFolder = items.Select(p => Path.GetDirectoryName(p.Job.NwcPath)).FirstOrDefault();

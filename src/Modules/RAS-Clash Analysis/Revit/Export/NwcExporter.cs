@@ -57,13 +57,18 @@ namespace RASv2.ClashAnalysis.Export
         private Action<NwcProgress> _changed;
         private int _revitMessages;
         private int _dialogs;
+        // Shift при «Запустить» — выгрузить и актуальные NWC
+        private readonly bool _force;
+        // дата изменения текущей модели — в историю
+        private DateTime? _modified;
 
-        public NwcExporter(UIApplication ui, ExportJournal journal, int year)
+        public NwcExporter(UIApplication ui, ExportJournal journal, int year, bool force)
         {
             _ui = ui;
             _app = ui.Application;
             _j = journal;
             _year = year;
+            _force = force;
         }
 
         /// <summary>Шапка журнала: где, кто, что и с какими настройками; план — что выгружается и что нет.</summary>
@@ -74,7 +79,8 @@ namespace RASv2.ClashAnalysis.Export
                     $"плагин {typeof(NwcExporter).Assembly.GetName().Version}, .NET {Environment.Version}");
             _j.Line($"Временная папка: {TempRoot}; свободно на диске: {FreeSpace(TempRoot)}");
             _j.Line($"Удалять перед выгрузкой: связи Revit {Yes(common.RemoveRevitLinks)}, DWG и CAD {Yes(common.RemoveCad)}, облака точек {Yes(common.RemovePointClouds)}, IFC {Yes(common.RemoveIfc)} (общие; строка может задать свои)");
-            _j.Line($"NWC к выгрузке: {jobs.Count(x => x.Skip == null)}, пропускаются: {jobs.Count(x => x.Skip != null)}");
+            _j.Line($"NWC к выгрузке: {jobs.Count(x => x.Skip == null)}, пропускаются: {jobs.Count(x => x.Skip != null)}" +
+                    (_force ? "; Shift — выгружаются и актуальные NWC" : "; актуальные NWC (модель не менялась) — пропускаются"));
             var i = 0;
             foreach (var job in jobs)
             {
@@ -224,6 +230,8 @@ namespace RASv2.ClashAnalysis.Export
                 Step("Замена NWC", () => Replace(exported, job.NwcPath));
 
                 entry.Seconds = clock.Elapsed.TotalSeconds;
+                entry.Signature = NwcRunPlan.Signature(job);
+                entry.ModelModified = _modified;
                 foreach (var note in NwcHistory.Compare(_history.Last(job.NwcPath), entry)) _j.Warn(job.ModelName + ": " + note);
                 _history.Put(entry);
                 p.State = NwcState.Done;
@@ -306,10 +314,19 @@ namespace RASv2.ClashAnalysis.Export
             else
                 _j.Line("   прежней NWC нет");
 
-            var modified = ModelDate(job.Model);
+            var modified = _modified = ModelDate(job.Model);
             _j.Line(modified == null ? "   дата изменения модели не известна" : $"   модель изменена: {modified:dd.MM.yyyy HH:mm}");
-            if (exists && modified != null && nwcDate != null && nwcDate > modified)
-                _j.Line("   прежняя NWC новее модели — модель с прошлой выгрузки не менялась");
+            var last = _history.Last(job.NwcPath);
+            if (last?.Signature != null && last.Signature != NwcRunPlan.Signature(job))
+                _j.Line("   вид или параметры выгрузки поменялись с прошлого раза — NWC выгружается заново");
+            var fresh = NwcRunPlan.Fresh(job, modified, nwcDate, last);
+            if (fresh != null && !_force)
+            {
+                _current.Step = _current.Note = "NWC актуальна: " + fresh;
+                _j.Line("   пропущена — " + _current.Note);
+                return true;
+            }
+            if (fresh != null) _j.Line("   NWC актуальна, но выгружается (Shift): " + fresh);
             if (!NwcRunPlan.Due(job, modified, exists))
             {
                 _current.Step = _current.Note = $"не изменялась в срок ({modified:dd.MM.yyyy}) — NWC актуальна";

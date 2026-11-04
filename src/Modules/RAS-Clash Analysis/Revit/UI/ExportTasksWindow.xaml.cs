@@ -426,7 +426,9 @@ namespace RASv2.ClashAnalysis.UI
             if (!_roots.SelectMany(r => r.Self()).Contains(task)) return;
             try
             {
-                Export.NwcRunner.Start(this, Revit as Autodesk.Revit.UI.UIApplication, task, Settings, RevitYear);
+                // Shift — выгрузить заново и актуальные NWC (модель не менялась с прошлой выгрузки)
+                Export.NwcRunner.Start(this, Revit as Autodesk.Revit.UI.UIApplication, task, Settings, RevitYear,
+                    (Keyboard.Modifiers & ModifierKeys.Shift) != 0);
             }
             catch (System.Exception ex)
             {

@@ -99,6 +99,19 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>Выгружать ли по отбору «отредактированные»: нет NWC — всегда; нет даты модели — всегда (Passes).</summary>
         public static bool Due(NwcJob job, DateTime? modelModified, bool nwcExists) =>
             !nwcExists || job.Edited == null || !job.Edited.On || job.Edited.Passes(modelModified);
+
+        /// <summary>
+        /// NWC актуальна — модель не копировать (разработчик, 04.11.2026: «можно ли ускорить» — копия с Revit Server идёт 2–3 минуты):
+        /// NWC есть и записана позже последнего изменения модели, а вид и параметры выгрузки — те же, что в прошлый раз на этом
+        /// компьютере (нет записи — NWC выгружал другой человек: по дате). Дата модели не известна — не актуальна. Почему
+        /// актуальна — строкой; null — выгружать.
+        /// </summary>
+        public static string Fresh(NwcJob job, DateTime? modelModified, DateTime? nwcWritten, NwcHistory.Entry last)
+        {
+            if (modelModified == null || nwcWritten == null || nwcWritten <= modelModified) return null;
+            if (last != null && last.Signature != null && last.Signature != Signature(job)) return null;
+            return $"модель не менялась с прошлой выгрузки (изменена {modelModified:dd.MM.yyyy HH:mm}, NWC от {nwcWritten:dd.MM.yyyy HH:mm})";
+        }
     }
 
     /// <summary>
@@ -116,6 +129,10 @@ namespace RASv2.ClashAnalysis.Logic
             [DataMember(Order = 3)] public int Elements { get; set; }
             [DataMember(Order = 4)] public double Seconds { get; set; }
             [DataMember(Order = 5)] public DateTime At { get; set; }
+            /// <summary>Вид и параметры выгрузки этой NWC (NwcRunPlan.Signature) — поменялись, NWC выгружается заново.</summary>
+            [DataMember(Order = 6, EmitDefaultValue = false)] public string Signature { get; set; }
+            /// <summary>Когда менялась модель, из которой выгружена NWC.</summary>
+            [DataMember(Order = 7, EmitDefaultValue = false)] public DateTime? ModelModified { get; set; }
         }
 
         [DataMember(Order = 1)] public List<Entry> Entries { get; set; } = new List<Entry>();

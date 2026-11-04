@@ -695,6 +695,20 @@ namespace RASv2.Tests
                 Check(RevitServers.StartHost(all, "192.168.100.72", 2023, answered) == "192.168.100.72", "последний выбранный — он");
                 Check(RevitServers.StartHost(all, null, 2024, (h, y) => false) == "10.10.1.88", "никто не отвечал — первый");
             });
+            yield return Case("выгрузка NWC: NWC актуальна — модель не менялась после NWC, вид и параметры те же; иначе — выгружать", () =>
+            {
+                var roots = Sample(out _, out _);
+                var job = NwcRunPlan.Build(roots[0], common, 2026, new List<string>())[0];
+                var model = new DateTime(2026, 11, 4, 10, 41, 0);
+                var nwc = new DateTime(2026, 11, 4, 10, 54, 0);
+                var same = new NwcHistory.Entry { Signature = NwcRunPlan.Signature(job) };
+                Check(NwcRunPlan.Fresh(job, model, nwc, same) != null, "не менялась, настройки те же — актуальна");
+                Check(NwcRunPlan.Fresh(job, model, nwc, null) != null, "записи нет (выгружал другой) — по дате");
+                Check(NwcRunPlan.Fresh(job, nwc.AddMinutes(3), nwc, same) == null, "модель новее NWC — выгружать");
+                Check(NwcRunPlan.Fresh(job, null, nwc, same) == null, "дата модели не известна — выгружать");
+                Check(NwcRunPlan.Fresh(job, model, null, same) == null, "NWC нет — выгружать");
+                Check(NwcRunPlan.Fresh(job, model, nwc, new NwcHistory.Entry { Signature = "другой вид" }) == null, "вид или параметры поменялись — выгружать");
+            });
             yield return Case("удаление: подзадачи", () =>
             {
                 var roots = Sample(out var high, out _);
