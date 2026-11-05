@@ -80,13 +80,18 @@ namespace RASv2.ClashAnalysis.Logic
         }
 
         /// <summary>
-        /// Модель Revit Server другой версии — в этом Revit не выгружается: у каждой версии свой Revit Server, и тот же путь в службе
-        /// этой версии — другая модель или никакой.
+        /// Модель Revit Server новее этого Revit — не выгружается: старый Revit новую модель не откроет. Старее — выгружается
+        /// (разработчик, 05.11.2026: «почему я не могу из Revit 2026 выгрузить модель Revit 2023? исправляй»): копирует утилита Revit
+        /// Server её версии (у каждой версии своё хранилище — CopyModel этого Revit её не найдёт), открывая, Revit обновляет копию.
         /// </summary>
         public static string SkipReason(ExportModel model, int revitYear) =>
-            ExportNodes.IsServerPath(model.Path) && model.Year > 0 && model.Year != revitYear
-                ? $"модель Revit Server {model.Year} — выгружается в Revit {model.Year}"
+            ExportNodes.IsServerPath(model.Path) && model.Year > revitYear
+                ? $"модель Revit Server {model.Year} — новее этого Revit {revitYear}: выгружается в Revit {model.Year}"
                 : null;
+
+        /// <summary>Модель Revit Server другой версии — копирует утилита Revit Server её версии, а не CopyModel этого Revit.</summary>
+        public static bool NeedsTool(ExportModel model, int revitYear) =>
+            ExportNodes.IsServerPath(model.Path) && model.Year > 0 && model.Year != revitYear;
 
         /// <summary>
         /// «Выгружено» строки дерева (разработчик, 05.11.2026): все NWC есть — когда записана самая старая (строка свежа настолько,

@@ -618,7 +618,7 @@ namespace RASv2.Tests
                 Check(notes.Count(n => n.Contains("разные вид")) == 2 && jobs.First(j => j.ModelName == "0000_01_01_S1_KJ01_01_M3").View == "3D_Navisworks",
                       "разные настройки: " + string.Join(" | ", notes));
 
-                // запуск у подзадачи — только её модели; Revit Server другой версии — пропуск с причиной
+                // запуск у подзадачи — только её модели; Revit Server старее — выгружается (копирует утилита её версии), новее — пропуск
                 var s2 = high.Children[1];
                 s2.Settings.Models = new List<ExportModel>
                 {
@@ -628,7 +628,12 @@ namespace RASv2.Tests
                 notes.Clear();
                 jobs = NwcRunPlan.Build(s2, common, 2026, notes);
                 Check(jobs.Count == 2 && notes.Count == 0, "подзадача: " + jobs.Count);
-                Check(jobs[0].Skip == "модель Revit Server 2023 — выгружается в Revit 2023" && jobs[1].Skip == null, "версия: " + jobs[0].Skip);
+                Check(jobs[0].Skip == null && jobs[1].Skip == null, "2023 в Revit 2026 — выгружается: " + jobs[0].Skip);
+                Check(NwcRunPlan.NeedsTool(jobs[0].Model, 2026) && !NwcRunPlan.NeedsTool(jobs[1].Model, 2026), "2023 — утилитой, 2026 — CopyModel");
+                Check(!NwcRunPlan.NeedsTool(new ExportModel { Path = @"\\srv\a.rvt" }, 2026), "файл — не утилитой");
+                jobs = NwcRunPlan.Build(s2, common, 2023, notes);
+                Check(jobs[0].Skip == null && jobs[1].Skip == "модель Revit Server 2026 — новее этого Revit 2023: выгружается в Revit 2026",
+                      "2026 в Revit 2023 — пропуск: " + jobs[1].Skip);
 
                 // одна модель — в две разные папки: несостыковка
                 mid.Settings.ViewName = null;

@@ -143,7 +143,9 @@ namespace RASv2.ClashAnalysis.Export
 
                 var due = items.Where(p => p.State == NwcState.Waiting).ToList();
                 _prefetch = new ModelPrefetch(due.Select(p => p.Job), _parallel, _year, TempRoot, _j);
-                _prefetch.Start(due.FirstOrDefault()?.Job);
+                // первую Revit копирует сам — если может: модель Revit Server другой версии копирует только утилита её версии
+                var first = due.FirstOrDefault()?.Job;
+                _prefetch.Start(first != null && NwcRunPlan.NeedsTool(first.Model, _year) ? null : first);
                 _j.Line("");
 
                 for (var i = 0; i < items.Count; i++)
@@ -199,12 +201,19 @@ namespace RASv2.ClashAnalysis.Export
                 Step("Копия модели", () =>
                 {
                     ahead = _prefetch?.Take(job);
+                    var tool = NwcRunPlan.NeedsTool(job.Model, _year);
+                    // модель Revit Server другой версии: CopyModel этого Revit ищет её в хранилище своей версии — копирует утилита её версии
+                    if (ahead == null && tool && _prefetch != null)
+                    {
+                        _j.Line($"   модель Revit Server {job.Model.Year} — копирует утилита Revit Server {job.Model.Year}");
+                        ahead = _prefetch.CopyNow(job);
+                    }
                     if (ahead != null)
                     {
                         var wait = Stopwatch.StartNew();
                         while (!ahead.Task.IsCompleted)
                         {
-                            _current.Step = "Копия модели — ждём копию наперёд";
+                            _current.Step = ahead.Own ? $"Копия модели — утилитой Revit Server {job.Model.Year}" : "Копия модели — ждём копию наперёд";
                             _changed(_current);
                             ahead.Task.Wait(300);
                         }
@@ -215,6 +224,7 @@ namespace RASv2.ClashAnalysis.Export
                                     (wait.Elapsed.TotalSeconds < 1 ? "была готова" : $"ждали {NwcHistory.Duration(wait.Elapsed.TotalSeconds)}"));
                             return;
                         }
+                        if (tool) throw new NwcError($"копия утилитой Revit Server {job.Model.Year} не вышла: {ahead.Error}");
                         _j.Line("   копия наперёд не вышла (" + ahead.Error + ") — копирует Revit");
                     }
                     Directory.CreateDirectory(temp);
