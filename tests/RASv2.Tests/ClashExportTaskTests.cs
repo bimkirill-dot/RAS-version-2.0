@@ -748,6 +748,25 @@ namespace RASv2.Tests
                     if (Directory.Exists(dir)) Directory.Delete(dir, true);
                 }
             });
+            yield return Case("таблица задач: столбцы — подзадачи, модели, проверки, NWF, «↑» — от строки выше; «Выгружено» — по самой старой NWC", () =>
+            {
+                var roots = Sample(out var high, out var mid);
+                var rows = ExportNodes.Rows(roots, new HashSet<ExportTask>());
+                RowColumns C(int i) => ExportNodes.Columns(rows[i]);
+                Check(C(0).Subtasks == "2" && C(0).Models == "7" && C(0).ModelsFrom == null && C(0).Tests == "—" && C(0).Nwf == "—", "задача");
+                Check(C(1).Subtasks == "2" && C(1).ModelsFrom == "ArmanQala" && C(1).Tests == "КЖ-АР.xml" && C(1).TestsFrom == null, "критичность: модели от задачи");
+                Check(C(2).Subtasks == "—" && C(2).Models == "3" && C(2).ModelsFrom == null && C(2).TestsFrom == "Высокая критичность" && C(2).Nwf == "S1_ВК.nwf",
+                      "подзадача: свои модели, проверки от «Высокой»: " + C(2).TestsFrom);
+
+                var t1 = new DateTime(2026, 11, 4, 10, 54, 0);
+                var t2 = new DateTime(2026, 11, 3, 9, 0, 0);
+                Check(NwcRunPlan.ExportedText(new List<(string, DateTime?)> { (@"\\s\a.nwc", t1), (@"\\s\b.nwc", t2) }, out var tip) == "03.11.26 09:00" &&
+                      tip.Contains("a.nwc — 04.11.2026 10:54"), "все есть — самая старая");
+                Check(NwcRunPlan.ExportedText(new List<(string, DateTime?)> { (@"\\s\a.nwc", t1), (@"\\s\b.nwc", null) }, out tip) == "1 из 2" &&
+                      tip.Contains("b.nwc — нет"), "есть не все");
+                Check(NwcRunPlan.ExportedText(new List<(string, DateTime?)> { (@"\\s\a.nwc", null) }, out _) == "—", "нет ни одной");
+                Check(NwcRunPlan.ExportedText(new List<(string, DateTime?)>(), out tip) == "—" && tip == null, "NWC у строки нет");
+            });
             yield return Case("удаление: подзадачи", () =>
             {
                 var roots = Sample(out var high, out _);

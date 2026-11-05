@@ -3,6 +3,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using RASv2.ClashAnalysis.Logic;
 
 namespace RASv2.ClashAnalysis.UI
@@ -16,13 +17,42 @@ namespace RASv2.ClashAnalysis.UI
     /// </summary>
     public partial class ExportTasksWindow : Window
     {
+        /// <summary>
+        /// Ширины столбцов таблицы — общие у шапки и строк: узко — «Проверки» и «NWF» скрываются, совсем узко — и «Подзадачи»
+        /// (название и модели — всегда).
+        /// </summary>
+        public sealed class TableLayout : System.ComponentModel.INotifyPropertyChanged
+        {
+            public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
+            private bool _wide = true, _subtasks = true;
+            public GridLength Subtasks => _subtasks ? new GridLength(78) : new GridLength(0);
+            public GridLength Tests => _wide ? new GridLength(1.2, GridUnitType.Star) : new GridLength(0);
+            public GridLength Nwf => _wide ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+            public Visibility SubtasksVisibility => _subtasks ? Visibility.Visible : Visibility.Collapsed;
+            public Visibility WideVisibility => _wide ? Visibility.Visible : Visibility.Collapsed;
+
+            /// <summary>Ширина таблицы — какие столбцы показывать.</summary>
+            public void Fit(double width)
+            {
+                var wide = width >= 680;
+                var subtasks = width >= 520;
+                if (wide == _wide && subtasks == _subtasks) return;
+                _wide = wide;
+                _subtasks = subtasks;
+                PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(null));
+            }
+        }
+
+        private readonly TableLayout _layout = new TableLayout();
+
         /// <summary>Строка окна: задача или подзадача.</summary>
         public sealed class RowItem : System.ComponentModel.INotifyPropertyChanged
         {
             public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
 
             public TreeRow Row { get; set; }
-            public string Summary { get; set; }
+            public RowColumns Columns { get; set; }
+            public TableLayout Layout { get; set; }
             public bool Collapsed { get; set; }
             public bool HasInner { get; set; }
             private bool _selected;
@@ -45,8 +75,46 @@ namespace RASv2.ClashAnalysis.UI
             public string Name => Item.Name;
             public double NameSize => IsTop ? 14 : 13;
             public FontWeight NameWeight => Row.Level <= 1 ? FontWeights.SemiBold : FontWeights.Normal;
-            // задачи — с промежутком сверху, подзадачи — плотно, отступ уровня — 22
-            public Thickness Indent => new Thickness(Row.Level * 22, IsTop ? 6 : 0, 0, 1);
+            // задачи — с промежутком сверху, подзадачи — плотно; отступ уровня (22) — внутри столбца «Название»
+            public Thickness RowMargin => new Thickness(0, IsTop ? 6 : 0, 0, 1);
+            public Thickness Indent => new Thickness(Row.Level * 22, 0, 0, 0);
+
+            // ── столбцы: «—» и значение от строки выше — бледно, «↑» — от строки выше ──
+            private Brush Shade(bool muted) => muted ? Muted : Normal;
+            public Brush Muted { get; set; }
+            public Brush Normal { get; set; }
+            public Brush SubtasksBrush => Shade(Columns.Subtasks == "—");
+            public string ModelsText => Columns.Models + (Columns.ModelsFrom != null ? " ↑" : "");
+            public string ModelsTip => Columns.ModelsFrom != null ? "от «" + Columns.ModelsFrom + "»" : null;
+            public Brush ModelsBrush => Shade(Columns.ModelsFrom != null || Columns.Models == "0");
+            public string TestsText => Columns.Tests + (Columns.TestsFrom != null ? " ↑" : "");
+            public string TestsTip => Columns.Tests == "—" ? null : Columns.Tests + (Columns.TestsFrom != null ? "\nот «" + Columns.TestsFrom + "»" : "");
+            public Brush TestsBrush => Shade(Columns.TestsFrom != null || Columns.Tests == "—");
+            public Brush NwfBrush => Shade(Columns.Nwf == "—");
+
+            // «Выгружено» — по файлам NWC, в фоне (сетевые папки бывают медленными)
+            private string _exported = "…";
+            public string Exported
+            {
+                get => _exported;
+                set
+                {
+                    _exported = value;
+                    PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Exported)));
+                    PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(ExportedBrush)));
+                }
+            }
+            private string _exportedTip;
+            public string ExportedTip
+            {
+                get => _exportedTip;
+                set
+                {
+                    _exportedTip = value;
+                    PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(ExportedTip)));
+                }
+            }
+            public Brush ExportedBrush => Shade(_exported == "—" || _exported == "…");
             // Segoe MDL2 Assets: E70D — вниз (развёрнуто), E76C — вправо (свёрнуто)
             public string Arrow => Collapsed ? "\uE76C" : "\uE70D";
             public Visibility ArrowVisibility => HasInner ? Visibility.Visible : Visibility.Hidden;
@@ -79,6 +147,7 @@ namespace RASv2.ClashAnalysis.UI
         {
             RASv2.Core.WindowTheme.Apply(this);
             InitializeComponent();
+            TableHead.DataContext = _layout;
             _store = store;
             try
             {
@@ -111,14 +180,71 @@ namespace RASv2.ClashAnalysis.UI
         {
             // перестройка списка — с прокруткой на месте
             var offset = TreeScroll.VerticalOffset;
+            var muted = (Brush)FindResource("Muted");
+            var normal = (Brush)FindResource("Fg");
             RowsList.ItemsSource = _items = ExportNodes.Rows(_roots, _collapsed)
                 .Select(r => new RowItem
                 {
-                    Row = r, Summary = ExportNodes.Summary(r), Collapsed = _collapsed.Contains(r.Item), HasInner = r.Item.Children.Count > 0,
-                    IsSelected = r.Item == _selected,
+                    Row = r, Columns = ExportNodes.Columns(r), Collapsed = _collapsed.Contains(r.Item), HasInner = r.Item.Children.Count > 0,
+                    IsSelected = r.Item == _selected, Muted = muted, Normal = normal, Layout = _layout,
                 })
                 .ToList();
             Dispatcher.BeginInvoke(new System.Action(() => TreeScroll.ScrollToVerticalOffset(offset)), System.Windows.Threading.DispatcherPriority.Loaded);
+            LoadExported(_items);
+        }
+
+        // поколение списка: пока даты NWC искались, список перестроили — старые не нужны
+        private int _exportedGeneration;
+
+        /// <summary>
+        /// «Выгружено» — по файлам NWC строки (план выгрузки: какие NWC у неё будут), в фоне: сетевая папка может отвечать долго;
+        /// пришло — в строки (в потоке окна).
+        /// </summary>
+        private void LoadExported(List<RowItem> items)
+        {
+            var generation = ++_exportedGeneration;
+            var plans = new List<(RowItem Row, List<string> Nwcs)>();
+            foreach (var item in items)
+            {
+                try
+                {
+                    var nwcs = NwcRunPlan.Build(item.Item, Settings, RevitYear, new List<string>())
+                        .Where(j => j.Skip == null).Select(j => j.NwcPath).ToList();
+                    plans.Add((item, nwcs));
+                }
+                catch (System.Exception ex)
+                {
+                    item.Exported = "—";
+                    RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: «Выгружено» — " + item.Name, ex);
+                }
+            }
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                var times = new Dictionary<string, System.DateTime?>(System.StringComparer.OrdinalIgnoreCase);
+                foreach (var path in plans.SelectMany(p => p.Nwcs).Distinct(System.StringComparer.OrdinalIgnoreCase))
+                {
+                    if (generation != _exportedGeneration) return;
+                    try { times[path] = System.IO.File.Exists(path) ? System.IO.File.GetLastWriteTime(path) : (System.DateTime?)null; }
+                    catch (System.Exception) { times[path] = null; }
+                }
+                Dispatcher.BeginInvoke(new System.Action(() =>
+                {
+                    if (generation != _exportedGeneration) return;
+                    foreach (var p in plans)
+                    {
+                        p.Row.Exported = NwcRunPlan.ExportedText(p.Nwcs.Select(n => (n, times[n])).ToList(), out var tip);
+                        p.Row.ExportedTip = tip;
+                    }
+                }));
+            });
+        }
+
+        // шапка таблицы — над столбцами строк: появилась полоса прокрутки — у шапки справа столько же места
+        private void TreeScroll_ScrollChanged(object sender, ScrollChangedEventArgs e)
+        {
+            var bar = TreeScroll.ActualWidth - TreeScroll.ViewportWidth;
+            TableHead.Margin = new Thickness(0, 0, 4 + System.Math.Max(0, bar), 0);
+            _layout.Fit(TreeScroll.ViewportWidth);
         }
 
         /// <summary>
@@ -436,6 +562,8 @@ namespace RASv2.ClashAnalysis.UI
                 MessageBox.Show(this, "Выгрузка не запустилась: " + ex.Message + "\nПодробности — в журнале плагина.", Title,
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
+            // «Выгружено» — по новым NWC
+            Refresh();
         }
 
         // перетаскивание строки: нажали на строку (не на кнопку) и повели мышью — перенос внутри своего уровня; нажатие — выбор

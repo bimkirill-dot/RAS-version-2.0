@@ -88,6 +88,22 @@ namespace RASv2.ClashAnalysis.Logic
                 ? $"модель Revit Server {model.Year} — выгружается в Revit {model.Year}"
                 : null;
 
+        /// <summary>
+        /// «Выгружено» строки дерева (разработчик, 05.11.2026): все NWC есть — когда записана самая старая (строка свежа настолько,
+        /// насколько её самая старая NWC); есть не все — «N из M»; нет ни одной или NWC у строки нет — «—». Tip — по NWC.
+        /// </summary>
+        public static string ExportedText(IList<(string Nwc, DateTime? Time)> nwcs, out string tip)
+        {
+            tip = string.Join("\n", nwcs.Take(20).Select(n => ExportNodes.FileName(n.Nwc) + " — " +
+                                                               (n.Time == null ? "нет" : n.Time.Value.ToString("dd.MM.yyyy HH:mm"))));
+            if (nwcs.Count > 20) tip += $"\n… ещё {nwcs.Count - 20}";
+            if (nwcs.Count == 0) tip = null;
+            var have = nwcs.Count(n => n.Time != null);
+            if (have == 0) return "—";
+            if (have < nwcs.Count) return $"{have} из {nwcs.Count}";
+            return nwcs.Min(n => n.Time.Value).ToString("dd.MM.yy HH:mm");
+        }
+
         /// <summary>Полный путь: диск («C:\…») или сетевая папка («\\сервер\…»).</summary>
         public static bool IsRooted(string path)
         {

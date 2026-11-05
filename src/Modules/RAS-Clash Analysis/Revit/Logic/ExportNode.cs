@@ -185,6 +185,20 @@ namespace RASv2.ClashAnalysis.Logic
         public ExportTask Item { get; set; }
     }
 
+    /// <summary>
+    /// Столбцы строки дерева (разработчик, 05.11.2026: «список — таблицей»): подзадачи, модели, проверки, NWF; «—» — нет.
+    /// *From — значение от строки выше (её название), null — своё.
+    /// </summary>
+    public sealed class RowColumns
+    {
+        public string Subtasks { get; set; }
+        public string Models { get; set; }
+        public string ModelsFrom { get; set; }
+        public string Tests { get; set; }
+        public string TestsFrom { get; set; }
+        public string Nwf { get; set; }
+    }
+
     /// <summary>Настройка строки по дереву, блоки, где что лежит, строки окна, проверки окна настроек.</summary>
     public static class ExportNodes
     {
@@ -300,6 +314,30 @@ namespace RASv2.ClashAnalysis.Logic
         }
 
         /// <summary>Краткая информация строки: подзадачи, модели (свои или от кого), файлы проверок, NWF — если строка её собирает.</summary>
+        public static RowColumns Columns(TreeRow row)
+        {
+            var task = row.Item;
+            const string none = "—";
+            var models = ModelsOf(task) ?? new List<ExportModel>();
+            var tests = TestsOf(task) ?? new List<string>();
+            return new RowColumns
+            {
+                Subtasks = task.Children.Count > 0 ? task.Children.Count.ToString() : none,
+                Models = models.Count.ToString(),
+                ModelsFrom = InheritedFrom(task, s => s.Models),
+                Tests = tests.Count > 0 ? string.Join(", ", tests.Select(FileName)) : none,
+                TestsFrom = tests.Count > 0 ? InheritedFrom(task, s => s.TestsFiles) : null,
+                Nwf = MakesNwf(task) ? NwfNameOf(task) + ".nwf" : none,
+            };
+        }
+
+        /// <summary>Название строки выше, от которой взято значение; своё или у задачи — null.</summary>
+        private static string InheritedFrom(ExportTask task, Func<NodeSettings, object> field)
+        {
+            var owner = OwnerOf(task, field);
+            return task.Parent == null || owner == null || owner == task ? null : owner.Name;
+        }
+
         public static string Summary(TreeRow row)
         {
             var task = row.Item;
