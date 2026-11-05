@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using RASv2.ClashAnalysis.Export;
 using RASv2.ClashAnalysis.Logic;
 using RASv2.ClashAnalysis.Site.Logic;
@@ -278,6 +279,7 @@ namespace RASv2.ClashAnalysis.UI
             }
             ModelsList.ItemsSource = null;
             ModelsList.ItemsSource = sorted;
+            UpdateRemove();
             _shownRows = sorted;
             LoadModelDates(sorted);
             ModelsSummary.Text = sorted.Count + " " + ExportTask.ModelsWord(sorted.Count);
@@ -319,6 +321,34 @@ namespace RASv2.ClashAnalysis.UI
         private void DeleteModel_Click(object sender, RoutedEventArgs e)
         {
             _models.Remove((ModelRow)((FrameworkElement)sender).DataContext);
+            Regroup();
+        }
+
+        // ── пакетное удаление (разработчик, 05.11.2026): выделить (Ctrl, Shift, Ctrl+A) — «Убрать выбранные (N)» или Delete ──
+
+        private void UpdateRemove()
+        {
+            var n = _modelsOwn ? ModelsList.SelectedItems.Count : 0;
+            ModelsRemove.Content = "Убрать выбранные (" + n + ")";
+            ModelsRemove.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void ModelsList_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateRemove();
+
+        private void ModelsList_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Delete || !_modelsOwn || ModelsList.SelectedItems.Count == 0) return;
+            e.Handled = true;
+            RemoveSelected_Click(sender, e);
+        }
+
+        private void RemoveSelected_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_modelsOwn) return;
+            var selected = new HashSet<ModelRow>(ModelsList.SelectedItems.Cast<ModelRow>());
+            if (selected.Count == 0) return;
+            _models.RemoveAll(selected.Contains);
+            Info.Text = "Убрано: " + selected.Count + " " + ExportTask.ModelsWord(selected.Count) + ".";
             Regroup();
         }
 
