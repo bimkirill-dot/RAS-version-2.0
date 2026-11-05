@@ -30,8 +30,6 @@ namespace RASv2.ClashAnalysis.Export
             public double Seconds;
             public long Size;
             public Process Process;
-            // скопирована по просьбе Revit (CopyNow), а не наперёд — места в очереди не занимала
-            public bool Own;
         }
 
         private readonly List<NwcJob> _jobs;
@@ -85,26 +83,7 @@ namespace RASv2.ClashAnalysis.Export
             }
         }
 
-        /// <summary>
-        /// Скопировать сейчас (Revit дошёл до модели, копия наперёд не начата, а сам Revit её не скопирует — модель Revit Server
-        /// другой версии): утилитой её версии, в фоне — Revit ждёт Task, окно обновляется.
-        /// </summary>
-        public Copy CopyNow(NwcJob job)
-        {
-            var c = new Copy
-            {
-                Job = job, Own = true,
-                Folder = Path.Combine(_tempRoot, "own_" + DateTime.Now.ToString("HHmmss") + "_" + Guid.NewGuid().ToString("N").Substring(0, 6)),
-            };
-            lock (_lock)
-            {
-                _started[job] = c;
-                c.Task = Task.Run(() => Run(c));
-            }
-            return c;
-        }
-
-        /// <summary>Revit закончил с копией — удалить её и освободить место следующей (копии наперёд).</summary>
+        /// <summary>Revit закончил с копией наперёд — удалить её и освободить место следующей.</summary>
         public void Done(Copy c)
         {
             lock (_lock)
@@ -112,7 +91,7 @@ namespace RASv2.ClashAnalysis.Export
                 if (!_done.Add(c)) return;
             }
             Delete(c.Folder);
-            if (!c.Own) _slots.Release();
+            _slots.Release();
         }
 
         private async Task Loop()
@@ -167,7 +146,7 @@ namespace RASv2.ClashAnalysis.Export
                 }
                 Directory.CreateDirectory(c.Folder);
                 c.File = Path.Combine(c.Folder, ExportNodes.FileName(c.Job.Model.Path));
-                _j.Line($"   [{(c.Own ? "утилитой" : "наперёд")}] {name}: копия начата (утилита Revit Server {year})");
+                _j.Line($"   [наперёд] {name}: копия начата");
                 var info = new ProcessStartInfo(tool, $"createLocalRVT \"{relative}\" -s {host} -d \"{c.File}\" -o")
                 {
                     UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
@@ -211,12 +190,12 @@ namespace RASv2.ClashAnalysis.Export
                 c.Process = null;
                 if (c.Error == null)
                 {
-                    _j.Line($"   [{(c.Own ? "утилитой" : "наперёд")}] {name}: готова за {NwcHistory.Duration(c.Seconds)}, {NwcHistory.SizeText(c.Size)}, " +
+                    _j.Line($"   [наперёд] {name}: готова за {NwcHistory.Duration(c.Seconds)}, {NwcHistory.SizeText(c.Size)}, " +
                             $"{c.Size / 1048576.0 / Math.Max(1, c.Seconds):0.0} МБ/с");
-                    if (!c.Own) _j.StepDone("Копия наперёд (параллельно)", c.Seconds, true);
+                    _j.StepDone("Копия наперёд (параллельно)", c.Seconds, true);
                 }
                 else
-                    _j.Line($"   [{(c.Own ? "утилитой" : "наперёд")}] {name}: не вышла — {c.Error}");
+                    _j.Line($"   [наперёд] {name}: не вышла — {c.Error}");
             }
         }
 

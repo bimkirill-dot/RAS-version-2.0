@@ -29,13 +29,6 @@ namespace RASv2.ClashAnalysis.Export
                 MessageBox.Show(owner, "Выгрузка работает только в Revit.", title, MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
-            if (!OptionalFunctionalityUtils.IsNavisworksExporterAvailable())
-            {
-                MessageBox.Show(owner, $"В этом Revit {year} нет модуля экспорта Navisworks (NWC). Установите «Navisworks NWC Export Utility» для Revit {year} и повторите.",
-                    title, MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
             var notes = new List<string>();
             var jobs = NwcRunPlan.Build(task, common, year, notes);
             var todo = jobs.Count(j => j.Skip == null);
@@ -63,14 +56,97 @@ namespace RASv2.ClashAnalysis.Export
             }
             using (journal)
             {
+                var runTitle = NwcExporter.Title(task);
                 var exporter = new NwcExporter(ui, journal, year, force, common.ParallelCopies);
-                exporter.Header(task, common, jobs, notes);
                 var items = jobs.Select(j => new NwcProgress { Job = j }).ToList();
+
+                // модели другой версии Revit — фоновому Revit их версии (разработчик, 05.11.2026: «пусть плагин запускает Revit 2023»):
+                // Revit Server — по версии хранилища, файл — по версии самого файла; свои — здесь
+                var byYear = items.Where(p => p.Job.Skip == null)
+                    .GroupBy(p => NwcWorkers.RunYear(p.Job.Model, FileYear(p.Job.Model), year)).ToList();
+                var local = byYear.Where(g => g.Key == year).SelectMany(g => g).ToList();
+                var others = byYear.Where(g => g.Key != year).ToList();
+                foreach (var g in others.Where(g => !File.Exists(NwcRemote.RevitExe(g.Key))))
+                    foreach (var p in g)
+                        p.Job.Skip = $"модель Revit {g.Key} — на этом компьютере нет Revit {g.Key}";
+                others = others.Where(g => File.Exists(NwcRemote.RevitExe(g.Key))).ToList();
+                // своих моделей нет — экспортёр этого Revit не нужен (Revit 2026 со сломанным экспортёром отдаёт модели 2023 Revit 2023)
+                if (local.Count > 0 && !OptionalFunctionalityUtils.IsNavisworksExporterAvailable())
+                {
+                    foreach (var p in local) p.Job.Skip = $"в этом Revit {year} нет модуля экспорта Navisworks (NWC) — установите «Navisworks NWC Export Utility» для Revit {year}";
+                    journal.Error($"в Revit {year} нет модуля экспорта Navisworks (NWC): {local.Count} {ExportTask.ModelsWord(local.Count)} не выгружаются");
+                    local.Clear();
+                }
+                // шапка — после раскладки: пропуски «нет Revit …», «нет модуля экспорта» — уже в плане
+                exporter.Header(runTitle, common, jobs, notes);
+
                 var nwcFolder = items.Select(p => Path.GetDirectoryName(p.Job.NwcPath)).FirstOrDefault();
-                var window = new ExportRunWindow(task.Name, items, journalPath, nwcFolder,
-                    w => exporter.Run(items, w.Changed, () => w.Cancelled)) { Owner = owner };
+                var remoteJournals = new List<string>();
+                var window = new ExportRunWindow(task.Name, items, journalPath, nwcFolder, w =>
+                {
+                    var remotes = others.Select(g =>
+                    {
+                        var path = Path.ChangeExtension(journalPath, null) + $" — Revit {g.Key}.log";
+                        remoteJournals.Add(path);
+                        return NwcRemote.Send(g.Key, g.ToList(), runTitle, path, force, common.ParallelCopies, journal);
+                    }).Where(r => r != null).ToList();
+                    void Poll()
+                    {
+                        foreach (var r in remotes) r.Poll(w.Changed);
+                    }
+                    bool Cancelled()
+                    {
+                        if (w.Cancelled) remotes.ForEach(r => r.Cancel());
+                        return w.Cancelled;
+                    }
+                    // свои — здесь; ход фоновых — между шагами своих
+                    var mine = items.Where(p => p.Job.Skip != null || local.Contains(p)).ToList();
+                    exporter.Run(mine, p =>
+                    {
+                        Poll();
+                        w.Changed(p);
+                    }, Cancelled);
+                    // свои закончены — ждать фоновые
+                    while (remotes.Any(r => !r.Finished))
+                    {
+                        Cancelled();
+                        Poll();
+                        w.Pump(1000);
+                    }
+                }) { Owner = owner };
                 window.ShowDialog();
                 ShareJournal(journal, ExportNodes.FolderOf(root));
+                foreach (var path in remoteJournals.Where(File.Exists)) ShareFile(journal, path, ExportNodes.FolderOf(root));
+            }
+        }
+
+        /// <summary>Версия Revit файла модели (не Revit Server): из самого файла; не прочитался — 0 (выгружает этот Revit).</summary>
+        private static int FileYear(ExportModel model)
+        {
+            if (ExportNodes.IsServerPath(model.Path) || !File.Exists(model.Path)) return 0;
+            try
+            {
+                return int.TryParse(BasicFileInfo.Extract(model.Path).Format, out var y) ? y : 0;
+            }
+            catch (Exception)
+            {
+                return 0;
+            }
+        }
+
+        /// <summary>Журнал фонового Revit — тоже в «Журналы выгрузки» папки задачи.</summary>
+        private static void ShareFile(ExportJournal journal, string path, string taskFolder)
+        {
+            if (string.IsNullOrWhiteSpace(taskFolder)) return;
+            try
+            {
+                var dir = Path.Combine(taskFolder, "Журналы выгрузки");
+                Directory.CreateDirectory(dir);
+                File.Copy(path, Path.Combine(dir, Path.GetFileName(path)), true);
+            }
+            catch (Exception ex)
+            {
+                journal.Line("копия журнала фонового Revit в папку задачи не записана: " + ex.Message);
             }
         }
 

@@ -7,6 +7,7 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Events;
 using RASv2.ClashAnalysis.Bridge;
+using RASv2.ClashAnalysis.Export;
 using RASv2.ClashAnalysis.Logic;
 using RASv2.ClashAnalysis.Reports;
 using RASv2.ClashAnalysis.Showing;
@@ -41,6 +42,8 @@ namespace RASv2.ClashAnalysis
         private DateTime _statusAt;
         // «Задачи выгрузки» — общее хранилище на сервере (Data\RAS-Clash Analysis\Задачи выгрузки): видят все специалисты
         private string _exportDir;
+        // этот Revit запущен фоновым выгрузчиком NWC (модели своей версии для Revit другой версии) — иначе null
+        private NwcWorker _worker;
 
         internal void Start(IModuleContext context)
         {
@@ -84,9 +87,16 @@ namespace RASv2.ClashAnalysis
 
             var events = context.Events;
             events.Idling(OnIdling);
+            if (NwcWorker.Requested(_year))
+            {
+                _worker = new NwcWorker(_year, _log);
+                _worker.Start();
+            }
             events.DocumentOpened((s, e) => _views.Opened(e.Document));
             events.DocumentClosing((s, e) => _views.Closing(e.Document));
 
+            // фоновый выгрузчик — без моста: «Показать в Revit» с сайта не должна уйти в свёрнутый Revit без человека
+            if (_worker != null) return;
             _server = BridgeServer.Start(_site, () => _status, _queue.Ask, _log);
             if (_server != null) _log.Info("Мост запущен: 127.0.0.1:" + _server.Port + ", сайт — " + _site);
         }
@@ -183,6 +193,7 @@ namespace RASv2.ClashAnalysis
         private void OnIdling(object sender, IdlingEventArgs e)
         {
             if (!(sender is UIApplication app)) return;
+            _worker?.OnIdling(app);
             _queue.EnsureEvent();
             _views.OnIdling();
             if (DateTime.UtcNow - _statusAt < StatusEvery) return;

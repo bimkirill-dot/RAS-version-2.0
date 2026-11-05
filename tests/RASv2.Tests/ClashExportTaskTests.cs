@@ -618,7 +618,7 @@ namespace RASv2.Tests
                 Check(notes.Count(n => n.Contains("разные вид")) == 2 && jobs.First(j => j.ModelName == "0000_01_01_S1_KJ01_01_M3").View == "3D_Navisworks",
                       "разные настройки: " + string.Join(" | ", notes));
 
-                // запуск у подзадачи — только её модели; Revit Server старее — выгружается (копирует утилита её версии), новее — пропуск
+                // запуск у подзадачи — только её модели; Revit Server другой версии — фоновому Revit её версии, такого Revit нет — пропуск
                 var s2 = high.Children[1];
                 s2.Settings.Models = new List<ExportModel>
                 {
@@ -626,14 +626,14 @@ namespace RASv2.Tests
                     new ExportModel { Path = "RSN://10.10.1.88/Проект/0000_01_01_S2_AR01_01_M3.rvt", Year = 2026 },
                 };
                 notes.Clear();
-                jobs = NwcRunPlan.Build(s2, common, 2026, notes);
+                jobs = NwcRunPlan.Build(s2, common, 2026, notes, y => true);
                 Check(jobs.Count == 2 && notes.Count == 0, "подзадача: " + jobs.Count);
-                Check(jobs[0].Skip == null && jobs[1].Skip == null, "2023 в Revit 2026 — выгружается: " + jobs[0].Skip);
-                Check(NwcRunPlan.NeedsTool(jobs[0].Model, 2026) && !NwcRunPlan.NeedsTool(jobs[1].Model, 2026), "2023 — утилитой, 2026 — CopyModel");
-                Check(!NwcRunPlan.NeedsTool(new ExportModel { Path = @"\\srv\a.rvt" }, 2026), "файл — не утилитой");
-                jobs = NwcRunPlan.Build(s2, common, 2023, notes);
-                Check(jobs[0].Skip == null && jobs[1].Skip == "модель Revit Server 2026 — новее этого Revit 2023: выгружается в Revit 2026",
-                      "2026 в Revit 2023 — пропуск: " + jobs[1].Skip);
+                Check(jobs[0].Skip == null && jobs[1].Skip == null, "2023 в Revit 2026 — не пропуск: " + jobs[0].Skip);
+                Check(NwcWorkers.RunYear(jobs[0].Model, 0, 2026) == 2023 && NwcWorkers.RunYear(jobs[1].Model, 0, 2026) == 2026, "2023 — фоновому Revit 2023");
+                Check(NwcWorkers.RunYear(new ExportModel { Path = @"\\srv\a.rvt" }, 2023, 2026) == 2023 &&
+                      NwcWorkers.RunYear(new ExportModel { Path = @"\\srv\a.rvt" }, 0, 2026) == 2026, "файл — по своей версии, не прочитана — этот");
+                jobs = NwcRunPlan.Build(s2, common, 2026, notes, y => y == 2026);
+                Check(jobs[0].Skip == "модель Revit Server 2023 — на этом компьютере нет Revit 2023", "нет Revit 2023 — пропуск: " + jobs[0].Skip);
 
                 // одна модель — в две разные папки: несостыковка
                 mid.Settings.ViewName = null;
@@ -771,6 +771,40 @@ namespace RASv2.Tests
                       tip.Contains("b.nwc — нет"), "есть не все");
                 Check(NwcRunPlan.ExportedText(new List<(string, DateTime?)> { (@"\\s\a.nwc", null) }, out _) == "—", "нет ни одной");
                 Check(NwcRunPlan.ExportedText(new List<(string, DateTime?)>(), out tip) == "—" && tip == null, "NWC у строки нет");
+            });
+            yield return Case("фоновый Revit другой версии: задание туда и обратно, «жив», история из двух Revit не затирается", () =>
+            {
+                var roots = Sample(out _, out _);
+                var job = NwcRunPlan.Build(roots[0], common, 2026, new List<string>())[0];
+                job.Model.Year = 2023;
+                job.Model.NwcName = "своё";
+                job.Edited = new ModelDateFilter { On = true, Mode = ModelDateFilter.After, From = new DateTime(2026, 11, 1) };
+                var dir = Path.Combine(Path.GetTempPath(), "ras-tests-" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    var path = NwcWorkers.JobPath(dir, "2023-1");
+                    NwcWorkers.Write(path, new NwcHandoff { Id = "2023-1", Year = 2023, Title = "A › B", Jobs = { NwcWorkers.ToHandoff(job) } });
+                    var back = NwcWorkers.FromHandoff(NwcWorkers.Read<NwcHandoff>(path).Jobs.Single());
+                    Check(back.Model.Path == job.Model.Path && back.Model.Year == 2023 && back.Model.NwcName == "своё" && back.NwcPath == job.NwcPath &&
+                          back.View == job.View && back.Edited.On && back.Edited.From.Value.Day == 1 && back.Rows.SequenceEqual(job.Rows) &&
+                          NwcRunPlan.Signature(back) == NwcRunPlan.Signature(job), "задание — то же");
+                    Check(NwcWorkers.Read<NwcHandoff>(Path.Combine(dir, "нет.job")) == null, "нет файла — null");
+
+                    var now = new DateTime(2026, 11, 5, 12, 0, 0);
+                    Check(NwcWorkers.IsAlive(new WorkerAlive { ProcessId = 1, At = now.AddSeconds(-5) }, now, id => true), "отметился 5 с назад — жив");
+                    Check(!NwcWorkers.IsAlive(new WorkerAlive { ProcessId = 1, At = now.AddMinutes(-2) }, now, id => true), "давно — нет");
+                    Check(!NwcWorkers.IsAlive(new WorkerAlive { ProcessId = 1, At = now }, now, id => false), "процесса нет — нет");
+
+                    var history = Path.Combine(dir, "история.json");
+                    NwcHistory.Merge(history, new[] { new NwcHistory.Entry { Nwc = @"\\s\a.nwc", Size = 1 } });   // фоновый Revit
+                    NwcHistory.Merge(history, new[] { new NwcHistory.Entry { Nwc = @"\\s\b.nwc", Size = 2 } });   // этот
+                    var h = NwcHistory.Load(history);
+                    Check(h.Entries.Count == 2 && h.Last(@"\\s\a.nwc").Size == 1, "записи обоих Revit — целы");
+                }
+                finally
+                {
+                    if (Directory.Exists(dir)) Directory.Delete(dir, true);
+                }
             });
             yield return Case("удаление: подзадачи", () =>
             {

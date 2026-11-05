@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
 using RASv2.ClashAnalysis.Export;
@@ -105,6 +106,18 @@ namespace RASv2.ClashAnalysis.UI
             if (row != null && p.State == NwcState.Working && RowsList.ItemContainerGenerator.ContainerFromItem(row) is FrameworkElement item)
                 item.BringIntoView();
             Dispatcher.Invoke(DispatcherPriority.Background, new Action(() => { }));
+        }
+
+        /// <summary>Подождать, не замирая: окно перерисовывается и принимает «Отмену» (пока ждём фоновый Revit).</summary>
+        public void Pump(int milliseconds)
+        {
+            var clock = Stopwatch.StartNew();
+            while (clock.ElapsedMilliseconds < milliseconds)
+            {
+                Dispatcher.Invoke(DispatcherPriority.Background, new Action(() => { }));
+                Thread.Sleep(30);
+            }
+            Header();
         }
 
         private void Header()

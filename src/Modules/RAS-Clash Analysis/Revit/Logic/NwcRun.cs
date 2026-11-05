@@ -33,7 +33,8 @@ namespace RASv2.ClashAnalysis.Logic
     /// </summary>
     public static class NwcRunPlan
     {
-        public static List<NwcJob> Build(ExportTask start, ExportSettings common, int revitYear, List<string> notes)
+        /// <param name="installed">Установлен ли Revit этой версии (для проверок); null — по Revit.exe в Program Files.</param>
+        public static List<NwcJob> Build(ExportTask start, ExportSettings common, int revitYear, List<string> notes, Func<int, bool> installed = null)
         {
             var jobs = new List<NwcJob>();
             var byPath = new Dictionary<string, NwcJob>(StringComparer.OrdinalIgnoreCase);
@@ -67,7 +68,7 @@ namespace RASv2.ClashAnalysis.Logic
                     if (!leaf)
                         notes.Add($"Модель «{job.ModelName}» есть у «{row.Name}», но ни у одной подзадачи — выгружается по настройкам «{row.Name}».");
                     job.Rows.Add(row.Name);
-                    job.Skip = SkipReason(model, revitYear) ??
+                    job.Skip = SkipReason(model, revitYear, installed) ??
                                (IsRooted(job.NwcPath) ? null : $"не задана папка: ни «Папки задачи», ни полного пути в «Папке для NWC» у «{row.Name}»");
                     byPath[job.NwcPath] = job;
                     jobs.Add(job);
@@ -80,18 +81,16 @@ namespace RASv2.ClashAnalysis.Logic
         }
 
         /// <summary>
-        /// Модель Revit Server новее этого Revit — не выгружается: старый Revit новую модель не откроет. Старее — выгружается
-        /// (разработчик, 05.11.2026: «почему я не могу из Revit 2026 выгрузить модель Revit 2023? исправляй»): копирует утилита Revit
-        /// Server её версии (у каждой версии своё хранилище — CopyModel этого Revit её не найдёт), открывая, Revit обновляет копию.
+        /// Модель Revit Server другой версии выгружает фоновый Revit её версии (разработчик, 05.11.2026: «давай без обновления» — Revit
+        /// новее открыл бы её, только обновляя; «пусть плагин запускает Revit 2023»). Такого Revit на компьютере нет — пропуск.
         /// </summary>
-        public static string SkipReason(ExportModel model, int revitYear) =>
-            ExportNodes.IsServerPath(model.Path) && model.Year > revitYear
-                ? $"модель Revit Server {model.Year} — новее этого Revit {revitYear}: выгружается в Revit {model.Year}"
-                : null;
-
-        /// <summary>Модель Revit Server другой версии — копирует утилита Revit Server её версии, а не CopyModel этого Revit.</summary>
-        public static bool NeedsTool(ExportModel model, int revitYear) =>
-            ExportNodes.IsServerPath(model.Path) && model.Year > 0 && model.Year != revitYear;
+        public static string SkipReason(ExportModel model, int revitYear, Func<int, bool> installed = null)
+        {
+            if (!ExportNodes.IsServerPath(model.Path) || model.Year <= 0 || model.Year == revitYear) return null;
+            installed = installed ?? (y => File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                "Autodesk", "Revit " + y, "Revit.exe")));
+            return installed(model.Year) ? null : $"модель Revit Server {model.Year} — на этом компьютере нет Revit {model.Year}";
+        }
 
         /// <summary>
         /// «Выгружено» строки дерева (разработчик, 05.11.2026): все NWC есть — когда записана самая старая (строка свежа настолько,
@@ -190,6 +189,17 @@ namespace RASv2.ClashAnalysis.Logic
             return notes;
         }
 
+        /// <summary>
+        /// Записать свои записи поверх того, что сейчас в файле (фоновый Revit другой версии пишет туда же — не затереть его
+        /// записи прочитанным в начале).
+        /// </summary>
+        public static void Merge(string path, IEnumerable<Entry> entries)
+        {
+            var current = Load(path);
+            foreach (var e in entries) current.Put(e);
+            current.Save(path);
+        }
+
         public static NwcHistory Load(string path)
         {
             try
@@ -207,7 +217,7 @@ namespace RASv2.ClashAnalysis.Logic
         public void Save(string path)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path));
-            var tmp = path + ".tmp";
+            var tmp = path + "." + Guid.NewGuid().ToString("N").Substring(0, 6) + ".tmp";
             using (var s = File.Create(tmp))
                 new DataContractJsonSerializer(typeof(NwcHistory)).WriteObject(s, this);
             if (File.Exists(path)) File.Delete(path);

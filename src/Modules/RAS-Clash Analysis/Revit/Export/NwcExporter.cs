@@ -55,6 +55,8 @@ namespace RASv2.ClashAnalysis.Export
         private readonly ExportJournal _j;
         private readonly int _year;
         private readonly NwcHistory _history = NwcHistory.Load(HistoryPath);
+        // записи этой выгрузки — в файл истории слиянием: фоновый Revit другой версии пишет туда же
+        private readonly List<NwcHistory.Entry> _written = new List<NwcHistory.Entry>();
         private NwcProgress _current;
         private Action<NwcProgress> _changed;
         private int _revitMessages;
@@ -78,9 +80,9 @@ namespace RASv2.ClashAnalysis.Export
         }
 
         /// <summary>Шапка журнала: где, кто, что и с какими настройками; план — что выгружается и что нет.</summary>
-        public void Header(ExportTask start, ExportSettings common, List<NwcJob> jobs, List<string> notes)
+        public void Header(string title, ExportSettings common, List<NwcJob> jobs, List<string> notes)
         {
-            _j.Line($"Выгрузка NWC — «{string.Join(" › ", TreePath(start))}»");
+            _j.Line($"Выгрузка NWC — «{title}»");
             _j.Line($"Revit {_app.VersionNumber} ({_app.SubVersionNumber}, сборка {_app.VersionBuild}), {Environment.UserName} на {Environment.MachineName}, " +
                     $"плагин {typeof(NwcExporter).Assembly.GetName().Version}, .NET {Environment.Version}");
             _j.Line($"Временная папка: {TempRoot}; свободно на диске: {FreeSpace(TempRoot)}");
@@ -143,9 +145,7 @@ namespace RASv2.ClashAnalysis.Export
 
                 var due = items.Where(p => p.State == NwcState.Waiting).ToList();
                 _prefetch = new ModelPrefetch(due.Select(p => p.Job), _parallel, _year, TempRoot, _j);
-                // первую Revit копирует сам — если может: модель Revit Server другой версии копирует только утилита её версии
-                var first = due.FirstOrDefault()?.Job;
-                _prefetch.Start(first != null && NwcRunPlan.NeedsTool(first.Model, _year) ? null : first);
+                _prefetch.Start(due.FirstOrDefault()?.Job);
                 _j.Line("");
 
                 for (var i = 0; i < items.Count; i++)
@@ -178,7 +178,7 @@ namespace RASv2.ClashAnalysis.Export
                 _ui.DialogBoxShowing -= OnDialog;
                 _app.FailuresProcessing -= OnFailures;
                 _current = null;
-                try { _history.Save(HistoryPath); }
+                try { NwcHistory.Merge(HistoryPath, _written); }
                 catch (Exception ex) { _j.Line("история выгрузок не записана: " + ex.Message); }
                 Summary(items);
             }
@@ -201,19 +201,12 @@ namespace RASv2.ClashAnalysis.Export
                 Step("Копия модели", () =>
                 {
                     ahead = _prefetch?.Take(job);
-                    var tool = NwcRunPlan.NeedsTool(job.Model, _year);
-                    // модель Revit Server другой версии: CopyModel этого Revit ищет её в хранилище своей версии — копирует утилита её версии
-                    if (ahead == null && tool && _prefetch != null)
-                    {
-                        _j.Line($"   модель Revit Server {job.Model.Year} — копирует утилита Revit Server {job.Model.Year}");
-                        ahead = _prefetch.CopyNow(job);
-                    }
                     if (ahead != null)
                     {
                         var wait = Stopwatch.StartNew();
                         while (!ahead.Task.IsCompleted)
                         {
-                            _current.Step = ahead.Own ? $"Копия модели — утилитой Revit Server {job.Model.Year}" : "Копия модели — ждём копию наперёд";
+                            _current.Step = "Копия модели — ждём копию наперёд";
                             _changed(_current);
                             ahead.Task.Wait(300);
                         }
@@ -224,7 +217,6 @@ namespace RASv2.ClashAnalysis.Export
                                     (wait.Elapsed.TotalSeconds < 1 ? "была готова" : $"ждали {NwcHistory.Duration(wait.Elapsed.TotalSeconds)}"));
                             return;
                         }
-                        if (tool) throw new NwcError($"копия утилитой Revit Server {job.Model.Year} не вышла: {ahead.Error}");
                         _j.Line("   копия наперёд не вышла (" + ahead.Error + ") — копирует Revit");
                     }
                     Directory.CreateDirectory(temp);
@@ -295,6 +287,7 @@ namespace RASv2.ClashAnalysis.Export
                 entry.ModelModified = p.ModelModified;
                 foreach (var note in NwcHistory.Compare(_history.Last(job.NwcPath), entry)) _j.Warn(job.ModelName + ": " + note);
                 _history.Put(entry);
+                _written.Add(entry);
                 p.State = NwcState.Done;
                 p.Step = "выгружена";
                 p.Note = NwcHistory.SizeText(entry.Size);
@@ -711,6 +704,9 @@ namespace RASv2.ClashAnalysis.Export
 
         public static string StateText(NwcState s) =>
             s == NwcState.Done ? "выгружена" : s == NwcState.Failed ? "ошибка" : s == NwcState.Skipped ? "пропущена" : s == NwcState.Working ? "идёт" : "ждёт";
+
+        /// <summary>Название запуска: строки дерева от задачи до запущенной — «Арман Кала 7 оч. › S1_КЖ».</summary>
+        public static string Title(ExportTask task) => string.Join(" › ", TreePath(task));
 
         private static IEnumerable<string> TreePath(ExportTask task)
         {

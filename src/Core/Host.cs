@@ -117,6 +117,8 @@ namespace RASv2.Core
                 return;
             }
             if (!WhatsNew.ShouldShow(BuildId, Channel, notes, seen)) return;
+            // Revit, запущенный плагином фоновым выгрузчиком NWC (RAS-Clash Analysis, RAS_NWC_WORKER): окно ждало бы человека
+            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("RAS_NWC_WORKER"))) return;
             _events.Idling.Add(Tag, (s, e) =>
             {
                 if (_whatsNewShown) return;
