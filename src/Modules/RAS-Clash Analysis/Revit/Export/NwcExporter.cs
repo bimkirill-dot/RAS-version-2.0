@@ -273,6 +273,8 @@ namespace RASv2.ClashAnalysis.Export
                 var exported = System.IO.Path.Combine(temp, nwcName + ".nwc");
                 Step("Выгрузка NWC", () =>
                 {
+                    // с копией наперёд своя временная папка не создавалась (копия — в папке pre_…), а NWC пишется сюда (06.11.2026)
+                    Directory.CreateDirectory(temp);
                     doc.Export(temp, nwcName, Options(job.Export.Nwc, view));
                     if (!File.Exists(exported)) throw new NwcError("Revit не создал NWC (выгрузка прошла без ошибки, а файла нет)");
                     entry.Size = new FileInfo(exported).Length;
