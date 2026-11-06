@@ -763,6 +763,18 @@ namespace RASv2.Tests
                 Check(C(2).Subtasks == "—" && C(2).Models == "3" && C(2).ModelsFrom == null && C(2).TestsFrom == "Высокая критичность" && C(2).Nwf == "S1_ВК.nwf",
                       "подзадача: свои модели, проверки от «Высокой»: " + C(2).TestsFrom);
 
+                // галочка NWF в списке — та же «Формировать NWF», с проверками панели (06.11.2026)
+                Check(C(2).NwfOn && C(2).NwfToggle && !C(0).NwfToggle && !C(1).NwfToggle, "галочка — только у строки без подзадач");
+                var s1 = high.Children[0];
+                var s2 = high.Children[1];
+                Check(ExportNodes.SetNwf(s1, false, common) == null && !s1.Settings.MakeNwf && C(2).Nwf == "—" && !C(2).NwfOn, "снята");
+                Check(ExportNodes.SetNwf(high, true, common) != null && !high.Settings.MakeNwf, "строка с подзадачами — нельзя");
+                s2.Settings.NwfName = "S1_ВК";
+                var clash = ExportNodes.SetNwf(s1, true, common);
+                Check(clash != null && clash.Contains("и у") && !s1.Settings.MakeNwf, "та же NWF у другой строки — нельзя, как было: " + clash);
+                s2.Settings.NwfName = null;
+                Check(ExportNodes.SetNwf(s1, true, common) == null && s1.Settings.MakeNwf && C(2).Nwf == "S1_ВК.nwf", "поставлена");
+
                 var t1 = new DateTime(2026, 11, 4, 10, 54, 0);
                 var t2 = new DateTime(2026, 11, 3, 9, 0, 0);
                 Check(NwcRunPlan.ExportedText(new List<(string, DateTime?)> { (@"\\s\a.nwc", t1), (@"\\s\b.nwc", t2) }, out var tip) == "03.11.26 09:00" &&

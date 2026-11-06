@@ -150,8 +150,13 @@
                                                ToolTip="{Binding ModelsTip}" />
                                     <TextBlock Grid.Column="3" Style="{StaticResource Cell}" Text="{Binding TestsText}" Foreground="{Binding TestsBrush}"
                                                ToolTip="{Binding TestsTip}" Visibility="{Binding Layout.WideVisibility}" />
-                                    <TextBlock Grid.Column="4" Style="{StaticResource Cell}" Text="{Binding Columns.Nwf}" Foreground="{Binding NwfBrush}"
-                                               ToolTip="{Binding Columns.Nwf}" Visibility="{Binding Layout.WideVisibility}" />
+                                    <!-- галочка «Формировать NWF» — прямо в списке (разработчик, 06.11.2026); у строки с подзадачами — «—» -->
+                                    <DockPanel Grid.Column="4" VerticalAlignment="Center" Visibility="{Binding Layout.WideVisibility}">
+                                        <CheckBox DockPanel.Dock="Left" Margin="0,0,6,0" IsChecked="{Binding Columns.NwfOn, Mode=OneWay}"
+                                                  Visibility="{Binding NwfToggleVisibility}" Click="Nwf_Click" ToolTip="Формировать NWF" />
+                                        <TextBlock Style="{StaticResource Cell}" Text="{Binding NwfText}" Foreground="{Binding NwfBrush}"
+                                                   ToolTip="{Binding NwfTip}" />
+                                    </DockPanel>
                                     <TextBlock Grid.Column="5" Style="{StaticResource Cell}" Text="{Binding Exported}" Foreground="{Binding ExportedBrush}"
                                                ToolTip="{Binding ExportedTip}" />
                                     <!-- фон — как у строки под мышью и выбранной: кнопки видны только у них -->

@@ -197,6 +197,9 @@ namespace RASv2.ClashAnalysis.Logic
         public string Tests { get; set; }
         public string TestsFrom { get; set; }
         public string Nwf { get; set; }
+        /// <summary>Галочка «Формировать NWF» в списке: стоит / её можно ставить (строка без подзадач).</summary>
+        public bool NwfOn { get; set; }
+        public bool NwfToggle { get; set; }
     }
 
     /// <summary>Настройка строки по дереву, блоки, где что лежит, строки окна, проверки окна настроек.</summary>
@@ -328,7 +331,23 @@ namespace RASv2.ClashAnalysis.Logic
                 Tests = tests.Count > 0 ? string.Join(", ", tests.Select(FileName)) : none,
                 TestsFrom = tests.Count > 0 ? InheritedFrom(task, s => s.TestsFiles) : null,
                 Nwf = MakesNwf(task) ? NwfNameOf(task) + ".nwf" : none,
+                NwfOn = MakesNwf(task),
+                NwfToggle = task.Children.Count == 0,
             };
+        }
+
+        /// <summary>
+        /// Галочка NWF прямо в списке задач (разработчик, 06.11.2026: «быстрый выбор той же настройки, что в меню задачи») — та же
+        /// «Формировать NWF», с теми же проверками, что при «Сохранить» в панели. Ошибка — галочка как была, текст ошибки; null — поставлена.
+        /// </summary>
+        public static string SetNwf(ExportTask task, bool on, ExportSettings common)
+        {
+            if (task.Children.Count > 0) return "NWF собирает строка без подзадач.";
+            var was = task.Settings.MakeNwf;
+            task.Settings.MakeNwf = on;
+            var error = on ? CheckNwfName(NwfNameOf(task)) ?? CheckNwf(Root(task), common) : null;
+            if (error != null) task.Settings.MakeNwf = was;
+            return error;
         }
 
         /// <summary>Название строки выше, от которой взято значение; своё или у задачи — null.</summary>

@@ -91,6 +91,10 @@ namespace RASv2.ClashAnalysis.UI
             public string TestsTip => Columns.Tests == "—" ? null : Columns.Tests + (Columns.TestsFrom != null ? "\nот «" + Columns.TestsFrom + "»" : "");
             public Brush TestsBrush => Shade(Columns.TestsFrom != null || Columns.Tests == "—");
             public Brush NwfBrush => Shade(Columns.Nwf == "—");
+            // строка без подзадач — галочка (снята — без текста), с подзадачами — «—»
+            public Visibility NwfToggleVisibility => Columns.NwfToggle ? Visibility.Visible : Visibility.Collapsed;
+            public string NwfText => !Columns.NwfToggle ? "—" : Columns.NwfOn ? Columns.Nwf : "";
+            public string NwfTip => Columns.NwfOn ? Columns.Nwf : null;
 
             // «Выгружено» — по файлам NWC, в фоне (сетевые папки бывают медленными)
             private string _exported = "…";
@@ -566,6 +570,34 @@ namespace RASv2.ClashAnalysis.UI
             Refresh();
         }
 
+        /// <summary>
+        /// Галочка NWF в списке (разработчик, 06.11.2026: «быстрый выбор той же настройки, что в меню задачи») — та же «Формировать NWF»,
+        /// с проверками панели, сразу на сервер. Строка открыта в панели с правками или есть новая несохранённая — сначала вопрос:
+        /// иначе «Сохранить» панели вернуло бы прежнюю галочку, а новая строка ушла бы на сервер без названия.
+        /// </summary>
+        private void Nwf_Click(object sender, RoutedEventArgs e)
+        {
+            var task = RowOf(sender).Item;
+            var on = ((CheckBox)sender).IsChecked == true;
+            if ((task == _selected || _pending != null) && !Leave() || !_roots.SelectMany(r => r.Self()).Contains(task))
+            {
+                Refresh();
+                return;
+            }
+            var error = ExportNodes.SetNwf(task, on, Settings);
+            if (error != null)
+            {
+                MessageBox.Show(this, error, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+                Refresh();
+                return;
+            }
+            // не записалась на сервер — как было
+            if (!SaveTop(ExportNodes.Root(task))) task.Settings.MakeNwf = !on;
+            Refresh();
+            // открытая в панели строка — заново, с новой галочкой (правок в ней уже нет — спросили выше)
+            if (task == _selected) Show(_roots.SelectMany(r => r.Self()).Contains(task) ? task : null);
+        }
+
         // перетаскивание строки: нажали на строку (не на кнопку) и повели мышью — перенос внутри своего уровня; нажатие — выбор
         private void Row_MouseDown(object sender, MouseButtonEventArgs e)
         {
@@ -626,7 +658,8 @@ namespace RASv2.ClashAnalysis.UI
         {
             // Run и прочие элементы текста — не в дереве отображения: их родителя — по логическому дереву
             for (; d != null; d = d is System.Windows.Media.Visual ? System.Windows.Media.VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d))
-                if (d is Button) return true;
+                // и галочка NWF: щелчок по ней — не выбор строки и не перетаскивание
+                if (d is System.Windows.Controls.Primitives.ButtonBase) return true;
             return false;
         }
     }
