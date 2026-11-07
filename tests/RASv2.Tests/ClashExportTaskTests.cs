@@ -914,6 +914,20 @@ namespace RASv2.Tests
                     run);
                 Check(still.Errors.Count == 1 && still.Errors[0].Path == @"\\s\b.nwc", "не повторяли — ошибка остаётся");
 
+                // по функциям: значок у галочки NWC и у галочки NWF — каждый о своём (07.11.2026)
+                Check(RunStates.MarkOf(run, "NWC") == StepMark.Errors && RunStates.MarkOf(run, "NWF") == StepMark.Ok, "NWC — ошибка (B), NWF — собрана");
+                Check(RunStates.StepOf(run, "NWC").Done == 1 && RunStates.StepOf(run, "NWC").Skipped == 1 && RunStates.StepOf(run, "NWF").Done == 1, "счёт по функциям");
+                Check(RunStates.MarkOf(null, "NWC") == StepMark.None && RunStates.MarkOf(new RowRun(), "NWF") == StepMark.None, "не запускали — без значка");
+                var nwcTip = RunStates.StepTip(run, "NWC", new List<string> { "KJ" }, false);
+                var nwfTip = RunStates.StepTip(run, "NWF", new List<string>(), false);
+                Check(nwcTip.Contains("B — NWC занята") && nwcTip.Contains("↻") && nwcTip.Contains("Модели изменились") && !nwfTip.Contains("B —") &&
+                      nwfTip.Contains("собрано 1"), "подсказки — каждая о своей функции");
+                var legacy = new RowRun { Done = 3, Errors = { new RunIssue { Name = "S1.nwf", Path = @"\\s\S1.nwf", Note = "занята" } }, Steps = new List<StepRun>() };
+                Check(RunStates.MarkOf(legacy, "NWC") == StepMark.Ok && RunStates.MarkOf(legacy, "NWF") == StepMark.Errors, "запуск до 07.11 — по ошибкам");
+                var nwfRetry = RunStates.Record(s1, paths, new List<(string, string, ItemResult, string)> { (@"\\s\S1.nwf", "S1.nwf", ItemResult.Done, null) },
+                    at.AddHours(2), 5, null, null, new HashSet<string> { @"\\s\S1.nwf" }, run);
+                Check(RunStates.MarkOf(nwfRetry, "NWC") == StepMark.Errors && RunStates.StepOf(nwfRetry, "NWF").Done == 2, "повтор NWF — ошибка NWC остаётся");
+
                 var tip = RunStates.Tip(run, new List<string> { "KJ" }, true);
                 Check(tip.Contains("с ошибкой 1") && tip.Contains("B — NWC занята") && tip.Contains("Изменились после выгрузки") && tip.Contains("Revit Server") &&
                       tip.Contains("Щелчок — журнал"), tip);

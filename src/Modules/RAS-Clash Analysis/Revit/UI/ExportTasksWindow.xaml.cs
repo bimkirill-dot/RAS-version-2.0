@@ -136,21 +136,30 @@ namespace RASv2.ClashAnalysis.UI
 
             private void Notify() => PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(null));
 
+            // значки — рядом с галочкой своей функции (разработчик, 07.11.2026: «статус чего — NWC, NWF, отчётов?»); выключена — без
+            // значка; идёт выгрузка — «Идёт выгрузка» в «Запуске», значков нет
             private bool Marks => _live == null;
-            public Visibility LiveVisibility => _live != null ? Visibility.Visible : Visibility.Collapsed;
-            public string LiveText => _live;
-            public Brush LiveBrush => _live == "Идёт выгрузка" || _live == "Остановка…" ? Accent : _live == "С ошибками" ? Error : _live == "Готово" ? Normal : Muted;
+            private StepMark Mark(string kind) => RunStates.MarkOf(_run, kind);
+            private static Visibility Show(bool on) => on ? Visibility.Visible : Visibility.Collapsed;
+            private bool NwcOn => Columns.NwcState != false;
+            private bool NwfOn => Columns.NwfState != false;
+            public Visibility NwcOkVisibility => Show(Marks && NwcOn && Mark("NWC") == StepMark.Ok);
+            public Visibility NwcErrorVisibility => Show(Marks && NwcOn && Mark("NWC") == StepMark.Errors);
+            public Visibility NwcChangedVisibility => Show(Marks && NwcOn && _changed.Count > 0);
+            public Visibility NwcUnknownVisibility => Show(Marks && NwcOn && _unknown);
+            public Visibility NwcRetryVisibility => Show(Marks && NwcOn && !_busy && Mark("NWC") == StepMark.Errors);
+            public string NwcStatusTip => RunStates.StepTip(_run, "NWC", _changed, _unknown);
+            public Visibility NwfOkVisibility => Show(Marks && NwfOn && Mark("NWF") == StepMark.Ok);
+            public Visibility NwfErrorVisibility => Show(Marks && NwfOn && Mark("NWF") == StepMark.Errors);
+            public Visibility NwfRetryVisibility => Show(Marks && NwfOn && !_busy && Mark("NWF") == StepMark.Errors);
+            public string NwfStatusTip => RunStates.StepTip(_run, "NWF", new List<string>(), false);
+            // «Запуск»: идёт выгрузка — её ход («Ждёт», «Идёт выгрузка», «В очереди»…), иначе — когда запускали
+            public string RunAt => _live ?? (_run == null ? "" : _run.At.ToString("dd.MM HH:mm"));
+            public string RunAtTip => _live != null || _run == null ? null : $"Запускал {_run.By}, {_run.At:dd.MM.yyyy HH:mm}";
+            public Brush RunAtBrush => _live == null ? Normal : _live == "Идёт выгрузка" || _live == "Остановка…" ? Accent : _live == "С ошибками" ? Error
+                : _live == "Готово" ? Normal : Muted;
             public Brush Accent { get; set; }
             public Brush Error { get; set; }
-            public Visibility MarksVisibility => Marks ? Visibility.Visible : Visibility.Collapsed;
-            public Visibility OkVisibility => Marks && _run != null && _run.Errors.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-            public Visibility ErrorVisibility => Marks && _run != null && _run.Errors.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-            public Visibility ChangedVisibility => Marks && _changed.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-            public Visibility UnknownVisibility => Marks && _unknown ? Visibility.Visible : Visibility.Collapsed;
-            public Visibility RetryVisibility => Marks && !_busy && _run != null && _run.Errors.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-            public string StatusTip => RunStates.Tip(_run, _changed, _unknown);
-            public string RunAt => _run == null ? "" : _run.At.ToString("dd.MM HH:mm");
-            public string RunAtTip => _run == null ? null : $"Запускал {_run.By}, {_run.At:dd.MM.yyyy HH:mm}";
             public string TimeText => _liveTime ?? _estimate;
             public string TimeTip => _liveTime != null ? "Идёт" : _estimateTip;
             public Brush TimeBrush => Shade(_liveTime == null);

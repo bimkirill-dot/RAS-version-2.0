@@ -184,15 +184,20 @@ namespace RASv2.ClashAnalysis.UI
             RunQueue();
         }
 
-        /// <summary>«Повторить» у красного треугольника: заново — только NWC и NWF с ошибками (и NWF, где они).</summary>
+        /// <summary>
+        /// ↻ у красного треугольника функции: заново — только её ошибки (NWC — эти NWC и NWF, в которые они входят; NWF — только
+        /// NWF с ошибками). Tag кнопки — «NWC» / «NWF».
+        /// </summary>
         private void Retry_Click(object sender, RoutedEventArgs e)
         {
             var row = RowOf(sender);
-            if (row.LastRun == null || row.LastRun.Errors.Count == 0) return;
+            var kind = (string)((FrameworkElement)sender).Tag;
+            var errors = row.LastRun?.Errors.Where(x => RunStates.KindOf(x.Path) == kind).ToList();
+            if (errors == null || errors.Count == 0) return;
             var request = new RunRequest
             {
                 Task = row.Item, Previous = row.LastRun,
-                Only = new HashSet<string>(row.LastRun.Errors.Select(x => x.Path), StringComparer.OrdinalIgnoreCase),
+                Only = new HashSet<string>(errors.Select(x => x.Path), StringComparer.OrdinalIgnoreCase),
             };
             if (_running)
             {
@@ -292,6 +297,8 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Итог — каждой строке ветки (и в файл задачи — его видят все); время NWC и NWF — для «Времени».</summary>
         private void Finish(RunRequest request, RunOutcome outcome)
         {
+            var itemTimes = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+            foreach (var p in outcome.Items.Where(p => p.Time > TimeSpan.Zero)) itemTimes[p.Job.NwcPath] = p.Time.TotalSeconds;
             var results = outcome.Items.Select(p => (p.Job.NwcPath, p.Job.ModelName,
                 p.State == NwcState.Done ? ItemResult.Done : p.State == NwcState.Failed ? ItemResult.Failed : ItemResult.Skipped,
                 p.Note ?? p.Job.Skip)).ToList();
@@ -305,7 +312,7 @@ namespace RASv2.ClashAnalysis.UI
                     : live.Start != null ? ((live.End ?? now) - live.Start.Value).TotalSeconds : 0;
                 var previous = request.Only != null ? (row == request.Task ? request.Previous : FindRun(row)) : null;
                 records.Add(RunStates.Record(row, live.Paths, results, outcome.Started, seconds, outcome.Journal,
-                    row == request.Task ? outcome.Notes : null, request.Only, previous));
+                    row == request.Task ? outcome.Notes : null, request.Only, previous, itemTimes));
             }
             var times = outcome.Items.Where(p => p.State == NwcState.Done && p.Time > TimeSpan.Zero)
                 .Select(p => new ItemTime { Path = p.Job.NwcPath, Seconds = p.Time.TotalSeconds, At = now }).ToList();

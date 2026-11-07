@@ -21,6 +21,21 @@ namespace RASv2.ClashAnalysis.Logic
         [DataMember(Order = 3)] public string Note { get; set; }
     }
 
+    /// <summary>Итог одной функции в запуске строки (разработчик, 07.11.2026: «статус чего — NWC, NWF, отчётов?»): «NWC», «NWF»…</summary>
+    [DataContract]
+    public sealed class StepRun
+    {
+        [DataMember(Order = 1)] public string Kind { get; set; }
+        [DataMember(Order = 2)] public int Done { get; set; }
+        [DataMember(Order = 3)] public int Failed { get; set; }
+        [DataMember(Order = 4)] public int Skipped { get; set; }
+        /// <summary>Сколько шли её NWC / NWF (сумма, без копий наперёд).</summary>
+        [DataMember(Order = 5)] public double Seconds { get; set; }
+    }
+
+    /// <summary>Чем кончилась функция в последнем запуске: не было / без ошибок / с ошибками.</summary>
+    public enum StepMark { None, Ok, Errors }
+
     /// <summary>Последний запуск строки (▷ у неё или у строки выше): когда, кто, сколько, ошибки, пропуски и несостыковки.</summary>
     [DataContract]
     public sealed class RowRun
@@ -35,6 +50,8 @@ namespace RASv2.ClashAnalysis.Logic
         [DataMember(Order = 8)] public List<string> Notes { get; set; } = new List<string>();
         /// <summary>Журнал запуска — копия в папке задачи (видна всем), не вышло — у запускавшего.</summary>
         [DataMember(Order = 9)] public string Journal { get; set; }
+        /// <summary>По функциям — для значка рядом с её галочкой; запуски до 07.11.2026 — без них (StepOf считает по ошибкам).</summary>
+        [DataMember(Order = 10)] public List<StepRun> Steps { get; set; } = new List<StepRun>();
     }
 
     /// <summary>Сколько шла NWC / NWF в последний раз — для «Времени» строки.</summary>
@@ -101,6 +118,7 @@ namespace RASv2.ClashAnalysis.Logic
                     {
                         r.Errors = r.Errors ?? new List<RunIssue>();
                         r.Notes = r.Notes ?? new List<string>();
+                        r.Steps = r.Steps ?? new List<StepRun>();
                     }
                     return f;
                 }
@@ -153,7 +171,8 @@ namespace RASv2.ClashAnalysis.Logic
         /// повторяли, остаются из прошлого раза (previous).
         /// </summary>
         public static RowRun Record(ExportTask row, ICollection<string> paths, IEnumerable<(string Path, string Name, ItemResult Result, string Note)> items,
-            DateTime at, double seconds, string journal, IEnumerable<string> notes, ICollection<string> retried = null, RowRun previous = null)
+            DateTime at, double seconds, string journal, IEnumerable<string> notes, ICollection<string> retried = null, RowRun previous = null,
+            IDictionary<string, double> times = null)
         {
             var mine = items.Where(i => paths.Contains(i.Path)).ToList();
             var run = new RowRun
@@ -164,14 +183,96 @@ namespace RASv2.ClashAnalysis.Logic
                 Notes = mine.Where(i => i.Result == ItemResult.Skipped && !string.IsNullOrWhiteSpace(i.Note)).Select(i => i.Name + " — " + i.Note)
                     .Concat(notes ?? Enumerable.Empty<string>()).ToList(),
             };
+            run.Steps = mine.GroupBy(i => KindOf(i.Path)).Select(g => new StepRun
+            {
+                Kind = g.Key, Done = g.Count(i => i.Result == ItemResult.Done), Failed = g.Count(i => i.Result == ItemResult.Failed),
+                Skipped = g.Count(i => i.Result == ItemResult.Skipped),
+                Seconds = times == null ? 0 : g.Sum(i => times.TryGetValue(i.Path, out var s) ? s : 0),
+            }).OrderBy(x => x.Kind).ToList();
             if (retried != null && previous != null)
             {
                 run.Errors.AddRange(previous.Errors.Where(e => !retried.Contains(e.Path)));
                 run.Notes = previous.Notes.Concat(run.Notes).Distinct().ToList();
                 run.Done += previous.Done;
                 run.Seconds = previous.Seconds;
+                // функции, которые не повторяли, — как были; повторённые — сделанное прежде и теперь, ошибки — какие остались
+                foreach (var kind in new[] { "NWC", "NWF" })
+                {
+                    var before = StepOf(previous, kind);
+                    var now = run.Steps.FirstOrDefault(x => x.Kind == kind);
+                    if (before == null && now == null) continue;
+                    var merged = new StepRun
+                    {
+                        Kind = kind, Done = (before?.Done ?? 0) + (now?.Done ?? 0), Skipped = before?.Skipped ?? 0,
+                        Seconds = before?.Seconds ?? now?.Seconds ?? 0, Failed = run.Errors.Count(e => KindOf(e.Path) == kind),
+                    };
+                    run.Steps.RemoveAll(x => x.Kind == kind);
+                    run.Steps.Add(merged);
+                }
+                run.Steps = run.Steps.OrderBy(x => x.Kind).ToList();
             }
             return run;
+        }
+
+        /// <summary>Функция по файлу: NWF — «.nwf», остальное — NWC.</summary>
+        public static string KindOf(string path) => (path ?? "").EndsWith(".nwf", StringComparison.OrdinalIgnoreCase) ? "NWF" : "NWC";
+
+        /// <summary>Итог функции в запуске; запуск до 07.11.2026 (без Steps) — по ошибкам и числу выгруженных (тогда — NWC).</summary>
+        public static StepRun StepOf(RowRun run, string kind)
+        {
+            if (run == null) return null;
+            var step = run.Steps?.FirstOrDefault(x => x.Kind == kind);
+            if (step != null) return step;
+            if (run.Steps != null && run.Steps.Count > 0) return null;
+            var failed = run.Errors.Count(e => KindOf(e.Path) == kind);
+            var done = kind == "NWC" ? run.Done : 0;
+            return failed == 0 && done == 0 ? null : new StepRun { Kind = kind, Done = done, Failed = failed };
+        }
+
+        /// <summary>Значок функции: ошибки — красный; что-то сделано без ошибок — зелёный; не было — нет.</summary>
+        public static StepMark MarkOf(RowRun run, string kind)
+        {
+            var step = StepOf(run, kind);
+            return step == null ? StepMark.None : step.Failed > 0 ? StepMark.Errors : step.Done > 0 ? StepMark.Ok : StepMark.None;
+        }
+
+        /// <summary>Подсказка к значку функции: когда, кто, сколько; её ошибки; у NWC — пропуски и изменившиеся модели.</summary>
+        public static string StepTip(RowRun run, string kind, IList<string> changed, bool unknown)
+        {
+            var lines = new List<string>();
+            var step = StepOf(run, kind);
+            var made = kind == "NWF" ? "собрано" : "выгружено";
+            if (step != null)
+            {
+                lines.Add($"{kind}: запуск {run.At:dd.MM.yyyy HH:mm}, {run.By}" + (step.Seconds > 0 ? ", " + NwcHistory.Duration(step.Seconds) : ""));
+                lines.Add($"{made} {step.Done}, с ошибкой {step.Failed}, пропущено {step.Skipped}");
+                var errors = run.Errors.Where(e => KindOf(e.Path) == kind).ToList();
+                if (errors.Count > 0)
+                {
+                    lines.Add("Ошибки:");
+                    lines.AddRange(errors.Take(12).Select(e => "  • " + e.Name + " — " + e.Note));
+                    if (errors.Count > 12) lines.Add($"  … ещё {errors.Count - 12}");
+                    lines.Add("↻ — повторить только их");
+                }
+                if (kind == "NWC" && run.Notes.Count > 0)
+                {
+                    lines.Add("Пропуски и несостыковки:");
+                    lines.AddRange(run.Notes.Take(12).Select(n => "  • " + n));
+                    if (run.Notes.Count > 12) lines.Add($"  … ещё {run.Notes.Count - 12}");
+                }
+            }
+            if (kind == "NWC")
+            {
+                if (changed.Count > 0)
+                {
+                    lines.Add("Модели изменились после выгрузки NWC:");
+                    lines.AddRange(changed.Take(12).Select(n => "  • " + n));
+                    if (changed.Count > 12) lines.Add($"  … ещё {changed.Count - 12}");
+                }
+                if (unknown) lines.Add("Дату части моделей Revit Server не сообщил — изменились ли они, не известно.");
+            }
+            if (step != null) lines.Add("Щелчок — журнал запуска");
+            return lines.Count == 0 ? null : string.Join("\n", lines);
         }
 
         /// <summary>«Время» строки: сумма последних времён её NWC и NWF; ни одной не выгружали — null. unknown — сколько без времени.</summary>
