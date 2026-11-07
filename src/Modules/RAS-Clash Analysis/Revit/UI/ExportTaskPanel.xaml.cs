@@ -86,10 +86,6 @@ namespace RASv2.ClashAnalysis.UI
             public bool On { get; set; }
         }
 
-
-        // пример, пока моделей нет
-        private const string SampleModel = "0000_01_01_S1_KJ01_01_M3.rvt";
-
         private readonly ExportTask _task;
         private readonly ExportTask _parent;
         private readonly ExportSettings _common;
@@ -703,18 +699,7 @@ namespace RASv2.ClashAnalysis.UI
                 .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             var block = blocks.FirstOrDefault() ?? "S1";
             var root = Folder.Text.Trim();
-            var labels = ExportNodes.Labels(block, null, _common, DateTime.Today);
-            var name = ExportNames.Fill(NwfNameText(), labels) + ".nwf";
-            var nwfFolder = ExportNodes.InProject(root, ExportNames.Fill(NwfFolder.Text, labels));
-            var nwf = nwfFolder + (makes ? "\\" + name : "");
-            NwfExample.Text = "Пример: " + nwf;
-            NwfExample.ToolTip = nwf;
-
-            var model = models.FirstOrDefault() ?? new ExportModel { Path = SampleModel };
-            var nwc = ExportNodes.InProject(root, ExportNames.Fill(NwcFolder.Text,
-                ExportNodes.Labels(ExportNodes.BlockOf(model, _common), model, _common, DateTime.Today))) + "\\" + ExportNodes.NwcNameOf(model, _common) + ".nwc";
-            NwcExample.Text = "Пример: " + nwc;
-            NwcExample.ToolTip = nwc;
+            // примеров под папками NWC и NWF нет (разработчик, 07.11.2026: «пример просто уберём, он не нужен»)
 
             var on = Checked();
             var format = on.Contains("HTML") ? "HTML" : on.FirstOrDefault() ?? "";

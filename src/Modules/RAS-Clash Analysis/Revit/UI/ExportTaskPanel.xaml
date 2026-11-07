@@ -194,7 +194,6 @@
                             <Button Style="{StaticResource Chip}" Content="{}{Блок}" Tag="{Binding ElementName=NwcFolder}" Click="Chip_Click" />
                             <Button Style="{StaticResource Chip}" Content="{}{Отдел}" Tag="{Binding ElementName=NwcFolder}" Click="Chip_Click" />
                         </StackPanel>
-                        <TextBlock x:Name="NwcExample" Style="{StaticResource Example}" />
                     </StackPanel>
                     <StackPanel Style="{StaticResource Side}">
                         <TextBlock x:Name="NwcFrom" Style="{StaticResource From}" />
@@ -464,7 +463,6 @@
                         <Button Grid.Column="2" x:Name="NwfBrowse" Style="{StaticResource Browse}" Tag="{Binding ElementName=NwfFolder}" Click="Browse_Click" />
                         <StackPanel Grid.Column="1">
                             <TextBox x:Name="NwfFolder" TextChanged="Any_Changed" />
-                            <TextBlock x:Name="NwfExample" Style="{StaticResource Example}" />
                         </StackPanel>
                         <StackPanel Style="{StaticResource Side}">
                             <TextBlock x:Name="NwfFrom" Style="{StaticResource From}" />
