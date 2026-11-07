@@ -80,7 +80,10 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>Переменная окружения фонового Revit — его версия: свой Revit пользователя задания не берёт.</summary>
         public const string EnvVar = "RAS_NWC_WORKER";
 
-        /// <summary>Сколько фоновый Revit ждёт новое задание, прежде чем закрыться (разработчик: «максимально быстро» — второй раз не запускать).</summary>
+        /// <summary>
+        /// Сколько фоновый Revit ждёт первое задание, прежде чем закрыться; выполнил — закрывается сразу (07.11.2026; было — ждал и
+        /// после выгрузки, чтобы второй раз не запускать).
+        /// </summary>
         public static readonly TimeSpan IdleExit = TimeSpan.FromMinutes(15);
 
         public static string Dir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

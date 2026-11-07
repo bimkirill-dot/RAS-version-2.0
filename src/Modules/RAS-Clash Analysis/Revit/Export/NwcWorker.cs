@@ -108,7 +108,8 @@ namespace RASv2.ClashAnalysis.Export
                 var job = Pending();
                 if (job == null)
                 {
-                    if (DateTime.Now - _idleSince >= NwcWorkers.IdleExit) Exit(app);
+                    // запущен, а задания так и нет (основной Revit закрыли, пока этот запускался) — не висеть
+                    if (DateTime.Now - _idleSince >= NwcWorkers.IdleExit) Exit(app, $"заданий нет {NwcWorkers.IdleExit.TotalMinutes:0} минут");
                     return;
                 }
                 var id = Path.GetFileNameWithoutExtension(job);
@@ -121,6 +122,9 @@ namespace RASv2.ClashAnalysis.Export
                     return;
                 }
                 Run(app, id, handoff);
+                // задание выполнено, новых нет — закрыться сразу (разработчик, 07.11.2026: «если плагин открывает Revit для выгрузки, то
+                // он этот же Revit закрывает, когда закончит»; было — ждал новые задания 15 минут)
+                if (Pending() == null) Exit(app, "выгрузка закончена");
             }
             catch (Exception ex)
             {
@@ -185,12 +189,12 @@ namespace RASv2.ClashAnalysis.Export
             }
         }
 
-        private void Exit(UIApplication app)
+        private void Exit(UIApplication app, string why)
         {
             _exiting = true;
             _timer?.Dispose();
             try { File.Delete(NwcWorkers.AlivePath(_dir, _year)); } catch (Exception) { /* не важно */ }
-            _log.Info($"Фоновая выгрузка NWC: заданий нет {NwcWorkers.IdleExit.TotalMinutes:0} минут — Revit {_year} закрывается");
+            _log.Info($"Фоновая выгрузка NWC: {why} — Revit {_year} закрывается");
             app.PostCommand(RevitCommandId.LookupPostableCommandId(PostableCommand.ExitRevit));
         }
 
