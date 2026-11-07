@@ -4,7 +4,8 @@
         xmlns:local="clr-namespace:RASv2.ClashAnalysis.UI"
         Title="Задачи выгрузки" Width="1500" Height="860" MinWidth="880" MinHeight="420"
         WindowStartupLocation="CenterOwner"
-        Background="{DynamicResource Bg}" Foreground="{DynamicResource Fg}" FontFamily="Segoe UI" FontSize="13">
+        Background="{DynamicResource Bg}" Foreground="{DynamicResource Fg}" FontFamily="Segoe UI" FontSize="13"
+        PreviewKeyDown="Window_PreviewKeyDown">
     <!-- «Задачи выгрузки» (DECISIONS.md модуля, «Дерево задач с наследованием (03.11.2026)», «Боковая панель (03.11.2026)»): слева —
          дерево (задача — серым фоном, под ней подзадачи любой глубины), справа — настройки выбранной строки (ExportTaskPanel), а
          не отдельным окном (разработчик: «чтобы настройки задач и подзадач открывались в боковой панели»); граница двигается.
@@ -25,6 +26,7 @@
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsTop}" Value="True">
                     <Setter Property="Background" Value="{DynamicResource Row}" />
+                    <Setter Property="Padding" Value="6,8,8,8" />
                 </DataTrigger>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{DynamicResource Hover}" />
@@ -138,7 +140,7 @@
                         <ColumnDefinition Width="80" />
                         <ColumnDefinition Width="{Binding Time}" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Style="{StaticResource ColHead}" Text="Название" Margin="58,0,10,0" />
+                    <TextBlock Style="{StaticResource ColHead}" Text="Название" Margin="66,0,10,0" />
                     <TextBlock Grid.Column="1" Style="{StaticResource ColHead}" Text="Модели" />
                     <TextBlock Grid.Column="2" Style="{StaticResource ColHead}" Text="Проверки" Visibility="{Binding WideVisibility}" />
                     <TextBlock Grid.Column="3" Style="{StaticResource ColHead}" Text="NWC" ToolTip="Выгружать NWC" />
@@ -174,13 +176,20 @@
                                         <ColumnDefinition Width="80" />
                                         <ColumnDefinition Width="{Binding Layout.Time}" />
                                     </Grid.ColumnDefinitions>
-                                    <DockPanel Margin="{Binding Indent}" VerticalAlignment="Center">
-                                        <Button Style="{StaticResource RowIcon}" Width="22" Margin="0" FontSize="10" Foreground="{DynamicResource Muted}"
-                                                Content="{Binding Arrow}" Visibility="{Binding ArrowVisibility}" Click="Toggle_Click" />
-                                        <TextBlock Text="{Binding Number}" Foreground="{DynamicResource Muted}" FontSize="12"
-                                                   MinWidth="28" Margin="2,0,8,0" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding Name}" FontSize="{Binding NameSize}" FontWeight="{Binding NameWeight}" ToolTip="{Binding Name}"
-                                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                    <!-- линия дерева — от стрелки строки выше вдоль подзадач -->
+                                    <Border Width="1" HorizontalAlignment="Left" Margin="{Binding GuideMargin}" Background="{DynamicResource Line}"
+                                            Visibility="{Binding GuideVisibility}" IsHitTestVisible="False" />
+                                    <!-- номер — ровным столбцом слева, уровень сдвигает только стрелку и название (разработчик, 07.11.2026: «не приятно
+                                         смотреть, как подзадачи отступают от своих задач» — номер «1.1.1» шире «1» и сдвигал название неровно) -->
+                                    <DockPanel VerticalAlignment="Center">
+                                        <TextBlock DockPanel.Dock="Left" Text="{Binding Number}" Foreground="{DynamicResource Muted}" FontSize="12"
+                                                   Width="44" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        <DockPanel Margin="{Binding Indent}">
+                                            <Button Style="{StaticResource RowIcon}" Width="18" Margin="0,0,4,0" FontSize="10" Foreground="{DynamicResource Muted}"
+                                                    Content="{Binding Arrow}" Visibility="{Binding ArrowVisibility}" Click="Toggle_Click" />
+                                            <TextBlock Text="{Binding Name}" FontSize="{Binding NameSize}" FontWeight="{Binding NameWeight}" ToolTip="{Binding Name}"
+                                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                        </DockPanel>
                                     </DockPanel>
                                     <TextBlock Grid.Column="1" Style="{StaticResource Cell}" Text="{Binding ModelsText}" Foreground="{Binding ModelsBrush}"
                                                ToolTip="{Binding ModelsTip}" />

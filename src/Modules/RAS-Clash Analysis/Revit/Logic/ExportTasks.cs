@@ -68,6 +68,56 @@ namespace RASv2.ClashAnalysis.Logic
             return copy;
         }
 
+        /// <summary>
+        /// Выбранные строки для пакетного копирования и удаления — без тех, у которых выбрана строка выше (копия и удаление строки и так
+        /// с её подзадачами); по порядку дерева (как в списке).
+        /// </summary>
+        public static List<ExportTask> Outermost(IList<ExportTask> roots, IEnumerable<ExportTask> picked)
+        {
+            var set = new HashSet<ExportTask>(picked);
+            return roots.SelectMany(r => r.Self())
+                .Where(t => set.Contains(t) && !Ancestors(t).Any(set.Contains))
+                .ToList();
+        }
+
+        private static IEnumerable<ExportTask> Ancestors(ExportTask t)
+        {
+            for (var p = t.Parent; p != null; p = p.Parent) yield return p;
+        }
+
+        /// <summary>
+        /// Пакетная копия (разработчик, 07.11.2026: «пакетное удаление, копирование задач / подзадач»): каждая выбранная строка — с
+        /// подзадачами, название — свободное рядом («(2)»); подзадача — сразу под своей строкой, задача — в конец списка (номер — next).
+        /// Возвращает копии.
+        /// </summary>
+        public static List<ExportTask> CopyRows(IList<ExportTask> roots, IEnumerable<ExportTask> picked, Func<int> next)
+        {
+            var copies = new List<ExportTask>();
+            foreach (var t in Outermost(roots, picked))
+            {
+                var copy = t.Copy();
+                if (t.Parent == null)
+                {
+                    copy.Name = ExportFiles.UniqueName(t.Name, roots.Select(r => r.Name));
+                    copy.StoreOrder = next();
+                    roots.Add(copy);
+                }
+                else
+                {
+                    var parent = t.Parent;
+                    copy.Name = ExportFiles.UniqueName(t.Name, parent.Children.Select(c => c.Name));
+                    parent.Add(copy);
+                    parent.Children.Remove(copy);
+                    parent.Children.Insert(parent.Children.IndexOf(t) + 1, copy);
+                }
+                copies.Add(copy);
+            }
+            return copies;
+        }
+
+        /// <summary>«строка», «строки», «строк» — по числу.</summary>
+        public static string RowsWord(int n) => Word(n, "строка", "строки", "строк");
+
         /// <summary>«подзадача», «подзадачи», «подзадач» — по числу.</summary>
         public static string SubtasksWord(int n) => Word(n, "подзадача", "подзадачи", "подзадач");
 

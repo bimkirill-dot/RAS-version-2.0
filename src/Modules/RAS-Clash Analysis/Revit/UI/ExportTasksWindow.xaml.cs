@@ -72,11 +72,17 @@ namespace RASv2.ClashAnalysis.UI
             public string Number => Row.Number;
             public bool IsTop => Item.Parent == null;
             public string Name => Item.Name;
-            public double NameSize => IsTop ? 14 : 13;
+            public double NameSize => IsTop ? 15 : 13;
             public FontWeight NameWeight => Row.Level <= 1 ? FontWeights.SemiBold : FontWeights.Normal;
-            // задачи — с промежутком сверху, подзадачи — плотно; отступ уровня (18) — внутри столбца «Название»
-            public Thickness RowMargin => new Thickness(0, IsTop ? 6 : 0, 0, 1);
-            public Thickness Indent => new Thickness(Row.Level * 18, 0, 0, 0);
+            // задачи — с промежутком сверху, подзадачи — плотно; отступ уровня (20) — внутри столбца «Название», номер — ровным столбцом слева
+            // задача — с промежутком сверху (группы задач — отдельно), подзадачи — плотно под ней
+            public Thickness RowMargin => new Thickness(0, IsTop ? (Row.Number == "1" ? 2 : 14) : 0, 0, 1);
+            // линия дерева: от стрелки строки выше — вниз вдоль подзадач (разработчик, 07.11.2026: «выделить задачу над подзадачами —
+            // сейчас они сливаются»)
+            public Visibility GuideVisibility => Row.Level > 0 ? Visibility.Visible : Visibility.Collapsed;
+            // номер (44) + отступ строки выше (20 на уровень) + середина её стрелки (9)
+            public Thickness GuideMargin => new Thickness(44 + (Row.Level - 1) * 20 + 9, -5, 0, -6);
+            public Thickness Indent => new Thickness(Row.Level * 20, 0, 0, 0);
 
             // ── столбцы: «—» и значение от строки выше — бледно, «↑» — от строки выше ──
             private Brush Shade(bool muted) => muted ? Muted : Normal;
@@ -181,6 +187,9 @@ namespace RASv2.ClashAnalysis.UI
         private ExportTaskPanel _panel;
         private ExportTask _pending;
         private List<RowItem> _items = new List<RowItem>();
+        // несколько выбранных строк (Ctrl / Shift / Ctrl+A) — пакетное копирование и удаление; одна строка — _selected и её панель
+        private readonly List<ExportTask> _picked = new List<ExportTask>();
+        private ExportTask _anchor;
 
         /// <summary>Задачи и общие настройки — из общего хранилища на сервере: открыли окно — видно свежее у всех.</summary>
         public ExportTasksWindow(ExportStore store)
@@ -246,7 +255,7 @@ namespace RASv2.ClashAnalysis.UI
                 .Select(r => new RowItem
                 {
                     Row = r, Columns = ExportNodes.Columns(r), Collapsed = _collapsed.Contains(r.Item), HasInner = r.Item.Children.Count > 0,
-                    IsSelected = r.Item == _selected, Muted = muted, Normal = normal, Layout = _layout,
+                    IsSelected = r.Item == _selected || _picked.Contains(r.Item), Muted = muted, Normal = normal, Layout = _layout,
                     Accent = (Brush)FindResource("Accent"), Error = (Brush)FindResource("Error"),
                 })
                 .ToList();
@@ -365,7 +374,7 @@ namespace RASv2.ClashAnalysis.UI
             }
             // строка уже в списке — только отметить; новой ещё нет — перестроить
             if (_selected == null || _items.Any(i => i.Item == _selected))
-                foreach (var i in _items) i.IsSelected = i.Item == _selected;
+                foreach (var i in _items) i.IsSelected = i.Item == _selected || _picked.Contains(i.Item);
             else Refresh();
         }
 
@@ -632,9 +641,18 @@ namespace RASv2.ClashAnalysis.UI
             var onButton = e.OriginalSource is DependencyObject d && FindButton(d);
             _dragArmed = !onButton;
             _dragStart = e.GetPosition(this);
-            // щелчок по строке (не по кнопке) — её настройки справа
+            // щелчок по строке (не по кнопке) — её настройки справа; с Ctrl / Shift — выбрать несколько (пакетно копировать, удалить)
             var item = RowOf(sender).Item;
-            if (onButton || item == _selected) return;
+            if (onButton) return;
+            var mods = Keyboard.Modifiers;
+            if ((mods & (ModifierKeys.Control | ModifierKeys.Shift)) != 0)
+            {
+                _dragArmed = false;
+                Pick(item, (mods & ModifierKeys.Shift) != 0);
+                return;
+            }
+            if (_picked.Count > 0) _picked.Clear();
+            else if (item == _selected) return;
             if (!Leave())
             {
                 _dragArmed = false;

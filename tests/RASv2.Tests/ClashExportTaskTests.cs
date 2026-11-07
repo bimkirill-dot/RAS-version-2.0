@@ -849,6 +849,23 @@ namespace RASv2.Tests
                     if (Directory.Exists(dir)) Directory.Delete(dir, true);
                 }
             });
+            yield return Case("пакетно: выбранные без подзадач выбранных; копии — с подзадачами, «(2)», подзадача — под своей, задача — в конец", () =>
+            {
+                var roots = Sample(out var high, out var mid);
+                var s1 = high.Children[0];
+                var outer = ExportTask.Outermost(roots, new[] { s1, roots[1], high, mid });
+                Check(outer.SequenceEqual(new[] { high, mid, roots[1] }), "S1 — внутри выбранной «Высокой»; порядок — как в дереве: " +
+                      string.Join(", ", outer.Select(t => t.Name)));
+                var order = 5;
+                var copies = ExportTask.CopyRows(roots, new[] { s1, roots[1] }, () => ++order);
+                Check(copies.Count == 2 && high.Children[1].Name == "S1_ВК (2)" && high.Children[1].Settings.MakeNwf && high.Children[1] != s1,
+                      "подзадача — сразу под своей, «(2)»: " + string.Join(", ", high.Children.Select(c => c.Name)));
+                Check(roots.Count == 3 && roots[2].Name == "ЖК Нурлы (2)" && roots[2].StoreOrder == 6 && roots[2].StoreId == null,
+                      "задача — в конец, новый номер, новый файл");
+                var deep = ExportTask.CopyRows(roots, new[] { high }, () => ++order);
+                Check(deep.Single().Children.Count == 3 && roots[0].Children[1].Name == "Высокая критичность (2)", "копия — с подзадачами");
+                Check(ExportTask.RowsWord(1) == "строка" && ExportTask.RowsWord(3) == "строки" && ExportTask.RowsWord(5) == "строк", "слово");
+            });
             yield return Case("статус строки: итог запуска в папке задачи, «Повторить ошибки», время, модель изменилась после NWC", () =>
             {
                 var roots = Sample(out var high, out var mid);

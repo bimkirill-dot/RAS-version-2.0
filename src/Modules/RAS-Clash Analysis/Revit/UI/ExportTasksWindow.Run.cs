@@ -336,6 +336,164 @@ namespace RASv2.ClashAnalysis.UI
             return path != null && _states.TryGetValue(path, out var f) ? RunStates.Find(f, row) : null;
         }
 
+        // ── несколько строк: Ctrl / Shift / Ctrl+A — пакетное копирование и удаление (разработчик, 07.11.2026) ──
+
+        /// <summary>Ctrl+щелчок — добавить или убрать строку, Shift+щелчок — все строки от прежней до этой (как в проводнике).</summary>
+        private void Pick(ExportTask item, bool range)
+        {
+            if (_picked.Count == 0)
+            {
+                // выбранная строка с правками в панели — сначала вопрос
+                if (_selected != null && !Leave()) return;
+                if (_selected != null && _roots.SelectMany(r => r.Self()).Contains(_selected))
+                {
+                    _picked.Add(_selected);
+                    _anchor = _selected;
+                }
+            }
+            var order = _items.Select(i => i.Item).ToList();
+            if (range && _anchor != null && order.Contains(_anchor))
+            {
+                int a = order.IndexOf(_anchor), b = order.IndexOf(item);
+                foreach (var t in order.Skip(Math.Min(a, b)).Take(Math.Abs(a - b) + 1))
+                    if (!_picked.Contains(t)) _picked.Add(t);
+            }
+            else
+            {
+                if (!_picked.Remove(item)) _picked.Add(item);
+                _anchor = item;
+            }
+            ShowPicked();
+        }
+
+        /// <summary>Справа — «Выбрано: N строк», их список и «Копировать», «Удалить»; одна строка — её настройки, как обычно.</summary>
+        private void ShowPicked()
+        {
+            if (_picked.Count <= 1)
+            {
+                var one = _picked.FirstOrDefault();
+                _picked.Clear();
+                Show(one);
+                return;
+            }
+            _selected = null;
+            _panel = null;
+            var n = _picked.Count;
+            var rows = ExportNodes.Rows(_roots, new HashSet<ExportTask>()).Where(r => _picked.Contains(r.Item)).ToList();
+            var box = new System.Windows.Controls.StackPanel { Margin = new Thickness(24, 18, 24, 18) };
+            box.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = $"Выбрано: {n} {ExportTask.RowsWord(n)}", FontSize = 14, FontWeight = FontWeights.SemiBold,
+            });
+            box.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = string.Join("\n", rows.Take(15).Select(r => r.Number + "   " + r.Item.Name)) + (rows.Count > 15 ? "\n…" : ""),
+                Foreground = (System.Windows.Media.Brush)FindResource("Muted"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 16),
+            });
+            var buttons = new System.Windows.Controls.WrapPanel();
+            var copy = new System.Windows.Controls.Button { Content = "Копировать", MinWidth = 120, Margin = new Thickness(0, 0, 8, 8) };
+            copy.Click += (s, e) => CopyPicked();
+            var delete = new System.Windows.Controls.Button { Content = "Удалить", MinWidth = 120, Margin = new Thickness(0, 0, 8, 8) };
+            delete.Click += (s, e) => DeletePicked();
+            var clear = new System.Windows.Controls.Button
+            {
+                Content = "Снять выбор", Style = (Style)FindResource("LinkButton"), VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(4, 0, 0, 8),
+            };
+            clear.Click += (s, e) => ClearPicked();
+            buttons.Children.Add(copy);
+            buttons.Children.Add(delete);
+            buttons.Children.Add(clear);
+            box.Children.Add(buttons);
+            Side.Content = box;
+            foreach (var i in _items) i.IsSelected = _picked.Contains(i.Item);
+        }
+
+        private void ClearPicked()
+        {
+            _picked.Clear();
+            Show(null);
+        }
+
+        /// <summary>Копии выбранных — с подзадачами, «(2)» в названии; подзадача — под своей строкой, задача — в конец; сразу на сервер.</summary>
+        private void CopyPicked()
+        {
+            if (_running || _picked.Count == 0) return;
+            var copies = ExportTask.CopyRows(_roots, _picked, NextOrder);
+            foreach (var top in copies.Select(ExportNodes.Root).Distinct().ToList()) SaveTop(top);
+            foreach (var c in copies.Where(c => c.Parent != null)) _collapsed.Remove(c.Parent);
+            // выбраны — копии: видно, что появилось, их можно сразу удалить, если лишние
+            var all = _roots.SelectMany(r => r.Self()).ToList();
+            _picked.Clear();
+            _picked.AddRange(copies.Where(all.Contains));
+            Refresh();
+            ShowPicked();
+        }
+
+        /// <summary>Удалить выбранные (с подзадачами) — после вопроса; задача — её файл на сервере, подзадача — из своей задачи.</summary>
+        private void DeletePicked()
+        {
+            if (_running) return;
+            var rows = ExportTask.Outermost(_roots, _picked);
+            if (rows.Count == 0) return;
+            var inner = rows.Sum(t => t.Descendants);
+            var text = $"Удалить {rows.Count} {ExportTask.RowsWord(rows.Count)}" + (inner > 0 ? $" и {inner} {ExportTask.SubtasksWord(inner)} в них" : "") + "?\n\n" +
+                       string.Join("\n", rows.Take(12).Select(t => "• " + t.Name)) + (rows.Count > 12 ? "\n…" : "");
+            if (MessageBox.Show(this, text, Title, MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+            var touched = new List<ExportTask>();
+            foreach (var t in rows)
+            {
+                if (t.Parent != null)
+                {
+                    var root = ExportNodes.Root(t);
+                    t.Parent.Remove(t);
+                    if (!touched.Contains(root)) touched.Add(root);
+                    continue;
+                }
+                try
+                {
+                    _store.DeleteProject(t);
+                    _roots.Remove(t);
+                }
+                catch (Exception ex)
+                {
+                    RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: задача не удалена с сервера — " + t.Name, ex);
+                    MessageBox.Show(this, "Задача «" + t.Name + "» не удалена с сервера: " + ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+            foreach (var root in touched.Where(_roots.Contains)) SaveTop(root);
+            _picked.Clear();
+            Refresh();
+            Show(null);
+        }
+
+        /// <summary>Ctrl+A — выбрать все строки списка, Delete — удалить выбранные, Esc — снять выбор (не когда печатают в панели).</summary>
+        private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (_running) return;
+            for (var f = System.Windows.Input.Keyboard.FocusedElement as DependencyObject; f != null; f = System.Windows.Media.VisualTreeHelper.GetParent(f))
+                if (f == Side || f is System.Windows.Controls.TextBox) return;
+            var ctrl = System.Windows.Input.Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Control;
+            if (e.Key == System.Windows.Input.Key.A && ctrl && _items.Count > 1)
+            {
+                if (_picked.Count == 0 && _selected != null && !Leave()) return;
+                _picked.Clear();
+                _picked.AddRange(_items.Select(i => i.Item));
+                ShowPicked();
+                e.Handled = true;
+            }
+            else if (e.Key == System.Windows.Input.Key.Delete && _picked.Count > 1)
+            {
+                DeletePicked();
+                e.Handled = true;
+            }
+            else if (e.Key == System.Windows.Input.Key.Escape && _picked.Count > 0)
+            {
+                ClearPicked();
+                e.Handled = true;
+            }
+        }
+
         // ── ход выгрузки — в строки ──
 
         void IRunView.Changed(NwcProgress p)
