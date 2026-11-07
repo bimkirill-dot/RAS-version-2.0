@@ -759,17 +759,42 @@ namespace RASv2.Tests
                 Check(C(2).Subtasks == "—" && C(2).Models == "3" && C(2).ModelsFrom == null && C(2).TestsFrom == "Высокая критичность" && C(2).Nwf == "S1_ВК.nwf",
                       "подзадача: свои модели, проверки от «Высокой»: " + C(2).TestsFrom);
 
-                // галочка NWF в списке — та же «Формировать NWF», с проверками панели (06.11.2026)
-                Check(C(2).NwfOn && C(2).NwfToggle && !C(0).NwfToggle && !C(1).NwfToggle, "галочка — только у строки без подзадач");
+                // выключатели списка (07.11.2026): у строки с подзадачами — сразу у всех ниже, по-разному — null
                 var s1 = high.Children[0];
                 var s2 = high.Children[1];
-                Check(ExportNodes.SetNwf(s1, false, common) == null && !s1.Settings.MakeNwf && C(2).Nwf == "—" && !C(2).NwfOn, "снята");
-                Check(ExportNodes.SetNwf(high, true, common) != null && !high.Settings.MakeNwf, "строка с подзадачами — нельзя");
+                Check(C(2).NwfOn && C(2).NwfState == true && C(1).NwfState == true && C(0).NwfState == true, "NWF: у всех строк без подзадач — да");
+                Check(C(0).NwcState == true && C(0).ReportsState == false && C(0).ReportsEnabled && C(2).Formats == "XML, HTML" && C(2).FormatsFrom == "ArmanQala",
+                      "NWC — да, отчёты — нет, форматы — от задачи: " + C(2).Formats);
+                Check(ExportNodes.SetFlag(s1, RowFlag.Nwf, false, common) == null && !s1.Settings.MakeNwf && C(2).Nwf == "—" && C(1).NwfState == null && C(0).NwfState == null,
+                      "снята у S1 — у «Высокой» и задачи по-разному");
+                Check(ExportNodes.SetFlag(s1, RowFlag.Reports, true, common) != null, "отчёты без NWF — нельзя");
+                Check(ExportNodes.SetFlag(high, RowFlag.Nwf, true, common) == null && s1.Settings.MakeNwf && s2.Settings.MakeNwf && !high.Settings.MakeNwf &&
+                      C(1).NwfState == true, "у строки с подзадачами — у всех ниже, у неё самой — нет");
                 s2.Settings.NwfName = "S1_ВК";
-                var clash = ExportNodes.SetNwf(s1, true, common);
-                Check(clash != null && clash.Contains("и у") && !s1.Settings.MakeNwf, "та же NWF у другой строки — нельзя, как было: " + clash);
+                ExportNodes.SetFlag(s1, RowFlag.Nwf, false, common);
+                var clash = ExportNodes.SetFlag(high, RowFlag.Nwf, true, common);
+                Check(clash != null && clash.Contains("и у") && !s1.Settings.MakeNwf && s2.Settings.MakeNwf, "та же NWF у двух строк — нельзя, всё как было: " + clash);
                 s2.Settings.NwfName = null;
-                Check(ExportNodes.SetNwf(s1, true, common) == null && s1.Settings.MakeNwf && C(2).Nwf == "S1_ВК.nwf", "поставлена");
+                Check(ExportNodes.SetFlag(roots[0], RowFlag.Nwf, true, common) == null && C(2).Nwf == "S1_ВК.nwf", "поставлена");
+                Check(ExportNodes.SetFlag(roots[0], RowFlag.Reports, true, common) == null && s1.Settings.MakeReports && mid.Settings.MakeReports &&
+                      C(0).ReportsState == true, "отчёты — у всех, кто собирает NWF");
+
+                Check(ExportNodes.SetFlag(high, RowFlag.Nwc, false, common) == null && high.Settings.NoNwc && s1.Settings.NoNwc && s2.Settings.NoNwc &&
+                      !roots[0].Settings.NoNwc && C(0).NwcState == null && C(1).NwcState == false, "NWC выключен у ветки — у задачи по-разному");
+                var plan = NwcRunPlan.Build(roots[0], common, 2026, new List<string>());
+                var kj1 = plan.Single(j => j.NwcPath.EndsWith(@"S1\NWC\0000_01_01_S1_KJ01_01_M3.nwc"));
+                Check(!kj1.Off && kj1.Skip == null, "модель S1 нужна и «Средней» (NWC включён) — выгружается: " + kj1.Skip);
+                mid.Settings.NoNwc = true;
+                plan = NwcRunPlan.Build(roots[0], common, 2026, new List<string>());
+                Check(plan.Where(j => j.Rows.Any(r => r != "ArmanQala")).All(j => j.Off && j.Skip == "выгрузка NWC выключена (галочка «NWC»)"),
+                      "выключен у всех строк этой NWC — не выгружается");
+                Check(NwfRunPlan.Build(roots[0], common).Count(n => n.Skip == null) == 3, "NWF собираются и без выгрузки NWC");
+                var copy = s1.Settings.Clone();
+                Check(copy.NoNwc, "копия строки — с выключателем");
+
+                Check(ExportNodes.SetFormats(s1, new[] { "Текст", "XML" }) == null && C(2).Formats == "XML, Текст" && C(2).FormatsFrom == null,
+                      "свои форматы — по порядку Navisworks: " + C(2).Formats);
+                Check(ExportNodes.SetFormats(s1, new string[0]) != null && C(2).Formats == "XML, Текст", "без форматов — нельзя");
 
                 var t1 = new DateTime(2026, 11, 4, 10, 54, 0);
                 var t2 = new DateTime(2026, 11, 3, 9, 0, 0);

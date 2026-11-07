@@ -42,6 +42,21 @@
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
             <Setter Property="Margin" Value="0,0,10,0" />
         </Style>
+        <!-- ячейка, по которой щёлкают (форматы): как текст, без рамки и фона -->
+        <Style x:Key="CellButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="Transparent">
+                            <ContentPresenter />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="ColHead" TargetType="TextBlock">
             <Setter Property="FontSize" Value="12" />
             <Setter Property="Foreground" Value="{DynamicResource Muted}" />
@@ -95,23 +110,29 @@
             </DockPanel>
             <Border DockPanel.Dock="Top" Height="1" Background="{DynamicResource Line}" Margin="0,0,0,6" />
 
-            <!-- шапка таблицы (разработчик, 05.11.2026: «список — таблицей»): столбцы — как у строк; справа — место полосы прокрутки -->
+            <!-- шапка таблицы (разработчик, 05.11.2026: «список — таблицей»): столбцы — как у строк; справа — место полосы прокрутки.
+                 Выключатели NWC / NWF / Отчёты / Форматы — по наброску, принятому 07.11.2026 («давай попробуем»); «Подзадачи» убраны
+                 (видно по дереву) -->
             <Border x:Name="TableHead" DockPanel.Dock="Top" BorderThickness="1" BorderBrush="Transparent" Padding="6,0,8,4" Margin="0,0,4,0">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="2*" />
-                        <ColumnDefinition Width="{Binding Subtasks}" />
-                        <ColumnDefinition Width="64" />
+                        <ColumnDefinition Width="56" />
                         <ColumnDefinition Width="{Binding Tests}" />
-                        <ColumnDefinition Width="{Binding Nwf}" />
-                        <ColumnDefinition Width="100" />
+                        <ColumnDefinition Width="48" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="60" />
+                        <ColumnDefinition Width="{Binding Formats}" />
+                        <ColumnDefinition Width="{Binding Exported}" />
                     </Grid.ColumnDefinitions>
                     <TextBlock Style="{StaticResource ColHead}" Text="Название" Margin="58,0,10,0" />
-                    <TextBlock Grid.Column="1" Style="{StaticResource ColHead}" Text="Подзадачи" Visibility="{Binding SubtasksVisibility}" />
-                    <TextBlock Grid.Column="2" Style="{StaticResource ColHead}" Text="Модели" />
-                    <TextBlock Grid.Column="3" Style="{StaticResource ColHead}" Text="Проверки" Visibility="{Binding WideVisibility}" />
-                    <TextBlock Grid.Column="4" Style="{StaticResource ColHead}" Text="NWF" Visibility="{Binding WideVisibility}" />
-                    <TextBlock Grid.Column="5" Style="{StaticResource ColHead}" Text="Выгружено"
+                    <TextBlock Grid.Column="1" Style="{StaticResource ColHead}" Text="Модели" />
+                    <TextBlock Grid.Column="2" Style="{StaticResource ColHead}" Text="Проверки" Visibility="{Binding WideVisibility}" />
+                    <TextBlock Grid.Column="3" Style="{StaticResource ColHead}" Text="NWC" ToolTip="Выгружать NWC" />
+                    <TextBlock Grid.Column="4" Style="{StaticResource ColHead}" Text="NWF" ToolTip="Формировать NWF" />
+                    <TextBlock Grid.Column="5" Style="{StaticResource ColHead}" Text="Отчёты" ToolTip="Формировать отчёты" />
+                    <TextBlock Grid.Column="6" Style="{StaticResource ColHead}" Text="Форматы" Visibility="{Binding WideVisibility}" />
+                    <TextBlock Grid.Column="7" Style="{StaticResource ColHead}" Text="Выгружено" Visibility="{Binding ExportedVisibility}"
                                ToolTip="Когда выгружена самая старая NWC строки; «2 из 4» — NWC есть не у всех моделей" />
                 </Grid>
             </Border>
@@ -130,11 +151,13 @@
                                          кнопки строки — поверх правого края, только когда видны (место не держат) -->
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="2*" />
-                                        <ColumnDefinition Width="{Binding Layout.Subtasks}" />
-                                        <ColumnDefinition Width="64" />
+                                        <ColumnDefinition Width="56" />
                                         <ColumnDefinition Width="{Binding Layout.Tests}" />
-                                        <ColumnDefinition Width="{Binding Layout.Nwf}" />
-                                        <ColumnDefinition Width="100" />
+                                        <ColumnDefinition Width="48" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="60" />
+                                        <ColumnDefinition Width="{Binding Layout.Formats}" />
+                                        <ColumnDefinition Width="{Binding Layout.Exported}" />
                                     </Grid.ColumnDefinitions>
                                     <DockPanel Margin="{Binding Indent}" VerticalAlignment="Center">
                                         <Button Style="{StaticResource RowIcon}" Width="22" Margin="0" FontSize="10" Foreground="{DynamicResource Muted}"
@@ -144,23 +167,29 @@
                                         <TextBlock Text="{Binding Name}" FontSize="{Binding NameSize}" FontWeight="{Binding NameWeight}" ToolTip="{Binding Name}"
                                                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,10,0" />
                                     </DockPanel>
-                                    <TextBlock Grid.Column="1" Style="{StaticResource Cell}" Text="{Binding Columns.Subtasks}" Foreground="{Binding SubtasksBrush}"
-                                               Visibility="{Binding Layout.SubtasksVisibility}" />
-                                    <TextBlock Grid.Column="2" Style="{StaticResource Cell}" Text="{Binding ModelsText}" Foreground="{Binding ModelsBrush}"
+                                    <TextBlock Grid.Column="1" Style="{StaticResource Cell}" Text="{Binding ModelsText}" Foreground="{Binding ModelsBrush}"
                                                ToolTip="{Binding ModelsTip}" />
-                                    <TextBlock Grid.Column="3" Style="{StaticResource Cell}" Text="{Binding TestsText}" Foreground="{Binding TestsBrush}"
+                                    <TextBlock Grid.Column="2" Style="{StaticResource Cell}" Text="{Binding TestsText}" Foreground="{Binding TestsBrush}"
                                                ToolTip="{Binding TestsTip}" Visibility="{Binding Layout.WideVisibility}" />
-                                    <!-- галочка «Формировать NWF» — прямо в списке (разработчик, 06.11.2026); у строки с подзадачами — «—» -->
-                                    <DockPanel Grid.Column="4" VerticalAlignment="Center" Visibility="{Binding Layout.WideVisibility}">
-                                        <CheckBox DockPanel.Dock="Left" Margin="0,0,6,0" IsChecked="{Binding Columns.NwfOn, Mode=OneWay}"
-                                                  Visibility="{Binding NwfToggleVisibility}" Click="Nwf_Click" ToolTip="Формировать NWF" />
-                                        <TextBlock Style="{StaticResource Cell}" Text="{Binding NwfText}" Foreground="{Binding NwfBrush}"
-                                                   ToolTip="{Binding NwfTip}" />
+                                    <!-- выключатели: у строки с подзадачами — сразу у всех ниже, «■» — у подзадач по-разному -->
+                                    <CheckBox Grid.Column="3" HorizontalAlignment="Left" Tag="Nwc" IsChecked="{Binding Columns.NwcState, Mode=OneWay}"
+                                              Click="Flag_Click" ToolTip="Выгружать NWC" />
+                                    <DockPanel Grid.Column="4" VerticalAlignment="Center">
+                                        <CheckBox DockPanel.Dock="Left" Margin="0,0,6,0" Tag="Nwf" IsChecked="{Binding Columns.NwfState, Mode=OneWay}"
+                                                  Click="Flag_Click" ToolTip="Формировать NWF" />
+                                        <TextBlock Style="{StaticResource Cell}" Text="{Binding NwfText}" ToolTip="{Binding NwfTip}" />
                                     </DockPanel>
-                                    <TextBlock Grid.Column="5" Style="{StaticResource Cell}" Text="{Binding Exported}" Foreground="{Binding ExportedBrush}"
-                                               ToolTip="{Binding ExportedTip}" />
+                                    <CheckBox Grid.Column="5" HorizontalAlignment="Left" Tag="Reports" IsChecked="{Binding Columns.ReportsState, Mode=OneWay}"
+                                              IsEnabled="{Binding Columns.ReportsEnabled}" Click="Flag_Click" ToolTip="Формировать отчёты" />
+                                    <!-- форматы — список с галочками; от строки выше — бледно и «↑» -->
+                                    <Button Grid.Column="6" Style="{StaticResource CellButton}" Click="Formats_Click" Visibility="{Binding Layout.WideVisibility}"
+                                            ToolTip="{Binding FormatsTip}">
+                                        <TextBlock Style="{StaticResource Cell}" Text="{Binding FormatsText}" Foreground="{Binding FormatsBrush}" />
+                                    </Button>
+                                    <TextBlock Grid.Column="7" Style="{StaticResource Cell}" Text="{Binding Exported}" Foreground="{Binding ExportedBrush}"
+                                               ToolTip="{Binding ExportedTip}" Visibility="{Binding Layout.ExportedVisibility}" />
                                     <!-- фон — как у строки под мышью и выбранной: кнопки видны только у них -->
-                                    <StackPanel Grid.ColumnSpan="6" HorizontalAlignment="Right" Orientation="Horizontal" VerticalAlignment="Center"
+                                    <StackPanel Grid.ColumnSpan="8" HorizontalAlignment="Right" Orientation="Horizontal" VerticalAlignment="Center"
                                                 Style="{StaticResource RowActions}" Background="{DynamicResource Hover}">
                                         <Button Style="{StaticResource RowIcon}" Content="&#xE768;" Click="Run_Click" ToolTip="Выгрузить NWC и собрать NWF (с Shift — NWC и тех моделей, что не менялись)" />
                                         <Button Style="{StaticResource RowIcon}" Content="&#xE710;" Click="AddSub_Click" ToolTip="Новая подзадача" />

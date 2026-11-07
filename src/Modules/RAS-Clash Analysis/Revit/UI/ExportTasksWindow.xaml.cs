@@ -18,27 +18,27 @@ namespace RASv2.ClashAnalysis.UI
     public partial class ExportTasksWindow : Window
     {
         /// <summary>
-        /// Ширины столбцов таблицы — общие у шапки и строк: узко — «Проверки» и «NWF» скрываются, совсем узко — и «Подзадачи»
-        /// (название и модели — всегда).
+        /// Ширины столбцов таблицы — общие у шапки и строк: узко — «Проверки» и «Форматы» скрываются, совсем узко — и «Выгружено»
+        /// (название, модели и выключатели — всегда).
         /// </summary>
         public sealed class TableLayout : System.ComponentModel.INotifyPropertyChanged
         {
             public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
-            private bool _wide = true, _subtasks = true;
-            public GridLength Subtasks => _subtasks ? new GridLength(78) : new GridLength(0);
+            private bool _wide = true, _exported = true;
             public GridLength Tests => _wide ? new GridLength(1.2, GridUnitType.Star) : new GridLength(0);
-            public GridLength Nwf => _wide ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
-            public Visibility SubtasksVisibility => _subtasks ? Visibility.Visible : Visibility.Collapsed;
+            public GridLength Formats => _wide ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+            public GridLength Exported => _exported ? new GridLength(100) : new GridLength(0);
             public Visibility WideVisibility => _wide ? Visibility.Visible : Visibility.Collapsed;
+            public Visibility ExportedVisibility => _exported ? Visibility.Visible : Visibility.Collapsed;
 
             /// <summary>Ширина таблицы — какие столбцы показывать.</summary>
             public void Fit(double width)
             {
-                var wide = width >= 680;
-                var subtasks = width >= 520;
-                if (wide == _wide && subtasks == _subtasks) return;
+                var wide = width >= 760;
+                var exported = width >= 560;
+                if (wide == _wide && exported == _exported) return;
                 _wide = wide;
-                _subtasks = subtasks;
+                _exported = exported;
                 PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(null));
             }
         }
@@ -83,18 +83,18 @@ namespace RASv2.ClashAnalysis.UI
             private Brush Shade(bool muted) => muted ? Muted : Normal;
             public Brush Muted { get; set; }
             public Brush Normal { get; set; }
-            public Brush SubtasksBrush => Shade(Columns.Subtasks == "—");
             public string ModelsText => Columns.Models + (Columns.ModelsFrom != null ? " ↑" : "");
             public string ModelsTip => Columns.ModelsFrom != null ? "от «" + Columns.ModelsFrom + "»" : null;
             public Brush ModelsBrush => Shade(Columns.ModelsFrom != null || Columns.Models == "0");
             public string TestsText => Columns.Tests + (Columns.TestsFrom != null ? " ↑" : "");
             public string TestsTip => Columns.Tests == "—" ? null : Columns.Tests + (Columns.TestsFrom != null ? "\nот «" + Columns.TestsFrom + "»" : "");
             public Brush TestsBrush => Shade(Columns.TestsFrom != null || Columns.Tests == "—");
-            public Brush NwfBrush => Shade(Columns.Nwf == "—");
-            // строка без подзадач — галочка (снята — без текста), с подзадачами — «—»
-            public Visibility NwfToggleVisibility => Columns.NwfToggle ? Visibility.Visible : Visibility.Collapsed;
-            public string NwfText => !Columns.NwfToggle ? "—" : Columns.NwfOn ? Columns.Nwf : "";
+            // имя NWF — у строки, которая её собирает
+            public string NwfText => Columns.NwfOn ? Columns.Nwf : "";
             public string NwfTip => Columns.NwfOn ? Columns.Nwf : null;
+            public string FormatsText => Columns.Formats + (Columns.FormatsFrom != null ? " ↑" : "") + " ▾";
+            public string FormatsTip => Columns.FormatsFrom != null ? "от «" + Columns.FormatsFrom + "»" : "Форматы отчётов";
+            public Brush FormatsBrush => Shade(Columns.FormatsFrom != null);
 
             // «Выгружено» — по файлам NWC, в фоне (сетевые папки бывают медленными)
             private string _exported = "…";
@@ -213,7 +213,7 @@ namespace RASv2.ClashAnalysis.UI
                 try
                 {
                     var nwcs = NwcRunPlan.Build(item.Item, Settings, RevitYear, new List<string>())
-                        .Where(j => j.Skip == null).Select(j => j.NwcPath).ToList();
+                        .Where(j => j.Skip == null || j.Off).Select(j => j.NwcPath).ToList();
                     plans.Add((item, nwcs));
                 }
                 catch (System.Exception ex)
@@ -571,31 +571,75 @@ namespace RASv2.ClashAnalysis.UI
         }
 
         /// <summary>
-        /// Галочка NWF в списке (разработчик, 06.11.2026: «быстрый выбор той же настройки, что в меню задачи») — та же «Формировать NWF»,
-        /// с проверками панели, сразу на сервер. Строка открыта в панели с правками или есть новая несохранённая — сначала вопрос:
-        /// иначе «Сохранить» панели вернуло бы прежнюю галочку, а новая строка ушла бы на сервер без названия.
+        /// Выключатели списка — NWC, NWF, отчёты (разработчик, 07.11.2026: «выключатель должен быть у всего»; набросок принят): у строки
+        /// с подзадачами — сразу у всех ниже; «■» (у подзадач по-разному) — щелчок включает у всех.
         /// </summary>
-        private void Nwf_Click(object sender, RoutedEventArgs e)
+        private void Flag_Click(object sender, RoutedEventArgs e)
         {
+            var box = (CheckBox)sender;
+            var row = RowOf(sender);
+            var flag = (RowFlag)System.Enum.Parse(typeof(RowFlag), (string)box.Tag);
+            var state = flag == RowFlag.Nwc ? row.Columns.NwcState : flag == RowFlag.Nwf ? row.Columns.NwfState : row.Columns.ReportsState;
+            var on = state != true;
+            Change(row.Item, () => ExportNodes.SetFlag(row.Item, flag, on, Settings));
+        }
+
+        /// <summary>Форматы отчётов строки — списком с галочками; закрыли список — свои форматы у строки, на сервер.</summary>
+        private void Formats_Click(object sender, RoutedEventArgs e)
+        {
+            var button = (Button)sender;
             var task = RowOf(sender).Item;
-            var on = ((CheckBox)sender).IsChecked == true;
-            if ((task == _selected || _pending != null) && !Leave() || !_roots.SelectMany(r => r.Self()).Contains(task))
+            var current = ExportNodes.FormatsOf(task) ?? new List<string>();
+            var fg = (Brush)FindResource("Fg");
+            var boxes = ExportNodes.ReportFormatNames
+                .Select(f => new CheckBox { Content = f, IsChecked = current.Contains(f), Foreground = fg, Margin = new Thickness(0, 3, 0, 3) })
+                .ToList();
+            var list = new StackPanel { Margin = new Thickness(12, 8, 12, 8) };
+            foreach (var b in boxes) list.Children.Add(b);
+            var popup = new System.Windows.Controls.Primitives.Popup
+            {
+                PlacementTarget = button, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom, StaysOpen = false,
+                AllowsTransparency = true,
+                Child = new Border
+                {
+                    Background = (Brush)FindResource("Bg"), BorderBrush = (Brush)FindResource("Line"), BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(6), Child = list,
+                },
+            };
+            popup.Closed += (s, a) =>
+            {
+                var chosen = boxes.Where(b => b.IsChecked == true).Select(b => (string)b.Content).ToList();
+                if (chosen.SequenceEqual(ExportNodes.ReportFormatNames.Where(current.Contains))) return;
+                Dispatcher.BeginInvoke(new System.Action(() => Change(task, () => ExportNodes.SetFormats(task, chosen))));
+            };
+            popup.IsOpen = true;
+        }
+
+        /// <summary>
+        /// Правка из списка — сразу на сервер. Строка (или строка ниже) открыта в панели с правками, или есть новая несохранённая —
+        /// сначала вопрос: иначе «Сохранить» панели вернуло бы прежнее, а новая строка ушла бы на сервер без названия. Ошибка проверки —
+        /// сообщением; не записалось — как было. Открытая строка — заново, с новым.
+        /// </summary>
+        private void Change(ExportTask task, System.Func<string> change)
+        {
+            var rows = task.Self().ToList();
+            if ((_selected != null && rows.Contains(_selected) || _pending != null) && !Leave() || !_roots.SelectMany(r => r.Self()).Contains(task))
             {
                 Refresh();
                 return;
             }
-            var error = ExportNodes.SetNwf(task, on, Settings);
+            var before = rows.Select(t => t.Settings.Clone()).ToList();
+            var error = change();
             if (error != null)
             {
                 MessageBox.Show(this, error, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
                 Refresh();
                 return;
             }
-            // не записалась на сервер — как было
-            if (!SaveTop(ExportNodes.Root(task))) task.Settings.MakeNwf = !on;
+            if (!SaveTop(ExportNodes.Root(task)))
+                for (var i = 0; i < rows.Count; i++) rows[i].Settings = before[i];
             Refresh();
-            // открытая в панели строка — заново, с новой галочкой (правок в ней уже нет — спросили выше)
-            if (task == _selected) Show(_roots.SelectMany(r => r.Self()).Contains(task) ? task : null);
+            if (_selected != null && rows.Contains(_selected)) Show(_roots.SelectMany(r => r.Self()).Contains(_selected) ? _selected : null);
         }
 
         // перетаскивание строки: нажали на строку (не на кнопку) и повели мышью — перенос внутри своего уровня; нажатие — выбор

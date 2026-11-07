@@ -79,6 +79,11 @@ namespace RASv2.ClashAnalysis.Logic
         [DataMember(Order = 17, EmitDefaultValue = false)] public bool MakeReports { get; set; }
         /// <summary>Выгружать только модели, отредактированные в выбранный срок (остальные — NWC актуален); null — от уровня выше.</summary>
         [DataMember(Order = 18, EmitDefaultValue = false)] public ModelDateFilter Edited { get; set; }
+        /// <summary>
+        /// «NWC» выключен — ▷ не выгружает NWC моделей строки (NWF — из NWC, что уже лежат); своё у строки, не наследуется
+        /// (разработчик, 07.11.2026: «выключатель должен быть у всего»). По умолчанию выгружается — поэтому «не», а не «да».
+        /// </summary>
+        [DataMember(Order = 19, EmitDefaultValue = false)] public bool NoNwc { get; set; }
 
         /// <summary>Задача верхнего уровня: всё своё, по умолчанию — регламент 15.10 (вида нет — из общих настроек).</summary>
         /// <summary>
@@ -97,7 +102,7 @@ namespace RASv2.ClashAnalysis.Logic
             TestsFiles = TestsFiles?.ToList(), NwfName = NwfName, Folder = Folder, ServerFolder = ServerFolder, NwcFolder = NwcFolder,
             NwfFolder = NwfFolder, ReportFolder = ReportFolder, Xml = Xml, Html = Html, ViewName = ViewName, MakeNwf = MakeNwf,
             HideNames = HideNames?.ToList(), ReportFormats = ReportFormats?.ToList(), Export = Export?.Clone(),
-            HideSets = HideSets?.Select(h => h.Clone()).ToList(), MakeReports = MakeReports, Edited = Edited?.Clone(),
+            HideSets = HideSets?.Select(h => h.Clone()).ToList(), MakeReports = MakeReports, Edited = Edited?.Clone(), NoNwc = NoNwc,
         };
     }
 
@@ -197,10 +202,21 @@ namespace RASv2.ClashAnalysis.Logic
         public string Tests { get; set; }
         public string TestsFrom { get; set; }
         public string Nwf { get; set; }
-        /// <summary>Галочка «Формировать NWF» в списке: стоит / её можно ставить (строка без подзадач).</summary>
+        /// <summary>Строка сама собирает NWF (имя — рядом с галочкой).</summary>
         public bool NwfOn { get; set; }
-        public bool NwfToggle { get; set; }
+        /// <summary>Выключатели (ExportNodes.FlagState): да / нет / у подзадач по-разному (null).</summary>
+        public bool? NwcState { get; set; }
+        public bool? NwfState { get; set; }
+        public bool? ReportsState { get; set; }
+        /// <summary>Отчёты — только у строк, собирающих NWF: ни одной — галочка серая.</summary>
+        public bool ReportsEnabled { get; set; }
+        /// <summary>Форматы отчётов строки (свои или от строки выше — FormatsFrom).</summary>
+        public string Formats { get; set; }
+        public string FormatsFrom { get; set; }
     }
+
+    /// <summary>Выключатели списка задач (разработчик, 07.11.2026: «выключатель должен быть у всего»).</summary>
+    public enum RowFlag { Nwc, Nwf, Reports }
 
     /// <summary>Настройка строки по дереву, блоки, где что лежит, строки окна, проверки окна настроек.</summary>
     public static class ExportNodes
@@ -332,22 +348,72 @@ namespace RASv2.ClashAnalysis.Logic
                 TestsFrom = tests.Count > 0 ? InheritedFrom(task, s => s.TestsFiles) : null,
                 Nwf = MakesNwf(task) ? NwfNameOf(task) + ".nwf" : none,
                 NwfOn = MakesNwf(task),
-                NwfToggle = task.Children.Count == 0,
+                NwcState = FlagState(task, RowFlag.Nwc),
+                NwfState = FlagState(task, RowFlag.Nwf),
+                ReportsState = FlagState(task, RowFlag.Reports),
+                ReportsEnabled = FlagRows(task, RowFlag.Reports).Any(),
+                Formats = string.Join(", ", FormatsOf(task) ?? new List<string>()),
+                FormatsFrom = InheritedFrom(task, s => s.ReportFormats),
             };
         }
 
+        // ── выключатели списка задач ──
+
         /// <summary>
-        /// Галочка NWF прямо в списке задач (разработчик, 06.11.2026: «быстрый выбор той же настройки, что в меню задачи») — та же
-        /// «Формировать NWF», с теми же проверками, что при «Сохранить» в панели. Ошибка — галочка как была, текст ошибки; null — поставлена.
+        /// К каким строкам относится выключатель: NWC — строка и все ниже (у строки с подзадачами — её модели, которых нет ниже);
+        /// NWF — строки без подзадач; отчёты — строки без подзадач, которые собирают NWF.
         /// </summary>
-        public static string SetNwf(ExportTask task, bool on, ExportSettings common)
+        private static IEnumerable<ExportTask> FlagRows(ExportTask task, RowFlag flag) =>
+            flag == RowFlag.Nwc ? task.Self()
+            : flag == RowFlag.Nwf ? task.Self().Where(t => t.Children.Count == 0)
+            : task.Self().Where(MakesNwf);
+
+        private static bool FlagOf(ExportTask t, RowFlag flag) =>
+            flag == RowFlag.Nwc ? !t.Settings.NoNwc : flag == RowFlag.Nwf ? t.Settings.MakeNwf : t.Settings.MakeReports;
+
+        private static void SetFlagOf(ExportTask t, RowFlag flag, bool on)
         {
-            if (task.Children.Count > 0) return "NWF собирает строка без подзадач.";
-            var was = task.Settings.MakeNwf;
-            task.Settings.MakeNwf = on;
-            var error = on ? CheckNwfName(NwfNameOf(task)) ?? CheckNwf(Root(task), common) : null;
-            if (error != null) task.Settings.MakeNwf = was;
+            if (flag == RowFlag.Nwc) t.Settings.NoNwc = !on;
+            else if (flag == RowFlag.Nwf) t.Settings.MakeNwf = on;
+            else t.Settings.MakeReports = on;
+        }
+
+        /// <summary>Выключатель строки: у всех её строк включено — да, ни у одной — нет, по-разному — null; строк нет — нет.</summary>
+        public static bool? FlagState(ExportTask task, RowFlag flag)
+        {
+            var rows = FlagRows(task, flag).ToList();
+            var on = rows.Count(t => FlagOf(t, flag));
+            return rows.Count == 0 || on == 0 ? false : on == rows.Count ? true : (bool?)null;
+        }
+
+        /// <summary>
+        /// Выключатель в списке (у строки с подзадачами — сразу у всех ниже), с теми же проверками, что при «Сохранить» в панели;
+        /// ошибка — всё как было, текст ошибки; null — сделано. Заменяет SetNwf (06.11.2026, только NWF и только у строки без подзадач).
+        /// </summary>
+        public static string SetFlag(ExportTask task, RowFlag flag, bool on, ExportSettings common)
+        {
+            var rows = FlagRows(task, flag).ToList();
+            if (rows.Count == 0)
+                return flag == RowFlag.Reports ? "Отчёты делает строка, которая собирает NWF: сначала включите NWF." : "Здесь нечего включать.";
+            var was = rows.Select(t => FlagOf(t, flag)).ToList();
+            foreach (var t in rows) SetFlagOf(t, flag, on);
+            string error = null;
+            if (flag == RowFlag.Nwf && on)
+                error = rows.Select(t => CheckNwfName(NwfNameOf(t)) is string e ? (rows.Count > 1 ? "«" + t.Name + "»: " : "") + e : null)
+                            .FirstOrDefault(e => e != null)
+                        ?? CheckNwf(Root(task), common);
+            if (error != null)
+                for (var i = 0; i < rows.Count; i++) SetFlagOf(rows[i], flag, was[i]);
             return error;
+        }
+
+        /// <summary>Форматы отчётов из списка задач — свои у строки (как «Изменить» в панели); пусто — нельзя.</summary>
+        public static string SetFormats(ExportTask task, IEnumerable<string> formats)
+        {
+            var list = ReportFormatNames.Where(f => formats.Contains(f)).ToList();
+            if (list.Count == 0) return "Нужен хотя бы один формат отчётов.";
+            task.Settings.ReportFormats = list;
+            return null;
         }
 
         /// <summary>Название строки выше, от которой взято значение; своё или у задачи — null.</summary>

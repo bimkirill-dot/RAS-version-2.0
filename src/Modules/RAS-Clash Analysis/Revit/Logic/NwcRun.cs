@@ -22,6 +22,8 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>Строки дерева, которым нужна эта NWC: по первой взяты настройки.</summary>
         public List<string> Rows { get; } = new List<string>();
         public string Skip { get; set; }
+        /// <summary>«NWC» выключен у всех строк этой NWC — не выгружается (Skip), а NWC, что уже есть, нужна NWF и «Выгружено».</summary>
+        public bool Off { get; set; }
         /// <summary>Строка окна хода — не NWC, а NWF строки (Export\NwfStage): имя — «S1_ВК.nwf».</summary>
         public bool IsNwf { get; set; }
         public string Name { get; set; }
@@ -62,6 +64,7 @@ namespace RASv2.ClashAnalysis.Logic
                     if (byPath.TryGetValue(job.NwcPath, out var same))
                     {
                         same.Rows.Add(row.Name);
+                        if (!row.Settings.NoNwc) same.Off = false;
                         if (!string.Equals(same.Model.Path, model.Path, StringComparison.OrdinalIgnoreCase))
                             notes.Add($"Одна NWC «{ExportNodes.FileName(job.NwcPath)}» — у двух моделей: «{same.Model.Path}» и «{model.Path}» (строка «{row.Name}»). Выгружается первая — проверьте имена NWC.");
                         else if (Signature(same) != Signature(job))
@@ -71,12 +74,14 @@ namespace RASv2.ClashAnalysis.Logic
                     if (!leaf)
                         notes.Add($"Модель «{job.ModelName}» есть у «{row.Name}», но ни у одной подзадачи — выгружается по настройкам «{row.Name}».");
                     job.Rows.Add(row.Name);
+                    job.Off = row.Settings.NoNwc;
                     job.Skip = SkipReason(model, revitYear, installed) ??
                                (IsRooted(job.NwcPath) ? null : $"не задана папка: ни «Папки задачи», ни полного пути в «Папке для NWC» у «{row.Name}»");
                     byPath[job.NwcPath] = job;
                     jobs.Add(job);
                 }
             }
+            foreach (var j in jobs.Where(j => j.Off && j.Skip == null)) j.Skip = "выгрузка NWC выключена (галочка «NWC»)";
             foreach (var g in jobs.GroupBy(j => j.Model.Path, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
                 notes.Add($"Модель «{ExportNames.BareName(g.Key)}» выгружается {g.Count()} раза — в разные папки: " +
                           string.Join(", ", g.Select(j => j.NwcPath)) + ". Модель откроется столько же раз.");

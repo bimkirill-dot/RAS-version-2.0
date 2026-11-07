@@ -770,6 +770,8 @@ namespace RASv2.ClashAnalysis.UI
             MakeReports = MakeReports.IsChecked == true,
             NwfName = NwfName.Text.Trim().Length > 0 ? NwfName.Text.Trim() : null,
             MakeNwf = MakeNwf.IsChecked == true,
+            // выключатель «NWC» — только в списке задач: панель его не меняет
+            NoNwc = _task.Settings.NoNwc,
             Folder = _folder.Value,
             NwcFolder = _nwc.Value,
             NwfFolder = _nwf.Value,
