@@ -264,6 +264,10 @@ namespace RASv2.ClashAnalysis.Export
                             (doc.IsWorkshared ? $"; рабочих наборов: {new FilteredWorksetCollector(doc).OfKind(WorksetKind.UserWorkset).Count()}" : ""));
                 });
 
+                // вид до удаления — замер: удаление DWG и связей бывало причиной пустого вида? (07.11.2026, модель АР: 86 видимых — только
+                // камеры и рамки, а у разработчика в Revit на этом виде всё есть)
+                var before = job.Export.Nwc.Scope == NwcScope.View ? CountVisibleModel(doc, job.View) : -1;
+                if (before >= 0) _j.Line($"   до удаления на виде «{job.View}» видно элементов модели: {before}");
                 Step("Удаление внешнего", () => RemoveExternal(doc, job.Export));
 
                 View3D view = null;
@@ -512,6 +516,25 @@ namespace RASv2.ClashAnalysis.Export
             if (left.Count > 0) _j.Warn($"{doc.Title}: после удаления остались — " + string.Join(", ", left));
         }
 
+        /// <summary>Сколько элементов модели (не камер, рамок, сетки) видно на 3D-виде с этим именем; вида нет — −1.</summary>
+        private static int CountVisibleModel(Document doc, string name)
+        {
+            try
+            {
+                var view = new FilteredElementCollector(doc).OfClass(typeof(View3D)).Cast<View3D>()
+                    .FirstOrDefault(v => !v.IsTemplate && string.Equals(v.Name.Trim(), (name ?? "").Trim(), StringComparison.OrdinalIgnoreCase));
+                if (view == null) return -1;
+                var service = new[] { BuiltInCategory.OST_Cameras, BuiltInCategory.OST_SectionBox, BuiltInCategory.OST_IOSSketchGrid, BuiltInCategory.OST_Viewers }
+                    .Select(c => new ElementId(c)).ToList();
+                return new FilteredElementCollector(doc, view.Id).WhereElementIsNotElementType().ToElements()
+                    .Count(e => e.Category != null && e.Category.CategoryType == CategoryType.Model && !service.Contains(e.Category.Id));
+            }
+            catch (Exception)
+            {
+                return -1;
+            }
+        }
+
         private static bool IsIfc(string name) => (name ?? "").IndexOf(".ifc", StringComparison.OrdinalIgnoreCase) >= 0;
 
         /// <summary>Номера и имена элементов — снимком, пока все целы.</summary>
@@ -575,6 +598,32 @@ namespace RASv2.ClashAnalysis.Export
                 }
                 _j.Warn($"{job.ModelName}: в виде «{view.Name}» было включено — {string.Join(", ", fixes)}; выключено перед выгрузкой");
             }
+
+            // что в шаблоне выключено целиком — в журнал (пустой вид: откуда)
+            var off = new List<string>();
+            var rules = view.ViewTemplateId != ElementId.InvalidElementId ? doc.GetElement(view.ViewTemplateId) as View ?? view : view;
+            try
+            {
+                if (rules.AreModelCategoriesHidden) off.Add("категории модели — выключены целиком («Показывать категории модели» снято)");
+            }
+            catch (Exception) { /* у вида нет такой настройки */ }
+            try
+            {
+                if (doc.IsWorkshared)
+                {
+                    var hiddenSets = new FilteredWorksetCollector(doc).OfKind(WorksetKind.UserWorkset)
+                        .Where(w => rules.GetWorksetVisibility(w.Id) == WorksetVisibility.Hidden).Select(w => w.Name).ToList();
+                    if (hiddenSets.Count > 0) off.Add($"рабочие наборы скрыты ({hiddenSets.Count}): " + string.Join(", ", hiddenSets.Take(10)) + (hiddenSets.Count > 10 ? ", …" : ""));
+                }
+            }
+            catch (Exception) { /* без рабочих наборов */ }
+            try
+            {
+                var hiddenFilters = rules.GetFilters().Where(f => !rules.GetFilterVisibility(f)).Select(f => doc.GetElement(f)?.Name).ToList();
+                if (hiddenFilters.Count > 0) off.Add($"фильтры скрывают ({hiddenFilters.Count}): " + string.Join(", ", hiddenFilters.Take(10)) + (hiddenFilters.Count > 10 ? ", …" : ""));
+            }
+            catch (Exception) { /* фильтров нет */ }
+            if (off.Count > 0) _j.Line("   в виде" + (rules != view ? $" (по шаблону «{rules.Name}»)" : "") + ": " + string.Join("; ", off));
 
             var visible = new FilteredElementCollector(doc, view.Id).WhereElementIsNotElementType().ToElements();
             entry.Elements = visible.Count;
