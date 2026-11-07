@@ -303,7 +303,7 @@ namespace RASv2.ClashAnalysis.UI
             {
                 // исключение сквозь вложенный ShowDialog роняет Revit (CLAUDE.md, «Правила, о которые уже спотыкались»)
                 RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: выбор моделей не открылся", ex);
-                Error.Text = "Окно выбора моделей не открылось — подробности в журнале плагина.";
+                ShowError("Окно выбора моделей не открылось — подробности в журнале плагина.");
                 return;
             }
             var list = _models.Select(m => m.Model).ToList();
@@ -441,7 +441,7 @@ namespace RASv2.ClashAnalysis.UI
                     _hide.Add(s);
                     added++;
                 }
-                Error.Text = "";
+                ShowError("");
                 Info.Text = "Добавлено правил: " + added + (sets.Count > added ? ", уже были: " + (sets.Count - added) : "") +
                             (skipped > 0 ? "; простые наборы выбора не годятся — пропущено: " + skipped : "") + ".";
                 ShowHide();
@@ -449,7 +449,7 @@ namespace RASv2.ClashAnalysis.UI
             catch (Exception ex)
             {
                 RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: поисковые наборы не прочитаны", ex);
-                Error.Text = ex is InvalidDataException ? ex.Message : "Файл не прочитан: " + ex.Message;
+                ShowError(ex is InvalidDataException ? ex.Message : "Файл не прочитан: " + ex.Message);
             }
         }
 
@@ -661,7 +661,7 @@ namespace RASv2.ClashAnalysis.UI
             {
                 // исключение сквозь вложенный ShowDialog роняет Revit (CLAUDE.md, «Правила, о которые уже спотыкались»)
                 RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: параметры выгрузки задачи не открылись", ex);
-                Error.Text = "Окно параметров выгрузки не открылось — подробности в журнале плагина.";
+                ShowError("Окно параметров выгрузки не открылось — подробности в журнале плагина.");
                 return;
             }
             _export = ExportOverride.From(current);
@@ -772,7 +772,7 @@ namespace RASv2.ClashAnalysis.UI
         private void Export_Click(object sender, RoutedEventArgs e)
         {
             var error = Validate();
-            Error.Text = error ?? "";
+            ShowError(error ?? "");
             if (error != null) return;
             var dialog = new Microsoft.Win32.SaveFileDialog
             {
@@ -792,7 +792,7 @@ namespace RASv2.ClashAnalysis.UI
             catch (Exception ex)
             {
                 RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: экспорт не записан", ex);
-                Error.Text = "Файл не записан: " + ex.Message;
+                ShowError("Файл не записан: " + ex.Message);
             }
         }
 
@@ -806,18 +806,18 @@ namespace RASv2.ClashAnalysis.UI
                 var file = ExportFiles.Load(dialog.FileName);
                 if (file.Kind == ExportFile.Common)
                 {
-                    Error.Text = "В файле — общие настройки, а не задача: их открывают в шестерёнке.";
+                    ShowError("В файле — общие настройки, а не задача: их открывают в шестерёнке.");
                     return;
                 }
                 var taken = _task.Children.Concat(_imported).Select(c => c.Name);
                 _imported.Add(file.Kind == ExportFile.Project ? ExportFiles.ToTop(file.ProjectData, taken) : ExportFiles.ToTask(file.TaskData, taken));
-                Error.Text = "";
+                ShowError("");
                 Info.Text = "Добавятся по «Сохранить»: " + string.Join(", ", _imported.Select(t => t.Name));
             }
             catch (Exception ex)
             {
                 RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: импорт не прочитан", ex);
-                Error.Text = ex is InvalidDataException ? ex.Message : "Файл не прочитан: " + ex.Message;
+                ShowError(ex is InvalidDataException ? ex.Message : "Файл не прочитан: " + ex.Message);
             }
         }
 
@@ -850,13 +850,26 @@ namespace RASv2.ClashAnalysis.UI
             if (TrySave()) Saved?.Invoke(this, EventArgs.Empty);
         }
 
+        /// <summary>
+        /// Что не так — красным внизу и окном поверх (разработчик, 07.11.2026: «предупреждение выходит красным где-то внизу, незаметно —
+        /// пусть выходит в отдельном окошке»); пусто — только убрать строку.
+        /// </summary>
+        private void ShowError(string text)
+        {
+            Error.Text = text ?? "";
+            if (string.IsNullOrEmpty(text)) return;
+            var owner = Window.GetWindow(this);
+            if (owner != null) MessageBox.Show(owner, text, "Менеджер задач", MessageBoxButton.OK, MessageBoxImage.Warning);
+            else MessageBox.Show(text, "Менеджер задач", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+
         private void Cancel_Click(object sender, RoutedEventArgs e) => Cancelled?.Invoke(this, EventArgs.Empty);
 
         /// <summary>Проверить и применить к строке дерева; ошибка — строкой внизу панели и false.</summary>
         public bool TrySave()
         {
             var error = Validate();
-            Error.Text = error ?? "";
+            ShowError(error ?? "");
             if (error != null) return false;
 
             // проверки по всему дереву (имена NWC, строки с NWF) — на уже применённых настройках; ошибка — вернуть как было
@@ -873,7 +886,7 @@ namespace RASv2.ClashAnalysis.UI
                 foreach (var t in _imported) _task.Remove(t);
                 _task.Name = name;
                 _task.Settings = settings;
-                Error.Text = error;
+                ShowError(error);
                 return false;
             }
             _imported.Clear();

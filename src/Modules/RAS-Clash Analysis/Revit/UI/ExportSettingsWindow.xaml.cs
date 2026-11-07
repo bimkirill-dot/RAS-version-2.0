@@ -115,7 +115,7 @@ namespace RASv2.ClashAnalysis.UI
             Scope.SelectedIndex = s.Scope == NwcScope.View ? 1 : 0;
             ViewName.Text = s.ViewName;
             RoomGeometry.IsChecked = s.RoomGeometry;
-            Error.Text = "";
+            ShowError("");
         }
 
         // имя вида нужно только при «Экспорт: Вид»
@@ -175,7 +175,7 @@ namespace RASv2.ClashAnalysis.UI
             catch (Exception ex)
             {
                 RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: экспорт общих настроек не записан", ex);
-                Error.Text = "Файл не записан: " + ex.Message;
+                ShowError("Файл не записан: " + ex.Message);
             }
         }
 
@@ -188,26 +188,36 @@ namespace RASv2.ClashAnalysis.UI
                 var file = ExportFiles.Load(dialog.FileName);
                 if (file.Kind != ExportFile.Common)
                 {
-                    Error.Text = "В файле — " + file.Kind.ToLowerInvariant() + ", а не общие настройки.";
+                    ShowError("В файле — " + file.Kind.ToLowerInvariant() + ", а не общие настройки.");
                     return;
                 }
                 FillAll(file.Settings);
                 UpdateExample();
-                Error.Text = "";
+                ShowError("");
                 Info.Text = "Взято из «" + Path.GetFileName(dialog.FileName) + "» — сохранится по «Сохранить».";
             }
             catch (Exception ex)
             {
                 RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: импорт общих настроек не прочитан", ex);
-                Error.Text = ex is InvalidDataException ? ex.Message : "Файл не прочитан: " + ex.Message;
+                ShowError(ex is InvalidDataException ? ex.Message : "Файл не прочитан: " + ex.Message);
             }
+        }
+
+        /// <summary>
+        /// Что не так — красным внизу и окном поверх (разработчик, 07.11.2026: «предупреждение выходит красным где-то внизу, незаметно —
+        /// пусть выходит в отдельном окошке»); пусто — только убрать строку.
+        /// </summary>
+        private void ShowError(string text)
+        {
+            Error.Text = text ?? "";
+            if (!string.IsNullOrEmpty(text)) MessageBox.Show(this, text, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
 
         /// <summary>Настройки, как сейчас в окне; что-то не так — ошибка внизу и null.</summary>
         private ExportSettings Collect()
         {
             var error = Validate(out var faceting);
-            Error.Text = error ?? "";
+            ShowError(error ?? "");
             if (error != null) return null;
 
             var result = new ExportSettings();
