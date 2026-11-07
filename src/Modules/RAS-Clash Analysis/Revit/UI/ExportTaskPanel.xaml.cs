@@ -707,19 +707,19 @@ namespace RASv2.ClashAnalysis.UI
             var name = ExportNames.Fill(NwfNameText(), labels) + ".nwf";
             var nwfFolder = ExportNodes.InProject(root, ExportNames.Fill(NwfFolder.Text, labels));
             var nwf = nwfFolder + (makes ? "\\" + name : "");
-            NwfExample.Text = "Пример: " + ExportNodes.Short(root, nwf);
+            NwfExample.Text = "Пример: " + nwf;
             NwfExample.ToolTip = nwf;
 
             var model = models.FirstOrDefault() ?? new ExportModel { Path = SampleModel };
             var nwc = ExportNodes.InProject(root, ExportNames.Fill(NwcFolder.Text,
                 ExportNodes.Labels(ExportNodes.BlockOf(model, _common), model, _common, DateTime.Today))) + "\\" + ExportNodes.NwcNameOf(model, _common) + ".nwc";
-            NwcExample.Text = "Пример: " + ExportNodes.Short(root, nwc);
+            NwcExample.Text = "Пример: " + nwc;
             NwcExample.ToolTip = nwc;
 
             var on = Checked();
             var format = on.Contains("HTML") ? "HTML" : on.FirstOrDefault() ?? "";
             var report = ExportNodes.InProject(root, ExportNames.Fill(ReportFolder.Text, ExportNodes.Labels(block, null, _common, DateTime.Today, format)));
-            ReportExample.Text = report.Length == 0 ? "Папка не задана" : "Пример: " + ExportNodes.Short(root, report);
+            ReportExample.Text = report.Length == 0 ? "Папка не задана" : "Пример: " + report;
             ReportExample.ToolTip = report;
         }
 
@@ -746,16 +746,17 @@ namespace RASv2.ClashAnalysis.UI
             if (path != null) Folder.Text = path;
         }
 
-        /// <summary>Папка NWC / NWF / отчётов: внутри папки проекта — коротко («S1»; S1 на {Блок} — меткой), вне — полный путь.</summary>
+        /// <summary>
+        /// Папка NWC / NWF / отчётов — полным путём (разработчик, 07.11.2026: «пишем полный путь к папкам; в полях для задания пути
+        /// тоже пишется полный путь»; было — внутри папки задачи коротко). Открывается с папки в поле, нет — с папки задачи.
+        /// </summary>
         private void Browse_Click(object sender, RoutedEventArgs e)
         {
             var box = (TextBox)((Button)sender).Tag;
-            var root = Folder.Text.Trim().TrimEnd('\\');
-            var path = FolderDialog.Pick(Owner, root, "Папка внутри проекта");
-            if (path == null) return;
-            box.Text = root.Length > 0 && path.StartsWith(root + "\\", StringComparison.OrdinalIgnoreCase)
-                ? path.Substring(root.Length + 1)
-                : path;
+            var current = ExportNodes.InProject(Folder.Text, box.Text);
+            var start = Directory.Exists(current) ? current : Folder.Text.Trim().TrimEnd(System.IO.Path.DirectorySeparatorChar);
+            var path = FolderDialog.Pick(Owner, start, "Папка");
+            if (path != null) box.Text = path;
         }
 
         // ── экспорт и импорт ──

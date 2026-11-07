@@ -298,7 +298,18 @@
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
                     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                     <TextBlock Style="{StaticResource Cap}" Text="" />
+                    <!-- узко — «от «…»» и «Изменить» над отбором, а не под ним (разработчик, 07.11.2026: «Изменить поднимем выше — сейчас
+                         не понятно, что нажимать»): поля от строки выше не меняются, пока не нажато «Изменить» -->
                     <WrapPanel Grid.Column="1" VerticalAlignment="Top">
+                        <WrapPanel.Style>
+                            <Style TargetType="WrapPanel">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Narrow, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True">
+                                        <Setter Property="Grid.Row" Value="1" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </WrapPanel.Style>
                         <CheckBox x:Name="EditedOn" VerticalAlignment="Center" Margin="0,4,10,4" Checked="Any_Changed" Unchecked="Any_Changed">
                             <TextBlock Text="Экспортировать модели, отредактированные" TextWrapping="Wrap" />
                         </CheckBox>
@@ -321,7 +332,20 @@
                                     Tag="{Binding ElementName=EditedDate2}" Click="PickDate_Click" ToolTip="Календарь" />
                         </StackPanel>
                     </WrapPanel>
-                    <StackPanel Style="{StaticResource Side}">
+                    <StackPanel>
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel" BasedOn="{StaticResource Side}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Narrow, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True">
+                                        <Setter Property="Grid.Column" Value="1" />
+                                        <Setter Property="Grid.Row" Value="0" />
+                                        <Setter Property="HorizontalAlignment" Value="Left" />
+                                        <Setter Property="Height" Value="Auto" />
+                                        <Setter Property="Margin" Value="0,10,0,2" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
                         <TextBlock x:Name="EditedFromText" Style="{StaticResource From}" />
                         <Button x:Name="EditedLink" Style="{StaticResource SideLink}" Click="EditedLink_Click" />
                     </StackPanel>
