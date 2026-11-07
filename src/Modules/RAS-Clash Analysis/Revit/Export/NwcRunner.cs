@@ -10,7 +10,7 @@ using RASv2.ClashAnalysis.Logic;
 
 namespace RASv2.ClashAnalysis.Export
 {
-    /// <summary>Где виден ход выгрузки — список задач: строка изменилась, подождать не замирая, «Остановить».</summary>
+    /// <summary>Где виден ход выгрузки — окно хода: строка изменилась, подождать не замирая, «Отмена».</summary>
     internal interface IRunView
     {
         void Changed(NwcProgress p);
@@ -30,8 +30,8 @@ namespace RASv2.ClashAnalysis.Export
 
     /// <summary>
     /// «Запустить» у строки «Задач выгрузки»: план (что выгружать, что нет и почему, несостыковки) → сразу журнал → NWC (свои и
-    /// фоновых Revit) → NWF → копия журнала в папку задачи. Ход — в список задач (разработчик, 07.11.2026: «больше не открываем
-    /// дополнительное окно — всё прямо в списке задач»). Журналы — %LocalAppData%\RAS_v_2.0\Logs\Выгрузка NWC (у каждого свои) и
+    /// фоновых Revit) → NWF → копия журнала в папку задачи. Ход — в окно хода (ExportRunWindow; убиралось в список задач и
+    /// вернулось 07.11.2026). Журналы — %LocalAppData%\RAS_v_2.0\Logs\Выгрузка NWC (у каждого свои) и
     /// «Журналы выгрузки» в папке задачи (видны всем).
     /// </summary>
     internal static class NwcRunner
@@ -42,7 +42,7 @@ namespace RASv2.ClashAnalysis.Export
         /// <param name="planned">Что пойдёт в запуск — до начала: список раскладывает по строкам.</param>
         /// <returns>null — не начато (причина показана).</returns>
         public static RunOutcome Run(Window owner, IRunView view, UIApplication ui, ExportTask task, ExportSettings common, int year,
-            ICollection<string> only, Action<List<NwcProgress>> planned)
+            ICollection<string> only, Action<List<NwcProgress>, string> planned)
         {
             const string title = "Выгрузка NWC";
             if (ui == null)
@@ -115,7 +115,7 @@ namespace RASv2.ClashAnalysis.Export
                 NwfStage.Header(journal, nwfPlans);
                 var nwfItems = NwfStage.Items(nwfPlans);
                 outcome.Items.AddRange(items.Concat(nwfItems));
-                planned?.Invoke(outcome.Items);
+                planned?.Invoke(outcome.Items, journalPath);
 
                 var remoteJournals = new List<string>();
                 try

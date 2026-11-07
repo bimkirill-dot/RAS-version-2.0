@@ -102,9 +102,6 @@ namespace RASv2.ClashAnalysis.UI
             private List<string> _changed = new List<string>();
             private bool _unknown;
             private string _estimate = "", _estimateTip;
-            // ход выгрузки: «Ждёт» / «Идёт выгрузка» / «В очереди»…; null — не выгружается
-            private string _live, _liveTime;
-            private bool _busy, _target;
 
             public RowRun LastRun => _run;
 
@@ -118,27 +115,11 @@ namespace RASv2.ClashAnalysis.UI
                 Notify();
             }
 
-            public void SetLive(string text, string time)
-            {
-                if (_live == text && _liveTime == time) return;
-                _live = text;
-                _liveTime = time;
-                Notify();
-            }
-
-            public void SetBusy(bool busy, bool target)
-            {
-                if (_busy == busy && _target == target) return;
-                _busy = busy;
-                _target = target;
-                Notify();
-            }
-
             private void Notify() => PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(null));
 
             // значки — рядом с галочкой своей функции (разработчик, 07.11.2026: «статус чего — NWC, NWF, отчётов?»); выключена — без
-            // значка; идёт выгрузка — «Идёт выгрузка» в «Запуске», значков нет
-            private bool Marks => _live == null;
+            // значка
+            private const bool Marks = true;
             private StepMark Mark(string kind) => RunStates.MarkOf(_run, kind);
             private static Visibility Show(bool on) => on ? Visibility.Visible : Visibility.Collapsed;
             private bool NwcOn => Columns.NwcState != false;
@@ -147,34 +128,20 @@ namespace RASv2.ClashAnalysis.UI
             public Visibility NwcErrorVisibility => Show(Marks && NwcOn && Mark("NWC") == StepMark.Errors);
             public Visibility NwcChangedVisibility => Show(Marks && NwcOn && _changed.Count > 0);
             public Visibility NwcUnknownVisibility => Show(Marks && NwcOn && _unknown);
-            public Visibility NwcRetryVisibility => Show(Marks && NwcOn && !_busy && Mark("NWC") == StepMark.Errors);
+            public Visibility NwcRetryVisibility => Show(Marks && NwcOn && Mark("NWC") == StepMark.Errors);
             public string NwcStatusTip => RunStates.StepTip(_run, "NWC", _changed, _unknown);
             public Visibility NwfOkVisibility => Show(Marks && NwfOn && Mark("NWF") == StepMark.Ok);
             public Visibility NwfErrorVisibility => Show(Marks && NwfOn && Mark("NWF") == StepMark.Errors);
-            public Visibility NwfRetryVisibility => Show(Marks && NwfOn && !_busy && Mark("NWF") == StepMark.Errors);
+            public Visibility NwfRetryVisibility => Show(Marks && NwfOn && Mark("NWF") == StepMark.Errors);
             public string NwfStatusTip => RunStates.StepTip(_run, "NWF", new List<string>(), false);
-            // «Запуск»: идёт выгрузка — её ход («Ждёт», «Идёт выгрузка», «В очереди»…), иначе — когда запускали
-            public string RunAt => _live ?? (_run == null ? "" : _run.At.ToString("dd.MM HH:mm"));
-            public string RunAtTip => _live != null || _run == null ? null : $"Запускал {_run.By}, {_run.At:dd.MM.yyyy HH:mm}";
-            public Brush RunAtBrush => _live == null ? Normal : _live == "Идёт выгрузка" || _live == "Остановка…" ? Accent : _live == "С ошибками" ? Error
-                : _live == "Готово" ? Normal : Muted;
-            public Brush Accent { get; set; }
-            public Brush Error { get; set; }
-            public string TimeText => _liveTime ?? _estimate;
-            public string TimeTip => _liveTime != null ? "Идёт" : _estimateTip;
-            public Brush TimeBrush => Shade(_liveTime == null);
+            public string RunAt => _run == null ? "" : _run.At.ToString("dd.MM HH:mm");
+            public string RunAtTip => _run == null ? null : $"Запускал {_run.By}, {_run.At:dd.MM.yyyy HH:mm}";
+            public string TimeText => _estimate;
+            public string TimeTip => _estimateTip;
 
-            // пока идёт выгрузка — правка закрыта; ▷ у выгружаемой строки — ■ «Остановить»
-            public bool Idle => !_busy;
-            public bool ReportsOn => Columns.ReportsEnabled && !_busy;
-            public bool IsTarget => _target;
-            public string RunTip => _target ? "Остановить выгрузку" : _busy ? "В очередь (ещё раз — убрать из очереди)" : "Выгрузить NWC и собрать NWF";
-            public Visibility EditVisibility => _busy ? Visibility.Collapsed : Visibility.Visible;
             // Segoe MDL2 Assets: E70D — вниз (развёрнуто), E76C — вправо (свёрнуто)
             public string Arrow => Collapsed ? "\uE76C" : "\uE70D";
             public Visibility ArrowVisibility => HasInner ? Visibility.Visible : Visibility.Hidden;
-            // место кнопки остаётся и у задачи, где её нет, — значки строк стоят ровно
-            public Visibility CopyVisibility => _busy ? Visibility.Collapsed : IsTop ? Visibility.Hidden : Visibility.Visible;
         }
 
         /// <summary>Версия Revit — для выбора моделей с Revit Server (настройки серверов — свои у каждой версии).</summary>
@@ -227,24 +194,8 @@ namespace RASv2.ClashAnalysis.UI
             Width = System.Math.Max(MinWidth, desk.Width * 0.8);
             Height = System.Math.Max(MinHeight, desk.Height * 0.85);
             Refresh();
-            Closing += (s, e) =>
-            {
-                // идёт выгрузка — остановить и закрыть, когда остановится (после текущей модели)
-                if (_running)
-                {
-                    e.Cancel = true;
-                    if (_closeAfter) return;
-                    if (MessageBox.Show(this, "Идёт выгрузка. Остановить её и закрыть окно?\nОстановится после текущей модели.", Title,
-                            MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-                    _cancel = true;
-                    _queue.Clear();
-                    _closeAfter = true;
-                    UpdateLive(true);
-                    return;
-                }
-                // несохранённые правки — спросить
-                e.Cancel = !Leave();
-            };
+            // закрыть окно с несохранёнными правками — спросить (идёт выгрузка — окно хода поверх, сюда не закрыть)
+            Closing += (s, e) => e.Cancel = !Leave();
         }
 
         private void ShowBanner(string text)
@@ -265,12 +216,10 @@ namespace RASv2.ClashAnalysis.UI
                 {
                     Row = r, Columns = ExportNodes.Columns(r), Collapsed = _collapsed.Contains(r.Item), HasInner = r.Item.Children.Count > 0,
                     IsSelected = r.Item == _selected || _picked.Contains(r.Item), Muted = muted, Normal = normal, Layout = _layout,
-                    Accent = (Brush)FindResource("Accent"), Error = (Brush)FindResource("Error"),
                 })
                 .ToList();
             Dispatcher.BeginInvoke(new System.Action(() => TreeScroll.ScrollToVerticalOffset(offset)), System.Windows.Threading.DispatcherPriority.Loaded);
             LoadStatus(_items);
-            UpdateBusy();
         }
 
         // шапка таблицы — над столбцами строк: появилась полоса прокрутки — у шапки справа столько же места
@@ -478,8 +427,17 @@ namespace RASv2.ClashAnalysis.UI
         {
             var task = RowOf(sender).Item;
             if (!Leave()) return;
-            var parent = task.Parent;
             var copy = task.Copy();
+            var parent = task.Parent;
+            if (parent == null)
+            {
+                // задача — тоже (разработчик, 07.11.2026: «не можем скопировать задачу — нет значка»): в конец списка, новым файлом
+                copy.Name = ExportFiles.UniqueName(task.Name, _roots.Select(r => r.Name));
+                copy.StoreOrder = NextOrder();
+                _roots.Add(copy);
+                Open(copy);
+                return;
+            }
             copy.Name = ExportFiles.UniqueName(task.Name, parent.Children.Select(c => c.Name));
             parent.Add(copy);
             parent.Children.Remove(copy);
@@ -617,7 +575,6 @@ namespace RASv2.ClashAnalysis.UI
         /// </summary>
         private void Change(ExportTask task, System.Func<string> change)
         {
-            if (_running) return;
             var rows = task.Self().ToList();
             if ((_selected != null && rows.Contains(_selected) || _pending != null) && !Leave() || !_roots.SelectMany(r => r.Self()).Contains(task))
             {
@@ -641,12 +598,6 @@ namespace RASv2.ClashAnalysis.UI
         // перетаскивание строки: нажали на строку (не на кнопку) и повели мышью — перенос внутри своего уровня; нажатие — выбор
         private void Row_MouseDown(object sender, MouseButtonEventArgs e)
         {
-            // идёт выгрузка — правка закрыта: строки не выбираются и не тащатся (кнопки строки — работают)
-            if (_running)
-            {
-                _dragArmed = false;
-                return;
-            }
             var onButton = e.OriginalSource is DependencyObject d && FindButton(d);
             _dragArmed = !onButton;
             _dragStart = e.GetPosition(this);

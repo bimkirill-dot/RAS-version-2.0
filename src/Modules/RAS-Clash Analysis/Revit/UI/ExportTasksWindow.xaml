@@ -81,13 +81,10 @@
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
         <!-- кнопки строки — только у строки под мышью (разработчик, 07.11.2026: «убираю курсор — их быть не должно»; было — и у
-             выбранной) и у выгружаемой (✕), поверх конца текста; высота строки не меняется -->
+             выбранной), поверх конца текста; высота строки не меняется -->
         <Style x:Key="RowActions" TargetType="StackPanel">
             <Setter Property="Opacity" Value="0" />
             <Style.Triggers>
-                <DataTrigger Binding="{Binding IsTarget}" Value="True">
-                    <Setter Property="Opacity" Value="1" />
-                </DataTrigger>
                 <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Border}}" Value="True">
                     <Setter Property="Opacity" Value="1" />
                 </DataTrigger>
@@ -145,9 +142,9 @@
                     <TextBlock Grid.Column="3" Style="{StaticResource ColHead}" Text="NWC" ToolTip="Выгружать NWC; рядом — как прошла в последний раз" />
                     <TextBlock Grid.Column="4" Style="{StaticResource ColHead}" Text="NWF" ToolTip="Формировать NWF; рядом — как прошла в последний раз" />
                     <TextBlock Grid.Column="5" Style="{StaticResource ColHead}" Text="Отчёты" ToolTip="Формировать отчёты" />
-                    <TextBlock Grid.Column="6" Style="{StaticResource ColHead}" Text="Запуск" ToolTip="Когда строку запускали последний раз; во время выгрузки — её ход" />
+                    <TextBlock Grid.Column="6" Style="{StaticResource ColHead}" Text="Запуск" ToolTip="Когда строку запускали последний раз" />
                     <TextBlock Grid.Column="7" Style="{StaticResource ColHead}" Text="Время" Visibility="{Binding TimeVisibility}"
-                               ToolTip="Сколько займёт — по прошлым выгрузкам; во время выгрузки — сколько идёт" />
+                               ToolTip="Сколько займёт — по прошлым выгрузкам" />
                 </Grid>
             </Border>
 
@@ -197,7 +194,7 @@
                                          выключателем), красный треугольник — ошибки и ↻ — повторить только их, жёлтый — модель изменилась после
                                          NWC, «?» — Revit Server дату не сообщил; щелчок по значку — журнал -->
                                     <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
-                                        <CheckBox Tag="Nwc" IsChecked="{Binding Columns.NwcState, Mode=OneWay}" IsEnabled="{Binding Idle}" Click="Flag_Click"
+                                        <CheckBox Tag="Nwc" IsChecked="{Binding Columns.NwcState, Mode=OneWay}" Click="Flag_Click"
                                                   ToolTip="Выгружать NWC" />
                                         <Button Style="{StaticResource CellButton}" Margin="6,0,0,0" Click="Status_Click" ToolTip="{Binding NwcStatusTip}"
                                                 ToolTipService.ShowDuration="60000">
@@ -214,7 +211,7 @@
                                     </StackPanel>
                                     <!-- имя NWF — в подсказке: обычно это название строки, а столбец с именем не оставлял места названиям -->
                                     <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
-                                        <CheckBox Tag="Nwf" IsChecked="{Binding Columns.NwfState, Mode=OneWay}" IsEnabled="{Binding Idle}" Click="Flag_Click"
+                                        <CheckBox Tag="Nwf" IsChecked="{Binding Columns.NwfState, Mode=OneWay}" Click="Flag_Click"
                                                   ToolTip="{Binding NwfTip}" />
                                         <Button Style="{StaticResource CellButton}" Margin="6,0,0,0" Click="Status_Click" ToolTip="{Binding NwfStatusTip}"
                                                 ToolTipService.ShowDuration="60000">
@@ -227,33 +224,18 @@
                                                 Click="Retry_Click" Visibility="{Binding NwfRetryVisibility}" ToolTip="Повторить только NWF с ошибками" />
                                     </StackPanel>
                                     <CheckBox Grid.Column="5" HorizontalAlignment="Left" Tag="Reports" IsChecked="{Binding Columns.ReportsState, Mode=OneWay}"
-                                              IsEnabled="{Binding ReportsOn}" Click="Flag_Click" ToolTip="Формировать отчёты" />
-                                    <TextBlock Grid.Column="6" Style="{StaticResource Cell}" Text="{Binding RunAt}" Foreground="{Binding RunAtBrush}" ToolTip="{Binding RunAtTip}" />
-                                    <TextBlock Grid.Column="7" Style="{StaticResource Cell}" Text="{Binding TimeText}" Foreground="{Binding TimeBrush}"
+                                              IsEnabled="{Binding Columns.ReportsEnabled}" Click="Flag_Click" ToolTip="Формировать отчёты" />
+                                    <TextBlock Grid.Column="6" Style="{StaticResource Cell}" Text="{Binding RunAt}" ToolTip="{Binding RunAtTip}" />
+                                    <TextBlock Grid.Column="7" Style="{StaticResource Cell}" Text="{Binding TimeText}" Foreground="{DynamicResource Muted}"
                                                ToolTip="{Binding TimeTip}" Visibility="{Binding Layout.TimeVisibility}" />
                                     <!-- фон — как у строки под мышью и выбранной: кнопки видны только у них -->
                                     <StackPanel Grid.ColumnSpan="8" HorizontalAlignment="Right" Orientation="Horizontal" VerticalAlignment="Center"
                                                 Style="{StaticResource RowActions}" Background="{DynamicResource Hover}">
-                                        <!-- ▷ — выгрузить (идёт другая — в очередь), у выгружаемой — ✕ «Остановить»; Segoe MDL2: E768, E711 -->
-                                        <Button Click="Run_Click" ToolTip="{Binding RunTip}">
-                                            <Button.Style>
-                                                <Style TargetType="Button" BasedOn="{StaticResource RowIcon}">
-                                                    <Setter Property="Content" Value="&#xE768;" />
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsTarget}" Value="True">
-                                                            <Setter Property="Content" Value="&#xE711;" />
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Button.Style>
-                                        </Button>
-                                        <Button Style="{StaticResource RowIcon}" Content="&#xE710;" Click="AddSub_Click" ToolTip="Новая подзадача"
-                                                Visibility="{Binding EditVisibility}" />
-                                        <!-- копия подзадачи (вторая критичность — копия первой) -->
-                                        <Button Style="{StaticResource RowIcon}" Content="&#xE8C8;" Click="Copy_Click" ToolTip="Копия"
-                                                Visibility="{Binding CopyVisibility}" />
-                                        <Button Style="{StaticResource RowIcon}" Content="&#xE74D;" Click="Delete_Click" ToolTip="Удалить"
-                                                Visibility="{Binding EditVisibility}" />
+                                        <Button Style="{StaticResource RowIcon}" Content="&#xE768;" Click="Run_Click" ToolTip="Выгрузить NWC и собрать NWF" />
+                                        <Button Style="{StaticResource RowIcon}" Content="&#xE710;" Click="AddSub_Click" ToolTip="Новая подзадача" />
+                                        <!-- копия строки с подзадачами (вторая критичность — копия первой; задача — тоже, 07.11.2026) -->
+                                        <Button Style="{StaticResource RowIcon}" Content="&#xE8C8;" Click="Copy_Click" ToolTip="Копия" />
+                                        <Button Style="{StaticResource RowIcon}" Content="&#xE74D;" Click="Delete_Click" ToolTip="Удалить" />
                                     </StackPanel>
                                 </Grid>
                             </Border>

@@ -6,7 +6,7 @@
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Fg}" FontFamily="Segoe UI" FontSize="13">
     <!-- Общие настройки «Задач выгрузки» (шестерёнка главного окна, DECISIONS.md модуля) — всё, что одно на компанию. Меню разделов
          слева (разработчик, 07.11.2026: «зачем всё в одно меню вмещаем — боковое меню с разделами»): «Общее» — метки, отделы,
-         копирование моделей; «Экспорт NWC» — параметры NWC Exporter (как в окне экспортёра Navisworks в Revit: подписи и значения —
+         копирование моделей; «NWC» (было «Экспорт NWC», 07.11.2026) — параметры NWC Exporter (как в окне экспортёра Navisworks в Revit: подписи и значения —
          дословно из экспортёра Revit 2026, порядок — по снимку разработчика), имя NWC, очистка модели перед экспортом. Разделы для
          выгрузки RVT и пересохранения моделей — когда до них дойдём. Подпись — вправо до общей границы, значение — слева, строки
          разделены линиями. Кнопки, поля, кисти — общие образцы ядра (подключаются до разметки); ключи своих стилей не совпадают с
@@ -117,7 +117,7 @@
             <ListBox x:Name="Nav" BorderThickness="0" Background="Transparent" ItemContainerStyle="{StaticResource NavItem}"
                      SelectionChanged="Nav_Changed" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBoxItem Content="Общее" Tag="General" />
-                <ListBoxItem Content="Экспорт NWC" Tag="Nwc" />
+                <ListBoxItem Content="NWC" Tag="Nwc" />
             </ListBox>
         </Border>
 

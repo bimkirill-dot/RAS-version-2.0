@@ -13,12 +13,10 @@ using RASv2.ClashAnalysis.Logic;
 namespace RASv2.ClashAnalysis.UI
 {
     /// <summary>
-    /// Выгрузка и статусы — прямо в списке задач (DECISIONS.md модуля, «Статус, запуск, время — в списке задач», 07.11.2026;
-    /// разработчик: «больше не открываем дополнительное окно с выгрузкой — сразу всё отображаем прямо в этом списке»): ▷ — запуск,
-    /// у строк ветки — «Ждёт» / «Идёт выгрузка» / итог и время; ▷ у другой строки во время выгрузки — в очередь, ■ — остановить.
-    /// Пока идёт выгрузка, задачи не правятся (окно отвечает только между шагами Revit). Итог запуска — файлом в папке задачи
-    /// (RunStates): зелёная галочка, красный треугольник (ошибки; «Повторить» — только их), жёлтый — модель изменилась после своей
-    /// NWC (плагин только предупреждает — что выгружать, решает человек), серый «?» — Revit Server дату не сообщил.
+    /// Выгрузка и статусы строк (DECISIONS.md модуля, «Окно хода — снова», 07.11.2026): ▷ — окно хода (ExportRunWindow: NWC и NWF,
+    /// шаг, время, «Отмена»); после — итог запуска каждой строки ветки файлом в папке задачи (RunStates), в списке — значки у галочек
+    /// функций (зелёный — без ошибок, красный — ошибки и ↻ — повторить только их, жёлтый — модель изменилась после NWC, «?» — Revit
+    /// Server дату не сообщил), «Запуск» и «Время». Плагин только предупреждает — что выгружать, решает человек.
     /// </summary>
     public partial class ExportTasksWindow : IRunView
     {
@@ -30,7 +28,7 @@ namespace RASv2.ClashAnalysis.UI
             public RowRun Previous;
         }
 
-        /// <summary>Строка ветки, которая выгружается: её NWC и NWF в запуске, когда пошла, когда кончилась.</summary>
+        /// <summary>Строка ветки в запуске: её NWC и NWF, когда пошла, когда кончилась (время строки — для «Времени»).</summary>
         private sealed class RowLive
         {
             public HashSet<string> Paths;
@@ -38,12 +36,10 @@ namespace RASv2.ClashAnalysis.UI
             public DateTime? End;
         }
 
-        private readonly List<RunRequest> _queue = new List<RunRequest>();
-        private RunRequest _active;
-        private bool _running, _cancel, _closeAfter;
         private readonly Dictionary<ExportTask, RowLive> _live = new Dictionary<ExportTask, RowLive>();
         private List<NwcProgress> _runItems = new List<NwcProgress>();
-        private DateTime _lastTick;
+        // окно хода текущего запуска: ход — в него, по пути — время строк
+        private ExportRunWindow _runWindow;
 
         // ── статусы: файлы состояния задач, даты NWC и моделей — в фоне, с запасом на повторные перестройки списка ──
         private readonly Dictionary<string, RunStateFile> _states = new Dictionary<string, RunStateFile>(StringComparer.OrdinalIgnoreCase);
@@ -166,22 +162,16 @@ namespace RASv2.ClashAnalysis.UI
             }
         }
 
-        // ── запуск, очередь, остановка ──
+        // ── запуск ──
 
-        /// <summary>«Запустить» (▷): сразу; идёт выгрузка — строка в очередь (ещё раз — из очереди), у выгружаемой — «Остановить».</summary>
+        /// <summary>«Запустить» (▷): несохранённые правки — сначала вопрос; дальше — окно хода.</summary>
         private void Run_Click(object sender, RoutedEventArgs e)
         {
             var task = RowOf(sender).Item;
-            if (_running)
-            {
-                Toggle(new RunRequest { Task = task });
-                return;
-            }
             if (!Leave()) return;
             // новая строка, от сохранения которой отказались, — исчезла
             if (!_roots.SelectMany(r => r.Self()).Contains(task)) return;
-            _queue.Add(new RunRequest { Task = task });
-            RunQueue();
+            RunOne(new RunRequest { Task = task });
         }
 
         /// <summary>
@@ -194,87 +184,50 @@ namespace RASv2.ClashAnalysis.UI
             var kind = (string)((FrameworkElement)sender).Tag;
             var errors = row.LastRun?.Errors.Where(x => RunStates.KindOf(x.Path) == kind).ToList();
             if (errors == null || errors.Count == 0) return;
-            var request = new RunRequest
+            if (!Leave()) return;
+            RunOne(new RunRequest
             {
                 Task = row.Item, Previous = row.LastRun,
                 Only = new HashSet<string>(errors.Select(x => x.Path), StringComparer.OrdinalIgnoreCase),
-            };
-            if (_running)
-            {
-                Toggle(request);
-                return;
-            }
-            if (!Leave()) return;
-            _queue.Add(request);
-            RunQueue();
-        }
-
-        /// <summary>Во время выгрузки: у выгружаемой строки — остановить, у строки в очереди — убрать, у остальных — в очередь.</summary>
-        private void Toggle(RunRequest request)
-        {
-            if (_active != null && _active.Task == request.Task)
-            {
-                if (_cancel) return;
-                if (MessageBox.Show(this, "Остановить выгрузку «" + request.Task.Name + "»? Остановится после текущей модели.", Title,
-                        MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
-                    _cancel = true;
-            }
-            else
-            {
-                var queued = _queue.FirstOrDefault(q => q.Task == request.Task);
-                if (queued != null) _queue.Remove(queued);
-                else _queue.Add(request);
-            }
-            UpdateBusy();
-        }
-
-        private void RunQueue()
-        {
-            _running = true;
-            UpdateBusy();
-            try
-            {
-                while (_queue.Count > 0 && !_closeAfter)
-                {
-                    _active = _queue[0];
-                    _queue.RemoveAt(0);
-                    _cancel = false;
-                    UpdateBusy();
-                    RunOne(_active);
-                }
-            }
-            finally
-            {
-                _active = null;
-                _running = false;
-                _queue.Clear();
-                _live.Clear();
-                UpdateBusy();
-                Refresh();
-            }
-            if (_closeAfter) Close();
+            });
         }
 
         private void RunOne(RunRequest request)
         {
             RunOutcome outcome = null;
+            var title = request.Task.Name + (request.Only != null ? " — повтор ошибок" : "");
             try
             {
-                outcome = NwcRunner.Run(this, this, Revit as Autodesk.Revit.UI.UIApplication, request.Task, Settings, RevitYear, request.Only,
-                    items => StartLive(request, items));
+                _runWindow = new ExportRunWindow(title, w =>
+                {
+                    outcome = NwcRunner.Run(w, this, Revit as Autodesk.Revit.UI.UIApplication, request.Task, Settings, RevitYear, request.Only,
+                        (items, journal) =>
+                        {
+                            w.SetItems(items, journal);
+                            StartLive(request, items);
+                        });
+                    return outcome != null;
+                }) { Owner = this };
+                _runWindow.ShowDialog();
             }
             catch (Exception ex)
             {
-                RASv2.Core.Log.Write("ClashAnalysis", "Выгрузка NWC: не запустилась — " + request.Task.Name, ex);
+                RASv2.Core.Log.Write("ClashAnalysis", "Выгрузка: не запустилась — " + request.Task.Name, ex);
                 MessageBox.Show(this, "Выгрузка не запустилась: " + ex.Message + "\nПодробности — в журнале плагина.", Title,
                     MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                _runWindow = null;
             }
             if (outcome != null) Finish(request, outcome);
             _live.Clear();
             _runItems = new List<NwcProgress>();
+            // итог — в значки, «Запуск», «Время»
+            Refresh();
         }
 
-        /// <summary>Что пойдёт в запуск — по строкам ветки: у каждой её NWC и NWF; строка запуска — сразу «Идёт выгрузка».</summary>
+        /// <summary>Что пойдёт в запуск — по строкам ветки: у каждой её NWC и NWF; строка запуска — с начала.</summary>
         private void StartLive(RunRequest request, List<NwcProgress> items)
         {
             _runItems = items;
@@ -287,7 +240,6 @@ namespace RASv2.ClashAnalysis.UI
                 if (paths.Count == 0) continue;
                 _live[row] = new RowLive { Paths = paths, Start = row == request.Task ? DateTime.Now : (DateTime?)null };
             }
-            UpdateLive(true);
         }
 
         private List<string> RowPaths(ExportTask row) =>
@@ -425,7 +377,7 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Копии выбранных — с подзадачами, «(2)» в названии; подзадача — под своей строкой, задача — в конец; сразу на сервер.</summary>
         private void CopyPicked()
         {
-            if (_running || _picked.Count == 0) return;
+            if (_picked.Count == 0) return;
             var copies = ExportTask.CopyRows(_roots, _picked, NextOrder);
             foreach (var top in copies.Select(ExportNodes.Root).Distinct().ToList()) SaveTop(top);
             foreach (var c in copies.Where(c => c.Parent != null)) _collapsed.Remove(c.Parent);
@@ -440,7 +392,6 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Удалить выбранные (с подзадачами) — после вопроса; задача — её файл на сервере, подзадача — из своей задачи.</summary>
         private void DeletePicked()
         {
-            if (_running) return;
             var rows = ExportTask.Outermost(_roots, _picked);
             if (rows.Count == 0) return;
             var inner = rows.Sum(t => t.Descendants);
@@ -477,7 +428,6 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Ctrl+A — выбрать все строки списка, Delete — удалить выбранные, Esc — снять выбор (не когда печатают в панели).</summary>
         private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
         {
-            if (_running) return;
             for (var f = System.Windows.Input.Keyboard.FocusedElement as DependencyObject; f != null; f = System.Windows.Media.VisualTreeHelper.GetParent(f))
                 if (f == Side || f is System.Windows.Controls.TextBox) return;
             var ctrl = System.Windows.Input.Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Control;
@@ -501,7 +451,7 @@ namespace RASv2.ClashAnalysis.UI
             }
         }
 
-        // ── ход выгрузки — в строки ──
+        // ── ход — в окно хода; по пути — когда строки ветки пошли и кончились ──
 
         void IRunView.Changed(NwcProgress p)
         {
@@ -515,55 +465,13 @@ namespace RASv2.ClashAnalysis.UI
                     live.End = now;
                 }
             }
-            UpdateLive(false);
-            Dispatcher.Invoke(DispatcherPriority.Background, new Action(() => { }));
+            _runWindow?.Changed(p);
         }
 
-        void IRunView.Pump(int milliseconds)
-        {
-            var clock = Stopwatch.StartNew();
-            while (clock.ElapsedMilliseconds < milliseconds)
-            {
-                Dispatcher.Invoke(DispatcherPriority.Background, new Action(() => { }));
-                Thread.Sleep(30);
-            }
-            UpdateLive(false);
-        }
+        void IRunView.Pump(int milliseconds) => _runWindow?.Pump(milliseconds);
 
-        bool IRunView.Cancelled => _cancel;
+        bool IRunView.Cancelled => _runWindow?.Cancelled == true;
 
         private static bool Finished(NwcProgress p) => p.State == NwcState.Done || p.State == NwcState.Failed || p.State == NwcState.Skipped;
-
-        /// <summary>«Ждёт» / «Идёт выгрузка» / «Готово» / «С ошибками» и время строк ветки; раз в секунду — не чаще (force — сразу).</summary>
-        private void UpdateLive(bool force)
-        {
-            var now = DateTime.Now;
-            if (!force && (now - _lastTick).TotalMilliseconds < 900) return;
-            _lastTick = now;
-            foreach (var item in _items)
-            {
-                if (!_live.TryGetValue(item.Item, out var live))
-                {
-                    item.SetLive(_queue.Any(q => q.Task == item.Item) ? "В очереди" : null, null);
-                    continue;
-                }
-                string text;
-                if (live.Start == null) text = "Ждёт";
-                else if (live.End == null) text = _cancel ? "Остановка…" : "Идёт выгрузка";
-                else text = _runItems.Any(x => live.Paths.Contains(x.Job.NwcPath) && x.State == NwcState.Failed) ? "С ошибками" : "Готово";
-                var time = live.Start == null ? "" : RunStates.Elapsed((live.End ?? now) - live.Start.Value);
-                item.SetLive(text, time);
-            }
-        }
-
-        /// <summary>Пока идёт выгрузка — правка закрыта: панель, кнопки сверху, галочки, «+», копия, корзина; ▷ / ■ — работают.</summary>
-        private void UpdateBusy()
-        {
-            Toolbar.IsEnabled = !_running;
-            Side.IsEnabled = !_running;
-            foreach (var item in _items)
-                item.SetBusy(_running, _active?.Task == item.Item);
-            UpdateLive(true);
-        }
     }
 }
