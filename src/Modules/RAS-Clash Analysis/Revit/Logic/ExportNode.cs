@@ -84,6 +84,11 @@ namespace RASv2.ClashAnalysis.Logic
         /// (разработчик, 07.11.2026: «выключатель должен быть у всего»). По умолчанию выгружается — поэтому «не», а не «да».
         /// </summary>
         [DataMember(Order = 19, EmitDefaultValue = false)] public bool NoNwc { get; set; }
+        /// <summary>
+        /// Галочка у подзадачи снята — при ▷ у строки выше она (и всё под ней) не делается, в списке — серая (разработчик, 07.11.2026);
+        /// ▷ у неё самой — делается. Своё у строки, не наследуется.
+        /// </summary>
+        [DataMember(Order = 20, EmitDefaultValue = false)] public bool Skipped { get; set; }
 
         /// <summary>Задача верхнего уровня: всё своё, по умолчанию — регламент 15.10 (вида нет — из общих настроек).</summary>
         /// <summary>
@@ -102,7 +107,7 @@ namespace RASv2.ClashAnalysis.Logic
             TestsFiles = TestsFiles?.ToList(), NwfName = NwfName, Folder = Folder, ServerFolder = ServerFolder, NwcFolder = NwcFolder,
             NwfFolder = NwfFolder, ReportFolder = ReportFolder, Xml = Xml, Html = Html, ViewName = ViewName, MakeNwf = MakeNwf,
             HideNames = HideNames?.ToList(), ReportFormats = ReportFormats?.ToList(), Export = Export?.Clone(),
-            HideSets = HideSets?.Select(h => h.Clone()).ToList(), MakeReports = MakeReports, Edited = Edited?.Clone(), NoNwc = NoNwc,
+            HideSets = HideSets?.Select(h => h.Clone()).ToList(), MakeReports = MakeReports, Edited = Edited?.Clone(), NoNwc = NoNwc, Skipped = Skipped,
         };
     }
 

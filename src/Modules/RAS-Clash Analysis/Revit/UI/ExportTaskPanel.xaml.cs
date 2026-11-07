@@ -757,6 +757,7 @@ namespace RASv2.ClashAnalysis.UI
             MakeNwf = MakeNwf.IsChecked == true,
             // выключатель «NWC» — только в списке задач: панель его не меняет
             NoNwc = _task.Settings.NoNwc,
+            Skipped = _task.Settings.Skipped,
             Folder = _folder.Value,
             NwcFolder = _nwc.Value,
             NwfFolder = _nwf.Value,

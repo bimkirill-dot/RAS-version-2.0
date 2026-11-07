@@ -71,6 +71,11 @@ namespace RASv2.ClashAnalysis.UI
             public ExportTask Item => Row.Item;
             public string Number => Row.Number;
             public bool IsTop => Item.Parent == null;
+            // галочка «делать» — у подзадач; снята у неё или выше — строка серая
+            public Visibility DoVisibility => IsTop ? Visibility.Collapsed : Visibility.Visible;
+            public bool DoChecked => !Item.Settings.Skipped;
+            public double RowOpacity => Item.IsSkipped ? 0.45 : 1;
+            public string DoTip => Item.Settings.Skipped ? "Не делается при запуске строки выше — включить" : "Делается при запуске строки выше — выключить";
             public string Name => Item.Name;
             public double NameSize => IsTop ? 15 : 13;
             public FontWeight NameWeight => Row.Level <= 1 ? FontWeights.SemiBold : FontWeights.Normal;
@@ -566,6 +571,18 @@ namespace RASv2.ClashAnalysis.UI
             var state = flag == RowFlag.Nwc ? row.Columns.NwcState : flag == RowFlag.Nwf ? row.Columns.NwfState : row.Columns.ReportsState;
             var on = state != true;
             Change(row.Item, () => ExportNodes.SetFlag(row.Item, flag, on, Settings));
+        }
+
+        /// <summary>Галочка подзадачи: снята — при ▷ у строки выше не делается и серая (разработчик, 07.11.2026); сразу на сервер.</summary>
+        private void Do_Click(object sender, RoutedEventArgs e)
+        {
+            var task = RowOf(sender).Item;
+            var on = ((CheckBox)sender).IsChecked == true;
+            Change(task, () =>
+            {
+                task.Settings.Skipped = !on;
+                return null;
+            });
         }
 
         /// <summary>

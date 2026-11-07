@@ -43,9 +43,13 @@ namespace RASv2.ClashAnalysis.Logic
         {
             var jobs = new List<NwcJob>();
             var byPath = new Dictionary<string, NwcJob>(StringComparer.OrdinalIgnoreCase);
-            var rows = start.Self().ToList();
+            // снятые галочкой подзадачи (07.11.2026) — не делаются; их модели не выгружает и строка выше (модели подзадач у неё — копией)
+            var rows = start.Active().ToList();
             var leaves = rows.Where(r => r.Children.Count == 0).ToList();
             var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var off in start.Self().Except(rows).Where(r => r.Children.Count == 0))
+                foreach (var m in ExportNodes.ModelsOf(off) ?? new List<ExportModel>())
+                    if (!string.IsNullOrWhiteSpace(m.Path)) used.Add(m.Path);
             foreach (var row in leaves.Concat(rows.Where(r => r.Children.Count > 0)))
             {
                 var leaf = row.Children.Count == 0;

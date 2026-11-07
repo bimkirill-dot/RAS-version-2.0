@@ -22,7 +22,7 @@ namespace RASv2.ClashAnalysis.Logic
         public static List<NwfPlan> Build(ExportTask start, ExportSettings common)
         {
             var plans = new List<NwfPlan>();
-            foreach (var row in start.Self().Where(ExportNodes.MakesNwf))
+            foreach (var row in start.Active().Where(ExportNodes.MakesNwf))
             {
                 var plan = new NwfPlan { Row = row, NwfPath = ExportNodes.NwfPath(row, common) };
                 plan.Nwcs = (ExportNodes.ModelsOf(row) ?? new List<ExportModel>())

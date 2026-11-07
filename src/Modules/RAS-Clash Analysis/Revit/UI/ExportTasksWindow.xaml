@@ -157,7 +157,7 @@
                             <Border Style="{StaticResource TaskRowBox}" Margin="{Binding RowMargin}" AllowDrop="True"
                                     PreviewMouseLeftButtonDown="Row_MouseDown" MouseMove="Row_MouseMove"
                                     DragOver="Row_DragOver" Drop="Row_Drop">
-                                <Grid>
+                                <Grid Opacity="{Binding RowOpacity}">
                                     <!-- столбцы — как у шапки; отступ уровня — внутри «Названия», остальные столбцы ровно друг под другом;
                                          кнопки строки — поверх правого края, только когда видны (место не держат) -->
                                     <Grid.ColumnDefinitions>
@@ -181,6 +181,9 @@
                                         <DockPanel Margin="{Binding Indent}">
                                             <Button Style="{StaticResource RowIcon}" Width="18" Margin="0,0,4,0" FontSize="10" Foreground="{DynamicResource Muted}"
                                                     Content="{Binding Arrow}" Visibility="{Binding ArrowVisibility}" Click="Toggle_Click" />
+                                            <!-- делать ли подзадачу при ▷ у строки выше (разработчик, 07.11.2026); снята — строка серая -->
+                                            <CheckBox Margin="0,0,6,0" IsChecked="{Binding DoChecked, Mode=OneWay}" Visibility="{Binding DoVisibility}"
+                                                      Click="Do_Click" ToolTip="{Binding DoTip}" />
                                             <TextBlock Text="{Binding Name}" FontSize="{Binding NameSize}" FontWeight="{Binding NameWeight}" ToolTip="{Binding Name}"
                                                        TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,10,0" />
                                         </DockPanel>

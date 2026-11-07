@@ -867,6 +867,24 @@ namespace RASv2.Tests
                     if (Directory.Exists(dir)) Directory.Delete(dir, true);
                 }
             });
+            yield return Case("галочка подзадачи: снята — при запуске строки выше не делается (NWC и NWF), её модели не выгружает и строка выше", () =>
+            {
+                var roots = Sample(out var high, out var mid);
+                var s1 = high.Children[0];
+                var all = NwcRunPlan.Build(roots[0], common, 2026, new List<string>()).Count;
+                s1.Settings.Skipped = true;
+                Check(s1.IsSkipped && !high.IsSkipped && roots[0].Active().Count() == 4 && !roots[0].Active().Contains(s1), "снята — не в запуске");
+                var notes = new List<string>();
+                var jobs = NwcRunPlan.Build(roots[0], common, 2026, notes);
+                Check(jobs.All(j => !j.Rows.Contains("S1_ВК")) && !notes.Any(n => n.Contains("_S1_")) && !jobs.Any(j => j.ModelName.Contains("_S1_OV")),
+                      "модели S1 — ни у неё, ни у задачи «ни у одной подзадачи»: " + string.Join(" | ", notes));
+                Check(jobs.Count < all, "NWC меньше: " + jobs.Count + " из " + all);
+                Check(!NwfRunPlan.Build(roots[0], common).Any(n => n.Row == s1), "NWF S1 — нет");
+                Check(NwcRunPlan.Build(s1, common, 2026, new List<string>()).Count == 3 && NwfRunPlan.Build(s1, common).Count == 1, "▷ у неё самой — делается");
+                high.Settings.Skipped = true;
+                Check(high.Children[1].IsSkipped && roots[0].Active().Count() == 2, "снята строка выше — серые и все под ней");
+                Check(s1.Settings.Clone().Skipped, "копия строки — с галочкой");
+            });
             yield return Case("пакетно: выбранные без подзадач выбранных; копии — с подзадачами, «(2)», подзадача — под своей, задача — в конец", () =>
             {
                 var roots = Sample(out var high, out var mid);

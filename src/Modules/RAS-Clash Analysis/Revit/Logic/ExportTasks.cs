@@ -60,6 +60,20 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>Строки ветки сверху вниз: сама и все вложенные.</summary>
         public IEnumerable<ExportTask> Self() => new[] { this }.Concat(Children.SelectMany(c => c.Self()));
 
+        /// <summary>Что делает ▷ у этой строки: она сама и подзадачи ниже, кроме снятых галочкой (с их подзадачами).</summary>
+        public IEnumerable<ExportTask> Active() => new[] { this }.Concat(Children.Where(c => !c.Settings.Skipped).SelectMany(c => c.Active()));
+
+        /// <summary>Снята галочка у неё или у строки выше — в списке серая (у строки, где ▷, её галочка не важна — Active).</summary>
+        public bool IsSkipped
+        {
+            get
+            {
+                for (var t = this; t != null; t = t.Parent)
+                    if (t.Settings.Skipped) return true;
+                return false;
+            }
+        }
+
         /// <summary>Копия с вложенными (⧉): настройки — копией, без места в хранилище.</summary>
         public ExportTask Copy()
         {
