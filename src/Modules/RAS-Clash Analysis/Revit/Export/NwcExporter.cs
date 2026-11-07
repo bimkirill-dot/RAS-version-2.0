@@ -582,6 +582,15 @@ namespace RASv2.ClashAnalysis.Export
             var byCategory = visible.GroupBy(e => e.Category?.Name ?? "без категории").OrderByDescending(g => g.Count()).ToList();
             _j.Line($"   видимых элементов: {visible.Count}; по категориям: " +
                     string.Join(", ", byCategory.Take(15).Select(g => g.Key + " " + g.Count())) + (byCategory.Count > 15 ? $", … ещё категорий: {byCategory.Count - 15}" : ""));
+            // видны только камеры, рамки вида, сетка — экспортёр Navisworks останавливается окном «Не найдена подходящая геометрия» и
+            // ждёт «ОК» (в фоновом Revit — некому; 07.11.2026, модель АР с шаблоном «*02_Navisworks») — до него не доходить
+            var service = new[] { BuiltInCategory.OST_Cameras, BuiltInCategory.OST_SectionBox, BuiltInCategory.OST_IOSSketchGrid, BuiltInCategory.OST_Viewers }
+                .Select(c => new ElementId(c)).ToList();
+            var model = visible.Count(e => e.Category != null && e.Category.CategoryType == CategoryType.Model && !service.Contains(e.Category.Id));
+            if (model == 0)
+                throw new NwcError($"в виде «{view.Name}» не видно ни одного элемента модели — только камеры и рамки" +
+                                   (view.ViewTemplateId != ElementId.InvalidElementId ? $"; проверьте шаблон «{doc.GetElement(view.ViewTemplateId)?.Name}» (фильтры, рабочие наборы)" : "") +
+                                   " — экспортёр Navisworks на таком виде останавливается");
             return view;
         }
 
