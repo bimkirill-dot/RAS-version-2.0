@@ -516,6 +516,76 @@ namespace RASv2.ClashAnalysis.Export
             if (left.Count > 0) _j.Warn($"{doc.Title}: после удаления остались — " + string.Join(", ", left));
         }
 
+        /// <summary>
+        /// Пустой вид — откуда (08.11.2026: у разработчика в Revit на этом виде всё есть, у плагина — 0 ещё до удаления связей): по
+        /// очереди, каждый раз с откатом — показать скрытые фильтры, все рабочие наборы, убрать фильтр стадий, отключить шаблон; в
+        /// журнал — сколько элементов модели тогда видно, и сколько их в модели вообще. Модель не меняется (всё откатывается).
+        /// </summary>
+        private void Probe(Document doc, View3D view)
+        {
+            var total = new FilteredElementCollector(doc).WhereElementIsNotElementType().ToElements().Count(IsModelElement);
+            _j.Line($"   в модели элементов модели: {total}; пробую, откуда пустой вид (с откатом):");
+            void Try(string what, Action<View> change)
+            {
+                try
+                {
+                    using (var tx = new Transaction(doc, "RAS: проверка вида"))
+                    {
+                        tx.Start();
+                        var rules = view.ViewTemplateId != ElementId.InvalidElementId ? doc.GetElement(view.ViewTemplateId) as View ?? view : view;
+                        change(rules);
+                        doc.Regenerate();
+                        var n = new FilteredElementCollector(doc, view.Id).WhereElementIsNotElementType().ToElements().Count(IsModelElement);
+                        tx.RollBack();
+                        _j.Line($"     {what}: видно {n}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _j.Line($"     {what}: не вышло — {ex.Message}");
+                }
+            }
+            Try("показать скрытые фильтры", r =>
+            {
+                foreach (var f in r.GetFilters()) if (!r.GetFilterVisibility(f)) r.SetFilterVisibility(f, true);
+            });
+            if (doc.IsWorkshared)
+                Try("показать все рабочие наборы", r =>
+                {
+                    foreach (var w in new FilteredWorksetCollector(doc).OfKind(WorksetKind.UserWorkset))
+                    {
+                        r.SetWorksetVisibility(w.Id, WorksetVisibility.Visible);
+                        if (r.Id != view.Id) view.SetWorksetVisibility(w.Id, WorksetVisibility.Visible);
+                    }
+                });
+            Try("фильтр стадий — «Показать все»", r =>
+            {
+                var all = new FilteredElementCollector(doc).OfClass(typeof(PhaseFilter)).Cast<PhaseFilter>()
+                    .FirstOrDefault(f => f.Name.IndexOf("все", StringComparison.OrdinalIgnoreCase) >= 0 || f.Name.IndexOf("all", StringComparison.OrdinalIgnoreCase) >= 0);
+                var p = r.get_Parameter(BuiltInParameter.VIEW_PHASE_FILTER);
+                if (all != null && p != null && !p.IsReadOnly) p.Set(all.Id);
+                else throw new InvalidOperationException("фильтра «Показать все» нет или он задан не здесь");
+            });
+            Try("без шаблона вида", r => view.ViewTemplateId = ElementId.InvalidElementId);
+            try
+            {
+                var p = view.get_Parameter(BuiltInParameter.VIEW_PHASE_FILTER);
+                var w = doc.IsWorkshared
+                    ? new FilteredWorksetCollector(doc).OfKind(WorksetKind.UserWorkset).Count(x => !x.IsVisibleByDefault)
+                    : 0;
+                _j.Line($"     фильтр стадий вида: {p?.AsValueString() ?? "—"}; рабочих наборов «не видны по умолчанию»: {w}; подрезка вида: " +
+                        (view.CropBoxActive ? "включена" : "нет"));
+            }
+            catch (Exception) { /* не важно */ }
+        }
+
+        private static readonly List<ElementId> ServiceCategories = new[]
+            { BuiltInCategory.OST_Cameras, BuiltInCategory.OST_SectionBox, BuiltInCategory.OST_IOSSketchGrid, BuiltInCategory.OST_Viewers }
+            .Select(c => new ElementId(c)).ToList();
+
+        private static bool IsModelElement(Element e) =>
+            e.Category != null && e.Category.CategoryType == CategoryType.Model && !ServiceCategories.Contains(e.Category.Id);
+
         /// <summary>Сколько элементов модели (не камер, рамок, сетки) видно на 3D-виде с этим именем; вида нет — −1.</summary>
         private static int CountVisibleModel(Document doc, string name)
         {
@@ -636,6 +706,7 @@ namespace RASv2.ClashAnalysis.Export
             var service = new[] { BuiltInCategory.OST_Cameras, BuiltInCategory.OST_SectionBox, BuiltInCategory.OST_IOSSketchGrid, BuiltInCategory.OST_Viewers }
                 .Select(c => new ElementId(c)).ToList();
             var model = visible.Count(e => e.Category != null && e.Category.CategoryType == CategoryType.Model && !service.Contains(e.Category.Id));
+            if (model == 0) Probe(doc, view);
             if (model == 0)
                 throw new NwcError($"в виде «{view.Name}» не видно ни одного элемента модели — только камеры и рамки" +
                                    (view.ViewTemplateId != ElementId.InvalidElementId ? $"; проверьте шаблон «{doc.GetElement(view.ViewTemplateId)?.Name}» (фильтры, рабочие наборы)" : "") +

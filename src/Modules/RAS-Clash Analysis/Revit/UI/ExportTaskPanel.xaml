@@ -168,7 +168,7 @@
 
                 <!-- ══ Экспорт ══ -->
                 <Border Style="{StaticResource SectionHead}">
-                    <TextBlock Style="{StaticResource SectionTitle}" Text="Экспорт" />
+                    <TextBlock Style="{StaticResource SectionTitle}" Text="NWC" />
                 </Border>
                 <!-- вида нет, если в общих «Экспорт: Целый проект» -->
                 <Grid x:Name="ViewRow" Style="{StaticResource RowGrid}">
