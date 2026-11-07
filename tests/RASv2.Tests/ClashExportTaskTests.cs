@@ -898,6 +898,14 @@ namespace RASv2.Tests
                           "время — по последним, новая — без времени");
                     Check(RunStates.Estimate(new[] { @"\\s\new.nwc" }, loaded, out _) == null && RunStates.Load(Path.Combine(dir, "нет.json")).Rows.Count == 0,
                           "ни одной — null; нет файла — пусто");
+
+                    // «Время» строки — прошлый запуск целиком; не запускали — сумма подзадач; лист без запуска — сумма NWC и NWF
+                    Func<ExportTask, IEnumerable<string>> none = t => new[] { @"\\s\a.nwc" };
+                    Check(RunStates.EstimateRow(s1, loaded, none, out var src) == 218 && src.StartsWith("прошлый запуск"), "своя строка — 218 с: " + src);
+                    var s2 = high.Children[1];
+                    Check(RunStates.EstimateRow(s2, loaded, none, out src) == 180 && src.Contains("без копирования"), "не запускали — по NWC: " + src);
+                    Check(RunStates.EstimateRow(high, loaded, none, out src) == 398 && src == "сумма подзадач", "у строки выше — сумма подзадач: " + src);
+                    Check(RunStates.EstimateRow(mid, loaded, t => new string[0], out _) == null, "ничего не известно — null");
                 }
                 finally
                 {

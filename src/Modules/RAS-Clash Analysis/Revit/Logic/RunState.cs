@@ -193,6 +193,43 @@ namespace RASv2.ClashAnalysis.Logic
             return known == 0 ? (double?)null : sum;
         }
 
+        /// <summary>
+        /// «Время» строки (разработчик, 07.11.2026: «вряд ли задача выгружалась 1 минуту»): её последний запуск целиком — с копиями
+        /// моделей, запуском фонового Revit, NWF (сумма времён NWC была меньше настоящего: копии наперёд идут параллельно, запуск Revit
+        /// в неё не входил); строку саму не запускали — сумма подзадач; у строки без подзадач — сумма последних времён её NWC и NWF.
+        /// Ничего не известно — null. source — откуда, для подсказки.
+        /// </summary>
+        public static double? EstimateRow(ExportTask row, RunStateFile file, Func<ExportTask, IEnumerable<string>> paths, out string source)
+        {
+            source = null;
+            var run = Find(file, row);
+            if (run != null && run.Seconds > 0)
+            {
+                source = $"прошлый запуск — {NwcHistory.Duration(run.Seconds)} ({run.At:dd.MM.yyyy HH:mm})";
+                return run.Seconds;
+            }
+            if (row.Children.Count > 0)
+            {
+                double sum = 0;
+                var known = 0;
+                foreach (var c in row.Children)
+                {
+                    var s = EstimateRow(c, file, paths, out _);
+                    if (s == null) continue;
+                    sum += s.Value;
+                    known++;
+                }
+                if (known == 0) return null;
+                source = "сумма подзадач" + (known < row.Children.Count ? $" (без {row.Children.Count - known} — их ещё не выгружали)" : "");
+                return sum;
+            }
+            var items = Estimate(paths(row), file, out var unknown);
+            if (items == null) return null;
+            source = "по прошлым выгрузкам NWC и NWF строки, без копирования моделей — на деле дольше" +
+                     (unknown > 0 ? $"; без {unknown} — их ещё не выгружали" : "");
+            return items;
+        }
+
         /// <summary>«≈ 12 мин», «≈ 1 ч 20 мин»; нет — «—».</summary>
         public static string EstimateText(double? seconds)
         {

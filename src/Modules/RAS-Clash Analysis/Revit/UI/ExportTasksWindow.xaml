@@ -78,7 +78,8 @@
             <Setter Property="Margin" Value="0,0,6,0" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
-        <!-- кнопки строки — у строки под мышью, у выбранной и у выгружаемой (■), поверх конца текста; высота строки не меняется -->
+        <!-- кнопки строки — только у строки под мышью (разработчик, 07.11.2026: «убираю курсор — их быть не должно»; было — и у
+             выбранной) и у выгружаемой (✕), поверх конца текста; высота строки не меняется -->
         <Style x:Key="RowActions" TargetType="StackPanel">
             <Setter Property="Opacity" Value="0" />
             <Style.Triggers>
@@ -86,9 +87,6 @@
                     <Setter Property="Opacity" Value="1" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Border}}" Value="True">
-                    <Setter Property="Opacity" Value="1" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding IsSelected}" Value="True">
                     <Setter Property="Opacity" Value="1" />
                 </DataTrigger>
             </Style.Triggers>

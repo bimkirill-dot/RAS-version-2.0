@@ -146,7 +146,7 @@ namespace RASv2.ClashAnalysis.UI
             {
                 var file = p.StatePath != null && _states.TryGetValue(p.StatePath, out var f) ? f : null;
                 var run = RunStates.Find(file, p.Item.Item);
-                var estimate = RunStates.Estimate(p.Paths, file, out var unknownTimes);
+                var estimate = RunStates.EstimateRow(p.Item.Item, file, t => t == p.Item.Item ? p.Paths : RowPaths(t), out var source);
                 List<ModelCheck> checks;
                 lock (_modelDates)
                     checks = p.Models.Select(m =>
@@ -162,8 +162,7 @@ namespace RASv2.ClashAnalysis.UI
                 var changed = RunStates.Changed(checks.Where(c => c.Model != null || !c.Answered), out var unknown);
                 p.Item.SetStatus(run, changed, unknown, RunStates.EstimateText(estimate),
                     estimate == null ? (p.Paths.Count == 0 ? null : "Ещё не выгружалось — время появится после первой выгрузки")
-                    : "По прошлым выгрузкам NWC и NWF строки" + (unknownTimes > 0 ? $"; без {unknownTimes} — их ещё не выгружали" : "") +
-                      (run != null && run.Seconds > 0 ? $"\nПрошлый запуск — {NwcHistory.Duration(run.Seconds)}" : ""));
+                    : "Примерно: " + source);
             }
         }
 
