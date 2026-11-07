@@ -172,7 +172,7 @@ namespace RASv2.ClashAnalysis.Export
             {
                 using (var journal = new ExportJournal(h.Journal))
                 {
-                    var exporter = new NwcExporter(app, journal, _year, h.Force, h.Parallel);
+                    var exporter = new NwcExporter(app, journal, _year, h.Parallel);
                     exporter.Header(h.Title + $" — фоновый Revit {_year}", items[0].Job.Export, items.Select(p => p.Job).ToList(), new List<string>());
                     exporter.Run(items, p => Save(false), () => File.Exists(cancelPath));
                 }

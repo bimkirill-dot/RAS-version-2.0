@@ -33,6 +33,7 @@ namespace RASv2.ClashAnalysis.Logic
         [DataMember(Order = 2)] public int Year { get; set; }
         [DataMember(Order = 3)] public string Title { get; set; }
         [DataMember(Order = 4)] public string Journal { get; set; }
+        /// <summary>Прежнее «Shift — и актуальные NWC»; с 07.11.2026 не используется (модели не пропускаются сами).</summary>
         [DataMember(Order = 5)] public bool Force { get; set; }
         [DataMember(Order = 6)] public int Parallel { get; set; }
         [DataMember(Order = 7)] public List<HandoffJob> Jobs { get; set; } = new List<HandoffJob>();

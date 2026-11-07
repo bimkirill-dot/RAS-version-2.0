@@ -68,10 +68,23 @@
             <Setter Property="Height" Value="24" />
             <Setter Property="MinHeight" Value="0" />
         </Style>
-        <!-- кнопки строки — у строки под мышью и у выбранной, поверх конца текста; высота строки не меняется — строки не прыгают -->
+        <!-- статус: зелёная галочка — выгружено без ошибок, красный треугольник — с ошибками, жёлтый — модель изменилась после
+             выгрузки, серый «?» — Revit Server дату не сообщил (разработчик, 07.11.2026) -->
+        <SolidColorBrush x:Key="MarkOk" Color="#2E9E55" />
+        <SolidColorBrush x:Key="MarkChanged" Color="#E0A100" />
+        <Style x:Key="Mark" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <!-- кнопки строки — у строки под мышью, у выбранной и у выгружаемой (■), поверх конца текста; высота строки не меняется -->
         <Style x:Key="RowActions" TargetType="StackPanel">
             <Setter Property="Opacity" Value="0" />
             <Style.Triggers>
+                <DataTrigger Binding="{Binding IsTarget}" Value="True">
+                    <Setter Property="Opacity" Value="1" />
+                </DataTrigger>
                 <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Border}}" Value="True">
                     <Setter Property="Opacity" Value="1" />
                 </DataTrigger>
@@ -85,8 +98,9 @@
     <Grid>
         <Grid.ColumnDefinitions>
             <!-- пределы ширины дерева и панели в сумме меньше окна наименьшей ширины — иначе панель уходит за край -->
-            <!-- дерево шире панели, 1,2 : 1 — по снимку разработчика (04.11.2026: «ширина левого окна по стандарту — вот такой») -->
-            <ColumnDefinition Width="1.2*" MinWidth="260" />
+            <!-- дерево шире панели: было 1,2 : 1 по снимку разработчика (04.11.2026); с выключателями, статусом, запуском и временем
+                 (07.11.2026) — 1,7 : 1, иначе названия не помещаются (панели и так хватает: 80 % экрана) -->
+            <ColumnDefinition Width="1.7*" MinWidth="260" />
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="*" MinWidth="480" />
         </Grid.ColumnDefinitions>
@@ -116,14 +130,16 @@
             <Border x:Name="TableHead" DockPanel.Dock="Top" BorderThickness="1" BorderBrush="Transparent" Padding="6,0,8,4" Margin="0,0,4,0">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="2*" />
-                        <ColumnDefinition Width="56" />
+                        <ColumnDefinition Width="2.6*" />
+                        <ColumnDefinition Width="58" />
                         <ColumnDefinition Width="{Binding Tests}" />
-                        <ColumnDefinition Width="48" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="60" />
+                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="58" />
                         <ColumnDefinition Width="{Binding Formats}" />
-                        <ColumnDefinition Width="{Binding Exported}" />
+                        <ColumnDefinition Width="116" />
+                        <ColumnDefinition Width="80" />
+                        <ColumnDefinition Width="{Binding Time}" />
                     </Grid.ColumnDefinitions>
                     <TextBlock Style="{StaticResource ColHead}" Text="Название" Margin="58,0,10,0" />
                     <TextBlock Grid.Column="1" Style="{StaticResource ColHead}" Text="Модели" />
@@ -132,8 +148,10 @@
                     <TextBlock Grid.Column="4" Style="{StaticResource ColHead}" Text="NWF" ToolTip="Формировать NWF" />
                     <TextBlock Grid.Column="5" Style="{StaticResource ColHead}" Text="Отчёты" ToolTip="Формировать отчёты" />
                     <TextBlock Grid.Column="6" Style="{StaticResource ColHead}" Text="Форматы" Visibility="{Binding WideVisibility}" />
-                    <TextBlock Grid.Column="7" Style="{StaticResource ColHead}" Text="Выгружено" Visibility="{Binding ExportedVisibility}"
-                               ToolTip="Когда выгружена самая старая NWC строки; «2 из 4» — NWC есть не у всех моделей" />
+                    <TextBlock Grid.Column="7" Style="{StaticResource ColHead}" Text="Статус" />
+                    <TextBlock Grid.Column="8" Style="{StaticResource ColHead}" Text="Запуск" ToolTip="Когда строку выгружали последний раз" />
+                    <TextBlock Grid.Column="9" Style="{StaticResource ColHead}" Text="Время" Visibility="{Binding TimeVisibility}"
+                               ToolTip="Сколько займёт — по прошлым выгрузкам; во время выгрузки — сколько идёт" />
                 </Grid>
             </Border>
 
@@ -150,14 +168,16 @@
                                     <!-- столбцы — как у шапки; отступ уровня — внутри «Названия», остальные столбцы ровно друг под другом;
                                          кнопки строки — поверх правого края, только когда видны (место не держат) -->
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="2*" />
-                                        <ColumnDefinition Width="56" />
+                                        <ColumnDefinition Width="2.6*" />
+                                        <ColumnDefinition Width="58" />
                                         <ColumnDefinition Width="{Binding Layout.Tests}" />
-                                        <ColumnDefinition Width="48" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="60" />
+                                        <ColumnDefinition Width="44" />
+                                        <ColumnDefinition Width="44" />
+                                        <ColumnDefinition Width="58" />
                                         <ColumnDefinition Width="{Binding Layout.Formats}" />
-                                        <ColumnDefinition Width="{Binding Layout.Exported}" />
+                                        <ColumnDefinition Width="116" />
+                                        <ColumnDefinition Width="80" />
+                                        <ColumnDefinition Width="{Binding Layout.Time}" />
                                     </Grid.ColumnDefinitions>
                                     <DockPanel Margin="{Binding Indent}" VerticalAlignment="Center">
                                         <Button Style="{StaticResource RowIcon}" Width="22" Margin="0" FontSize="10" Foreground="{DynamicResource Muted}"
@@ -173,30 +193,70 @@
                                                ToolTip="{Binding TestsTip}" Visibility="{Binding Layout.WideVisibility}" />
                                     <!-- выключатели: у строки с подзадачами — сразу у всех ниже, «■» — у подзадач по-разному -->
                                     <CheckBox Grid.Column="3" HorizontalAlignment="Left" Tag="Nwc" IsChecked="{Binding Columns.NwcState, Mode=OneWay}"
-                                              Click="Flag_Click" ToolTip="Выгружать NWC" />
-                                    <DockPanel Grid.Column="4" VerticalAlignment="Center">
-                                        <CheckBox DockPanel.Dock="Left" Margin="0,0,6,0" Tag="Nwf" IsChecked="{Binding Columns.NwfState, Mode=OneWay}"
-                                                  Click="Flag_Click" ToolTip="Формировать NWF" />
-                                        <TextBlock Style="{StaticResource Cell}" Text="{Binding NwfText}" ToolTip="{Binding NwfTip}" />
-                                    </DockPanel>
+                                              IsEnabled="{Binding Idle}" Click="Flag_Click" ToolTip="Выгружать NWC" />
+                                    <!-- имя NWF — в подсказке: обычно это название строки, а столбец с именем не оставлял места названиям -->
+                                    <CheckBox Grid.Column="4" HorizontalAlignment="Left" Tag="Nwf" IsChecked="{Binding Columns.NwfState, Mode=OneWay}"
+                                              IsEnabled="{Binding Idle}" Click="Flag_Click" ToolTip="{Binding NwfTip}" />
                                     <CheckBox Grid.Column="5" HorizontalAlignment="Left" Tag="Reports" IsChecked="{Binding Columns.ReportsState, Mode=OneWay}"
-                                              IsEnabled="{Binding Columns.ReportsEnabled}" Click="Flag_Click" ToolTip="Формировать отчёты" />
+                                              IsEnabled="{Binding ReportsOn}" Click="Flag_Click" ToolTip="Формировать отчёты" />
                                     <!-- форматы — список с галочками; от строки выше — бледно и «↑» -->
                                     <Button Grid.Column="6" Style="{StaticResource CellButton}" Click="Formats_Click" Visibility="{Binding Layout.WideVisibility}"
-                                            ToolTip="{Binding FormatsTip}">
-                                        <TextBlock Style="{StaticResource Cell}" Text="{Binding FormatsText}" Foreground="{Binding FormatsBrush}" />
+                                            IsEnabled="{Binding Idle}" ToolTip="{Binding FormatsTip}">
+                                        <DockPanel Margin="0,0,10,0">
+                                            <TextBlock DockPanel.Dock="Right" FontFamily="Segoe MDL2 Assets" FontSize="9" Text="&#xE70D;" Margin="4,1,0,0"
+                                                       VerticalAlignment="Center" Foreground="{DynamicResource Muted}" />
+                                            <TextBlock Style="{StaticResource Cell}" Margin="0" Text="{Binding FormatsText}" Foreground="{Binding FormatsBrush}" />
+                                        </DockPanel>
                                     </Button>
-                                    <TextBlock Grid.Column="7" Style="{StaticResource Cell}" Text="{Binding Exported}" Foreground="{Binding ExportedBrush}"
-                                               ToolTip="{Binding ExportedTip}" Visibility="{Binding Layout.ExportedVisibility}" />
+                                    <!-- статус: идёт выгрузка — текстом; иначе — значки (щелчок — журнал запуска) и «Повторить» у ошибок -->
+                                    <Grid Grid.Column="7" VerticalAlignment="Center">
+                                        <TextBlock Style="{StaticResource Cell}" Text="{Binding LiveText}" Foreground="{Binding LiveBrush}"
+                                                   Visibility="{Binding LiveVisibility}" />
+                                        <StackPanel Orientation="Horizontal" Visibility="{Binding MarksVisibility}">
+                                            <Button Style="{StaticResource CellButton}" HorizontalAlignment="Left" Click="Status_Click"
+                                                    ToolTip="{Binding StatusTip}" ToolTipService.ShowDuration="60000">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Style="{StaticResource Mark}" Text="&#xE73E;" Foreground="{StaticResource MarkOk}"
+                                                               Visibility="{Binding OkVisibility}" />
+                                                    <TextBlock Style="{StaticResource Mark}" Text="&#xE7BA;" Foreground="{DynamicResource Error}"
+                                                               Visibility="{Binding ErrorVisibility}" />
+                                                    <TextBlock Style="{StaticResource Mark}" Text="&#xE7BA;" Foreground="{StaticResource MarkChanged}"
+                                                               Visibility="{Binding ChangedVisibility}" />
+                                                    <TextBlock Style="{StaticResource Mark}" Text="?" FontFamily="Segoe UI" FontWeight="SemiBold" FontSize="14"
+                                                               Foreground="{DynamicResource Muted}" Visibility="{Binding UnknownVisibility}" />
+                                                </StackPanel>
+                                            </Button>
+                                            <Button Style="{StaticResource LinkButton}" FontSize="12" VerticalAlignment="Center" Content="Повторить"
+                                                    Click="Retry_Click" Visibility="{Binding RetryVisibility}"
+                                                    ToolTip="Выгрузить заново только NWC и NWF с ошибками" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <TextBlock Grid.Column="8" Style="{StaticResource Cell}" Text="{Binding RunAt}" ToolTip="{Binding RunAtTip}" />
+                                    <TextBlock Grid.Column="9" Style="{StaticResource Cell}" Text="{Binding TimeText}" Foreground="{Binding TimeBrush}"
+                                               ToolTip="{Binding TimeTip}" Visibility="{Binding Layout.TimeVisibility}" />
                                     <!-- фон — как у строки под мышью и выбранной: кнопки видны только у них -->
-                                    <StackPanel Grid.ColumnSpan="8" HorizontalAlignment="Right" Orientation="Horizontal" VerticalAlignment="Center"
+                                    <StackPanel Grid.ColumnSpan="10" HorizontalAlignment="Right" Orientation="Horizontal" VerticalAlignment="Center"
                                                 Style="{StaticResource RowActions}" Background="{DynamicResource Hover}">
-                                        <Button Style="{StaticResource RowIcon}" Content="&#xE768;" Click="Run_Click" ToolTip="Выгрузить NWC и собрать NWF (с Shift — NWC и тех моделей, что не менялись)" />
-                                        <Button Style="{StaticResource RowIcon}" Content="&#xE710;" Click="AddSub_Click" ToolTip="Новая подзадача" />
+                                        <!-- ▷ — выгрузить (идёт другая — в очередь), у выгружаемой — ✕ «Остановить»; Segoe MDL2: E768, E711 -->
+                                        <Button Click="Run_Click" ToolTip="{Binding RunTip}">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource RowIcon}">
+                                                    <Setter Property="Content" Value="&#xE768;" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsTarget}" Value="True">
+                                                            <Setter Property="Content" Value="&#xE711;" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                        <Button Style="{StaticResource RowIcon}" Content="&#xE710;" Click="AddSub_Click" ToolTip="Новая подзадача"
+                                                Visibility="{Binding EditVisibility}" />
                                         <!-- копия подзадачи (вторая критичность — копия первой) -->
                                         <Button Style="{StaticResource RowIcon}" Content="&#xE8C8;" Click="Copy_Click" ToolTip="Копия"
                                                 Visibility="{Binding CopyVisibility}" />
-                                        <Button Style="{StaticResource RowIcon}" Content="&#xE74D;" Click="Delete_Click" ToolTip="Удалить" />
+                                        <Button Style="{StaticResource RowIcon}" Content="&#xE74D;" Click="Delete_Click" ToolTip="Удалить"
+                                                Visibility="{Binding EditVisibility}" />
                                     </StackPanel>
                                 </Grid>
                             </Border>

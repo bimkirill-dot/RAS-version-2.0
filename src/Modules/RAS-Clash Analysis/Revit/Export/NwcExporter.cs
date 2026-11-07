@@ -62,20 +62,18 @@ namespace RASv2.ClashAnalysis.Export
         private int _revitMessages;
         private int _dialogs;
         // Shift при «Запустить» — выгрузить и актуальные NWC
-        private readonly bool _force;
         // копий моделей Revit Server наперёд одновременно (ModelPrefetch)
         private readonly int _parallel;
         private ModelPrefetch _prefetch;
         // дата изменения текущей модели — в историю
         private DateTime? _modified;
 
-        public NwcExporter(UIApplication ui, ExportJournal journal, int year, bool force, int parallel)
+        public NwcExporter(UIApplication ui, ExportJournal journal, int year, int parallel)
         {
             _ui = ui;
             _app = ui.Application;
             _j = journal;
             _year = year;
-            _force = force;
             _parallel = parallel;
         }
 
@@ -87,8 +85,9 @@ namespace RASv2.ClashAnalysis.Export
                     $"плагин {typeof(NwcExporter).Assembly.GetName().Version}, .NET {Environment.Version}");
             _j.Line($"Временная папка: {TempRoot}; свободно на диске: {FreeSpace(TempRoot)}");
             _j.Line($"Удалять перед выгрузкой: связи Revit {Yes(common.RemoveRevitLinks)}, DWG и CAD {Yes(common.RemoveCad)}, облака точек {Yes(common.RemovePointClouds)}, IFC {Yes(common.RemoveIfc)} (общие; строка может задать свои)");
-            _j.Line($"NWC к выгрузке: {jobs.Count(x => x.Skip == null)}, пропускаются: {jobs.Count(x => x.Skip != null)}" +
-                    (_force ? "; Shift — выгружаются и актуальные NWC" : "; актуальные NWC (модель не менялась) — пропускаются"));
+            // что выгружать, решает человек (разработчик, 07.11.2026: «не нужно самому пропускать модели — для этого есть
+            // „Экспортировать модели, отредактированные после“»): модели, которые не менялись, тоже выгружаются
+            _j.Line($"NWC к выгрузке: {jobs.Count(x => x.Skip == null)}, пропускаются: {jobs.Count(x => x.Skip != null)}");
             var i = 0;
             foreach (var job in jobs)
             {
@@ -378,13 +377,7 @@ namespace RASv2.ClashAnalysis.Export
             if (last?.Signature != null && last.Signature != NwcRunPlan.Signature(job))
                 _j.Line("   вид или параметры выгрузки поменялись с прошлого раза — NWC выгружается заново");
             var fresh = NwcRunPlan.Fresh(job, modified, nwcDate, last);
-            if (fresh != null && !_force)
-            {
-                _current.Step = _current.Note = "NWC актуальна: " + fresh;
-                _j.Line("   пропущена — " + _current.Note);
-                return true;
-            }
-            if (fresh != null) _j.Line("   NWC актуальна, но выгружается (Shift): " + fresh);
+            if (fresh != null) _j.Line("   модель не менялась с прошлой выгрузки, выгружается: " + fresh);
             if (!NwcRunPlan.Due(job, modified, exists))
             {
                 _current.Step = _current.Note = $"не изменялась в срок ({modified:dd.MM.yyyy}) — NWC актуальна";

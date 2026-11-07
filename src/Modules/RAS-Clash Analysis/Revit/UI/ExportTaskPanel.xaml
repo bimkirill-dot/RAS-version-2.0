@@ -357,7 +357,7 @@
                     <TextBlock Style="{StaticResource Cap}" Text="Настройки NWC Exporter" />
                     <WrapPanel Grid.Column="1" VerticalAlignment="Top">
                         <TextBlock x:Name="ExportFrom" VerticalAlignment="Center" Margin="0,4,10,4" />
-                        <Button x:Name="ExportEdit" Style="{StaticResource SideLink}" Content="изменить" FontSize="12" Click="ExportEdit_Click" />
+                        <Button x:Name="ExportEdit" Style="{StaticResource SideLink}" Content="Изменить" Click="ExportEdit_Click" />
                     </WrapPanel>
                     <StackPanel Style="{StaticResource Side}">
                         <Button x:Name="ExportReset" Style="{StaticResource SideLink}" Click="ExportReset_Click" />

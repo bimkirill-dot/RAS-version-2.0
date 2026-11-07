@@ -18,27 +18,27 @@ namespace RASv2.ClashAnalysis.UI
     public partial class ExportTasksWindow : Window
     {
         /// <summary>
-        /// Ширины столбцов таблицы — общие у шапки и строк: узко — «Проверки» и «Форматы» скрываются, совсем узко — и «Выгружено»
-        /// (название, модели и выключатели — всегда).
+        /// Ширины столбцов таблицы — общие у шапки и строк: узко — «Проверки» и «Форматы» скрываются, совсем узко — и «Время»
+        /// (название, модели, выключатели, статус и запуск — всегда).
         /// </summary>
         public sealed class TableLayout : System.ComponentModel.INotifyPropertyChanged
         {
             public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
-            private bool _wide = true, _exported = true;
-            public GridLength Tests => _wide ? new GridLength(1.2, GridUnitType.Star) : new GridLength(0);
-            public GridLength Formats => _wide ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
-            public GridLength Exported => _exported ? new GridLength(100) : new GridLength(0);
+            private bool _wide = true, _time = true;
+            public GridLength Tests => _wide ? new GridLength(0.9, GridUnitType.Star) : new GridLength(0);
+            public GridLength Formats => _wide ? new GridLength(0.9, GridUnitType.Star) : new GridLength(0);
+            public GridLength Time => _time ? new GridLength(72) : new GridLength(0);
             public Visibility WideVisibility => _wide ? Visibility.Visible : Visibility.Collapsed;
-            public Visibility ExportedVisibility => _exported ? Visibility.Visible : Visibility.Collapsed;
+            public Visibility TimeVisibility => _time ? Visibility.Visible : Visibility.Collapsed;
 
             /// <summary>Ширина таблицы — какие столбцы показывать.</summary>
             public void Fit(double width)
             {
-                var wide = width >= 760;
-                var exported = width >= 560;
-                if (wide == _wide && exported == _exported) return;
+                var wide = width >= 860;
+                var time = width >= 660;
+                if (wide == _wide && time == _time) return;
                 _wide = wide;
-                _exported = exported;
+                _time = time;
                 PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(null));
             }
         }
@@ -75,9 +75,9 @@ namespace RASv2.ClashAnalysis.UI
             public string Name => Item.Name;
             public double NameSize => IsTop ? 14 : 13;
             public FontWeight NameWeight => Row.Level <= 1 ? FontWeights.SemiBold : FontWeights.Normal;
-            // задачи — с промежутком сверху, подзадачи — плотно; отступ уровня (22) — внутри столбца «Название»
+            // задачи — с промежутком сверху, подзадачи — плотно; отступ уровня (18) — внутри столбца «Название»
             public Thickness RowMargin => new Thickness(0, IsTop ? 6 : 0, 0, 1);
-            public Thickness Indent => new Thickness(Row.Level * 22, 0, 0, 0);
+            public Thickness Indent => new Thickness(Row.Level * 18, 0, 0, 0);
 
             // ── столбцы: «—» и значение от строки выше — бледно, «↑» — от строки выше ──
             private Brush Shade(bool muted) => muted ? Muted : Normal;
@@ -89,41 +89,81 @@ namespace RASv2.ClashAnalysis.UI
             public string TestsText => Columns.Tests + (Columns.TestsFrom != null ? " ↑" : "");
             public string TestsTip => Columns.Tests == "—" ? null : Columns.Tests + (Columns.TestsFrom != null ? "\nот «" + Columns.TestsFrom + "»" : "");
             public Brush TestsBrush => Shade(Columns.TestsFrom != null || Columns.Tests == "—");
-            // имя NWF — у строки, которая её собирает
-            public string NwfText => Columns.NwfOn ? Columns.Nwf : "";
-            public string NwfTip => Columns.NwfOn ? Columns.Nwf : null;
-            public string FormatsText => Columns.Formats + (Columns.FormatsFrom != null ? " ↑" : "") + " ▾";
+            // имя NWF — в подсказке у галочки
+            public string NwfTip => "Формировать NWF" + (Columns.NwfOn ? ": " + Columns.Nwf : "");
+            public string FormatsText => Columns.Formats + (Columns.FormatsFrom != null ? " ↑" : "");
             public string FormatsTip => Columns.FormatsFrom != null ? "от «" + Columns.FormatsFrom + "»" : "Форматы отчётов";
             public Brush FormatsBrush => Shade(Columns.FormatsFrom != null);
 
-            // «Выгружено» — по файлам NWC, в фоне (сетевые папки бывают медленными)
-            private string _exported = "…";
-            public string Exported
+            // ── статус, запуск, время (в фоне: файл состояния задачи, даты NWC и моделей) ──
+            private RowRun _run;
+            private List<string> _changed = new List<string>();
+            private bool _unknown;
+            private string _estimate = "", _estimateTip;
+            // ход выгрузки: «Ждёт» / «Идёт выгрузка» / «В очереди»…; null — не выгружается
+            private string _live, _liveTime;
+            private bool _busy, _target;
+
+            public RowRun LastRun => _run;
+
+            public void SetStatus(RowRun run, List<string> changed, bool unknown, string estimate, string estimateTip)
             {
-                get => _exported;
-                set
-                {
-                    _exported = value;
-                    PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Exported)));
-                    PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(ExportedBrush)));
-                }
+                _run = run;
+                _changed = changed ?? new List<string>();
+                _unknown = unknown;
+                _estimate = estimate;
+                _estimateTip = estimateTip;
+                Notify();
             }
-            private string _exportedTip;
-            public string ExportedTip
+
+            public void SetLive(string text, string time)
             {
-                get => _exportedTip;
-                set
-                {
-                    _exportedTip = value;
-                    PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(ExportedTip)));
-                }
+                if (_live == text && _liveTime == time) return;
+                _live = text;
+                _liveTime = time;
+                Notify();
             }
-            public Brush ExportedBrush => Shade(_exported == "—" || _exported == "…");
+
+            public void SetBusy(bool busy, bool target)
+            {
+                if (_busy == busy && _target == target) return;
+                _busy = busy;
+                _target = target;
+                Notify();
+            }
+
+            private void Notify() => PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(null));
+
+            private bool Marks => _live == null;
+            public Visibility LiveVisibility => _live != null ? Visibility.Visible : Visibility.Collapsed;
+            public string LiveText => _live;
+            public Brush LiveBrush => _live == "Идёт выгрузка" || _live == "Остановка…" ? Accent : _live == "С ошибками" ? Error : _live == "Готово" ? Normal : Muted;
+            public Brush Accent { get; set; }
+            public Brush Error { get; set; }
+            public Visibility MarksVisibility => Marks ? Visibility.Visible : Visibility.Collapsed;
+            public Visibility OkVisibility => Marks && _run != null && _run.Errors.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            public Visibility ErrorVisibility => Marks && _run != null && _run.Errors.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            public Visibility ChangedVisibility => Marks && _changed.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            public Visibility UnknownVisibility => Marks && _unknown ? Visibility.Visible : Visibility.Collapsed;
+            public Visibility RetryVisibility => Marks && !_busy && _run != null && _run.Errors.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            public string StatusTip => RunStates.Tip(_run, _changed, _unknown);
+            public string RunAt => _run == null ? "" : _run.At.ToString("dd.MM HH:mm");
+            public string RunAtTip => _run == null ? null : $"Запускал {_run.By}, {_run.At:dd.MM.yyyy HH:mm}";
+            public string TimeText => _liveTime ?? _estimate;
+            public string TimeTip => _liveTime != null ? "Идёт" : _estimateTip;
+            public Brush TimeBrush => Shade(_liveTime == null);
+
+            // пока идёт выгрузка — правка закрыта; ▷ у выгружаемой строки — ■ «Остановить»
+            public bool Idle => !_busy;
+            public bool ReportsOn => Columns.ReportsEnabled && !_busy;
+            public bool IsTarget => _target;
+            public string RunTip => _target ? "Остановить выгрузку" : _busy ? "В очередь (ещё раз — убрать из очереди)" : "Выгрузить NWC и собрать NWF";
+            public Visibility EditVisibility => _busy ? Visibility.Collapsed : Visibility.Visible;
             // Segoe MDL2 Assets: E70D — вниз (развёрнуто), E76C — вправо (свёрнуто)
             public string Arrow => Collapsed ? "\uE76C" : "\uE70D";
             public Visibility ArrowVisibility => HasInner ? Visibility.Visible : Visibility.Hidden;
             // место кнопки остаётся и у задачи, где её нет, — значки строк стоят ровно
-            public Visibility CopyVisibility => IsTop ? Visibility.Hidden : Visibility.Visible;
+            public Visibility CopyVisibility => _busy ? Visibility.Collapsed : IsTop ? Visibility.Hidden : Visibility.Visible;
         }
 
         /// <summary>Версия Revit — для выбора моделей с Revit Server (настройки серверов — свои у каждой версии).</summary>
@@ -168,9 +208,29 @@ namespace RASv2.ClashAnalysis.UI
                 Toolbar.Visibility = Visibility.Collapsed;
                 RowsList.IsEnabled = false;
             }
+            // по умолчанию — больше (разработчик, 07.11.2026: «окно по стандарту больше, но 90 % — слишком»): 80 % рабочего стола
+            var desk = SystemParameters.WorkArea;
+            Width = System.Math.Max(MinWidth, desk.Width * 0.8);
+            Height = System.Math.Max(MinHeight, desk.Height * 0.85);
             Refresh();
-            // закрыть окно с несохранёнными правками — спросить
-            Closing += (s, e) => e.Cancel = !Leave();
+            Closing += (s, e) =>
+            {
+                // идёт выгрузка — остановить и закрыть, когда остановится (после текущей модели)
+                if (_running)
+                {
+                    e.Cancel = true;
+                    if (_closeAfter) return;
+                    if (MessageBox.Show(this, "Идёт выгрузка. Остановить её и закрыть окно?\nОстановится после текущей модели.", Title,
+                            MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+                    _cancel = true;
+                    _queue.Clear();
+                    _closeAfter = true;
+                    UpdateLive(true);
+                    return;
+                }
+                // несохранённые правки — спросить
+                e.Cancel = !Leave();
+            };
         }
 
         private void ShowBanner(string text)
@@ -191,56 +251,12 @@ namespace RASv2.ClashAnalysis.UI
                 {
                     Row = r, Columns = ExportNodes.Columns(r), Collapsed = _collapsed.Contains(r.Item), HasInner = r.Item.Children.Count > 0,
                     IsSelected = r.Item == _selected, Muted = muted, Normal = normal, Layout = _layout,
+                    Accent = (Brush)FindResource("Accent"), Error = (Brush)FindResource("Error"),
                 })
                 .ToList();
             Dispatcher.BeginInvoke(new System.Action(() => TreeScroll.ScrollToVerticalOffset(offset)), System.Windows.Threading.DispatcherPriority.Loaded);
-            LoadExported(_items);
-        }
-
-        // поколение списка: пока даты NWC искались, список перестроили — старые не нужны
-        private int _exportedGeneration;
-
-        /// <summary>
-        /// «Выгружено» — по файлам NWC строки (план выгрузки: какие NWC у неё будут), в фоне: сетевая папка может отвечать долго;
-        /// пришло — в строки (в потоке окна).
-        /// </summary>
-        private void LoadExported(List<RowItem> items)
-        {
-            var generation = ++_exportedGeneration;
-            var plans = new List<(RowItem Row, List<string> Nwcs)>();
-            foreach (var item in items)
-            {
-                try
-                {
-                    var nwcs = NwcRunPlan.Build(item.Item, Settings, RevitYear, new List<string>())
-                        .Where(j => j.Skip == null || j.Off).Select(j => j.NwcPath).ToList();
-                    plans.Add((item, nwcs));
-                }
-                catch (System.Exception ex)
-                {
-                    item.Exported = "—";
-                    RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: «Выгружено» — " + item.Name, ex);
-                }
-            }
-            System.Threading.Tasks.Task.Run(() =>
-            {
-                var times = new Dictionary<string, System.DateTime?>(System.StringComparer.OrdinalIgnoreCase);
-                foreach (var path in plans.SelectMany(p => p.Nwcs).Distinct(System.StringComparer.OrdinalIgnoreCase))
-                {
-                    if (generation != _exportedGeneration) return;
-                    try { times[path] = System.IO.File.Exists(path) ? System.IO.File.GetLastWriteTime(path) : (System.DateTime?)null; }
-                    catch (System.Exception) { times[path] = null; }
-                }
-                Dispatcher.BeginInvoke(new System.Action(() =>
-                {
-                    if (generation != _exportedGeneration) return;
-                    foreach (var p in plans)
-                    {
-                        p.Row.Exported = NwcRunPlan.ExportedText(p.Nwcs.Select(n => (n, times[n])).ToList(), out var tip);
-                        p.Row.ExportedTip = tip;
-                    }
-                }));
-            });
+            LoadStatus(_items);
+            UpdateBusy();
         }
 
         // шапка таблицы — над столбцами строк: появилась полоса прокрутки — у шапки справа столько же места
@@ -546,28 +562,24 @@ namespace RASv2.ClashAnalysis.UI
             }
         }
 
-        // выгрузка — следующим шагом; молчащая кнопка выглядела бы сломанной (разбор 02.11.2026)
-        /// <summary>«Запустить»: выгрузка NWC строки и её подзадач (Export\NwcRunner); несохранённые правки — сначала вопрос.</summary>
-        private void Run_Click(object sender, RoutedEventArgs e)
+        /// <summary>Статус — щелчок: журнал последнего запуска строки (копия в папке задачи, у запускавшего — свой).</summary>
+        private void Status_Click(object sender, RoutedEventArgs e)
         {
-            var task = RowOf(sender).Item;
-            if (!Leave()) return;
-            // новая строка, от сохранения которой отказались, — исчезла
-            if (!_roots.SelectMany(r => r.Self()).Contains(task)) return;
+            var run = RowOf(sender).LastRun;
+            if (run == null) return;
+            if (string.IsNullOrEmpty(run.Journal) || !System.IO.File.Exists(run.Journal))
+            {
+                MessageBox.Show(this, "Журнал запуска не найден: " + (run.Journal ?? "—"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
             try
             {
-                // Shift — выгрузить заново и актуальные NWC (модель не менялась с прошлой выгрузки)
-                Export.NwcRunner.Start(this, Revit as Autodesk.Revit.UI.UIApplication, task, Settings, RevitYear,
-                    (Keyboard.Modifiers & ModifierKeys.Shift) != 0);
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(run.Journal) { UseShellExecute = true });
             }
             catch (System.Exception ex)
             {
-                RASv2.Core.Log.Write("ClashAnalysis", "Выгрузка NWC: не запустилась — " + task.Name, ex);
-                MessageBox.Show(this, "Выгрузка не запустилась: " + ex.Message + "\nПодробности — в журнале плагина.", Title,
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(this, "Журнал не открылся: " + ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             }
-            // «Выгружено» — по новым NWC
-            Refresh();
         }
 
         /// <summary>
@@ -622,6 +634,7 @@ namespace RASv2.ClashAnalysis.UI
         /// </summary>
         private void Change(ExportTask task, System.Func<string> change)
         {
+            if (_running) return;
             var rows = task.Self().ToList();
             if ((_selected != null && rows.Contains(_selected) || _pending != null) && !Leave() || !_roots.SelectMany(r => r.Self()).Contains(task))
             {
@@ -645,6 +658,12 @@ namespace RASv2.ClashAnalysis.UI
         // перетаскивание строки: нажали на строку (не на кнопку) и повели мышью — перенос внутри своего уровня; нажатие — выбор
         private void Row_MouseDown(object sender, MouseButtonEventArgs e)
         {
+            // идёт выгрузка — правка закрыта: строки не выбираются и не тащатся (кнопки строки — работают)
+            if (_running)
+            {
+                _dragArmed = false;
+                return;
+            }
             var onButton = e.OriginalSource is DependencyObject d && FindButton(d);
             _dragArmed = !onButton;
             _dragStart = e.GetPosition(this);

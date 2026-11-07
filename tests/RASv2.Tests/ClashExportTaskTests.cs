@@ -853,6 +853,76 @@ namespace RASv2.Tests
                     if (Directory.Exists(dir)) Directory.Delete(dir, true);
                 }
             });
+            yield return Case("статус строки: итог запуска в папке задачи, «Повторить ошибки», время, модель изменилась после NWC", () =>
+            {
+                var roots = Sample(out var high, out var mid);
+                var s1 = high.Children[0];
+                Check(RunStates.Key(s1) == "ArmanQala › Высокая критичность › S1_ВК", "ключ — по названиям: " + RunStates.Key(s1));
+                Check(RunStates.PathOf(s1) == @"\\srv\2025_Арман Кала 7 очередь\Журналы выгрузки\состояние.json", "файл — в папке задачи");
+                roots[1].Settings.Folder = "";
+                Check(RunStates.PathOf(roots[1]) == null, "без папки задачи — не хранится");
+
+                var at = new DateTime(2026, 11, 7, 15, 20, 0);
+                var items = new List<(string, string, ItemResult, string)>
+                {
+                    (@"\\s\a.nwc", "A", ItemResult.Done, null), (@"\\s\b.nwc", "B", ItemResult.Failed, "NWC занята"),
+                    (@"\\s\c.nwc", "C", ItemResult.Skipped, "не изменялась в срок"), (@"\\s\S1.nwf", "S1.nwf", ItemResult.Done, "собрана"),
+                    (@"\\s\other.nwc", "D", ItemResult.Failed, "чужая"),
+                };
+                var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { @"\\s\a.nwc", @"\\s\b.nwc", @"\\s\c.nwc", @"\\s\S1.nwf" };
+                var run = RunStates.Record(s1, paths, items, at, 218, @"\\s\журнал.log", new[] { "Одна NWC — у двух моделей" });
+                Check(run.Done == 2 && run.Skipped == 1 && run.Errors.Count == 1 && run.Errors[0].Name == "B" && run.Errors[0].Note == "NWC занята",
+                      "только NWC и NWF строки: " + run.Errors.Count);
+                Check(run.Notes.SequenceEqual(new[] { "C — не изменялась в срок", "Одна NWC — у двух моделей" }), "пропуски и несостыковки: " + string.Join(" | ", run.Notes));
+
+                var retry = RunStates.Record(s1, paths, new List<(string, string, ItemResult, string)> { (@"\\s\b.nwc", "B", ItemResult.Done, null) },
+                    at.AddHours(1), 40, null, null, new HashSet<string> { @"\\s\b.nwc" }, run);
+                Check(retry.Errors.Count == 0 && retry.Done == 3 && retry.Seconds == 218 && retry.At == at.AddHours(1) && retry.Notes.Count == 2,
+                      "повтор ошибок: ошибка ушла, время — прежнего запуска");
+                var still = RunStates.Record(s1, paths, new List<(string, string, ItemResult, string)>(), at, 0, null, null, new HashSet<string> { @"\\s\x.nwc" },
+                    run);
+                Check(still.Errors.Count == 1 && still.Errors[0].Path == @"\\s\b.nwc", "не повторяли — ошибка остаётся");
+
+                var tip = RunStates.Tip(run, new List<string> { "KJ" }, true);
+                Check(tip.Contains("с ошибкой 1") && tip.Contains("B — NWC занята") && tip.Contains("Изменились после выгрузки") && tip.Contains("Revit Server") &&
+                      tip.Contains("Щелчок — журнал"), tip);
+                Check(RunStates.Tip(null, new List<string>(), false) == null, "ничего — без подсказки");
+
+                var dir = Path.Combine(Path.GetTempPath(), "ras-tests-" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    var file = Path.Combine(dir, "Журналы выгрузки", RunStates.FileName);
+                    RunStates.Save(file, new[] { run }, new[] { new ItemTime { Path = @"\\s\a.nwc", Seconds = 120 }, new ItemTime { Path = @"\\s\S1.nwf", Seconds = 20 } });
+                    var other = new RowRun { Key = "ArmanQala › Средняя критичность", At = at };
+                    RunStates.Save(file, new[] { other }, new[] { new ItemTime { Path = @"\\s\a.nwc", Seconds = 180 } });
+                    var loaded = RunStates.Load(file);
+                    Check(loaded.Rows.Count == 2 && RunStates.Find(loaded, s1)?.Errors.Count == 1 && RunStates.Find(loaded, mid)?.At == at,
+                          "коллега записал другую строку — обе целы");
+                    Check(RunStates.Estimate(new[] { @"\\s\a.nwc", @"\\s\S1.nwf", @"\\s\new.nwc" }, loaded, out var unknown) == 200 && unknown == 1,
+                          "время — по последним, новая — без времени");
+                    Check(RunStates.Estimate(new[] { @"\\s\new.nwc" }, loaded, out _) == null && RunStates.Load(Path.Combine(dir, "нет.json")).Rows.Count == 0,
+                          "ни одной — null; нет файла — пусто");
+                }
+                finally
+                {
+                    if (Directory.Exists(dir)) Directory.Delete(dir, true);
+                }
+                Check(RunStates.EstimateText(null) == "—" && RunStates.EstimateText(20) == "≈ 1 мин" && RunStates.EstimateText(725) == "≈ 12 мин" &&
+                      RunStates.EstimateText(4800) == "≈ 1 ч 20 мин" && RunStates.EstimateText(7200) == "≈ 2 ч", "текст времени");
+                Check(RunStates.Elapsed(TimeSpan.FromSeconds(245)) == "4:05" && RunStates.Elapsed(TimeSpan.FromSeconds(3730)) == "1:02:10", "идёт");
+
+                var nwc = new DateTime(2026, 11, 6, 9, 30, 0);
+                var changed = RunStates.Changed(new[]
+                {
+                    new ModelCheck { Name = "KJ", Model = nwc.AddHours(2), Answered = true, Nwc = nwc },
+                    new ModelCheck { Name = "AR", Model = nwc.AddSeconds(-30), Answered = true, Nwc = nwc },
+                    new ModelCheck { Name = "OV", Model = nwc.AddSeconds(30), Answered = true, Nwc = nwc },
+                    new ModelCheck { Name = "VK", Model = nwc.AddDays(1), Answered = true, Nwc = null },
+                }, out var unk);
+                Check(changed.SequenceEqual(new[] { "KJ" }) && !unk, "изменилась после NWC — только KJ (NWC нет — не считается, минута — запас): " + string.Join(",", changed));
+                RunStates.Changed(new[] { new ModelCheck { Name = "KJ", Answered = false, Nwc = nwc } }, out unk);
+                Check(unk, "сервер не ответил — «?»");
+            });
             yield return Case("фоновый Revit другой версии: задание туда и обратно, «жив», история из двух Revit не затирается", () =>
             {
                 var roots = Sample(out _, out _);

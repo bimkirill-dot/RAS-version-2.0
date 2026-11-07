@@ -7,32 +7,58 @@ using System.Windows;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using RASv2.ClashAnalysis.Logic;
-using RASv2.ClashAnalysis.UI;
 
 namespace RASv2.ClashAnalysis.Export
 {
+    /// <summary>Где виден ход выгрузки — список задач: строка изменилась, подождать не замирая, «Остановить».</summary>
+    internal interface IRunView
+    {
+        void Changed(NwcProgress p);
+        void Pump(int milliseconds);
+        bool Cancelled { get; }
+    }
+
+    /// <summary>Чем кончился запуск: NWC и NWF с итогом, несостыковки плана, журнал (общий — в папке задачи — или свой).</summary>
+    internal sealed class RunOutcome
+    {
+        public List<NwcProgress> Items { get; } = new List<NwcProgress>();
+        public List<string> Notes { get; } = new List<string>();
+        public string Journal { get; set; }
+        public DateTime Started { get; set; }
+        public TimeSpan Elapsed { get; set; }
+    }
+
     /// <summary>
-    /// «Запустить» у строки «Задач выгрузки»: план (что выгружается, что нет и почему, несостыковки) → сразу журнал →
-    /// окно хода → копия журнала в папку задачи. Журналы — %LocalAppData%\RAS_v_2.0\Logs\Выгрузка NWC (у каждого свои) и
+    /// «Запустить» у строки «Задач выгрузки»: план (что выгружать, что нет и почему, несостыковки) → сразу журнал → NWC (свои и
+    /// фоновых Revit) → NWF → копия журнала в папку задачи. Ход — в список задач (разработчик, 07.11.2026: «больше не открываем
+    /// дополнительное окно — всё прямо в списке задач»). Журналы — %LocalAppData%\RAS_v_2.0\Logs\Выгрузка NWC (у каждого свои) и
     /// «Журналы выгрузки» в папке задачи (видны всем).
     /// </summary>
     internal static class NwcRunner
     {
         public static string JournalDir => Path.Combine(Path.GetDirectoryName(RASv2.Core.Log.FilePath), "Выгрузка NWC");
 
-        /// <param name="force">Shift при «Запустить»: выгрузить и NWC, модели которых не менялись.</param>
-        public static void Start(Window owner, UIApplication ui, ExportTask task, ExportSettings common, int year, bool force)
+        /// <param name="only">«Повторить ошибки»: только эти NWC и NWF (и NWF, в которых эти NWC); null — всё.</param>
+        /// <param name="planned">Что пойдёт в запуск — до начала: список раскладывает по строкам.</param>
+        /// <returns>null — не начато (причина показана).</returns>
+        public static RunOutcome Run(Window owner, IRunView view, UIApplication ui, ExportTask task, ExportSettings common, int year,
+            ICollection<string> only, Action<List<NwcProgress>> planned)
         {
             const string title = "Выгрузка NWC";
             if (ui == null)
             {
                 MessageBox.Show(owner, "Выгрузка работает только в Revit.", title, MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
+                return null;
             }
             var notes = new List<string>();
             var jobs = NwcRunPlan.Build(task, common, year, notes);
             // NWF строк с галочкой «Формировать NWF» — после NWC (DECISIONS.md модуля, «Этап 2 — сборка NWF»)
             var nwfPlans = NwfRunPlan.Build(task, common);
+            if (only != null)
+            {
+                jobs = jobs.Where(j => only.Contains(j.NwcPath)).ToList();
+                nwfPlans = nwfPlans.Where(n => only.Contains(n.NwfPath) || n.Nwcs.Any(only.Contains)).ToList();
+            }
             var todo = jobs.Count(j => j.Skip == null) + nwfPlans.Count(n => n.Skip == null);
             if (todo == 0)
             {
@@ -40,11 +66,11 @@ namespace RASv2.ClashAnalysis.Export
                           string.Join("\n", jobs.Select(j => "• " + j.ModelName + " — " + j.Skip)
                               .Concat(nwfPlans.Select(n => "• " + ExportNodes.FileName(n.NwfPath) + " — " + n.Skip)));
                 MessageBox.Show(owner, "Выгружать нечего: " + why, title, MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
+                return null;
             }
 
-            // без вопроса «Начать?» (разработчик, 04.11.2026: «после нажатия сразу выгрузка начинается»): пропуски с причинами — строками
-            // окна хода, несостыковки — в журнале
+            // без вопроса «Начать?» (разработчик, 04.11.2026: «после нажатия сразу выгрузка начинается»): пропуски с причинами и
+            // несостыковки — в подсказке к статусу строки и в журнале
             var root = ExportNodes.Root(task);
             var journalPath = Path.Combine(JournalDir, $"{DateTime.Now:yyyy-MM-dd HH-mm-ss} {Safe(root.Name)}{(root == task ? "" : " — " + Safe(task.Name))}.log");
             ExportJournal journal;
@@ -56,12 +82,15 @@ namespace RASv2.ClashAnalysis.Export
             {
                 RASv2.Core.Log.Write("ClashAnalysis", "Выгрузка NWC: журнал не создан — " + journalPath, ex);
                 MessageBox.Show(owner, "Журнал выгрузки не создался: " + ex.Message, title, MessageBoxButton.OK, MessageBoxImage.Error);
-                return;
+                return null;
             }
+            var outcome = new RunOutcome { Journal = journalPath, Started = DateTime.Now };
+            outcome.Notes.AddRange(notes);
+            var clock = System.Diagnostics.Stopwatch.StartNew();
             using (journal)
             {
-                var runTitle = NwcExporter.Title(task);
-                var exporter = new NwcExporter(ui, journal, year, force, common.ParallelCopies);
+                var runTitle = NwcExporter.Title(task) + (only != null ? " — повтор ошибок" : "");
+                var exporter = new NwcExporter(ui, journal, year, common.ParallelCopies);
                 var items = jobs.Select(j => new NwcProgress { Job = j }).ToList();
 
                 // модели другой версии Revit — фоновому Revit их версии (разработчик, 05.11.2026: «пусть плагин запускает Revit 2023»):
@@ -85,48 +114,63 @@ namespace RASv2.ClashAnalysis.Export
                 exporter.Header(runTitle, common, jobs, notes);
                 NwfStage.Header(journal, nwfPlans);
                 var nwfItems = NwfStage.Items(nwfPlans);
+                outcome.Items.AddRange(items.Concat(nwfItems));
+                planned?.Invoke(outcome.Items);
 
-                var nwcFolder = items.Concat(nwfItems).Select(p => Path.GetDirectoryName(p.Job.NwcPath)).FirstOrDefault();
                 var remoteJournals = new List<string>();
-                var window = new ExportRunWindow(task.Name, items.Concat(nwfItems).ToList(), journalPath, nwcFolder, w =>
+                try
                 {
                     var remotes = others.Select(g =>
                     {
                         var path = Path.ChangeExtension(journalPath, null) + $" — Revit {g.Key}.log";
                         remoteJournals.Add(path);
-                        return NwcRemote.Send(g.Key, g.ToList(), runTitle, path, force, common.ParallelCopies, journal);
+                        return NwcRemote.Send(g.Key, g.ToList(), runTitle, path, common.ParallelCopies, journal);
                     }).Where(r => r != null).ToList();
                     void Poll()
                     {
-                        foreach (var r in remotes) r.Poll(w.Changed);
+                        foreach (var r in remotes) r.Poll(view.Changed);
                     }
                     bool Cancelled()
                     {
-                        if (w.Cancelled) remotes.ForEach(r => r.Cancel());
-                        return w.Cancelled;
+                        if (view.Cancelled) remotes.ForEach(r => r.Cancel());
+                        return view.Cancelled;
                     }
                     // свои — здесь; ход фоновых — между шагами своих
                     var mine = items.Where(p => p.Job.Skip != null || local.Contains(p)).ToList();
                     exporter.Run(mine, p =>
                     {
                         Poll();
-                        w.Changed(p);
+                        view.Changed(p);
                     }, Cancelled);
                     // свои закончены — ждать фоновые
                     while (remotes.Any(r => !r.Finished))
                     {
                         Cancelled();
                         Poll();
-                        w.Pump(1000);
+                        view.Pump(1000);
                     }
                     // NWC готовы (свои и фоновых) — NWF; остановили — NWF не собираются
-                    if (w.Cancelled) NwfStage.Stopped(nwfItems, w.Changed);
-                    else NwfStage.Run(nwfPlans, nwfItems, journal, w.Changed, () => w.Cancelled, w.Pump);
-                }) { Owner = owner };
-                window.ShowDialog();
-                ShareJournal(journal, ExportNodes.FolderOf(root));
+                    if (view.Cancelled) NwfStage.Stopped(nwfItems, view.Changed);
+                    else NwfStage.Run(nwfPlans, nwfItems, journal, view.Changed, () => view.Cancelled, view.Pump);
+                }
+                catch (Exception ex)
+                {
+                    // ошибка сквозь окно уронила бы Revit: то, что не кончилось, — ошибкой, причина — в журнал и ras.log
+                    RASv2.Core.Log.Write("ClashAnalysis", "Выгрузка NWC: запуск оборвался", ex);
+                    journal.Error("запуск оборвался: " + ex.Message, ex);
+                    foreach (var p in outcome.Items.Where(p => p.State == NwcState.Waiting || p.State == NwcState.Working))
+                    {
+                        p.State = NwcState.Failed;
+                        p.Note = "запуск оборвался: " + ex.Message;
+                        view.Changed(p);
+                    }
+                }
+                outcome.Elapsed = clock.Elapsed;
+                var shared = ShareJournal(journal, ExportNodes.FolderOf(root));
+                if (shared != null) outcome.Journal = shared;
                 foreach (var path in remoteJournals.Where(File.Exists)) ShareFile(journal, path, ExportNodes.FolderOf(root));
             }
+            return outcome;
         }
 
         /// <summary>Версия Revit файла модели (не Revit Server): из самого файла; не прочитался — 0 (выгружает этот Revit).</summary>
@@ -159,10 +203,13 @@ namespace RASv2.ClashAnalysis.Export
             }
         }
 
-        /// <summary>Копия журнала — в «Журналы выгрузки» папки задачи: коллеги видят, что и когда выгружалось. Не вышло — только в журнал.</summary>
-        private static void ShareJournal(ExportJournal journal, string taskFolder)
+        /// <summary>
+        /// Копия журнала — в «Журналы выгрузки» папки задачи: коллеги видят, что и когда выгружалось. Путь копии; не вышло — null
+        /// (причина — в журнал).
+        /// </summary>
+        private static string ShareJournal(ExportJournal journal, string taskFolder)
         {
-            if (string.IsNullOrWhiteSpace(taskFolder)) return;
+            if (string.IsNullOrWhiteSpace(taskFolder)) return null;
             try
             {
                 var dir = Path.Combine(taskFolder, "Журналы выгрузки");
@@ -170,10 +217,12 @@ namespace RASv2.ClashAnalysis.Export
                 journal.Line("копия журнала: " + target);
                 Directory.CreateDirectory(dir);
                 File.WriteAllText(target, journal.ReadAll(), new UTF8Encoding(true));
+                return target;
             }
             catch (Exception ex)
             {
                 journal.Line("копия журнала в папку задачи не записана: " + ex.Message);
+                return null;
             }
         }
 

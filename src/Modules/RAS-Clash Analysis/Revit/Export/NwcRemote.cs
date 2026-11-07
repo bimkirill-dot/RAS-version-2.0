@@ -41,7 +41,7 @@ namespace RASv2.ClashAnalysis.Export
             "Autodesk", "Revit " + year, "Revit.exe");
 
         /// <summary>Отдать модели фоновому Revit их версии; null — не вышло (строки — с ошибкой, причина — в журнале).</summary>
-        public static NwcRemote Send(int year, List<NwcProgress> items, string title, string journal, bool force, int parallel, ExportJournal main)
+        public static NwcRemote Send(int year, List<NwcProgress> items, string title, string journal, int parallel, ExportJournal main)
         {
             var remote = new NwcRemote(year, items, journal, main);
             foreach (var p in items) p.Step = $"ждёт фоновый Revit {year}";
@@ -49,7 +49,7 @@ namespace RASv2.ClashAnalysis.Export
             {
                 var handoff = new NwcHandoff
                 {
-                    Id = remote._id, Year = year, Title = title, Journal = journal, Force = force, Parallel = parallel, Created = DateTime.Now,
+                    Id = remote._id, Year = year, Title = title, Journal = journal, Parallel = parallel, Created = DateTime.Now,
                     Jobs = items.Select(p => NwcWorkers.ToHandoff(p.Job)).ToList(),
                 };
                 NwcWorkers.Write(NwcWorkers.JobPath(remote._dir, remote._id), handoff);
