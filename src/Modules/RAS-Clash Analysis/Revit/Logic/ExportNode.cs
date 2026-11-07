@@ -210,9 +210,6 @@ namespace RASv2.ClashAnalysis.Logic
         public bool? ReportsState { get; set; }
         /// <summary>Отчёты — только у строк, собирающих NWF: ни одной — галочка серая.</summary>
         public bool ReportsEnabled { get; set; }
-        /// <summary>Форматы отчётов строки (свои или от строки выше — FormatsFrom).</summary>
-        public string Formats { get; set; }
-        public string FormatsFrom { get; set; }
     }
 
     /// <summary>Выключатели списка задач (разработчик, 07.11.2026: «выключатель должен быть у всего»).</summary>
@@ -352,8 +349,6 @@ namespace RASv2.ClashAnalysis.Logic
                 NwfState = FlagState(task, RowFlag.Nwf),
                 ReportsState = FlagState(task, RowFlag.Reports),
                 ReportsEnabled = FlagRows(task, RowFlag.Reports).Any(),
-                Formats = string.Join(", ", FormatsOf(task) ?? new List<string>()),
-                FormatsFrom = InheritedFrom(task, s => s.ReportFormats),
             };
         }
 
@@ -405,15 +400,6 @@ namespace RASv2.ClashAnalysis.Logic
             if (error != null)
                 for (var i = 0; i < rows.Count; i++) SetFlagOf(rows[i], flag, was[i]);
             return error;
-        }
-
-        /// <summary>Форматы отчётов из списка задач — свои у строки (как «Изменить» в панели); пусто — нельзя.</summary>
-        public static string SetFormats(ExportTask task, IEnumerable<string> formats)
-        {
-            var list = ReportFormatNames.Where(f => formats.Contains(f)).ToList();
-            if (list.Count == 0) return "Нужен хотя бы один формат отчётов.";
-            task.Settings.ReportFormats = list;
-            return null;
         }
 
         /// <summary>Название строки выше, от которой взято значение; своё или у задачи — null.</summary>

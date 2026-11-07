@@ -763,8 +763,7 @@ namespace RASv2.Tests
                 var s1 = high.Children[0];
                 var s2 = high.Children[1];
                 Check(C(2).NwfOn && C(2).NwfState == true && C(1).NwfState == true && C(0).NwfState == true, "NWF: у всех строк без подзадач — да");
-                Check(C(0).NwcState == true && C(0).ReportsState == false && C(0).ReportsEnabled && C(2).Formats == "XML, HTML" && C(2).FormatsFrom == "ArmanQala",
-                      "NWC — да, отчёты — нет, форматы — от задачи: " + C(2).Formats);
+                Check(C(0).NwcState == true && C(0).ReportsState == false && C(0).ReportsEnabled, "NWC — да, отчёты — нет");
                 Check(ExportNodes.SetFlag(s1, RowFlag.Nwf, false, common) == null && !s1.Settings.MakeNwf && C(2).Nwf == "—" && C(1).NwfState == null && C(0).NwfState == null,
                       "снята у S1 — у «Высокой» и задачи по-разному");
                 Check(ExportNodes.SetFlag(s1, RowFlag.Reports, true, common) != null, "отчёты без NWF — нельзя");
@@ -792,9 +791,6 @@ namespace RASv2.Tests
                 var copy = s1.Settings.Clone();
                 Check(copy.NoNwc, "копия строки — с выключателем");
 
-                Check(ExportNodes.SetFormats(s1, new[] { "Текст", "XML" }) == null && C(2).Formats == "XML, Текст" && C(2).FormatsFrom == null,
-                      "свои форматы — по порядку Navisworks: " + C(2).Formats);
-                Check(ExportNodes.SetFormats(s1, new string[0]) != null && C(2).Formats == "XML, Текст", "без форматов — нельзя");
 
                 var t1 = new DateTime(2026, 11, 4, 10, 54, 0);
                 var t2 = new DateTime(2026, 11, 3, 9, 0, 0);

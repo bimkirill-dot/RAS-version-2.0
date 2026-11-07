@@ -18,7 +18,7 @@ namespace RASv2.ClashAnalysis.UI
     public partial class ExportTasksWindow : Window
     {
         /// <summary>
-        /// Ширины столбцов таблицы — общие у шапки и строк: узко — «Проверки» и «Форматы» скрываются, совсем узко — и «Время»
+        /// Ширины столбцов таблицы — общие у шапки и строк: узко — «Проверки» скрываются, совсем узко — и «Время»
         /// (название, модели, выключатели, статус и запуск — всегда).
         /// </summary>
         public sealed class TableLayout : System.ComponentModel.INotifyPropertyChanged
@@ -26,7 +26,6 @@ namespace RASv2.ClashAnalysis.UI
             public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
             private bool _wide = true, _time = true;
             public GridLength Tests => _wide ? new GridLength(0.9, GridUnitType.Star) : new GridLength(0);
-            public GridLength Formats => _wide ? new GridLength(0.9, GridUnitType.Star) : new GridLength(0);
             public GridLength Time => _time ? new GridLength(72) : new GridLength(0);
             public Visibility WideVisibility => _wide ? Visibility.Visible : Visibility.Collapsed;
             public Visibility TimeVisibility => _time ? Visibility.Visible : Visibility.Collapsed;
@@ -91,9 +90,6 @@ namespace RASv2.ClashAnalysis.UI
             public Brush TestsBrush => Shade(Columns.TestsFrom != null || Columns.Tests == "—");
             // имя NWF — в подсказке у галочки
             public string NwfTip => "Формировать NWF" + (Columns.NwfOn ? ": " + Columns.Nwf : "");
-            public string FormatsText => Columns.Formats + (Columns.FormatsFrom != null ? " ↑" : "");
-            public string FormatsTip => Columns.FormatsFrom != null ? "от «" + Columns.FormatsFrom + "»" : "Форматы отчётов";
-            public Brush FormatsBrush => Shade(Columns.FormatsFrom != null);
 
             // ── статус, запуск, время (в фоне: файл состояния задачи, даты NWC и моделей) ──
             private RowRun _run;
@@ -594,37 +590,6 @@ namespace RASv2.ClashAnalysis.UI
             var state = flag == RowFlag.Nwc ? row.Columns.NwcState : flag == RowFlag.Nwf ? row.Columns.NwfState : row.Columns.ReportsState;
             var on = state != true;
             Change(row.Item, () => ExportNodes.SetFlag(row.Item, flag, on, Settings));
-        }
-
-        /// <summary>Форматы отчётов строки — списком с галочками; закрыли список — свои форматы у строки, на сервер.</summary>
-        private void Formats_Click(object sender, RoutedEventArgs e)
-        {
-            var button = (Button)sender;
-            var task = RowOf(sender).Item;
-            var current = ExportNodes.FormatsOf(task) ?? new List<string>();
-            var fg = (Brush)FindResource("Fg");
-            var boxes = ExportNodes.ReportFormatNames
-                .Select(f => new CheckBox { Content = f, IsChecked = current.Contains(f), Foreground = fg, Margin = new Thickness(0, 3, 0, 3) })
-                .ToList();
-            var list = new StackPanel { Margin = new Thickness(12, 8, 12, 8) };
-            foreach (var b in boxes) list.Children.Add(b);
-            var popup = new System.Windows.Controls.Primitives.Popup
-            {
-                PlacementTarget = button, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom, StaysOpen = false,
-                AllowsTransparency = true,
-                Child = new Border
-                {
-                    Background = (Brush)FindResource("Bg"), BorderBrush = (Brush)FindResource("Line"), BorderThickness = new Thickness(1),
-                    CornerRadius = new CornerRadius(6), Child = list,
-                },
-            };
-            popup.Closed += (s, a) =>
-            {
-                var chosen = boxes.Where(b => b.IsChecked == true).Select(b => (string)b.Content).ToList();
-                if (chosen.SequenceEqual(ExportNodes.ReportFormatNames.Where(current.Contains))) return;
-                Dispatcher.BeginInvoke(new System.Action(() => Change(task, () => ExportNodes.SetFormats(task, chosen))));
-            };
-            popup.IsOpen = true;
         }
 
         /// <summary>
