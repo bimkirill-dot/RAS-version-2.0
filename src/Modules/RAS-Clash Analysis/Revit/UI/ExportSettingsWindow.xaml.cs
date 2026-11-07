@@ -10,13 +10,14 @@ using RASv2.ClashAnalysis.Logic;
 namespace RASv2.ClashAnalysis.UI
 {
     /// <summary>
-    /// Общие настройки «Задач выгрузки» (шестерёнка) — всё, что одно на компанию: параметры выгрузки NWC (как в окне экспортёра
-    /// Navisworks в Revit, те же подписи и порядок; последним — обрезка имени NWC), что удалить перед выгрузкой, метки, отделы. «По умолчанию» —
-    /// только параметры экспортёра, значения со снимка окна разработчика. Правится копия: «Отмена» оставляет как было.
+    /// Общие настройки «Задач выгрузки» (шестерёнка) — всё, что одно на компанию, по разделам меню слева (разработчик, 07.11.2026):
+    /// «Общее» — метки, отделы, копирование моделей; «Экспорт NWC» — параметры NWC Exporter (как в окне экспортёра Navisworks в
+    /// Revit, те же подписи и порядок), имя NWC («обрезать всё после …»), очистка модели перед экспортом. «По умолчанию» — только
+    /// параметры экспортёра. Правится копия: «Отмена» оставляет как было.
     /// </summary>
     public partial class ExportSettingsWindow : Window
     {
-        // пример под «Обрезать имя NWC» и «Метками» — имя разработчика (03.11.2026)
+        // пример под «Имя NWC» и «Метками» — имя разработчика (03.11.2026)
         // с хвостом после «М3» — чтобы в примере была видна обрезка (разработчик, 04.11.2026)
         private const string SampleModel = "0000_01_01_S01_KJ01_01_М3_BIM_Alma";
 
@@ -33,6 +34,7 @@ namespace RASv2.ClashAnalysis.UI
             foreach (var f in ExportSettings.DateFormats) DateFormat.Items.Add(new ComboBoxItem { Content = today.ToString(f), Tag = f });
             DepartmentsList.ItemsSource = _departments;
             FillAll(settings);
+            Nav.SelectedIndex = 0;
             _ready = true;
             UpdateExample();
             _opened = State();
@@ -42,20 +44,28 @@ namespace RASv2.ClashAnalysis.UI
         private readonly string _opened;
 
         /// <summary>
-        /// Параметры выгрузки задачи (карандаш задачи → «Настройки» → «Изменить»; разработчик, 03.11.2026: «то же, что шестерёнка»):
-        /// экспортёр NWC и «Удалить из модели перед выгрузкой»; вид — в самой задаче, обрезка имени, метки и отделы — только общие.
+        /// Параметры выгрузки задачи (панель строки → «Настройки NWC Exporter» → «Изменить»; разработчик, 03.11.2026: «то же, что
+        /// шестерёнка»): только раздел «Экспорт NWC» — параметры NWC Exporter и очистка модели; вид — в самой задаче; имя NWC, метки,
+        /// отделы, копирование — только общие. Меню разделов не нужно — один раздел.
         /// </summary>
         public ExportSettingsWindow(ExportSettings settings, string taskName) : this(settings)
         {
             Title = "Параметры выгрузки — " + taskName;
             FileButtons.Visibility = Visibility.Collapsed;
+            NavBox.Visibility = Visibility.Collapsed;
+            Nav.SelectedIndex = 1;
             OptionRowOf(Scope).Visibility = Visibility.Collapsed;
-            OptionRowOf(TrimName).Visibility = Visibility.Collapsed;
-            NameExample.Visibility = Visibility.Collapsed;
-            // всё после «Удалить из модели перед выгрузкой» (метки, отделы) — общее для компании
-            var row = OptionRowOf(RemoveIfc);
-            var panel = (Panel)row.Parent;
-            for (var i = panel.Children.IndexOf(row) + 1; i < panel.Children.Count; i++) panel.Children[i].Visibility = Visibility.Collapsed;
+            NameBlock.Visibility = Visibility.Collapsed;
+            Width = 780;
+        }
+
+        /// <summary>Раздел меню — его содержимое справа, прокрутка — к началу.</summary>
+        private void Nav_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            var tag = (string)((ListBoxItem)Nav.SelectedItem)?.Tag;
+            General.Visibility = tag == "General" ? Visibility.Visible : Visibility.Collapsed;
+            NwcSection.Visibility = tag == "Nwc" ? Visibility.Visible : Visibility.Collapsed;
+            Scroll.ScrollToTop();
         }
 
         private static FrameworkElement OptionRowOf(FrameworkElement e)
@@ -69,7 +79,7 @@ namespace RASv2.ClashAnalysis.UI
             ElementProperties.IsChecked, Urls.IsChecked, Lights.IsChecked, RoomAsAttribute.IsChecked, LinkedCad.IsChecked,
             LinkedFiles.IsChecked, Parts.IsChecked, MissingMaterials.IsChecked, Levels.IsChecked, Scope.SelectedIndex, ViewName.Text,
             RoomGeometry.IsChecked, RemoveRevitLinks.IsChecked, RemoveCad.IsChecked, RemovePointClouds.IsChecked, RemoveIfc.IsChecked,
-            TrimName.IsChecked, BlockPrefix.Text, DateFormat.SelectedIndex, ParallelCopies.Text,
+            TrimAfter.Text, BlockPrefix.Text, DateFormat.SelectedIndex, ParallelCopies.Text,
             string.Join(";", _departments.Select(d => d.Department)));
 
         /// <summary>Окно — из настроек (открытие и «Импорт…»).</summary>
@@ -80,7 +90,7 @@ namespace RASv2.ClashAnalysis.UI
             RemoveCad.IsChecked = s.RemoveCad;
             RemovePointClouds.IsChecked = s.RemovePointClouds;
             RemoveIfc.IsChecked = s.RemoveIfc;
-            TrimName.IsChecked = s.TrimName;
+            TrimAfter.Text = s.TrimAfter ?? "";
             BlockPrefix.Text = s.BlockPrefix;
             DateFormat.SelectedIndex = Math.Max(0, Array.IndexOf(ExportSettings.DateFormats, s.DateFormat));
             ParallelCopies.Text = s.ParallelCopies.ToString(CultureInfo.InvariantCulture);
@@ -120,11 +130,12 @@ namespace RASv2.ClashAnalysis.UI
 
         private string SelectedDateFormat => (string)((ComboBoxItem)DateFormat.SelectedItem)?.Tag ?? ExportSettings.DateFormats[0];
 
-        /// <summary>Примеры на одном имени модели: под «Обрезать имя NWC» — имя NWC, под «Метками» — {Блок}, {Отдел}, {Дата} (по тому, что сейчас в окне).</summary>
+        /// <summary>Примеры на одном имени модели: под «Имя NWC» — имя NWC, под «Метками» — {Блок}, {Отдел}, {Дата} (по тому, что сейчас в окне).</summary>
         private void UpdateExample()
         {
-            var nwc = ExportNames.NwcName(SampleModel, TrimName.IsChecked == true, out var matches);
-            NameExample.Text = "Пример: " + SampleModel + " → " + nwc + (matches || TrimName.IsChecked != true ? "" : " (не по шаблону)");
+            var nwc = ExportNames.NwcName(SampleModel, TrimAfter.Text, out var matches);
+            NameExample.Text = "Пример: " + SampleModel + " → " + nwc +
+                               (TrimAfter.Text.Trim().Length == 0 ? " (не обрезается)" : matches ? "" : " (в имени нет «" + TrimAfter.Text.Trim() + "» — как есть)");
             var block = ExportNames.Block(SampleModel, BlockPrefix.Text);
             var department = ExportNames.Department(SampleModel, _departments.Select(d => d.Department));
             LabelsExample.Text = "Пример: " + SampleModel + " → {Блок} " + Or(block) + " · {Отдел} " + Or(department) +
@@ -221,7 +232,9 @@ namespace RASv2.ClashAnalysis.UI
             result.RemoveCad = RemoveCad.IsChecked == true;
             result.RemovePointClouds = RemovePointClouds.IsChecked == true;
             result.RemoveIfc = RemoveIfc.IsChecked == true;
-            result.TrimName = TrimName.IsChecked == true;
+            result.TrimAfter = TrimAfter.Text.Trim();
+            // прежние сборки плагина у коллег читают галочку «по шаблону»
+            result.TrimName = result.TrimAfter.Length > 0;
             result.BlockPrefix = BlockPrefix.Text.Trim();
             result.DateFormat = SelectedDateFormat;
             result.ParallelCopies = int.Parse(ParallelCopies.Text.Trim(), CultureInfo.InvariantCulture);

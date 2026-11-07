@@ -159,9 +159,9 @@ namespace RASv2.Tests
                 Check(ExportTask.SubtasksWord(1) == "подзадача" && ExportTask.SubtasksWord(3) == "подзадачи" && ExportTask.BlocksWord(9) == "блоков",
                     "подзадачи, блоки");
             });
-            yield return Case("имя NWC: до части «М3» включительно, остальное отрезается; «М3» нет — как есть", () =>
+            yield return Case("имя NWC: обрезать всё после части («М3» — как прежний шаблон); части нет — как есть", () =>
             {
-                string Nwc(string file, bool trim = true) => ExportNames.NwcName(file, trim, out _);
+                string Nwc(string file, bool trim = true) => ExportNames.NwcName(file, trim ? "М3" : "", out _);
                 Check(Nwc("0000_01_01_S01_01_М3_BIM_Alma") == "0000_01_01_S01_01_М3", "образец разработчика (русская М): " + Nwc("0000_01_01_S01_01_М3_BIM_Alma"));
                 Check(Nwc("0000_01_01_S6_KJ01_01_M3 еще текст.rvt") == "0000_01_01_S6_KJ01_01_M3", Nwc("0000_01_01_S6_KJ01_01_M3 еще текст.rvt"));
                 Check(Nwc("0000_01_01_S6_KJ01_01_M3_еще текст.rvt") == "0000_01_01_S6_KJ01_01_M3", "с отделом и хвостом через «_»");
@@ -169,10 +169,28 @@ namespace RASv2.Tests
                 Check(Nwc(@"\\srv\Генплан.rvt") == "Генплан", "«\\\\сервер\\файл» — не пусто (.NET 8)");
                 Check(Nwc("0000_01_01_S6_KJ01_01_M3 еще текст.rvt", trim: false) == "0000_01_01_S6_KJ01_01_M3 еще текст", "без обрезки");
                 Check(Nwc("0000_01_01_S6_KJ01_01_M31_x.rvt") == "0000_01_01_S6_KJ01_01_M31_x", "«M31» — не «М3»");
-                var short_ = ExportNames.NwcName("Модель АР.rvt", true, out var matches);
-                Check(short_ == "Модель АР" && !matches, "не по шаблону: " + short_);
-                ExportNames.NwcName("0000_01_01_S6_KJ01_01_M3.rvt", true, out matches);
-                Check(matches, "по шаблону");
+                var short_ = ExportNames.NwcName("Модель АР.rvt", "М3", out var matches);
+                Check(short_ == "Модель АР" && !matches, "части нет: " + short_);
+                ExportNames.NwcName("0000_01_01_S6_KJ01_01_M3.rvt", "м3", out matches);
+                Check(matches, "найдена, регистр и русская / латинская «М» — не важны");
+                Check(ExportNames.NwcName("0000_01_01_S6_KJ01_01_M3_BIM_Alma_рабочая.rvt", "BIM_Alma", out _) == "0000_01_01_S6_KJ01_01_M3_BIM_Alma",
+                      "своя часть — из нескольких слов");
+                Check(ExportNames.NwcName("KM3_01_M3_x.rvt", "M3", out _) == "KM3_01_M3", "«KM3» — не часть «M3»");
+                // файл до 07.11.2026 — без TrimAfter: галочка «по шаблону» → «М3», снята → пусто
+                var tmp = Path.Combine(Path.GetTempPath(), "ras-tests-" + Guid.NewGuid().ToString("N") + ".json");
+                try
+                {
+                    foreach (var was in new[] { true, false })
+                    {
+                        ExportFiles.Save(tmp, ExportFiles.FromCommon(new ExportSettings { TrimAfter = null, TrimName = was }));
+                        var back = ExportFiles.Load(tmp).Settings.TrimAfter;
+                        Check(back == (was ? "М3" : ""), "прежний файл, галочка " + was + ": «" + back + "»");
+                    }
+                }
+                finally
+                {
+                    if (File.Exists(tmp)) File.Delete(tmp);
+                }
             });
             yield return Case("{Блок} и {Отдел} — найденные в имени модели, не по номеру части", () =>
             {

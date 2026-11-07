@@ -72,7 +72,14 @@ namespace RASv2.ClashAnalysis.Logic
         public bool RemovePointClouds { get; set; } = true;
         public bool RemoveIfc { get; set; } = true;
 
-        /// <summary>Обрезать имя NWC: всё после части «М3» (разработчик, 03.11.2026) — ExportNames.NwcName.</summary>
+        /// <summary>
+        /// Имя NWC: обрезать всё после этой части имени модели (разработчик, 07.11.2026: «Имя NWC: обрезать всё после — и пользователь
+        /// сам вводит после чего»; было — галочка «по шаблону М3», 03.11.2026); пусто — имя как есть. ExportNames.NwcName.
+        /// </summary>
+        public string TrimAfter { get; set; } = "М3";
+
+        /// <summary>Прежняя галочка «Обрезать по шаблону М3»: читается из файлов до 07.11.2026 (TrimAfter нет — «М3» или пусто), пишется
+        /// для прежних сборок плагина у коллег.</summary>
         public bool TrimName { get; set; } = true;
 
         /// <summary>{Блок} — часть имени модели вида «буква и цифры»: «S6», «S10» (разработчик, 02.11.2026: «зачем по частям делить»).</summary>
@@ -103,6 +110,7 @@ namespace RASv2.ClashAnalysis.Logic
             RemovePointClouds = s.RemovePointClouds;
             RemoveIfc = s.RemoveIfc;
             TrimName = s.TrimName;
+            TrimAfter = s.TrimAfter;
             BlockPrefix = s.BlockPrefix;
             DateFormat = s.DateFormat;
             ParallelCopies = s.ParallelCopies;
@@ -176,25 +184,44 @@ namespace RASv2.ClashAnalysis.Logic
         }
 
         /// <summary>
-        /// Имя NWC из имени модели. trim — до части «М3» включительно, остальное отрезается (разработчик, 03.11.2026: пример
-        /// «0000_01_01_S01_01_М3_BIM_Alma → 0000_01_01_S01_01_М3»; «части Р3 не будет»): «…_M3 еще текст.rvt» и «…_M3_еще
-        /// текст.rvt» → «…_M3». Буква «М» — латинская или русская, без учёта регистра; так режется по смыслу, а не по счёту частей —
-        /// с отделом в имени и без. Части «М3» нет — имя как есть, matches = false («не по шаблону»).
+        /// Имя NWC из имени модели: всё после части trimAfter отрезается (разработчик, 07.11.2026: «Имя NWC: обрезать всё после …»;
+        /// пример «0000_01_01_S01_01_М3_BIM_Alma» и «М3» → «0000_01_01_S01_01_М3»). Часть — целая: до неё начало имени, «_», пробел
+        /// или «-», после — конец, «_», пробел, «-», «.» («М3» не найдётся в «М31»). Без учёта регистра, русские и латинские буквы,
+        /// одинаковые на вид (М и M, А и A…), — одно и то же. Пусто или части нет — имя как есть, matches = false.
         /// </summary>
-        public static string NwcName(string modelFile, bool trim, out bool matches)
+        public static string NwcName(string modelFile, string trimAfter, out bool matches)
         {
             var name = BareName(modelFile).Trim();
-            var split = name.Split('_');
-            var at = Array.FindIndex(split, p => StageRx.IsMatch(p));
-            matches = at >= 0;
-            if (!trim || !matches) return name;
-            var kept = split.Take(at + 1).ToArray();
-            var space = kept[at].IndexOf(' ');
-            if (space >= 0) kept[at] = kept[at].Substring(0, space);
-            return string.Join("_", kept);
+            var marker = (trimAfter ?? "").Trim();
+            matches = false;
+            if (marker.Length == 0) return name;
+            var n = Fold(name);
+            var m = Fold(marker);
+            for (var i = n.IndexOf(m, StringComparison.Ordinal); i >= 0; i = n.IndexOf(m, i + 1, StringComparison.Ordinal))
+            {
+                var end = i + m.Length;
+                if ((i == 0 || "_ -".IndexOf(name[i - 1]) >= 0) && (end == name.Length || "_ -.".IndexOf(name[end]) >= 0))
+                {
+                    matches = true;
+                    return name.Substring(0, end).TrimEnd();
+                }
+            }
+            return name;
         }
 
-        // часть «М3» — сама или с текстом через пробел («М3 еще текст»); М — латинская или русская
-        private static readonly Regex StageRx = new Regex(@"^[MМ]3(\s|$)", RegexOptions.IgnoreCase);
+        // заглавные; русские буквы, одинаковые на вид с латинскими, — латинскими (длина та же — места совпадают)
+        private static string Fold(string s)
+        {
+            var chars = s.ToUpperInvariant().ToCharArray();
+            for (var i = 0; i < chars.Length; i++)
+            {
+                var at = Cyrillic.IndexOf(chars[i]);
+                if (at >= 0) chars[i] = Latin[at];
+            }
+            return new string(chars);
+        }
+
+        private const string Cyrillic = "АВЕКМНОРСТХУ";
+        private const string Latin = "ABEKMHOPCTXY";
     }
 }
