@@ -309,6 +309,7 @@ namespace RASv2.ClashAnalysis.UI
                     var panel = new ExportTaskPanel(task, Settings)
                     {
                         RevitYear = RevitYear, TakenNames = SiblingsOf(task).Where(t => t != task).Select(t => t.Name).ToList(),
+                        LastJournal = () => FindRun(task)?.Journal,
                     };
                     panel.Saved += (s, e) =>
                     {

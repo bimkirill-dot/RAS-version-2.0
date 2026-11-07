@@ -117,17 +117,20 @@
                     <TextBlock x:Name="Info" Style="{StaticResource Msg}" Foreground="{DynamicResource Muted}" FontSize="12" />
                     <TextBlock x:Name="Error" Style="{StaticResource Msg}" Foreground="{DynamicResource Error}" />
                 </StackPanel>
-                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
-                    <Button Content="Экспорт…" Click="Export_Click" ToolTip="С подзадачами — в файл, чтобы поделиться" />
-                    <Button Content="Импорт подзадач…" Margin="8,0,0,0" Click="Import_Click"
-                            ToolTip="Задача или подзадача из файла — подзадачей сюда" />
-                </StackPanel>
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <!-- «Сохранить» и «Отменить» — первыми, справа: не уходят за край; «Экспорт», «Импорт», «Журнал» — в остаток, узко — в две строки -->
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Bottom">
                     <Button Content="Сохранить" Style="{StaticResource PrimaryButton}" Click="Save_Click" />
                     <!-- «Отменить» — правки этой строки пропадают; новая несохранённая строка исчезает -->
                     <Button Content="Отменить" Margin="8,0,0,0" Click="Cancel_Click" />
                 </StackPanel>
-                <Border />
+                <WrapPanel Margin="0,0,8,0">
+                    <Button Content="Экспорт…" Margin="0,2,8,2" Click="Export_Click" ToolTip="С подзадачами — в файл, чтобы поделиться" />
+                    <Button Content="Импорт…" Margin="0,2,8,2" Click="Import_Click"
+                            ToolTip="Импорт подзадач: задача или подзадача из файла — подзадачей сюда" />
+                    <!-- журнал последней выгрузки строки (разработчик, 07.11.2026); не выгружали — папка журналов задачи -->
+                    <Button Content="Журнал" Margin="0,2,0,2" Click="Journal_Click"
+                            ToolTip="Журнал последней выгрузки этой строки; не выгружали — папка «Журналы выгрузки» задачи" />
+                </WrapPanel>
             </DockPanel>
         </Border>
 

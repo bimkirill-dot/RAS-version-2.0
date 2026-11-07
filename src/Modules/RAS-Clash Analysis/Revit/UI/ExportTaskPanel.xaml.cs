@@ -865,6 +865,34 @@ namespace RASv2.ClashAnalysis.UI
 
         private void Cancel_Click(object sender, RoutedEventArgs e) => Cancelled?.Invoke(this, EventArgs.Empty);
 
+        /// <summary>Журнал последней выгрузки строки — его даёт список задач (итог запуска в папке задачи); null — не выгружали.</summary>
+        public Func<string> LastJournal { get; set; }
+
+        /// <summary>«Журнал выгрузки»: журнал последней выгрузки строки; нет — папка «Журналы выгрузки» задачи; нет и её — сказать.</summary>
+        private void Journal_Click(object sender, RoutedEventArgs e)
+        {
+            var journal = LastJournal?.Invoke();
+            var folder = ExportNodes.FolderOf(ExportNodes.Root(_task));
+            var dir = NwcRunPlan.IsRooted(folder) ? Path.Combine(folder, "Журналы выгрузки") : null;
+            var target = !string.IsNullOrEmpty(journal) && File.Exists(journal) ? journal : dir != null && Directory.Exists(dir) ? dir : null;
+            if (target == null)
+            {
+                var owner = Window.GetWindow(this);
+                const string text = "Журналов выгрузки ещё нет — строку не выгружали.";
+                if (owner != null) MessageBox.Show(owner, text, "Менеджер задач", MessageBoxButton.OK, MessageBoxImage.Information);
+                else MessageBox.Show(text, "Менеджер задач", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(target) { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                ShowError("Не открылось: " + target + " — " + ex.Message);
+            }
+        }
+
         /// <summary>Проверить и применить к строке дерева; ошибка — строкой внизу панели и false.</summary>
         public bool TrySave()
         {
