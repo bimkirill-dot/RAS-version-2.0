@@ -784,6 +784,54 @@ namespace RASv2.Tests
                 Check(NwcRunPlan.ExportedText(new List<(string, DateTime?)> { (@"\\s\a.nwc", null) }, out _) == "—", "нет ни одной");
                 Check(NwcRunPlan.ExportedText(new List<(string, DateTime?)>(), out tip) == "—" && tip == null, "NWC у строки нет");
             });
+            yield return Case("NWF: какие строки собирают, из каких NWC; строки хода программы; что добавить в постоянную NWF; какой Navisworks", () =>
+            {
+                var roots = Sample(out var high, out var mid);
+                var plans = NwfRunPlan.Build(roots[0], common);
+                Check(string.Join(" ", plans.Select(p => p.Row.Name)) == "S1_ВК S2_ВК Средняя критичность", "строки с галочкой: " + string.Join(" ", plans.Select(p => p.Row.Name)));
+                Check(plans[0].NwfPath == @"\\srv\2025_Арман Кала 7 очередь\NWF\S1_ВК.nwf" && plans[0].Skip == null, "путь NWF: " + plans[0].NwfPath);
+                var nwcs = NwcRunPlan.Build(high.Children[0], common, 2026, new List<string>()).Select(j => j.NwcPath).ToList();
+                Check(plans[0].Nwcs.Count == 3 && plans[0].Nwcs.SequenceEqual(nwcs), "NWC — те же пути, что у выгрузки: " + string.Join(", ", plans[0].Nwcs));
+                Check(NwfRunPlan.Build(roots[1], common).Count == 0, "без галочки — NWF нет");
+                roots[1].Settings.MakeNwf = true;
+                roots[1].Settings.Folder = "";
+                Check(NwfRunPlan.Build(roots[1], common)[0].Skip.StartsWith("не задана папка"), "без папки — пропуск");
+
+                Check(NwfTool.Parse(NwfTool.StepLine(2, "Открытие NWF"), out var i, out _, out _, out var text) == '@' && i == 2 && text == "Открытие NWF", "шаг");
+                Check(NwfTool.Parse(NwfTool.DoneLine(1, NwfTool.Ok, 12.34, "обновлена: NWC 4\nстрока"), out i, out var result, out var sec, out text) == '=' &&
+                      i == 1 && result == "ok" && Math.Abs(sec - 12.3) < 0.01 && text == "обновлена: NWC 4 строка", "итог: " + text);
+                Check(NwfTool.Parse("  Navisworks запущен за 3,6 с", out i, out _, out _, out _) == ' ' && i == -1, "просто строка");
+                Check(NwfTool.Parse("@ x шаг", out i, out _, out _, out _) == ' ' && NwfTool.Parse("= 1 ok", out _, out _, out _, out _) == ' ', "испорченные — просто строки");
+
+                NwfTool.Diff(new[] { @"\\s\NWC\KJ.nwc", @"\\s\NWC\AR.nwc", @"\\s\Старое\OV.nwc", @"\\s\NWC\VK.nwc" },
+                    new[] { @"\\s\NWC\kj.nwc", @"\\s\NWC\AR.nwc", @"\\s\NWC\OV.nwc", @"\\s\NWC\EL.nwc" }, out var append, out var elsewhere, out var extra);
+                Check(append.SequenceEqual(new[] { @"\\s\NWC\EL.nwc" }), "добавить — новую: " + string.Join(", ", append));
+                Check(elsewhere.SequenceEqual(new[] { @"\\s\NWC\OV.nwc" }), "та же NWC из другой папки — не добавлять");
+                Check(extra.SequenceEqual(new[] { @"\\s\NWC\VK.nwc" }), "лишняя в NWF — сказать: " + string.Join(", ", extra));
+
+                var files = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    @"P:\Autodesk\Navisworks Simulate 2023\Autodesk.Navisworks.Automation.dll", @"P:\Autodesk\Navisworks Simulate 2023\Roamer.exe",
+                    @"P:\Autodesk\Navisworks Manage 2024\Autodesk.Navisworks.Automation.dll", @"P:\Autodesk\Navisworks Manage 2024\Roamer.exe",
+                };
+                Check(NwfTool.FindNavisworks(@"P:\", files.Contains) == @"P:\Autodesk\Navisworks Simulate 2023", "сначала 2023");
+                files.Add(@"P:\Autodesk\Navisworks Manage 2023\Roamer.exe");
+                Check(NwfTool.FindNavisworks(@"P:\", files.Contains) == @"P:\Autodesk\Navisworks Simulate 2023", "Manage без Automation — не он");
+                Check(NwfTool.FindNavisworks(@"P:\", f => false) == null, "нет — null");
+
+                var dir = Path.Combine(Path.GetTempPath(), "ras-tests-" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    var file = Path.Combine(dir, "job.json");
+                    NwfTool.Write(file, new NwfToolJob { NavisworksDir = @"C:\N", Items = { new NwfToolItem { Nwf = @"\\s\S1_ВК.nwf", Nwcs = { @"\\s\a.nwc" } } } });
+                    var back = NwfTool.Read<NwfToolJob>(file);
+                    Check(back.NavisworksDir == @"C:\N" && back.Items.Single().Nwf == @"\\s\S1_ВК.nwf" && back.Items[0].Nwcs.Single() == @"\\s\a.nwc", "задание туда и обратно");
+                }
+                finally
+                {
+                    if (Directory.Exists(dir)) Directory.Delete(dir, true);
+                }
+            });
             yield return Case("фоновый Revit другой версии: задание туда и обратно, «жив», история из двух Revit не затирается", () =>
             {
                 var roots = Sample(out _, out _);

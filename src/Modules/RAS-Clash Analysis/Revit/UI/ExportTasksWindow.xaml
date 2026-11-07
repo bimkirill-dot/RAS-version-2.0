@@ -162,7 +162,7 @@
                                     <!-- фон — как у строки под мышью и выбранной: кнопки видны только у них -->
                                     <StackPanel Grid.ColumnSpan="6" HorizontalAlignment="Right" Orientation="Horizontal" VerticalAlignment="Center"
                                                 Style="{StaticResource RowActions}" Background="{DynamicResource Hover}">
-                                        <Button Style="{StaticResource RowIcon}" Content="&#xE768;" Click="Run_Click" ToolTip="Выгрузить NWC (с Shift — и те, чьи модели не менялись)" />
+                                        <Button Style="{StaticResource RowIcon}" Content="&#xE768;" Click="Run_Click" ToolTip="Выгрузить NWC и собрать NWF (с Shift — NWC и тех моделей, что не менялись)" />
                                         <Button Style="{StaticResource RowIcon}" Content="&#xE710;" Click="AddSub_Click" ToolTip="Новая подзадача" />
                                         <!-- копия подзадачи (вторая критичность — копия первой) -->
                                         <Button Style="{StaticResource RowIcon}" Content="&#xE8C8;" Click="Copy_Click" ToolTip="Копия"

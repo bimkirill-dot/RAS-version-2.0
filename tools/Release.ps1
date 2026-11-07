@@ -86,7 +86,8 @@ function Copy-Build([int]$year, [string]$target, [string]$id, [string]$notes) {
     $temp = "$target.tmp"
     if (Test-Path $temp) { Remove-Item $temp -Recurse -Force }
     New-Item -ItemType Directory -Path $temp -Force | Out-Null
-    Get-ChildItem $parts -File | Where-Object { $_.Extension -in '.dll', '.pdb', '.json' -or $_.Name -eq 'ribbon.txt' } | Copy-Item -Destination $temp
+    # .exe и .config — программы модулей рядом со сборкой (RAS-Clash Analysis: сборка NWF через Navisworks, NwfTool)
+    Get-ChildItem $parts -File | Where-Object { $_.Extension -in '.dll', '.pdb', '.json', '.exe', '.config' -or $_.Name -eq 'ribbon.txt' } | Copy-Item -Destination $temp
     $info = @("Сборка: $id", "Revit: $year", "Коммит: $(Get-Commit)", "Собрал: $env:USERNAME, $(Get-Date -Format 'dd.MM.yyyy HH:mm')")
     Set-Content -Path (Join-Path $temp 'build.txt') -Value $info -Encoding UTF8
     if ($notes) { Set-Content -Path (Join-Path $temp 'notes.txt') -Value $notes -Encoding UTF8 }

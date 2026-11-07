@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Сборка NWF «Задач выгрузки» (DECISIONS.md модуля, «Этап 2 — сборка NWF»): Navisworks без окна (Automation API) — только
+    из отдельного процесса .NET Framework 4.8 x64, поэтому своя программа, а не код модуля (из Revit 2026 — .NET 8 — напрямую
+    нельзя). Лежит в сборке рядом с модулем (parts), модуль запускает её с заданием-файлом (Export\NwfStage.cs).
+    Одна и та же для Revit 2023 и 2026. Navisworks берётся с компьютера, где она работает; без Navisworks 2023 на компьютере
+    сборки программа собирается пустой (скажет «собрана без Navisworks»).
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>RASv2.ClashAnalysis.NwfTool</AssemblyName>
+    <RootNamespace>RASv2.ClashAnalysis.NwfBuild</RootNamespace>
+    <OutputPath>$(RasOut)parts\</OutputPath>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <NavisworksDir Condition="'$(NavisworksDir)' == ''">C:\Program Files\Autodesk\Navisworks Manage 2023</NavisworksDir>
+    <HasNavisworks Condition="Exists('$(NavisworksDir)\Autodesk.Navisworks.Automation.dll')">true</HasNavisworks>
+    <DefineConstants Condition="'$(HasNavisworks)' == 'true'">$(DefineConstants);NAVISWORKS</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- задание и строки хода — общие с модулем, исходником -->
+    <Compile Include="..\Revit\Logic\NwfTool.cs" Link="Logic\NwfTool.cs" />
+    <Reference Include="System.Runtime.Serialization" />
+  </ItemGroup>
+
+  <!-- Navisworks — с компьютера, где программа работает (папку ей передаёт модуль), с программой не копируется -->
+  <ItemGroup Condition="'$(HasNavisworks)' == 'true'">
+    <Reference Include="Autodesk.Navisworks.Automation">
+      <HintPath>$(NavisworksDir)\Autodesk.Navisworks.Automation.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Autodesk.Navisworks.Api">
+      <HintPath>$(NavisworksDir)\Autodesk.Navisworks.Api.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

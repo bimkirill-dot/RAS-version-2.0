@@ -22,8 +22,11 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>Строки дерева, которым нужна эта NWC: по первой взяты настройки.</summary>
         public List<string> Rows { get; } = new List<string>();
         public string Skip { get; set; }
+        /// <summary>Строка окна хода — не NWC, а NWF строки (Export\NwfStage): имя — «S1_ВК.nwf».</summary>
+        public bool IsNwf { get; set; }
+        public string Name { get; set; }
 
-        public string ModelName => ExportNames.BareName(Model.Path);
+        public string ModelName => Name ?? ExportNames.BareName(Model.Path);
     }
 
     /// <summary>

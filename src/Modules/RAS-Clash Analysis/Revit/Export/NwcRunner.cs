@@ -31,10 +31,14 @@ namespace RASv2.ClashAnalysis.Export
             }
             var notes = new List<string>();
             var jobs = NwcRunPlan.Build(task, common, year, notes);
-            var todo = jobs.Count(j => j.Skip == null);
+            // NWF строк с галочкой «Формировать NWF» — после NWC (DECISIONS.md модуля, «Этап 2 — сборка NWF»)
+            var nwfPlans = NwfRunPlan.Build(task, common);
+            var todo = jobs.Count(j => j.Skip == null) + nwfPlans.Count(n => n.Skip == null);
             if (todo == 0)
             {
-                var why = jobs.Count == 0 ? "у «" + task.Name + "» и её подзадач нет моделей." : "все модели пропускаются:\n" + string.Join("\n", jobs.Select(j => "• " + j.ModelName + " — " + j.Skip));
+                var why = jobs.Count == 0 && nwfPlans.Count == 0 ? "у «" + task.Name + "» и её подзадач нет моделей." : "всё пропускается:\n" +
+                          string.Join("\n", jobs.Select(j => "• " + j.ModelName + " — " + j.Skip)
+                              .Concat(nwfPlans.Select(n => "• " + ExportNodes.FileName(n.NwfPath) + " — " + n.Skip)));
                 MessageBox.Show(owner, "Выгружать нечего: " + why, title, MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
@@ -79,10 +83,12 @@ namespace RASv2.ClashAnalysis.Export
                 }
                 // шапка — после раскладки: пропуски «нет Revit …», «нет модуля экспорта» — уже в плане
                 exporter.Header(runTitle, common, jobs, notes);
+                NwfStage.Header(journal, nwfPlans);
+                var nwfItems = NwfStage.Items(nwfPlans);
 
-                var nwcFolder = items.Select(p => Path.GetDirectoryName(p.Job.NwcPath)).FirstOrDefault();
+                var nwcFolder = items.Concat(nwfItems).Select(p => Path.GetDirectoryName(p.Job.NwcPath)).FirstOrDefault();
                 var remoteJournals = new List<string>();
-                var window = new ExportRunWindow(task.Name, items, journalPath, nwcFolder, w =>
+                var window = new ExportRunWindow(task.Name, items.Concat(nwfItems).ToList(), journalPath, nwcFolder, w =>
                 {
                     var remotes = others.Select(g =>
                     {
@@ -113,6 +119,9 @@ namespace RASv2.ClashAnalysis.Export
                         Poll();
                         w.Pump(1000);
                     }
+                    // NWC готовы (свои и фоновых) — NWF; остановили — NWF не собираются
+                    if (w.Cancelled) NwfStage.Stopped(nwfItems, w.Changed);
+                    else NwfStage.Run(nwfPlans, nwfItems, journal, w.Changed, () => w.Cancelled, w.Pump);
                 }) { Owner = owner };
                 window.ShowDialog();
                 ShareJournal(journal, ExportNodes.FolderOf(root));

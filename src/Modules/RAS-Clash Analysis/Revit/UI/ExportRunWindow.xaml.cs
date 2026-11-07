@@ -26,7 +26,7 @@ namespace RASv2.ClashAnalysis.UI
             public int Number { get; set; }
             public string Name => Progress.Job.ModelName;
             public NwcState State => Progress.State;
-            public string StateName => NwcExporter.StateText(Progress.State);
+            public string StateName => Progress.Job.IsNwf && Progress.State == NwcState.Done ? "готова" : NwcExporter.StateText(Progress.State);
             public string Detail => Progress.State == NwcState.Working || Progress.State == NwcState.Waiting
                 ? Progress.Step + "  →  " + Progress.Job.NwcPath
                 : Progress.Note ?? Progress.Step;
