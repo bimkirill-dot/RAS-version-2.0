@@ -151,10 +151,12 @@ namespace RASv2.ClashAnalysis.UI
             RunTests.IsChecked = !s.NoTestsRun;
             MakeReports.IsChecked = s.MakeReports && task.Children.Count == 0;
             NwfName.Text = s.NwfName ?? "";
-            _folder = Field(Folder, FolderFrom, FolderLink, x => x.Folder, ExportNodes.FolderOf, FolderBrowse);
-            _nwc = Field(NwcFolder, NwcFrom, NwcLink, x => x.NwcFolder, ExportNodes.NwcFolderOf, NwcBrowse, NwcChips);
-            _nwf = Field(NwfFolder, NwfFrom, NwfLink, x => x.NwfFolder, ExportNodes.NwfFolderOf, NwfBrowse);
-            _report = Field(ReportFolder, ReportFrom, ReportLink, x => x.ReportFolder, ExportNodes.ReportFolderOf, ReportBrowse, ReportChips);
+            _folder = Field(Folder, FolderFrom, FolderLink, x => x.Folder, ExportNodes.FolderOf, false, FolderBrowse);
+            // папки NWC, NWF, отчётов — полным путём (разработчик, 07–08.11.2026: «пишем полный путь к папкам; в полях — тоже полный»):
+            // короткие (от папки задачи, как было) — показываются целиком и так и сохранятся
+            _nwc = Field(NwcFolder, NwcFrom, NwcLink, x => x.NwcFolder, ExportNodes.NwcFolderOf, true, NwcBrowse, NwcChips);
+            _nwf = Field(NwfFolder, NwfFrom, NwfLink, x => x.NwfFolder, ExportNodes.NwfFolderOf, true, NwfBrowse);
+            _report = Field(ReportFolder, ReportFrom, ReportLink, x => x.ReportFolder, ExportNodes.ReportFolderOf, true, ReportBrowse, ReportChips);
             // вид — нигде не задан — «по общим настройкам» (разработчик, 02.11.2026), и у задачи верхнего уровня тоже
             var viewOwner = _parent == null ? null : ExportNodes.OwnerOf(_parent, x => x.ViewName);
             _view = new InheritField(ViewName, ViewFrom, ViewLink, null, s.ViewName,
@@ -189,12 +191,19 @@ namespace RASv2.ClashAnalysis.UI
                 MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes;
 
         /// <summary>Строка «своё или от уровня выше»; у задачи верхнего уровня — всегда своё, без ссылки.</summary>
+        /// <param name="path">Папка внутри папки задачи: показать полным путём (своё — от папки этой строки, от строки выше — от её папки).</param>
         private InheritField Field(TextBox box, TextBlock from, Button link, Func<NodeSettings, string> field, Func<ExportTask, string> of,
-            params FrameworkElement[] extras)
+            bool path, params FrameworkElement[] extras)
         {
             var top = _parent == null;
-            var f = new InheritField(box, from, link, extras, top ? field(_task.Settings) ?? of(_task) : field(_task.Settings),
-                top ? "" : of(_parent), Source(x => field(x)), Changed);
+            string Full(string value, ExportTask at) =>
+                !path || value == null ? value : ExportNodes.InProject(ExportNodes.FolderOf(at), value);
+            var own = top ? field(_task.Settings) ?? of(_task) : field(_task.Settings);
+            var f = new InheritField(box, from, link, extras, Full(own, _task),
+                top ? "" : Full(of(_parent), _parent), Source(x => field(x)), Changed);
+            // полный путь длинный — целиком в подсказке
+            box.SetBinding(ToolTipProperty, new System.Windows.Data.Binding("Text") { Source = box });
+            ToolTipService.SetShowOnDisabled(box, true);
             if (top) from.Visibility = link.Visibility = Visibility.Collapsed;
             return f;
         }
