@@ -1077,7 +1077,14 @@ namespace RASv2.Tests
                 Check(RunStates.Key(s1) == "ArmanQala › Высокая критичность › S1_ВК", "ключ — по названиям: " + RunStates.Key(s1));
                 Check(RunStates.PathOf(s1) == @"\\srv\2025_Арман Кала 7 очередь\Журналы выгрузки\состояние.json", "файл — в папке задачи");
                 roots[1].Settings.Folder = "";
-                Check(RunStates.PathOf(roots[1]) == null, "без папки задачи — не хранится");
+                Check(RunStates.PathOf(roots[1]) == Path.Combine(RunStates.LocalDir, "ЖК Нурлы.json"), "без папки задачи — на этом компьютере (09.11.2026)");
+                // задача без папки — только пересохранение: папки не нужны; NWC — пропуск с причиной
+                Check(NwcRunPlan.Build(roots[1], common, 2026, new List<string>()).All(j => j.Skip.StartsWith("не задана папка")), "NWC без папки — пропуск");
+                roots[1].Settings.NoNwc = true;
+                roots[1].Settings.Resave = true;
+                Check(NwcRunPlan.Build(roots[1], common, 2026, new List<string>()).All(j => j.Skip == null && j.Resave), "только пересохранение — без папок");
+                roots[1].Settings.NoNwc = false;
+                roots[1].Settings.Resave = false;
 
                 var at = new DateTime(2026, 11, 7, 15, 20, 0);
                 var items = new List<(string, string, ItemResult, string)>

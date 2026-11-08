@@ -99,11 +99,22 @@ namespace RASv2.ClashAnalysis.Logic
     {
         public const string FileName = "состояние.json";
 
-        /// <summary>Файл состояния задачи; папки задачи нет — null (состояние не хранится).</summary>
+        /// <summary>Состояние задач без папки — на этом компьютере (по названию задачи).</summary>
+        public static string LocalDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "RAS_v_2.0", "RAS-Clash Analysis", "Выгрузка NWC", "Состояние");
+
+        /// <summary>
+        /// Файл состояния задачи: в её папке; папки нет (разработчик, 09.11.2026: «задачу можно создать и вовсе без папки — для
+        /// пересохранения папки не нужны») — на этом компьютере, по названию задачи; без названия — null (не хранится).
+        /// </summary>
         public static string PathOf(ExportTask task)
         {
-            var folder = ExportNodes.FolderOf(ExportNodes.Root(task));
-            return NwcRunPlan.IsRooted(folder) ? Path.Combine(folder, "Журналы выгрузки", FileName) : null;
+            var root = ExportNodes.Root(task);
+            var folder = ExportNodes.FolderOf(root);
+            if (NwcRunPlan.IsRooted(folder)) return Path.Combine(folder, "Журналы выгрузки", FileName);
+            var bad = Path.GetInvalidFileNameChars();
+            var name = new string((root.Name ?? "").Trim().Select(c => bad.Contains(c) ? '_' : c).ToArray());
+            return name.Length == 0 ? null : Path.Combine(LocalDir, name + ".json");
         }
 
         /// <summary>Строка — по названиям от задачи («ArmanQala › Высокая критичность › S1_ВК»): переименовали — состояние с нуля.</summary>

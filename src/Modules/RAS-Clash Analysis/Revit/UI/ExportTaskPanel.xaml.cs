@@ -995,7 +995,8 @@ namespace RASv2.ClashAnalysis.UI
         {
             var journal = LastJournal?.Invoke();
             var folder = ExportNodes.FolderOf(ExportNodes.Root(_task));
-            var dir = NwcRunPlan.IsRooted(folder) ? Path.Combine(folder, "Журналы выгрузки") : null;
+            // без папки задачи журналы — только на этом компьютере
+            var dir = NwcRunPlan.IsRooted(folder) ? Path.Combine(folder, "Журналы выгрузки") : RASv2.ClashAnalysis.Export.NwcRunner.JournalDir;
             var target = !string.IsNullOrEmpty(journal) && File.Exists(journal) ? journal : dir != null && Directory.Exists(dir) ? dir : null;
             if (target == null)
             {
@@ -1048,7 +1049,8 @@ namespace RASv2.ClashAnalysis.UI
         {
             var name = ExportNodes.CheckName(TaskName.Text, TakenNames);
             if (name != null) return name;
-            if (_parent == null && Folder.Text.Trim().Length == 0) return "Нужна папка задачи — в ней NWC, NWF и отчёты.";
+            // папка задачи не обязательна (разработчик, 09.11.2026: «для пересохранения папки не нужны»): без неё NWC, NWF, отчёты и
+            // RVT пропускаются с причиной, если им не задан полный путь
             if (_formatsOwn && Checked().Count == 0) return "Нужен хотя бы один формат отчётов.";
             if (_editedOwn && EditedOn.IsChecked == true)
             {
