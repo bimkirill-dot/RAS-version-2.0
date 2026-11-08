@@ -174,6 +174,11 @@ namespace RASv2.ClashAnalysis.NwfBuild
                 }
             }
 
+            // скрыть — до проверок (разработчик, 07.11.2026: «сначала скрыть по загруженным условиям, потом проверка»; Navisworks скрытое
+            // в проверки не берёт — проверено им); ничего не нашлось — пропуск («что поделать»)
+            if (item.HideSets.Count > 0) Hide(app, i, item, notes);
+            if (item.Tests.Count > 0) Tests(app, i, item, notes);
+
             Console.WriteLine(NwfTool.StepLine(i, "Сохранение NWF"));
             Directory.CreateDirectory(Path.GetDirectoryName(nwf));
             var save = Stopwatch.StartNew();
@@ -192,6 +197,101 @@ namespace RASv2.ClashAnalysis.NwfBuild
             return 1;
         }
 #endif
+
+        /// <summary>
+        /// Скрыть по наборам «Скрыть»: встроенный импорт наборов Navisworks → модуль программы находит каждый набор по имени, скрывает
+        /// найденное и убирает сам набор (в NWF его не остаётся — при следующем обновлении не задвоится).
+        /// </summary>
+        private static void Hide(NavisworksApplication app, int i, NwfToolItem item, List<string> notes)
+        {
+            Console.WriteLine(NwfTool.StepLine(i, "Скрытие по наборам поиска"));
+            var names = item.HideSets.Select(x => (string)System.Xml.Linq.XElement.Parse(x).Attribute("name") ?? "").ToList();
+            var sets = Path.Combine(Path.GetTempPath(), "ras-nwf-sets-" + Guid.NewGuid().ToString("N") + ".xml");
+            var result = Path.Combine(Path.GetTempPath(), "ras-nwf-hide-" + Guid.NewGuid().ToString("N") + ".txt");
+            try
+            {
+                // шапка — как у файла экспорта Navisworks (единицы и схема): без неё встроенный импорт молча ничего не загружает?
+                File.WriteAllText(sets, "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<exchange xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" " +
+                                        "xsi:noNamespaceSchemaLocation=\"http://download.autodesk.com/us/navisworks/schemas/nw-exchange-12.0.xsd\" units=\"ft\">" +
+                                        "<selectionsets>" + string.Join("", item.HideSets) + "</selectionsets></exchange>", new UTF8Encoding(false));
+                var c = Stopwatch.StartNew();
+                app.ExecuteAddInPlugin(NwfTool.ImportSets, sets);
+                app.ExecuteAddInPlugin(NwfTool.HidePlugin, new[] { result }.Concat(names).ToArray());
+                var lines = File.Exists(result) ? File.ReadAllLines(result, Encoding.UTF8) : new string[0];
+                var hidden = 0;
+                foreach (var line in lines)
+                {
+                    var parts = line.Split('\t');
+                    var n = parts.Length > 1 && int.TryParse(parts[1], out var x) ? x : -1;
+                    Say("   скрыть «" + parts[0] + "»: " + (n < 0 ? "набор не загрузился" + (parts.Length > 2 ? " (наборы в NWF: " + (parts[2].Length == 0 ? "нет" : parts[2]) + ")" : "")
+                        : n == 0 ? "ничего не найдено — пропуск" : "скрыто " + n));
+                    if (n > 0) hidden += n;
+                }
+                Say("   скрытие — " + Sec(c));
+                notes.Add("скрыто: " + hidden);
+            }
+            finally
+            {
+                foreach (var f in new[] { sets, result }) if (File.Exists(f)) File.Delete(f);
+            }
+        }
+
+        /// <summary>
+        /// Проверки: в NWF их нет — загрузить из файлов строки (встроенный импорт Clash Detective; копию — импорт может удалить файл);
+        /// есть — не загружать заново (у коллизий остаются статусы и комментарии); затем — прогнать все, итог по каждой — в журнал.
+        /// </summary>
+        private static void Tests(NavisworksApplication app, int i, NwfToolItem item, List<string> notes)
+        {
+            var info = Path.Combine(Path.GetTempPath(), "ras-nwf-tests-" + Guid.NewGuid().ToString("N") + ".txt");
+            try
+            {
+                app.ExecuteAddInPlugin(NwfTool.TestsPlugin, info, "count");
+                var have = File.Exists(info) && int.TryParse(File.ReadAllText(info).Trim(), out var n) ? n : 0;
+                if (have > 0) Say("   проверок в NWF: " + have + " — заново не загружаются (статусы и комментарии коллизий остаются), только прогон");
+                else
+                    foreach (var file in item.Tests)
+                    {
+                        Console.WriteLine(NwfTool.StepLine(i, "Загрузка проверок: " + Path.GetFileName(file)));
+                        if (!File.Exists(file))
+                        {
+                            Say("   файла проверок нет: " + file);
+                            notes.Add("нет файла проверок: " + Path.GetFileName(file));
+                            continue;
+                        }
+                        var copy = Path.Combine(Path.GetTempPath(), "ras-nwf-" + Guid.NewGuid().ToString("N") + ".xml");
+                        File.Copy(file, copy, true);
+                        try
+                        {
+                            app.ExecuteAddInPlugin(NwfTool.ImportTests, copy);
+                            Say("   загружены проверки: " + file);
+                        }
+                        finally
+                        {
+                            if (File.Exists(copy)) File.Delete(copy);
+                        }
+                    }
+                Console.WriteLine(NwfTool.StepLine(i, "Прогон проверок"));
+                var c = Stopwatch.StartNew();
+                app.ExecuteAddInPlugin(NwfTool.TestsPlugin, info, "run");
+                var lines = File.Exists(info) ? File.ReadAllLines(info, Encoding.UTF8) : new string[0];
+                int tests = 0, total = 0, fresh = 0;
+                foreach (var line in lines)
+                {
+                    var p = line.Split('\t');
+                    if (p.Length < 4) continue;
+                    tests++;
+                    total += int.TryParse(p[2], out var t) ? t : 0;
+                    fresh += int.TryParse(p[3], out var f) ? f : 0;
+                    Say($"   проверка «{p[0]}»: {p[1]}, коллизий {p[2]}, новых {p[3]}");
+                }
+                Say("   прогон — " + Sec(c));
+                notes.Add($"проверок {tests}, коллизий {total}, новых {fresh}");
+            }
+            finally
+            {
+                if (File.Exists(info)) File.Delete(info);
+            }
+        }
 
         private static void Say(string s) => Console.WriteLine("  " + s);
 

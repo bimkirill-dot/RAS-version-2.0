@@ -26,6 +26,10 @@ namespace RASv2.ClashAnalysis.Logic
     {
         [DataMember(Order = 1)] public string Nwf { get; set; }
         [DataMember(Order = 2)] public List<string> Nwcs { get; set; } = new List<string>();
+        /// <summary>«Скрыть»: поисковые наборы Navisworks (&lt;selectionset&gt; как в файле экспорта) — найденное скрывается до проверок.</summary>
+        [DataMember(Order = 3)] public List<string> HideSets { get; set; } = new List<string>();
+        /// <summary>Файлы проверок Clash Detective (.xml) — загружаются, если в NWF проверок ещё нет; затем — прогон всех проверок.</summary>
+        [DataMember(Order = 4)] public List<string> Tests { get; set; } = new List<string>();
     }
 
     /// <summary>
@@ -39,6 +43,14 @@ namespace RASv2.ClashAnalysis.Logic
         public const string ExeName = "RASv2.ClashAnalysis.NwfTool.exe";
         /// <summary>Модуль программы внутри Navisworks: какие модели в открытой NWF (имя + «.» + разработчик).</summary>
         public const string ModelsPlugin = "RasNwfModels.RASV";
+        /// <summary>Модуль программы: скрыть найденное наборами (имена — после файла итога), сами наборы — убрать.</summary>
+        public const string HidePlugin = "RasNwfHide.RASV";
+        /// <summary>Модуль программы: проверки — «count» (сколько в NWF) или «run» (прогнать все, итог по каждой).</summary>
+        public const string TestsPlugin = "RasNwfTests.RASV";
+        /// <summary>Встроенный импорт Navisworks: «Импортировать наборы поисковых запросов» (XML &lt;exchange&gt;&lt;selectionsets&gt;).</summary>
+        public const string ImportSets = "NativeExportPluginAdaptor_XmlSelectionSetsImportPlugin_Import.Navisworks";
+        /// <summary>Встроенный импорт Clash Detective: «Тест конфликтов в формате XML».</summary>
+        public const string ImportTests = "NativeExportPluginAdaptor_LcOdpClashTestsImportPlugin_Import.Navisworks";
         public const string Ok = "ok", Fail = "fail", Skip = "skip";
 
         public static string StepLine(int index, string step) => "@ " + index + " " + OneLine(step);

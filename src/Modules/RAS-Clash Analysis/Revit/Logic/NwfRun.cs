@@ -11,6 +11,10 @@ namespace RASv2.ClashAnalysis.Logic
         public string NwfPath { get; set; }
         public List<string> Nwcs { get; set; } = new List<string>();
         public string Skip { get; set; }
+        /// <summary>«Скрыть» строки (свои или от строки выше) — &lt;selectionset&gt;; скрываются в NWF до проверок.</summary>
+        public List<HideSet> HideSets { get; set; } = new List<HideSet>();
+        /// <summary>Файлы проверок строки (свои или от строки выше).</summary>
+        public List<string> Tests { get; set; } = new List<string>();
     }
 
     /// <summary>
@@ -24,7 +28,12 @@ namespace RASv2.ClashAnalysis.Logic
             var plans = new List<NwfPlan>();
             foreach (var row in start.Active().Where(ExportNodes.MakesNwf))
             {
-                var plan = new NwfPlan { Row = row, NwfPath = ExportNodes.NwfPath(row, common) };
+                var plan = new NwfPlan
+                {
+                    Row = row, NwfPath = ExportNodes.NwfPath(row, common),
+                    HideSets = (ExportNodes.HideSetsOf(row) ?? new List<HideSet>()).Where(h => !string.IsNullOrWhiteSpace(h.Xml)).ToList(),
+                    Tests = (ExportNodes.TestsOf(row) ?? new List<string>()).Where(t => !string.IsNullOrWhiteSpace(t)).ToList(),
+                };
                 plan.Nwcs = (ExportNodes.ModelsOf(row) ?? new List<ExportModel>())
                     .Where(m => !string.IsNullOrWhiteSpace(m.Path))
                     .Select(m => ExportNodes.NwcPath(row, m, common))

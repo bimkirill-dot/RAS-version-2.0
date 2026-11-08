@@ -42,6 +42,8 @@ namespace RASv2.ClashAnalysis.Export
             {
                 j.Line($"   NWF «{p.Row.Name}»: {p.NwfPath}" + (p.Skip != null ? " — пропускается: " + p.Skip : ""));
                 foreach (var n in p.Nwcs) j.Line("      ← " + n);
+                foreach (var h in p.HideSets) j.Line($"      скрыть: «{h.Name}» — {h.Text}");
+                foreach (var t in p.Tests) j.Line("      проверки: " + t);
             }
             j.Line("");
         }
@@ -100,7 +102,11 @@ namespace RASv2.ClashAnalysis.Export
             {
                 NavisworksDir = navisworks, CancelFile = Path.Combine(work, "cancel"),
                 BackupDir = Path.Combine(NwcRunner.JournalDir, "NWF до обновления"),
-                Items = todo.Select(i => new NwfToolItem { Nwf = plans[i].NwfPath, Nwcs = plans[i].Nwcs.ToList() }).ToList(),
+                Items = todo.Select(i => new NwfToolItem
+                {
+                    Nwf = plans[i].NwfPath, Nwcs = plans[i].Nwcs.ToList(), HideSets = plans[i].HideSets.Select(h => h.Xml).ToList(),
+                    Tests = plans[i].Tests.ToList(),
+                }).ToList(),
             };
             var jobFile = Path.Combine(work, "job.json");
             NwfTool.Write(jobFile, job);

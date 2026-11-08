@@ -23,6 +23,7 @@
     <!-- задание и строки хода — общие с модулем, исходником -->
     <Compile Include="..\Revit\Logic\NwfTool.cs" Link="Logic\NwfTool.cs" />
     <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.Xml.Linq" />
   </ItemGroup>
 
   <!-- Navisworks — с компьютера, где программа работает (папку ей передаёт модуль), с программой не копируется -->
@@ -33,6 +34,10 @@
     </Reference>
     <Reference Include="Autodesk.Navisworks.Api">
       <HintPath>$(NavisworksDir)\Autodesk.Navisworks.Api.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Autodesk.Navisworks.Clash">
+      <HintPath>$(NavisworksDir)\Autodesk.Navisworks.Clash.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
