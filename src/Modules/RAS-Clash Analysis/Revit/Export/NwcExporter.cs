@@ -250,7 +250,7 @@ namespace RASv2.ClashAnalysis.Export
 
                 Step("Связи — не загружать", () => DoNotLoadLinks(copyPath));
 
-                Step("Открытие", () =>
+                void Open()
                 {
                     var options = new OpenOptions { Audit = false };
                     if (workshared)
@@ -262,12 +262,24 @@ namespace RASv2.ClashAnalysis.Export
                     if (doc == null) throw new NwcError("Revit не открыл модель");
                     _j.Line($"   открыта: «{doc.Title}»; элементов: {new FilteredElementCollector(doc).WhereElementIsNotElementType().GetElementCount()}" +
                             (doc.IsWorkshared ? $"; рабочих наборов: {new FilteredWorksetCollector(doc).OfKind(WorksetKind.UserWorkset).Count()}" : ""));
-                });
+                }
+                Step("Открытие", Open);
 
-                // вид до удаления — замер: удаление DWG и связей бывало причиной пустого вида? (07.11.2026, модель АР: 86 видимых — только
-                // камеры и рамки, а у разработчика в Revit на этом виде всё есть)
+                // вид до удаления — замер (07.11.2026, модель АР: 86 видимых — только камеры и рамки, а у разработчика в Revit на этом
+                // виде всё есть). Та же модель, тот же Revit то пустой вид, то полный (08.11.2026: два запуска — 0, третий — 35 588; никто
+                // ничего не нажимал) — пустой сразу после открытия: закрыть и открыть ещё раз; снова пустой — ошибка с пробами (PrepareView)
                 var before = job.Export.Nwc.Scope == NwcScope.View ? CountVisibleModel(doc, job.View) : -1;
                 if (before >= 0) _j.Line($"   до удаления на виде «{job.View}» видно элементов модели: {before}");
+                if (before == 0)
+                {
+                    _j.Warn($"{job.ModelName}: вид «{job.View}» пустой сразу после открытия — модель закрывается и открывается ещё раз");
+                    var first = doc;
+                    doc = null;
+                    Step("Закрытие (пустой вид)", () => first.Close(false));
+                    Step("Открытие (второй раз)", Open);
+                    before = CountVisibleModel(doc, job.View);
+                    _j.Line($"   после повторного открытия на виде видно элементов модели: {before}");
+                }
                 Step("Удаление внешнего", () => RemoveExternal(doc, job.Export));
 
                 View3D view = null;
