@@ -31,6 +31,8 @@ namespace RASv2.ClashAnalysis.Logic
         /// null — RVT не нужен.
         /// </summary>
         public string RvtPath { get; set; }
+        /// <summary>Пересохранить модель на место («Пересохранить RVT» у строки, 08.11.2026) — первым делом, пока модель не тронута.</summary>
+        public bool Resave { get; set; }
         /// <summary>Строка окна хода — не NWC, а NWF строки (Export\NwfStage): имя — «S1_ВК.nwf».</summary>
         public bool IsNwf { get; set; }
         public string Name { get; set; }
@@ -70,16 +72,25 @@ namespace RASv2.ClashAnalysis.Logic
                     if (!leaf && used.Contains(model.Path)) continue;
                     used.Add(model.Path);
                     var export = ExportNodes.ExportOf(row, common);
+                    // свои «Настройки RVT» строки (или уровня выше) — в параметры этой модели
+                    var rvtOwner = ExportNodes.OwnerOf(row, s => s.Rvt);
+                    if (rvtOwner != null)
+                    {
+                        export = ReferenceEquals(export, common) ? common.Clone() : export;
+                        export.Rvt = rvtOwner.Settings.Rvt.Clone();
+                    }
                     var job = new NwcJob
                     {
                         Model = model, Export = export, View = ExportNodes.ViewOf(row, common), Edited = ExportNodes.EditedOf(row),
                         NwcPath = ExportNodes.NwcPath(row, model, common),
                         RvtPath = row.Settings.MakeRvt ? ExportNodes.RvtPath(row, model, common, when) : null,
+                        Resave = row.Settings.Resave,
                     };
                     if (byPath.TryGetValue(job.NwcPath, out var same))
                     {
                         same.Rows.Add(row.Name);
                         if (!row.Settings.NoNwc) same.Off = false;
+                        if (row.Settings.Resave) same.Resave = true;
                         if (job.RvtPath != null)
                         {
                             if (same.RvtPath == null) same.RvtPath = job.RvtPath;
@@ -103,7 +114,7 @@ namespace RASv2.ClashAnalysis.Logic
             }
             // папки и выключатели — после слияния строк: NWC нужна хоть одной строке, RVT — хоть одной
             foreach (var j in jobs.Where(j => j.Skip == null))
-                j.Skip = j.Off && j.RvtPath == null ? "выгрузка NWC выключена (галочка «NWC»)"
+                j.Skip = j.Off && j.RvtPath == null && !j.Resave ? "выгрузка NWC выключена (галочка «NWC»)"
                     : !j.Off && !IsRooted(j.NwcPath) ? $"не задана папка: ни «Папки задачи», ни полного пути в «Папке для NWC» у «{j.Rows[0]}»"
                     : j.RvtPath != null && !IsRooted(j.RvtPath) ? $"не задана папка: ни «Папки задачи», ни полного пути в «Папке для RVT» у «{j.Rows[0]}»"
                     : null;

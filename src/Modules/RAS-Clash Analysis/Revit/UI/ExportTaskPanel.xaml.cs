@@ -106,6 +106,8 @@ namespace RASv2.ClashAnalysis.UI
         // свои параметры выгрузки (null — от уровня выше или общие); _exportEdits — для «Отмена с правками спрашивает»
         private ExportOverride _export;
         private int _exportEdits;
+        // свои «Настройки RVT» (null — от уровня выше или общие)
+        private RvtOptions _rvtOptions;
         private string _serverFolder;
 
         public event PropertyChangedEventHandler PropertyChanged;
@@ -153,6 +155,8 @@ namespace RASv2.ClashAnalysis.UI
             // «Экспортировать NWC» и «Экспортировать RVT» — те же выключатели, что в списке задач (08.11.2026)
             MakeNwc.IsChecked = !s.NoNwc;
             MakeRvt.IsChecked = s.MakeRvt;
+            Resave.IsChecked = s.Resave;
+            _rvtOptions = s.Rvt?.Clone();
             NwfName.Text = s.NwfName ?? "";
             _folder = Field(Folder, FolderFrom, FolderLink, x => x.Folder, ExportNodes.FolderOf, false, FolderBrowse);
             // папки NWC, NWF, отчётов — полным путём (разработчик, 07–08.11.2026: «пишем полный путь к папкам; в полях — тоже полный»):
@@ -186,6 +190,7 @@ namespace RASv2.ClashAnalysis.UI
             ShowFormats();
             ShowEdited();
             ShowExport();
+            ShowRvtOptions();
             _opened = State();
         }
 
@@ -225,7 +230,7 @@ namespace RASv2.ClashAnalysis.UI
             string.Join(";", _tests.Select(r => r.Path)), _hideOwn, string.Join(";", _hide.Select(h => h.Xml)), _formatsOwn, string.Join(";", Checked()), _export == null, _exportEdits, _editedOwn, EditedOn.IsChecked, EditedMode.SelectedIndex,
             EditedDate1.Text, EditedDate2.Text,
             MakeNwf.IsChecked, RunTests.IsChecked, MakeReports.IsChecked, NwfName.Text, Own(_folder), Own(_nwc), Own(_nwf), Own(_report), Own(_view), _imported.Count,
-            MakeNwc.IsChecked, MakeRvt.IsChecked, Own(_rvt));
+            MakeNwc.IsChecked, MakeRvt.IsChecked, Own(_rvt), Resave.IsChecked, _rvtOptions == null, _exportEdits);
 
         private static string Own(InheritField f) => f.Value ?? "\u0001";
 
@@ -691,6 +696,46 @@ namespace RASv2.ClashAnalysis.UI
             ShowExport();
         }
 
+        // ── «Настройки RVT»: по общим или свои (08.11.2026) ──
+
+        private void ShowRvtOptions()
+        {
+            var owner = _parent == null ? null : ExportNodes.OwnerOf(_parent, x => x.Rvt);
+            var inherited = owner == null ? "По общим настройкам" : "от «" + owner.Name + "»";
+            RvtOptionsFrom.Text = _rvtOptions != null ? "Свои" : inherited;
+            RvtOptionsReset.Content = "Вернуть " + (owner == null ? "по общим настройкам" : inherited);
+            RvtOptionsReset.Visibility = _rvtOptions != null ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void RvtOptionsEdit_Click(object sender, RoutedEventArgs e)
+        {
+            // начать с того, что действует сейчас: своих, уровня выше или общих
+            var current = _common.Clone();
+            current.Rvt = (_rvtOptions ?? (_parent == null ? _common.Rvt : ExportNodes.RvtOptionsOf(_parent, _common)) ?? new RvtOptions()).Clone();
+            try
+            {
+                var name = TaskName.Text.Trim().Length > 0 ? TaskName.Text.Trim() : "новая строка";
+                if (new ExportSettingsWindow(current, name, true) { Owner = Owner }.Free().ShowDialog() != true) return;
+            }
+            catch (Exception ex)
+            {
+                // исключение сквозь вложенный ShowDialog роняет Revit (CLAUDE.md, «Правила, о которые уже спотыкались»)
+                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: настройки RVT строки не открылись", ex);
+                ShowError("Окно настроек RVT не открылось — подробности в журнале плагина.");
+                return;
+            }
+            _rvtOptions = current.Rvt.Clone();
+            _exportEdits++;
+            ShowRvtOptions();
+        }
+
+        private void RvtOptionsReset_Click(object sender, RoutedEventArgs e)
+        {
+            _rvtOptions = null;
+            _exportEdits++;
+            ShowRvtOptions();
+        }
+
         // ── примеры ──
 
         /// <summary>Примеры — по блокам моделей строки (как в окне сейчас); блоков нет — «S1».</summary>
@@ -781,6 +826,8 @@ namespace RASv2.ClashAnalysis.UI
             NoNwc = MakeNwc.IsChecked != true,
             MakeRvt = MakeRvt.IsChecked == true,
             RvtFolder = _rvt.Value,
+            Resave = Resave.IsChecked == true,
+            Rvt = _rvtOptions?.Clone(),
             Skipped = _task.Settings.Skipped,
             Folder = _folder.Value,
             NwcFolder = _nwc.Value,

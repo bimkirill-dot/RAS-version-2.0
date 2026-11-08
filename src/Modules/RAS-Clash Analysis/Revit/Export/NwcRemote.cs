@@ -102,7 +102,10 @@ namespace RASv2.ClashAnalysis.Export
                     NwcState? Part(string s) => Enum.TryParse<NwcState>(s ?? "", out var x) ? x : (NwcState?)null;
                     var nwc = Part(s.Nwc);
                     var rvt = Part(s.Rvt);
-                    if (p.State == state && p.Step == step && p.Note == note && p.Nwc == nwc && p.Rvt == rvt) continue;
+                    var resave = Part(s.Resave);
+                    if (p.State == state && p.Step == step && p.Note == note && p.Nwc == nwc && p.Rvt == rvt && p.Resave == resave) continue;
+                    p.Resave = resave;
+                    p.ResaveNote = s.ResaveNote;
                     p.State = state;
                     p.Step = step;
                     p.Note = note;

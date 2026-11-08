@@ -580,6 +580,29 @@
                         </StackPanel>
                     </Grid>
                 </StackPanel>
+                <!-- пересохранение на место (разработчик, 08.11.2026: «уменьшить вес файла») — тот же выключатель, что в списке -->
+                <Grid Style="{StaticResource RowGrid}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <TextBlock Style="{StaticResource Cap}" Text="Пересохранить RVT" />
+                    <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
+                        <CheckBox x:Name="Resave" VerticalAlignment="Center" Checked="Any_Changed" Unchecked="Any_Changed"
+                                  ToolTip="Модели строки — на то же место, сжатые и освобождённые; перед заменой — резервная копия" />
+                    </DockPanel>
+                </Grid>
+                <!-- настройки выгрузки и пересохранения — по общим или свои (то же окно, что шестерёнка → RVT; как у NWC) -->
+                <Grid Style="{StaticResource RowGrid}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <TextBlock Style="{StaticResource Cap}" Text="Настройки RVT" />
+                    <WrapPanel Grid.Column="1" VerticalAlignment="Top">
+                        <TextBlock x:Name="RvtOptionsFrom" VerticalAlignment="Center" Margin="0,4,10,4" />
+                        <Button Style="{StaticResource SideLink}" Content="Изменить" Click="RvtOptionsEdit_Click" />
+                    </WrapPanel>
+                    <StackPanel Style="{StaticResource Side}">
+                        <Button x:Name="RvtOptionsReset" Style="{StaticResource SideLink}" Click="RvtOptionsReset_Click" />
+                    </StackPanel>
+                </Grid>
             </StackPanel>
         </ScrollViewer>
     </DockPanel>

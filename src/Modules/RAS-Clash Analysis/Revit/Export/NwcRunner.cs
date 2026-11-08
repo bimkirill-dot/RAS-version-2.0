@@ -62,11 +62,24 @@ namespace RASv2.ClashAnalysis.Export
                 foreach (var j in jobs)
                 {
                     if (!only.Contains(j.NwcPath) && !j.Off) j.Off = true;
+                    if (j.Resave && !only.Contains(RunStates.ResaveKey(j.Model.Path))) j.Resave = false;
                     // RVT — и по имени файла: в папке RVT может быть {Дата} — у повтора она своя
                     if (j.RvtPath != null && !only.Contains(j.RvtPath) && !rvtNames.Contains(ExportNodes.FileName(j.RvtPath))) j.RvtPath = null;
                 }
-                jobs = jobs.Where(j => !j.Off || j.RvtPath != null).ToList();
+                jobs = jobs.Where(j => !j.Off || j.RvtPath != null || j.Resave).ToList();
                 nwfPlans = nwfPlans.Where(n => only.Contains(n.NwfPath) || n.Nwcs.Any(only.Contains)).ToList();
+            }
+            // пересохранение заменяет модели на месте — спросить (разработчик, 08.11.2026: «окно-предупреждение»)
+            var resave = jobs.Where(j => j.Resave && j.Skip == null).ToList();
+            if (resave.Count > 0)
+            {
+                var text = $"Будут пересохранены на место {resave.Count} {ExportTask.ModelsWord(resave.Count)}:\n" +
+                           string.Join("\n", resave.Take(15).Select(j => "• " + j.ModelName)) + (resave.Count > 15 ? "\n…" : "") +
+                           "\n\nУ коллег, которые работают с этими моделями, прежние локальные копии перестанут синхронизироваться: " +
+                           "несинхронизированные изменения пропадут, локальные копии придётся создать заново. Пусть все синхронизируются и закроют модели.\n\n" +
+                           "Перед заменой прежняя модель копируется в папку резервных копий.\n\nПродолжить?";
+                if (MessageBox.Show(owner, text, "Пересохранение моделей", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
+                    return null;
             }
             AskTests(owner, task, nwfPlans);
             var todo = jobs.Count(j => j.Skip == null) + nwfPlans.Count(n => n.Skip == null);

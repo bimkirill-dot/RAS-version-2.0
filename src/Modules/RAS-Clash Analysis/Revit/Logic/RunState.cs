@@ -240,7 +240,7 @@ namespace RASv2.ClashAnalysis.Logic
                 run.Done += previous.Done;
                 run.Seconds = previous.Seconds;
                 // функции, которые не повторяли, — как были; повторённые — сделанное прежде и теперь, ошибки — какие остались
-                foreach (var kind in new[] { "NWC", "NWF", "RVT" })
+                foreach (var kind in new[] { "NWC", "NWF", "RVT", "RESAVE" })
                 {
                     var before = StepOf(previous, kind);
                     var now = run.Steps.FirstOrDefault(x => x.Kind == kind);
@@ -258,10 +258,19 @@ namespace RASv2.ClashAnalysis.Logic
             return run;
         }
 
-        /// <summary>Функция по файлу: NWF — «.nwf», RVT — «.rvt» (08.11.2026), остальное — NWC.</summary>
+        /// <summary>Итог пересохранения модели — путь модели с этим окончанием (сам путь модели — «.rvt», как у выгрузки RVT).</summary>
+        public const string ResaveSuffix = "|пересохранение";
+
+        public static string ResaveKey(string modelPath) => (modelPath ?? "") + ResaveSuffix;
+
+        /// <summary>Функция по файлу: NWF — «.nwf», пересохранение — ResaveSuffix, RVT — «.rvt» (08.11.2026), остальное — NWC.</summary>
         public static string KindOf(string path) =>
             (path ?? "").EndsWith(".nwf", StringComparison.OrdinalIgnoreCase) ? "NWF"
+            : (path ?? "").EndsWith(ResaveSuffix, StringComparison.Ordinal) ? "RESAVE"
             : (path ?? "").EndsWith(".rvt", StringComparison.OrdinalIgnoreCase) ? "RVT" : "NWC";
+
+        /// <summary>Название функции для людей.</summary>
+        public static string KindTitle(string kind) => kind == "RESAVE" ? "Пересохранение" : kind;
 
         /// <summary>Итог функции в запуске; запуск до 07.11.2026 (без Steps) — по ошибкам и числу выгруженных (тогда — NWC).</summary>
         public static StepRun StepOf(RowRun run, string kind)
@@ -287,10 +296,10 @@ namespace RASv2.ClashAnalysis.Logic
         {
             var lines = new List<string>();
             var step = StepOf(run, kind);
-            var made = kind == "NWF" ? "собрано" : "выгружено";
+            var made = kind == "NWF" ? "собрано" : kind == "RESAVE" ? "пересохранено" : "выгружено";
             if (step != null)
             {
-                lines.Add($"{kind}: запуск {run.At:dd.MM.yyyy HH:mm}, {run.By}" + (step.Seconds > 0 ? ", " + NwcHistory.Duration(step.Seconds) : ""));
+                lines.Add($"{KindTitle(kind)}: запуск {run.At:dd.MM.yyyy HH:mm}, {run.By}" + (step.Seconds > 0 ? ", " + NwcHistory.Duration(step.Seconds) : ""));
                 lines.Add($"{made} {step.Done}, с ошибкой {step.Failed}, пропущено {step.Skipped}");
                 var errors = run.Errors.Where(e => KindOf(e.Path) == kind).ToList();
                 if (errors.Count > 0)

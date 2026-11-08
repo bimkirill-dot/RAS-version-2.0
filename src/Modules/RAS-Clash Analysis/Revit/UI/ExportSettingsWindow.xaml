@@ -119,7 +119,7 @@
                      SelectionChanged="Nav_Changed" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBoxItem Content="Общее" Tag="General" />
                 <ListBoxItem Content="Экспорт NWC" Tag="Nwc" />
-                <ListBoxItem Content="Экспорт RVT" Tag="Rvt" />
+                <ListBoxItem Content="RVT" Tag="Rvt" />
                 <ListBoxItem Content="Настройки отчётов" Tag="Report" />
             </ListBox>
         </Border>
@@ -382,10 +382,11 @@
                 </Border>
             </StackPanel>
 
-            <!-- ══ Экспорт RVT — для заказчика (разработчик, 08.11.2026): проверка при открытии, рабочие наборы, имя, что с уже лежащим ══ -->
+            <!-- ══ RVT (разработчик, 08.11.2026): выгрузка для заказчика — проверка при открытии, рабочие наборы, что с уже лежащим, имя;
+                 пересохранение на место — сжать, проверить, папка резервных копий ══ -->
             <StackPanel x:Name="RvtSection" Visibility="Collapsed">
                 <DockPanel Style="{StaticResource HeadBar}">
-                    <TextBlock Style="{StaticResource Head}" Text="Открытие модели" />
+                    <TextBlock Style="{StaticResource Head}" Text="Выгрузка RVT" />
                 </DockPanel>
                 <Border Style="{StaticResource OptionRow}">
                     <Grid>
@@ -395,9 +396,6 @@
                     </Grid>
                 </Border>
 
-                <DockPanel Style="{StaticResource HeadBar}" Margin="0,22,0,2">
-                    <TextBlock Style="{StaticResource Head}" Text="Сохранение" />
-                </DockPanel>
                 <Border Style="{StaticResource OptionRow}">
                     <Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="320" /><ColumnDefinition /></Grid.ColumnDefinitions>
@@ -416,13 +414,10 @@
                     </Grid>
                 </Border>
 
-                <DockPanel Style="{StaticResource HeadBar}" Margin="0,22,0,2">
-                    <TextBlock Style="{StaticResource Head}" Text="Имя RVT" />
-                </DockPanel>
                 <Border Style="{StaticResource OptionRow}">
                     <Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="320" /><ColumnDefinition /></Grid.ColumnDefinitions>
-                        <TextBlock Style="{StaticResource OptionName}" Text="Обрезать всё после" />
+                        <TextBlock Style="{StaticResource OptionName}" Text="Имя RVT: обрезать всё после" />
                         <TextBox Grid.Column="1" x:Name="RvtTrimAfter" Width="160" HorizontalAlignment="Left" TextChanged="Any_Changed"
                                  ToolTip="Часть имени модели, после которой всё отрезается; пусто — имя модели как есть" />
                     </Grid>
@@ -434,6 +429,44 @@
                                Margin="0,1,8,0" VerticalAlignment="Top" />
                     <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Muted}" FontSize="12"
                                Text="Каждая модель строки открывается отсоединённо (если у строки стоит и NWC — тем же открытием, после NWC), из неё удаляются все связи — Revit, DWG и другие CAD, облака точек, IFC, — три раза выполняется очистка от неиспользуемого, и модель сохраняется в папку RVT строки в своей версии Revit. В Revit 2023 стандартной очистки для плагинов нет — удаляются неиспользуемые семейства и типы; в Revit 2026 — стандартная очистка." />
+                </DockPanel>
+
+                <!-- пересохранение на место (разработчик, 08.11.2026: «чтобы уменьшить вес файла»; «сжать», «проверить», папка копий — меняется) -->
+                <DockPanel Style="{StaticResource HeadBar}" Margin="0,26,0,2">
+                    <TextBlock Style="{StaticResource Head}" Text="Пересохранение на место" />
+                </DockPanel>
+                <Border Style="{StaticResource OptionRow}">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="320" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource OptionName}" Text="Сжать модель" />
+                        <CheckBox Grid.Column="1" x:Name="ResaveCompact" ToolTip="«Сжать файл» при сохранении — меньше вес, сохранение дольше" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource OptionRow}">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="320" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource OptionName}" Text="Проверить модель (Audit)" />
+                        <CheckBox Grid.Column="1" x:Name="ResaveAudit" ToolTip="Revit исправляет ошибки модели при открытии; открытие дольше" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource OptionRow}">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="320" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource OptionName}" Text="Папка резервных копий" />
+                        <DockPanel Grid.Column="1">
+                            <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xF12B;" Margin="6,0,0,0"
+                                    Click="BackupBrowse_Click" ToolTip="Выбрать папку" />
+                            <TextBox x:Name="ResaveBackup" TextChanged="Any_Changed"
+                                     ToolTip="Сюда — прежняя модель перед заменой, одна на модель (следующая заменяет прежнюю); пусто — на этом компьютере" />
+                        </DockPanel>
+                    </Grid>
+                </Border>
+                <TextBlock x:Name="ResaveBackupNote" Foreground="{DynamicResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="320,6,0,0" />
+                <DockPanel Margin="0,16,0,0">
+                    <TextBlock DockPanel.Dock="Left" FontFamily="Segoe MDL2 Assets" FontSize="14" Text="&#xE7BA;" Foreground="{StaticResource NoteWarn}"
+                               Margin="0,1,8,0" VerticalAlignment="Top" />
+                    <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Muted}" FontSize="12"
+                               Text="Модель открывается отсоединённо с рабочими наборами и сохраняется центральной туда же, откуда взята (Revit Server или сетевая папка), в своей версии Revit; рабочие наборы освобождаются. У коллег прежние локальные копии перестают синхронизироваться — перед запуском плагин спросит. Прежняя модель перед заменой копируется в папку резервных копий." />
                 </DockPanel>
             </StackPanel>
 

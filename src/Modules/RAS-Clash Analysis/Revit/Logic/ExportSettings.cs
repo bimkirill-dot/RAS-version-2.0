@@ -61,6 +61,20 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>RVT с таким именем уже лежит: перезаписать — да; нет — пропустить.</summary>
         public bool Overwrite { get; set; } = true;
 
+        // ── пересохранение на место (разработчик, 08.11.2026: «чтобы уменьшить вес файла») ──
+        /// <summary>«Сжать модель» при пересохранении.</summary>
+        public bool ResaveCompact { get; set; } = true;
+        /// <summary>«Проверить модель» (Audit) при открытии для пересохранения.</summary>
+        public bool ResaveAudit { get; set; } = true;
+        /// <summary>Папка резервных копий — прежняя модель перед заменой (одна на модель); пусто — на этом компьютере (DefaultBackupDir).</summary>
+        public string BackupFolder { get; set; } = "";
+
+        public static string DefaultBackupDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "RAS_v_2.0", "RAS-Clash Analysis", "Пересохранение", "Резервные копии");
+
+        /// <summary>Куда класть резервные копии: заданная папка или по умолчанию.</summary>
+        public string BackupDir => string.IsNullOrWhiteSpace(BackupFolder) ? DefaultBackupDir : BackupFolder.Trim();
+
         public RvtOptions Clone() => (RvtOptions)MemberwiseClone();
     }
 

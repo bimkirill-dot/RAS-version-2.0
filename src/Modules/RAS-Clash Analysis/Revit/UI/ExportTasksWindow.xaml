@@ -133,6 +133,7 @@
                         <ColumnDefinition Width="76" />
                         <ColumnDefinition Width="64" />
                         <ColumnDefinition Width="76" />
+                        <ColumnDefinition Width="76" />
                         <ColumnDefinition Width="104" />
                         <ColumnDefinition Width="{Binding Time}" />
                     </Grid.ColumnDefinitions>
@@ -142,8 +143,16 @@
                     <TextBlock Grid.Column="3" Style="{StaticResource ColHead}" Text="NWF" ToolTip="Формировать NWF; рядом — как прошла в последний раз" />
                     <TextBlock Grid.Column="4" Style="{StaticResource ColHead}" Text="Отчёты" ToolTip="Формировать отчёты" />
                     <TextBlock Grid.Column="5" Style="{StaticResource ColHead}" Text="RVT" ToolTip="Экспортировать RVT для заказчика; рядом — как прошёл в последний раз" />
-                    <TextBlock Grid.Column="6" Style="{StaticResource ColHead}" Text="Запуск" ToolTip="Когда строку запускали последний раз" />
-                    <TextBlock Grid.Column="7" Style="{StaticResource ColHead}" Text="Время" Visibility="{Binding TimeVisibility}"
+                    <!-- пересохранение на место — значком (разработчик, 08.11.2026: «дискета со знаком круглой стрелочки») -->
+                    <Grid Grid.Column="6" HorizontalAlignment="Left" Margin="0,0,8,4" Background="Transparent"
+                          ToolTip="Пересохранить RVT на место (уменьшить вес); рядом — как прошло в последний раз">
+                        <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="15" Text="&#xE74E;" Foreground="{DynamicResource Muted}" />
+                        <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-7,-3" Background="{DynamicResource Bg}" CornerRadius="5">
+                            <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="9" FontWeight="Bold" Text="&#xE72C;" Margin="1" Foreground="{DynamicResource Muted}" />
+                        </Border>
+                    </Grid>
+                    <TextBlock Grid.Column="7" Style="{StaticResource ColHead}" Text="Запуск" ToolTip="Когда строку запускали последний раз" />
+                    <TextBlock Grid.Column="8" Style="{StaticResource ColHead}" Text="Время" Visibility="{Binding TimeVisibility}"
                                ToolTip="Сколько займёт — по прошлым выгрузкам" />
                 </Grid>
             </Border>
@@ -166,6 +175,7 @@
                                         <ColumnDefinition Width="94" />
                                         <ColumnDefinition Width="76" />
                                         <ColumnDefinition Width="64" />
+                                        <ColumnDefinition Width="76" />
                                         <ColumnDefinition Width="76" />
                                         <ColumnDefinition Width="104" />
                                         <ColumnDefinition Width="{Binding Layout.Time}" />
@@ -240,16 +250,29 @@
                                         <Button Style="{StaticResource RowIcon}" Tag="RVT" Content="&#xE72C;" Width="22" FontSize="12" Margin="0"
                                                 Click="Retry_Click" Visibility="{Binding RvtRetryVisibility}" ToolTip="Повторить только RVT с ошибками" />
                                     </StackPanel>
-                                    <TextBlock Grid.Column="6" Style="{StaticResource Cell}" Text="{Binding RunAt}" ToolTip="{Binding RunAtTip}" />
-                                    <TextBlock Grid.Column="7" Style="{StaticResource Cell}" Text="{Binding TimeText}" Foreground="{DynamicResource Muted}"
+                                    <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <CheckBox Tag="Resave" IsChecked="{Binding Columns.ResaveState, Mode=OneWay}" Click="Flag_Click"
+                                                  ToolTip="Пересохранить RVT на место" />
+                                        <Button Style="{StaticResource CellButton}" Margin="6,0,0,0" Click="Status_Click" ToolTip="{Binding ResaveStatusTip}"
+                                                ToolTipService.ShowDuration="60000">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Style="{StaticResource Mark}" Text="&#xE930;" Foreground="{StaticResource MarkOk}" Visibility="{Binding ResaveOkVisibility}" />
+                                                <TextBlock Style="{StaticResource Mark}" Text="&#xE7BA;" Foreground="{DynamicResource Error}" Visibility="{Binding ResaveErrorVisibility}" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Style="{StaticResource RowIcon}" Tag="RESAVE" Content="&#xE72C;" Width="22" FontSize="12" Margin="0"
+                                                Click="Retry_Click" Visibility="{Binding ResaveRetryVisibility}" ToolTip="Повторить только пересохранение с ошибками" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="7" Style="{StaticResource Cell}" Text="{Binding RunAt}" ToolTip="{Binding RunAtTip}" />
+                                    <TextBlock Grid.Column="8" Style="{StaticResource Cell}" Text="{Binding TimeText}" Foreground="{DynamicResource Muted}"
                                                ToolTip="{Binding TimeTip}" Visibility="{Binding Layout.TimeVisibility}" />
                                     <!-- фон — как у строки под мышью и выбранной: кнопки видны только у них -->
-                                    <StackPanel Grid.ColumnSpan="8" HorizontalAlignment="Right" Orientation="Horizontal" VerticalAlignment="Center"
+                                    <StackPanel Grid.ColumnSpan="9" HorizontalAlignment="Right" Orientation="Horizontal" VerticalAlignment="Center"
                                                 Style="{StaticResource RowActions}" Background="{DynamicResource Hover}">
                                         <Button Style="{StaticResource RowIcon}" Content="&#xE768;" Click="Run_Click" ToolTip="Выгрузить NWC и собрать NWF" />
                                         <!-- повторить все ошибки прошлого запуска — NWC и NWF одним запуском (08.11.2026) -->
                                         <Button Style="{StaticResource RowIcon}" Tag="Все" Content="&#xE72C;" FontSize="12" Click="Retry_Click"
-                                                Visibility="{Binding RetryAllVisibility}" ToolTip="Повторить все ошибки — NWC, NWF и RVT" />
+                                                Visibility="{Binding RetryAllVisibility}" ToolTip="Повторить все ошибки — NWC, NWF, RVT и пересохранение" />
                                         <Button Style="{StaticResource RowIcon}" Content="&#xE710;" Click="AddSub_Click" ToolTip="Новая подзадача" />
                                         <!-- копия строки с подзадачами (вторая критичность — копия первой; задача — тоже, 07.11.2026) -->
                                         <Button Style="{StaticResource RowIcon}" Content="&#xE8C8;" Click="Copy_Click" ToolTip="Копия" />

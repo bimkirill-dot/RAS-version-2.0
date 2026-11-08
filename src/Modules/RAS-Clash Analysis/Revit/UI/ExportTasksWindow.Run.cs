@@ -208,6 +208,7 @@ namespace RASv2.ClashAnalysis.UI
             {
                 row.NwcRetryVisibility == Visibility.Visible ? "NWC" : null, row.NwfRetryVisibility == Visibility.Visible ? "NWF" : null,
                 row.RvtRetryVisibility == Visibility.Visible ? "RVT" : null,
+                row.ResaveRetryVisibility == Visibility.Visible ? "RESAVE" : null,
             };
             var errors = row.LastRun?.Errors.Where(x => kinds.Contains(RunStates.KindOf(x.Path))).ToList();
             if (errors == null || errors.Count == 0) return;
@@ -273,6 +274,7 @@ namespace RASv2.ClashAnalysis.UI
             var inRun = new HashSet<string>(items.Select(p => p.Job.NwcPath), StringComparer.OrdinalIgnoreCase);
             // RVT строки — по её модели (NWC тот же путь; {Дата} в папке RVT — время запуска, заново не вычислить)
             var rvtOf = items.Where(p => p.Job.RvtPath != null).ToDictionary(p => p.Job.NwcPath, p => p.Job.RvtPath, StringComparer.OrdinalIgnoreCase);
+            var resaveOf = items.Where(p => p.Job.Resave).ToDictionary(p => p.Job.NwcPath, p => RunStates.ResaveKey(p.Job.Model.Path), StringComparer.OrdinalIgnoreCase);
             foreach (var row in request.Task.Self())
             {
                 var paths = new HashSet<string>(RowPaths(row).Where(inRun.Contains), StringComparer.OrdinalIgnoreCase);
@@ -280,6 +282,9 @@ namespace RASv2.ClashAnalysis.UI
                 if (row.Settings.MakeRvt || row == request.Task)
                     foreach (var n in paths.ToList())
                         if (rvtOf.TryGetValue(n, out var rvt)) paths.Add(rvt);
+                if (row.Settings.Resave || row == request.Task)
+                    foreach (var n in paths.ToList())
+                        if (resaveOf.TryGetValue(n, out var key)) paths.Add(key);
                 if (paths.Count == 0) continue;
                 _live[row] = new RowLive { Paths = paths, Start = row == request.Task ? DateTime.Now : (DateTime?)null };
             }
@@ -301,6 +306,8 @@ namespace RASv2.ClashAnalysis.UI
                 p.Job.Off && !p.Job.IsNwf ? p.Job.Skip ?? "выгрузка NWC выключена (галочка «NWC»)" : p.NwcNote ?? p.Note ?? p.Job.Skip)).ToList();
             results.AddRange(outcome.Items.Where(p => p.Job.RvtPath != null).Select(p => (p.Job.RvtPath, p.Job.ModelName,
                 Result(p.Rvt ?? p.State), p.RvtNote ?? p.Note ?? p.Job.Skip)));
+            results.AddRange(outcome.Items.Where(p => p.Job.Resave).Select(p => (RunStates.ResaveKey(p.Job.Model.Path), p.Job.ModelName,
+                Result(p.Resave ?? p.State), p.ResaveNote ?? p.Note ?? p.Job.Skip)));
             // повтор ошибок: NWC, которую не повторяли (повтор только RVT), — не в итог
             if (request.Only != null) results.RemoveAll(r => RunStates.KindOf(r.Item1) == "NWC" && !request.Only.Contains(r.Item1));
             var now = DateTime.Now;

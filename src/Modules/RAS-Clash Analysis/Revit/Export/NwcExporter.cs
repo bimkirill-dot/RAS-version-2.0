@@ -31,6 +31,9 @@ namespace RASv2.ClashAnalysis.Export
         public NwcState? Rvt { get; set; }
         public string NwcNote { get; set; }
         public string RvtNote { get; set; }
+        /// <summary>Пересохранение модели на место (08.11.2026); null — не нужно.</summary>
+        public NwcState? Resave { get; set; }
+        public string ResaveNote { get; set; }
     }
 
     /// <summary>Понятная ошибка модели — в журнал и окно без стека (стек — у непредвиденных, и они же — в ras.log).</summary>
@@ -40,6 +43,8 @@ namespace RASv2.ClashAnalysis.Export
     }
 
     /// <summary>
+    /// Пересохранение на место (08.11.2026) — первым после открытия, пока модель не тронута: резервная копия, «Сохранить как»
+    /// центральную туда же (сжать — по настройкам), освободить всё; дальше NWC и RVT — по копии, открытой заново.
     /// Выгрузка RVT (08.11.2026) — тем же открытием, после NWC: удалить все связи, очистить от неиспользуемого три раза, «Сохранить как»
     /// в папку RVT (рабочие наборы — оставить и освободить или без них, по общим настройкам).
     /// Выгрузка NWC (DECISIONS.md модуля, «Порядок на одну модель», «Выгрузка NWC — первая версия»): на каждую модель — копия во
@@ -108,6 +113,11 @@ namespace RASv2.ClashAnalysis.Export
                 i++;
                 _j.Line($"  {i,3}. {job.ModelName}  →  {(job.Off ? "NWC не выгружается" : job.NwcPath)}");
                 if (job.RvtPath != null) _j.Line("       RVT  →  " + job.RvtPath);
+                if (job.Resave)
+                {
+                    var r = job.Export.Rvt ?? new RvtOptions();
+                    _j.Line($"       пересохранение на место: сжать {Yes(r.ResaveCompact)}, проверить (Audit) {Yes(r.ResaveAudit)}; резервная копия → {r.BackupDir}");
+                }
                 _j.Line($"       модель: {job.Model.Path}{(job.Model.Year > 0 ? $" (Revit {job.Model.Year})" : "")}; строки: {string.Join(", ", job.Rows)}");
                 _j.Line($"       вид: {(job.Export.Nwc.Scope == NwcScope.View ? "«" + job.View + "»" : "целый проект")}; " + OptionsText(job.Export.Nwc) +
                         (job.Edited?.On == true ? $"; отбор: отредактированные {job.Edited.Mode} {job.Edited.From:dd.MM.yyyy}{(job.Edited.To != null ? "–" + job.Edited.To.Value.ToString("dd.MM.yyyy") : "")}" : ""));
@@ -205,8 +215,10 @@ namespace RASv2.ClashAnalysis.Export
             // что делать с моделью: NWC — галочка «NWC»; RVT — галочка «RVT» (не пропущен и не упал до открытия — CheckRvt)
             var wantNwc = !job.Off;
             var wantRvt = job.RvtPath != null && p.Rvt == null;
+            var wantResave = job.Resave && p.Resave == null;
             if (wantNwc) p.Nwc = NwcState.Working;
             if (wantRvt) p.Rvt = NwcState.Waiting;
+            if (wantResave) p.Resave = NwcState.Waiting;
             var rvt = job.Export.Rvt ?? new RvtOptions();
             var temp = System.IO.Path.Combine(TempRoot, DateTime.Now.ToString("HHmmss") + "_" + Guid.NewGuid().ToString("N").Substring(0, 6));
             var copy = System.IO.Path.Combine(temp, ExportNodes.FileName(job.Model.Path));
@@ -270,12 +282,28 @@ namespace RASv2.ClashAnalysis.Export
                     }
                 });
 
-                Step("Связи — не загружать", () => DoNotLoadLinks(copyPath));
+                // пересохранение — модель на место такой, какая была: связи загружаются как обычно (иначе у коллег станут «не
+                // загружены»); резервная копия — с нетронутой копии, до открытия
+                if (wantResave)
+                {
+                    try
+                    {
+                        Step("Пересохранение: резервная копия", () => Backup(copy, job));
+                    }
+                    catch (Exception ex) when (wantNwc || wantRvt)
+                    {
+                        p.Resave = NwcState.Failed;
+                        p.ResaveNote = "резервная копия не записана — модель не пересохраняется: " + ex.Message;
+                        _j.Error(job.ModelName + " — " + p.ResaveNote);
+                        wantResave = false;
+                    }
+                }
+                if (!wantResave) Step("Связи — не загружать", () => DoNotLoadLinks(copyPath));
 
                 // RVT без рабочих наборов — их убирает только открытие («отсоединить и удалить рабочие наборы»): без NWC — сразу так; с NWC —
                 // NWC по обычному открытию (виды — с рабочими наборами), потом второе открытие той же копии (без нового копирования)
                 var discard = wantRvt && workshared && !rvt.KeepWorksets;
-                var audit = wantRvt && rvt.Audit;
+                var audit = wantRvt && rvt.Audit || wantResave && rvt.ResaveAudit;
                 void Open(bool dropWorksets)
                 {
                     var options = new OpenOptions { Audit = audit };
@@ -294,7 +322,36 @@ namespace RASv2.ClashAnalysis.Export
                             (doc.IsWorkshared ? $"; рабочих наборов: {new FilteredWorksetCollector(doc).OfKind(WorksetKind.UserWorkset).Count()}" : "") +
                             (dropWorksets ? "; рабочие наборы удалены (RVT — без них)" : "") + (audit ? "; с проверкой (Audit)" : ""));
                 }
-                Step(audit ? "Открытие с проверкой" : "Открытие", () => Open(discard && !wantNwc));
+                Step(audit ? "Открытие с проверкой" : "Открытие", () => Open(discard && !wantNwc && !wantResave));
+
+                if (wantResave)
+                {
+                    p.Resave = NwcState.Working;
+                    try
+                    {
+                        Step("Пересохранение на место", () => ResaveTo(doc, job));
+                        p.Resave = NwcState.Done;
+                        p.ResaveNote = "пересохранена" + ((job.Export.Rvt ?? new RvtOptions()).ResaveCompact ? ", сжата" : "");
+                    }
+                    catch (Exception ex) when (wantNwc || wantRvt)
+                    {
+                        p.Resave = NwcState.Failed;
+                        p.ResaveNote = ex is NwcError ? ex.Message : $"{p.Step}: {ex.Message}";
+                        _j.Error(job.ModelName + " — пересохранение: " + p.ResaveNote, ex is NwcError ? null : ex);
+                        if (!(ex is NwcError)) RASv2.Core.Log.Write("ClashAnalysis", "Пересохранение: " + job.Model.Path, ex);
+                    }
+                    // дальше NWC и RVT — по копии, открытой заново: модель стала центральной на месте, и правки в ней заняли бы её
+                    // элементы у всех (без рабочих наборов — нет: правки не сохраняются)
+                    if ((wantNwc || wantRvt) && doc != null && doc.IsWorkshared)
+                    {
+                        var first = doc;
+                        doc = null;
+                        Step("Закрытие (после пересохранения)", () => first.Close(false));
+                        Step("Связи — не загружать", () => DoNotLoadLinks(copyPath));
+                        audit = wantRvt && rvt.Audit;
+                        Step(audit ? "Открытие с проверкой (для NWC и RVT)" : "Открытие (для NWC и RVT)", () => Open(discard && !wantNwc));
+                    }
+                }
 
                 if (wantNwc)
                 {
@@ -382,7 +439,7 @@ namespace RASv2.ClashAnalysis.Export
                         if (!(ex is NwcError)) RASv2.Core.Log.Write("ClashAnalysis", "Выгрузка RVT: " + job.Model.Path + " — шаг «" + p.Step + "»", ex);
                     }
                 }
-                p.State = p.Nwc == NwcState.Failed || p.Rvt == NwcState.Failed ? NwcState.Failed : NwcState.Done;
+                p.State = p.Nwc == NwcState.Failed || p.Rvt == NwcState.Failed || p.Resave == NwcState.Failed ? NwcState.Failed : NwcState.Done;
                 p.Step = p.State == NwcState.Done ? "выгружена" : "ошибка";
                 p.Note = Notes(p);
             }
@@ -400,6 +457,11 @@ namespace RASv2.ClashAnalysis.Export
                 {
                     p.Rvt = NwcState.Failed;
                     p.RvtNote = note;
+                }
+                if (job.Resave && p.Resave != NwcState.Done && p.Resave != NwcState.Failed)
+                {
+                    p.Resave = NwcState.Failed;
+                    p.ResaveNote = note;
                 }
                 p.Note = Notes(p) ?? note;
                 _j.Error(job.ModelName + " — " + note, ex is NwcError ? null : ex);
@@ -439,14 +501,66 @@ namespace RASv2.ClashAnalysis.Export
             }
         }
 
-        /// <summary>Итог модели строкой: только NWC — как было («12 МБ»); с RVT — «NWC: …; RVT: …».</summary>
+        /// <summary>Итог модели строкой: только NWC — как было («12 МБ»); с RVT, пересохранением — «NWC: …; RVT: …; пересохранение: …».</summary>
         private static string Notes(NwcProgress p)
         {
-            if (p.Rvt == null) return p.NwcNote;
+            if (p.Rvt == null && p.Resave == null) return p.NwcNote;
             var parts = new List<string>();
+            if (p.Resave != null) parts.Add("пересохранение: " + (p.ResaveNote ?? StateText(p.Resave.Value)));
             if (p.Nwc != null) parts.Add("NWC: " + (p.NwcNote ?? StateText(p.Nwc.Value)));
-            parts.Add("RVT: " + (p.RvtNote ?? StateText(p.Rvt.Value)));
+            if (p.Rvt != null) parts.Add("RVT: " + (p.RvtNote ?? StateText(p.Rvt.Value)));
             return string.Join("; ", parts);
+        }
+
+        /// <summary>Резервная копия модели перед пересохранением — нетронутая копия, одна на модель (следующая заменяет прежнюю).</summary>
+        private void Backup(string copy, NwcJob job)
+        {
+            var dir = (job.Export.Rvt ?? new RvtOptions()).BackupDir;
+            Directory.CreateDirectory(dir);
+            var target = System.IO.Path.Combine(dir, ExportNodes.FileName(job.Model.Path));
+            var tmp = target + ".ras-tmp";
+            File.Copy(copy, tmp, true);
+            if (File.Exists(target)) File.Delete(target);
+            File.Move(tmp, target);
+            _j.Line($"   резервная копия: {target}, {NwcHistory.SizeText(new FileInfo(target).Length)}");
+        }
+
+        /// <summary>
+        /// Пересохранить на место (разработчик, 08.11.2026): «Сохранить как» туда же, откуда модель взята (Revit Server или папка), —
+        /// с рабочими наборами центральной, «Сжать» — по настройкам; затем «Освободить всё».
+        /// </summary>
+        private void ResaveTo(Document doc, NwcJob job)
+        {
+            var rvt = job.Export.Rvt ?? new RvtOptions();
+            var central = doc.IsWorkshared;
+            var options = new SaveAsOptions { OverwriteExistingFile = true, Compact = rvt.ResaveCompact };
+            if (central) options.SetWorksharingOptions(new WorksharingSaveAsOptions { SaveAsCentral = true });
+            var server = ExportNodes.IsServerPath(job.Model.Path);
+            long before = !server && File.Exists(job.Model.Path) ? new FileInfo(job.Model.Path).Length : -1;
+            doc.SaveAs(ModelPathUtils.ConvertUserVisiblePathToModelPath(job.Model.Path), options);
+            if (central) Relinquish(doc);
+            var after = !server && File.Exists(job.Model.Path) ? new FileInfo(job.Model.Path).Length : -1;
+            _j.Line($"   пересохранена: {job.Model.Path}" + (central ? " — центральная, с рабочими наборами" : "") + (rvt.ResaveCompact ? ", сжата" : "") +
+                    (before > 0 && after > 0 ? $"; было {NwcHistory.SizeText(before)}, стало {NwcHistory.SizeText(after)}" : ""));
+        }
+
+        /// <summary>«Освободить всё»; не вышло — синхронизация с освобождением; что осталось занятым — несостыковка.</summary>
+        private void Relinquish(Document doc)
+        {
+            try
+            {
+                WorksharingUtils.RelinquishOwnership(doc, new RelinquishOptions(true), new TransactWithCentralOptions());
+            }
+            catch (Exception ex)
+            {
+                _j.Line("   «Освободить всё» не вышло (" + ex.Message + ") — синхронизация с освобождением");
+                var sync = new SynchronizeWithCentralOptions { Comment = "RAS: освободить всё", SaveLocalBefore = false, SaveLocalAfter = false };
+                sync.SetRelinquishOptions(new RelinquishOptions(true));
+                doc.SynchronizeWithCentral(new TransactWithCentralOptions(), sync);
+            }
+            var owned = new FilteredWorksetCollector(doc).OfKind(WorksetKind.UserWorkset).Where(w => w.IsEditable).Select(w => w.Name).ToList();
+            if (owned.Count == 0) _j.Line("   рабочие наборы освобождены");
+            else _j.Warn($"{doc.Title}: рабочие наборы не освобождены ({owned.Count}): " + string.Join(", ", owned.Take(10)));
         }
 
         /// <summary>Удалить все связи (RVT для заказчика): Revit, IFC, DWG и CAD, облака точек — настройки удаления NWC не важны.</summary>
@@ -535,23 +649,7 @@ namespace RASv2.ClashAnalysis.Export
             var options = new SaveAsOptions { OverwriteExistingFile = true, MaximumBackups = 1 };
             if (central) options.SetWorksharingOptions(new WorksharingSaveAsOptions { SaveAsCentral = true });
             doc.SaveAs(target, options);
-            if (central)
-            {
-                try
-                {
-                    WorksharingUtils.RelinquishOwnership(doc, new RelinquishOptions(true), new TransactWithCentralOptions());
-                }
-                catch (Exception ex)
-                {
-                    _j.Line("   «Освободить всё» не вышло (" + ex.Message + ") — синхронизация с освобождением");
-                    var sync = new SynchronizeWithCentralOptions { Comment = "RAS: выгрузка RVT — освободить всё", SaveLocalBefore = false, SaveLocalAfter = false };
-                    sync.SetRelinquishOptions(new RelinquishOptions(true));
-                    doc.SynchronizeWithCentral(new TransactWithCentralOptions(), sync);
-                }
-                var owned = new FilteredWorksetCollector(doc).OfKind(WorksetKind.UserWorkset).Where(w => w.IsEditable).Select(w => w.Name).ToList();
-                if (owned.Count == 0) _j.Line("   рабочие наборы освобождены");
-                else _j.Warn($"{doc.Title}: рабочие наборы не освобождены ({owned.Count}): " + string.Join(", ", owned.Take(10)));
-            }
+            if (central) Relinquish(doc);
             if (!File.Exists(target)) throw new NwcError("Revit не записал RVT (сохранение прошло без ошибки, а файла нет)");
             var size = new FileInfo(target).Length;
             _j.Line($"   RVT записан: {target} — {NwcHistory.SizeText(size)}, " + (central ? "центральный файл с рабочими наборами" : "без рабочих наборов"));
@@ -586,7 +684,29 @@ namespace RASv2.ClashAnalysis.Export
         /// </summary>
         private bool Before(NwcJob job)
         {
-            var rvtOnly = false;
+            // NWC у модели не выгружается (только RVT и / или пересохранение) — проверки NWC не нужны
+            var rvtOnly = job.Off;
+            if (job.Resave)
+            {
+                try
+                {
+                    var dir = (job.Export.Rvt ?? new RvtOptions()).BackupDir;
+                    try
+                    {
+                        Directory.CreateDirectory(dir);
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new NwcError($"папка резервных копий недоступна: {dir} — {ex.Message}");
+                    }
+                }
+                catch (NwcError ex) when (!job.Off || job.RvtPath != null)
+                {
+                    _current.Resave = NwcState.Failed;
+                    _current.ResaveNote = ex.Message;
+                    _j.Error(job.ModelName + " — пересохранение: " + ex.Message);
+                }
+            }
             if (job.RvtPath != null)
             {
                 try
@@ -600,9 +720,8 @@ namespace RASv2.ClashAnalysis.Export
                     _current.RvtNote = ex.Message;
                     _j.Error(job.ModelName + " — RVT: " + ex.Message);
                 }
-                rvtOnly = job.Off;
             }
-            var exists = rvtOnly ? File.Exists(job.RvtPath) : File.Exists(job.NwcPath);
+            var exists = rvtOnly ? job.RvtPath != null && File.Exists(job.RvtPath) : File.Exists(job.NwcPath);
             DateTime? nwcDate = null;
             if (!rvtOnly)
             {

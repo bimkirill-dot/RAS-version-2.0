@@ -153,6 +153,7 @@ namespace RASv2.ClashAnalysis.Export
                         {
                             Index = i, State = p.State.ToString(), Step = p.Step, Note = p.Note, Seconds = p.Time.TotalSeconds,
                             Nwc = p.Nwc?.ToString(), Rvt = p.Rvt?.ToString(), NwcNote = p.NwcNote, RvtNote = p.RvtNote,
+                            Resave = p.Resave?.ToString(), ResaveNote = p.ResaveNote,
                         }).ToList(),
                     });
                 }

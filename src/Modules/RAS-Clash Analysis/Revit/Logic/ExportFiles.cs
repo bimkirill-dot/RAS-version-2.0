@@ -143,6 +143,7 @@ namespace RASv2.ClashAnalysis.Logic
             // файл до 08.11.2026 — без «Экспорта RVT»: по умолчанию
             if (s.Rvt == null) s.Rvt = new RvtOptions();
             if (s.Rvt.TrimAfter == null) s.Rvt.TrimAfter = "";
+            if (s.Rvt.BackupFolder == null) s.Rvt.BackupFolder = "";
             // файл до 08.11.2026 — без настроек отчётов: как в Navisworks (и дата обнаружения, сетка — для сайта)
             if (s.Report == null) s.Report = ReportOptions.Defaults();
             s.Report.Fields = s.Report.Fields ?? ReportOptions.Defaults().Fields;

@@ -73,6 +73,26 @@ namespace RASv2.ClashAnalysis.UI
             Width = 780;
         }
 
+        /// <summary>
+        /// «Настройки RVT» строки (панель строки → раздел RVT → «Изменить»; разработчик, 08.11.2026: «по общим, но чтобы можно было
+        /// изменить, как у NWC»): только раздел RVT — выгрузка и пересохранение.
+        /// </summary>
+        public ExportSettingsWindow(ExportSettings settings, string taskName, bool rvt) : this(settings)
+        {
+            Title = "Настройки RVT — " + taskName;
+            FileButtons.Visibility = Visibility.Collapsed;
+            NavBox.Visibility = Visibility.Collapsed;
+            Nav.SelectedIndex = 2;
+            Width = 780;
+        }
+
+        private void BackupBrowse_Click(object sender, RoutedEventArgs e)
+        {
+            var current = ResaveBackup.Text.Trim().Length > 0 ? ResaveBackup.Text.Trim() : RvtOptions.DefaultBackupDir;
+            var path = FolderDialog.Pick(this, Directory.Exists(current) ? current : "", "Папка резервных копий");
+            if (path != null) ResaveBackup.Text = path;
+        }
+
         /// <summary>Раздел меню — его содержимое справа, прокрутка — к началу.</summary>
         private void Nav_Changed(object sender, SelectionChangedEventArgs e)
         {
@@ -97,7 +117,8 @@ namespace RASv2.ClashAnalysis.UI
             RoomGeometry.IsChecked, RemoveRevitLinks.IsChecked, RemoveCad.IsChecked, RemovePointClouds.IsChecked, RemoveIfc.IsChecked,
             TrimAfter.Text, BlockPrefix.Text, DateFormat.SelectedIndex, ParallelCopies.Text,
             string.Join(";", _departments.Select(d => d.Department)), Picked(_fields), Picked(_statuses), GroupMode.SelectedIndex,
-            FilteredOnly.IsChecked, RvtAudit.IsChecked, RvtWorksets.SelectedIndex, RvtOverwrite.IsChecked, RvtTrimAfter.Text);
+            FilteredOnly.IsChecked, RvtAudit.IsChecked, RvtWorksets.SelectedIndex, RvtOverwrite.IsChecked, RvtTrimAfter.Text,
+            ResaveCompact.IsChecked, ResaveAudit.IsChecked, ResaveBackup.Text);
 
         private static string Picked(ObservableCollection<Pick> picks) => string.Join(";", picks.Where(p => p.On).Select(p => p.Name));
 
@@ -121,6 +142,9 @@ namespace RASv2.ClashAnalysis.UI
             RvtWorksets.SelectedIndex = r.KeepWorksets ? 0 : 1;
             RvtOverwrite.IsChecked = r.Overwrite;
             RvtTrimAfter.Text = r.TrimAfter ?? "";
+            ResaveCompact.IsChecked = r.ResaveCompact;
+            ResaveAudit.IsChecked = r.ResaveAudit;
+            ResaveBackup.Text = r.BackupFolder ?? "";
         }
 
         /// <summary>Настройки отчётов — все поля и статусы Navisworks по порядку, отмечены — из настроек.</summary>
@@ -171,6 +195,7 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Примеры на одном имени модели: под «Имя NWC» — имя NWC, под «Метками» — {Блок}, {Отдел}, {Дата} (по тому, что сейчас в окне).</summary>
         private void UpdateExample()
         {
+            ResaveBackupNote.Text = ResaveBackup.Text.Trim().Length == 0 ? "Пусто — на этом компьютере: " + RvtOptions.DefaultBackupDir : "";
             var rvt = ExportNames.NwcName(SampleModel, RvtTrimAfter.Text, out var rvtMatches);
             RvtNameExample.Text = "Пример: " + SampleModel + " → " + rvt + ".rvt" +
                                   (RvtTrimAfter.Text.Trim().Length == 0 ? " (имя модели)" : rvtMatches ? "" : " (в имени нет «" + RvtTrimAfter.Text.Trim() + "» — как есть)");
@@ -295,7 +320,8 @@ namespace RASv2.ClashAnalysis.UI
             result.Rvt = new RvtOptions
             {
                 Audit = RvtAudit.IsChecked == true, KeepWorksets = RvtWorksets.SelectedIndex != 1, Overwrite = RvtOverwrite.IsChecked == true,
-                TrimAfter = RvtTrimAfter.Text.Trim(),
+                TrimAfter = RvtTrimAfter.Text.Trim(), ResaveCompact = ResaveCompact.IsChecked == true, ResaveAudit = ResaveAudit.IsChecked == true,
+                BackupFolder = ResaveBackup.Text.Trim(),
             };
             result.Report = new ReportOptions
             {
