@@ -178,6 +178,8 @@ namespace RASv2.ClashAnalysis.NwfBuild
             // в проверки не берёт — проверено им); ничего не нашлось — пропуск («что поделать»)
             if (item.HideSets.Count > 0) Hide(app, i, item, notes);
             if (item.Tests.Count > 0) Tests(app, i, item, notes);
+            // отчёты — после прогона, по каждому формату (разработчик, 08.11.2026)
+            if (item.Tests.Count > 0 && item.Reports.Count > 0) Reports(app, i, item, notes);
 
             Console.WriteLine(NwfTool.StepLine(i, "Сохранение NWF"));
             Directory.CreateDirectory(Path.GetDirectoryName(nwf));
@@ -266,7 +268,10 @@ namespace RASv2.ClashAnalysis.NwfBuild
                             notes.Add("нет файла проверок: " + Path.GetFileName(file));
                             continue;
                         }
-                        var copy = Path.Combine(Path.GetTempPath(), "ras-nwf-" + Guid.NewGuid().ToString("N") + ".xml");
+                        // копией (импорт может удалить файл) с тем же именем: Navisworks дописывает имя файла к своим наборам проверок
+                        var dir = Path.Combine(Path.GetTempPath(), "ras-nwf-" + Guid.NewGuid().ToString("N"));
+                        Directory.CreateDirectory(dir);
+                        var copy = Path.Combine(dir, Path.GetFileName(file));
                         File.Copy(file, copy, true);
                         try
                         {
@@ -275,7 +280,7 @@ namespace RASv2.ClashAnalysis.NwfBuild
                         }
                         finally
                         {
-                            if (File.Exists(copy)) File.Delete(copy);
+                            try { Directory.Delete(dir, true); } catch (Exception) { /* временная — не важно */ }
                         }
                     }
                 Console.WriteLine(NwfTool.StepLine(i, "Прогон проверок"));
@@ -299,6 +304,34 @@ namespace RASv2.ClashAnalysis.NwfBuild
             {
                 if (File.Exists(info)) File.Delete(info);
             }
+        }
+
+        /// <summary>Отчёты Clash Detective: по формату — в его папку (модуль программы ReportPlugin); не вышло — пометка, NWF всё равно сохраняется.</summary>
+        private static void Reports(NavisworksApplication app, int i, NwfToolItem item, List<string> notes)
+        {
+            var made = 0;
+            foreach (var r in item.Reports)
+            {
+                Console.WriteLine(NwfTool.StepLine(i, "Отчёт: " + r.Format));
+                var result = Path.Combine(Path.GetTempPath(), "ras-nwf-report-" + Guid.NewGuid().ToString("N") + ".txt");
+                try
+                {
+                    var c = Stopwatch.StartNew();
+                    app.ExecuteAddInPlugin(NwfTool.ReportPlugin, result, r.Folder, r.Format);
+                    var lines = File.Exists(result) ? File.ReadAllLines(result, Encoding.UTF8) : new[] { "ошибка: модуль отчётов не ответил" };
+                    var ok = lines.FirstOrDefault() == "ok";
+                    var files = Directory.Exists(r.Folder) ? Directory.GetFiles(r.Folder, "*", SearchOption.AllDirectories).Length : 0;
+                    Say($"   отчёт «{r.Format}»: " + (ok ? $"записан в {r.Folder} — файлов {files}, {Sec(c)}" : lines.FirstOrDefault()));
+                    foreach (var l in lines.Skip(1)) Say("     " + l);
+                    if (ok) made++;
+                    else notes.Add("отчёт «" + r.Format + "» не записан");
+                }
+                finally
+                {
+                    if (File.Exists(result)) File.Delete(result);
+                }
+            }
+            notes.Add("отчётов: " + made + " из " + item.Reports.Count);
         }
 
         private static void Say(string s) => Console.WriteLine("  " + s);

@@ -45,6 +45,7 @@ namespace RASv2.ClashAnalysis.Export
                 foreach (var h in p.HideSets) j.Line($"      скрыть: «{h.Name}» — {h.Text}");
                 foreach (var t in p.Tests) j.Line("      проверки: " + t);
                 if (!p.RunTests) j.Line("      проверки: не выполняются («Выполнять проверки» снята) — вручную");
+                foreach (var r in p.Reports) j.Line($"      отчёт «{r.Format}» → {r.Folder}");
             }
             j.Line("");
         }
@@ -106,7 +107,7 @@ namespace RASv2.ClashAnalysis.Export
                 Items = todo.Select(i => new NwfToolItem
                 {
                     Nwf = plans[i].NwfPath, Nwcs = plans[i].Nwcs.ToList(), HideSets = plans[i].HideSets.Select(h => h.Xml).ToList(),
-                    Tests = plans[i].Tests.ToList(), ReplaceTests = plans[i].ReplaceTests,
+                    Tests = plans[i].Tests.ToList(), ReplaceTests = plans[i].ReplaceTests, Reports = plans[i].Reports.ToList(),
                 }).ToList(),
             };
             var jobFile = Path.Combine(work, "job.json");

@@ -840,6 +840,16 @@ namespace RASv2.Tests
                 Check(NwfRunPlan.Build(roots[1], common).Count == 0, "без галочки — NWF нет");
                 // «Выполнять проверки» (08.11.2026): снята — проверок в задании нет
                 Check(plans[0].RunTests && plans.Last().Tests.Count == 1, "по умолчанию — выполнять");
+                // отчёты (08.11.2026): у строки «Формировать отчёты» — по формату папка на время запуска
+                Check(plans.All(p => p.Reports.Count == 0), "без «Формировать отчёты» — отчётов нет");
+                mid.Settings.MakeReports = true;
+                var withReports = NwfRunPlan.Build(roots[0], common, new DateTime(2026, 11, 8, 18, 5, 0)).Single(p => p.Row == mid);
+                Check(withReports.Reports.Select(r => r.Format).SequenceEqual(new[] { "XML", "HTML" }) &&
+                      withReports.Reports[0].Folder.EndsWith(@"\Отчеты\08.11.2026 18-05"), "XML и HTML — в папку с датой и временем: " + withReports.Reports[0].Folder);
+                mid.Settings.NoTestsRun = true;
+                Check(NwfRunPlan.Build(roots[0], common).Single(p => p.Row == mid).Reports.Count == 0, "проверки не выполняются — отчётов нет");
+                mid.Settings.NoTestsRun = false;
+                mid.Settings.MakeReports = false;
                 mid.Settings.NoTestsRun = true;
                 var noTests = NwfRunPlan.Build(roots[0], common).Single(p => p.Row == mid);
                 Check(!noTests.RunTests && noTests.Tests.Count == 0 && mid.Settings.Clone().NoTestsRun, "снята — без проверок");

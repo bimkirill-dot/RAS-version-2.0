@@ -32,6 +32,16 @@ namespace RASv2.ClashAnalysis.Logic
         [DataMember(Order = 4)] public List<string> Tests { get; set; } = new List<string>();
         /// <summary>Файл проверок сменился и человек согласился заменить: проверки NWF — убрать и загрузить заново.</summary>
         [DataMember(Order = 5)] public bool ReplaceTests { get; set; }
+        /// <summary>Отчёты после прогона проверок: формат и папка (папка отчётов строки на время запуска).</summary>
+        [DataMember(Order = 6)] public List<NwfToolReport> Reports { get; set; } = new List<NwfToolReport>();
+    }
+
+    [DataContract]
+    public sealed class NwfToolReport
+    {
+        /// <summary>Формат — как в Navisworks: «XML», «HTML», «HTML (Табличное представление)», «Текст», «Как точки обзора».</summary>
+        [DataMember(Order = 1)] public string Format { get; set; }
+        [DataMember(Order = 2)] public string Folder { get; set; }
     }
 
     /// <summary>
@@ -49,6 +59,8 @@ namespace RASv2.ClashAnalysis.Logic
         public const string HidePlugin = "RasNwfHide.RASV";
         /// <summary>Модуль программы: проверки — «count» (сколько в NWF) или «run» (прогнать все, итог по каждой).</summary>
         public const string TestsPlugin = "RasNwfTests.RASV";
+        /// <summary>Модуль программы: отчёт Clash Detective — файл итога, папка, формат.</summary>
+        public const string ReportPlugin = "RasNwfReport.RASV";
         /// <summary>Встроенный импорт Navisworks: «Импортировать наборы поисковых запросов» (XML &lt;exchange&gt;&lt;selectionsets&gt;).</summary>
         public const string ImportSets = "NativeExportPluginAdaptor_XmlSelectionSetsImportPlugin_Import.Navisworks";
         /// <summary>Встроенный импорт Clash Detective: «Тест конфликтов в формате XML».</summary>

@@ -17,6 +17,8 @@ namespace RASv2.ClashAnalysis.Logic
         public List<string> Tests { get; set; } = new List<string>();
         /// <summary>Подпись файлов проверок (RunStates.TestsSignature) — запомнить после сборки.</summary>
         public string TestsSignature { get; set; }
+        /// <summary>Отчёты после прогона проверок: формат — папка (папка отчётов строки, {Дата} — время запуска).</summary>
+        public List<NwfToolReport> Reports { get; set; } = new List<NwfToolReport>();
         /// <summary>«Выполнять проверки» у строки: нет — проверки не загружаются и не прогоняются.</summary>
         public bool RunTests { get; set; } = true;
         /// <summary>Файл проверок сменился, человек согласился — проверки в NWF заменяются.</summary>
@@ -29,8 +31,10 @@ namespace RASv2.ClashAnalysis.Logic
     /// </summary>
     public static class NwfRunPlan
     {
-        public static List<NwfPlan> Build(ExportTask start, ExportSettings common)
+        /// <param name="runDate">Время запуска — {Дата} папки отчётов (одно на весь запуск: все форматы — в одну папку).</param>
+        public static List<NwfPlan> Build(ExportTask start, ExportSettings common, DateTime? runDate = null)
         {
+            var when = runDate ?? DateTime.Now;
             var plans = new List<NwfPlan>();
             foreach (var row in start.Active().Where(ExportNodes.MakesNwf))
             {
@@ -43,6 +47,10 @@ namespace RASv2.ClashAnalysis.Logic
                         : (ExportNodes.TestsOf(row) ?? new List<string>()).Where(t => !string.IsNullOrWhiteSpace(t)).ToList(),
                     RunTests = !row.Settings.NoTestsRun,
                 };
+                // отчёты — у строки «Формировать отчёты» (и проверки выполняются: отчёт — по их результатам; разработчик, 08.11.2026)
+                if (ExportNodes.MakesReports(row) && plan.RunTests && plan.Tests.Count > 0)
+                    plan.Reports = (ExportNodes.FormatsOf(row) ?? new List<string>())
+                        .Select(f => new NwfToolReport { Format = f, Folder = ExportNodes.ReportPath(row, common, when, f) }).ToList();
                 plan.Nwcs = (ExportNodes.ModelsOf(row) ?? new List<ExportModel>())
                     .Where(m => !string.IsNullOrWhiteSpace(m.Path))
                     .Select(m => ExportNodes.NwcPath(row, m, common))

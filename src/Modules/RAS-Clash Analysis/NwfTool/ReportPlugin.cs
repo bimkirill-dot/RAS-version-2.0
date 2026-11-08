@@ -1,0 +1,148 @@
+#if NAVISWORKS
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using Autodesk.Navisworks.Api;
+using Autodesk.Navisworks.Api.Clash;
+using Autodesk.Navisworks.Api.Interop;
+using NwApp = Autodesk.Navisworks.Api.Application;
+using Autodesk.Navisworks.Api.Plugins;
+
+namespace RASv2.ClashAnalysis.NwfBuild
+{
+    /// <summary>
+    /// Отчёты Clash Detective (разработчик, 08.11.2026: «сделаем, чтобы можно было и отчёты выгружать»): та же функция, что кнопка
+    /// «Записать отчёт» вкладки «Отчёт» (LcClClashReport.WriteReport — не из документированного API), без окна: вопросы «куда
+    /// сохранить» — своим посредником (папка и имя файла — из параметров). Параметры: файл итога, папка, формат (название, как в
+    /// Navisworks: «XML», «HTML», «HTML (Табличное представление)», «Текст», «Как точки обзора»). Отчёт — по всем проверкам,
+    /// каждая — своим файлом (как отчёты разработчика: «АР Стены_МЕР Воздуховоды.xml»). Итог — строки: «ok» / «ошибка …», затем
+    /// доступные форматы и виды отчёта (разобрать, если формат не нашёлся).
+    /// </summary>
+    [Plugin("RasNwfReport", "RASV", DisplayName = "RAS v. 2.0 — отчёты NWF")]
+    [AddInPlugin(AddInLocation.None)]
+    public class ReportPlugin : AddInPlugin
+    {
+        private sealed class Answers : LcClClashGUIProxy
+        {
+            private readonly string _folder;
+            public readonly List<string> Errors = new List<string>();
+            public readonly List<string> Files = new List<string>();
+
+            public Answers(string folder) => _folder = folder;
+
+            public override bool PromptForFilename(string extension, string suggestedName, string filter, out string out_filename)
+            {
+                var name = string.IsNullOrWhiteSpace(suggestedName) ? "Отчёт" : Path.GetFileName(suggestedName);
+                if (!string.IsNullOrEmpty(extension) && !name.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
+                    name += extension.StartsWith(".") ? extension : "." + extension;
+                out_filename = Path.Combine(_folder, name);
+                Files.Add(out_filename);
+                return true;
+            }
+
+            public override bool PromptForFolder(string title, string startFolder, out string out_folder)
+            {
+                out_folder = _folder;
+                Files.Add(_folder + Path.DirectorySeparatorChar);
+                return true;
+            }
+
+            public override void ReportError(string error_msg) => Errors.Add(error_msg);
+        }
+
+        // проверки, результаты, группы — вглубь
+        private static IEnumerable<SavedItem> All(IEnumerable<SavedItem> items)
+        {
+            foreach (var i in items)
+            {
+                yield return i;
+                if (i is GroupItem g)
+                    foreach (var x in All(g.Children)) yield return x;
+            }
+        }
+
+        public override int Execute(params string[] parameters)
+        {
+            var result = parameters[0];
+            var folder = parameters[1];
+            var format = parameters[2];
+            var lines = new List<string>();
+            try
+            {
+                if (!LcClClashReport.IsInitialised()) LcClClashReport.Initialise();
+                var formatters = Enumerable.Range(0, LcClClashReport.NumReportFormatters()).Select(i =>
+                {
+                    LcClClashReport.GetReportFormatterName(i, out var n);
+                    LcClClashReport.GetReportFormatterInternalName(i, out var inner);
+                    return (Index: i, Name: n ?? "", Inner: inner ?? "");
+                }).ToList();
+                var drivers = Enumerable.Range(0, LcClClashReport.NumReportDrivers()).Select(i =>
+                {
+                    LcClClashReport.GetReportDriverName(i, out var n);
+                    LcClClashReport.GetReportDriverInternalName(i, out var inner);
+                    return (Index: i, Name: n ?? "", Inner: inner ?? "");
+                }).ToList();
+                var f = formatters.FirstOrDefault(x => string.Equals(x.Name.Trim(), format.Trim(), StringComparison.OrdinalIgnoreCase));
+                if (f.Name == null || f.Name.Length == 0)
+                    f = formatters.FirstOrDefault(x => x.Name.IndexOf(format, StringComparison.OrdinalIgnoreCase) >= 0 && (format != "HTML" || x.Name.IndexOf("(", StringComparison.Ordinal) < 0));
+                // все проверки, каждая — своим файлом: вид отчёта «раздельно» (по внутреннему имени или названию)
+                var d = drivers.FirstOrDefault(x => x.Inner.IndexOf("separate", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                                    x.Name.IndexOf("раздельн", StringComparison.OrdinalIgnoreCase) >= 0);
+                if (f.Name == null || f.Name.Length == 0)
+                    lines.Add("ошибка: формата «" + format + "» нет");
+                else if (d.Name == null || d.Name.Length == 0)
+                    lines.Add("ошибка: вида отчёта «все проверки раздельно» нет");
+                else
+                {
+                    Directory.CreateDirectory(folder);
+                    LcClClashReport.SetCurrentReportFormatter(f.Index);
+                    LcClClashReport.SetCurrentReportDriver(d.Index);
+                    // фильтр результатов — не включать: в отчёт — все результаты проверок по отмеченным статусам
+                    LcClClashReport.SetCurrentFilterMode(false);
+                    // статусы, которые попадают в отчёт, — все (без окна Navisworks ни одного не отмечено: в отчёте была только сводка)
+                    var statuses = new List<string>();
+                    for (var s = 0; s < LcClClashReport.NumStatusFlags(); s++)
+                    {
+                        var flag = LcClClashReport.GetStatusFlag(s);
+                        flag.SetEnabled(true);
+                        flag.GetUserNameW(out var sn);
+                        statuses.Add(sn);
+                    }
+                    var fields = new List<string>();
+                    for (var s = 0; s < LcClClashReport.NumReportFields(); s++)
+                    {
+                        var field = LcClClashReport.GetReportField(s);
+                        field.GetUserNameW(out var fn);
+                        fields.Add(fn + (field.GetEnabled() ? "+" : "-"));
+                    }
+                    // в отчёт — только результаты из выбора (окно Clash Detective кладёт туда все): все результаты и группы всех проверок
+                    var selector = new LcClashReportResultSelector();
+                    var results = 0;
+                    foreach (var item in All(NwApp.ActiveDocument.GetClash().TestsData.Tests))
+                    {
+                        selector.AddGuid(item.Guid);
+                        if (item is ClashResult) results++;
+                    }
+                    var answers = new Answers(folder);
+                    var ok = LcClClashReport.WriteReport(LcOpState.GetActiveInstance(), answers, selector, "");
+                    lines.Insert(0, ok && answers.Errors.Count == 0 ? "ok" : "ошибка: " + (answers.Errors.Count > 0 ? string.Join("; ", answers.Errors) : "отчёт не записан"));
+                    lines.Add("куда: " + string.Join(" | ", answers.Files) + "; результатов в выборе: " + results);
+                    lines.Add("статусы: " + string.Join(", ", statuses));
+                    lines.Add("поля: " + string.Join(", ", fields));
+                }
+                lines.Add("форматы: " + string.Join(" | ", formatters.Select(x => x.Name + " [" + x.Inner + "]")));
+                lines.Add("виды: " + string.Join(" | ", drivers.Select(x => x.Name + " [" + x.Inner + "]")));
+            }
+            catch (Exception ex)
+            {
+                lines.Insert(0, "ошибка: " + ex.Message);
+                lines.Add(ex.ToString());
+            }
+            File.WriteAllLines(result, lines, new UTF8Encoding(false));
+            return 0;
+        }
+    }
+}
+#endif
