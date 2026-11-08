@@ -60,13 +60,6 @@ namespace RASv2.ClashAnalysis.UI
             Sub.Text = "Готовится план выгрузки…";
             LogButton.Visibility = Visibility.Collapsed;
             Header();
-            // работа — после показа окна: иначе окно не появится, пока не выгрузится всё
-            ContentRendered += (s, e) =>
-            {
-                if (_started) return;
-                _started = true;
-                Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(Work));
-            };
             Closing += (s, e) =>
             {
                 if (!_running) return;
@@ -86,6 +79,19 @@ namespace RASv2.ClashAnalysis.UI
             LogButton.Visibility = Visibility.Visible;
             Header();
             Dispatcher.Invoke(DispatcherPriority.Background, new Action(() => { }));
+        }
+
+        /// <summary>
+        /// Выгрузить — сразу, в вызове от Revit (окно открыто Show, не ShowDialog: тот выключает и Revit — разработчик, 08.11.2026: «хочу
+        /// сворачивать Revit»). Кончилась — окно с итогом остаётся, Revit свободен; не началась (причина показана) — окно закрывается.
+        /// </summary>
+        public void RunNow()
+        {
+            if (_started) return;
+            _started = true;
+            // окно — нарисовать до работы
+            Dispatcher.Invoke(DispatcherPriority.Background, new Action(() => { }));
+            Work();
         }
 
         private void Work()

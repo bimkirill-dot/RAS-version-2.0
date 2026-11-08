@@ -513,7 +513,7 @@ namespace RASv2.ClashAnalysis.UI
 
         private void Settings_Click(object sender, RoutedEventArgs e)
         {
-            if (Nested(() => new ExportSettingsWindow(Settings) { Owner = this }.ShowDialog(), "Общие настройки"))
+            if (Nested(() => new ExportSettingsWindow(Settings) { Owner = this }.Free().ShowDialog(), "Общие настройки"))
             {
                 try
                 {

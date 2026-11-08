@@ -229,7 +229,18 @@ namespace RASv2.ClashAnalysis.UI
                         });
                     return outcome != null;
                 }) { Owner = this };
-                _runWindow.ShowDialog();
+                // окно хода — обычное (не ShowDialog: тот выключает и Revit): выгрузка идёт здесь же, в вызове от Revit (Revit занят);
+                // закончилась — окно с итогом остаётся, Revit свободен. Список, пока идёт, не правится
+                IsEnabled = false;
+                try
+                {
+                    _runWindow.Show();
+                    _runWindow.RunNow();
+                }
+                finally
+                {
+                    IsEnabled = true;
+                }
             }
             catch (Exception ex)
             {

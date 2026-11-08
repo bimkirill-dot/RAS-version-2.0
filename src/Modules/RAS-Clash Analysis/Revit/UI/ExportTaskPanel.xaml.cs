@@ -293,7 +293,7 @@ namespace RASv2.ClashAnalysis.UI
             {
                 // окно Revit «Открыть» из плагина Revit Server не показывает (проверка разработчика, 02.11.2026) — своё окно; с
                 // папки, откуда добавляли в прошлый раз
-                var picker = new ModelPickerWindow(RevitYear, _serverFolder ?? ExportNodes.StartServerFolder(_task)) { Owner = Owner };
+                var picker = new ModelPickerWindow(RevitYear, _serverFolder ?? ExportNodes.StartServerFolder(_task)) { Owner = Owner }.Free();
                 if (picker.ShowDialog() != true) return;
                 picked = picker.Picked;
                 var server = picked.Select(m => ExportNodes.ServerFolderOf(m.Path)).FirstOrDefault(f => f.Length > 0);
@@ -655,7 +655,7 @@ namespace RASv2.ClashAnalysis.UI
             try
             {
                 var name = TaskName.Text.Trim().Length > 0 ? TaskName.Text.Trim() : "новая строка";
-                if (new ExportSettingsWindow(current, name) { Owner = Owner }.ShowDialog() != true) return;
+                if (new ExportSettingsWindow(current, name) { Owner = Owner }.Free().ShowDialog() != true) return;
             }
             catch (Exception ex)
             {

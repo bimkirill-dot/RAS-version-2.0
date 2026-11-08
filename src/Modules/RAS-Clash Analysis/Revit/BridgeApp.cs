@@ -223,8 +223,11 @@ namespace RASv2.ClashAnalysis
                 {
                     RevitYear = _year, Revit = app, InRevit = action => calls.Post(ui => action(ui)),
                 };
-                var owner = app.MainWindowHandle;
-                if (owner != IntPtr.Zero) new WindowInteropHelper(window).Owner = owner;
+                // без владельца: своё окно на панели задач — Revit сворачивается отдельно (разработчик, 08.11.2026: «хочу сворачивать
+                // Revit»); вложенные окна Revit не выключают (RevitFree)
+                UI.RevitFree.RevitWindow = app.MainWindowHandle;
+                window.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen;
+                window.ShowInTaskbar = true;
                 window.Closed += (s, e) => _tasksWindow = null;
                 _tasksWindow = window;
                 window.Show();
