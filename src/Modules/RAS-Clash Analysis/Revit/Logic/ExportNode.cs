@@ -89,6 +89,11 @@ namespace RASv2.ClashAnalysis.Logic
         /// ▷ у неё самой — делается. Своё у строки, не наследуется.
         /// </summary>
         [DataMember(Order = 20, EmitDefaultValue = false)] public bool Skipped { get; set; }
+        /// <summary>
+        /// «Выполнять проверки» снята — NWF собирается и обновляется (со скрытием), проверки плагин не загружает и не прогоняет: человек
+        /// — вручную (разработчик, 08.11.2026). Своё у строки, не наследуется; по умолчанию выполнять — поэтому «не».
+        /// </summary>
+        [DataMember(Order = 21, EmitDefaultValue = false)] public bool NoTestsRun { get; set; }
 
         /// <summary>Задача верхнего уровня: всё своё, по умолчанию — регламент 15.10 (вида нет — из общих настроек).</summary>
         /// <summary>
@@ -107,7 +112,7 @@ namespace RASv2.ClashAnalysis.Logic
             TestsFiles = TestsFiles?.ToList(), NwfName = NwfName, Folder = Folder, ServerFolder = ServerFolder, NwcFolder = NwcFolder,
             NwfFolder = NwfFolder, ReportFolder = ReportFolder, Xml = Xml, Html = Html, ViewName = ViewName, MakeNwf = MakeNwf,
             HideNames = HideNames?.ToList(), ReportFormats = ReportFormats?.ToList(), Export = Export?.Clone(),
-            HideSets = HideSets?.Select(h => h.Clone()).ToList(), MakeReports = MakeReports, Edited = Edited?.Clone(), NoNwc = NoNwc, Skipped = Skipped,
+            HideSets = HideSets?.Select(h => h.Clone()).ToList(), MakeReports = MakeReports, Edited = Edited?.Clone(), NoNwc = NoNwc, Skipped = Skipped, NoTestsRun = NoTestsRun,
         };
     }
 

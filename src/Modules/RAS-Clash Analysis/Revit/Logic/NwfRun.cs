@@ -17,6 +17,8 @@ namespace RASv2.ClashAnalysis.Logic
         public List<string> Tests { get; set; } = new List<string>();
         /// <summary>Подпись файлов проверок (RunStates.TestsSignature) — запомнить после сборки.</summary>
         public string TestsSignature { get; set; }
+        /// <summary>«Выполнять проверки» у строки: нет — проверки не загружаются и не прогоняются.</summary>
+        public bool RunTests { get; set; } = true;
         /// <summary>Файл проверок сменился, человек согласился — проверки в NWF заменяются.</summary>
         public bool ReplaceTests { get; set; }
     }
@@ -36,7 +38,10 @@ namespace RASv2.ClashAnalysis.Logic
                 {
                     Row = row, NwfPath = ExportNodes.NwfPath(row, common),
                     HideSets = (ExportNodes.HideSetsOf(row) ?? new List<HideSet>()).Where(h => !string.IsNullOrWhiteSpace(h.Xml)).ToList(),
-                    Tests = (ExportNodes.TestsOf(row) ?? new List<string>()).Where(t => !string.IsNullOrWhiteSpace(t)).ToList(),
+                    // «Выполнять проверки» снята — проверок в задании нет (NWF — без них, человек — вручную)
+                    Tests = row.Settings.NoTestsRun ? new List<string>()
+                        : (ExportNodes.TestsOf(row) ?? new List<string>()).Where(t => !string.IsNullOrWhiteSpace(t)).ToList(),
+                    RunTests = !row.Settings.NoTestsRun,
                 };
                 plan.Nwcs = (ExportNodes.ModelsOf(row) ?? new List<ExportModel>())
                     .Where(m => !string.IsNullOrWhiteSpace(m.Path))

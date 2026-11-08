@@ -44,6 +44,7 @@ namespace RASv2.ClashAnalysis.Export
                 foreach (var n in p.Nwcs) j.Line("      ← " + n);
                 foreach (var h in p.HideSets) j.Line($"      скрыть: «{h.Name}» — {h.Text}");
                 foreach (var t in p.Tests) j.Line("      проверки: " + t);
+                if (!p.RunTests) j.Line("      проверки: не выполняются («Выполнять проверки» снята) — вручную");
             }
             j.Line("");
         }

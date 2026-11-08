@@ -835,6 +835,12 @@ namespace RASv2.Tests
                 var nwcs = NwcRunPlan.Build(high.Children[0], common, 2026, new List<string>()).Select(j => j.NwcPath).ToList();
                 Check(plans[0].Nwcs.Count == 3 && plans[0].Nwcs.SequenceEqual(nwcs), "NWC — те же пути, что у выгрузки: " + string.Join(", ", plans[0].Nwcs));
                 Check(NwfRunPlan.Build(roots[1], common).Count == 0, "без галочки — NWF нет");
+                // «Выполнять проверки» (08.11.2026): снята — проверок в задании нет
+                Check(plans[0].RunTests && plans.Last().Tests.Count == 1, "по умолчанию — выполнять");
+                mid.Settings.NoTestsRun = true;
+                var noTests = NwfRunPlan.Build(roots[0], common).Single(p => p.Row == mid);
+                Check(!noTests.RunTests && noTests.Tests.Count == 0 && mid.Settings.Clone().NoTestsRun, "снята — без проверок");
+                mid.Settings.NoTestsRun = false;
                 roots[1].Settings.MakeNwf = true;
                 roots[1].Settings.Folder = "";
                 Check(NwfRunPlan.Build(roots[1], common)[0].Skip.StartsWith("не задана папка"), "без папки — пропуск");

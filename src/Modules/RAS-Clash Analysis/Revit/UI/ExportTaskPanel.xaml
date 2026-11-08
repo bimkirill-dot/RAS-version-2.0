@@ -389,6 +389,16 @@
                         <TextBox x:Name="NwfName" Grid.Column="1" VerticalAlignment="Top" TextChanged="Any_Changed" />
                     </Grid>
 
+                    <!-- снята — NWF без проверок: человек выполняет их вручную (разработчик, 08.11.2026) -->
+                    <Grid Style="{StaticResource RowGrid}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Cap}" Text="Выполнять проверки" />
+                        <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
+                            <CheckBox x:Name="RunTests" VerticalAlignment="Center" Checked="Any_Changed" Unchecked="Any_Changed"
+                                      ToolTip="Загрузить проверки (если их ещё нет в NWF) и прогнать; снята — NWF обновляется, проверки — вручную" />
+                        </DockPanel>
+                    </Grid>
+
                     <Grid Style="{StaticResource RowGrid}">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
                         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>

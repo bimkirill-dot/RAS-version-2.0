@@ -148,6 +148,7 @@ namespace RASv2.ClashAnalysis.UI
             // «Формировать NWF» и имя NWF — свои у строки; у строки с подзадачами галочка недоступна
             MakeNwf.IsChecked = s.MakeNwf && task.Children.Count == 0;
             MakeNwf.IsEnabled = task.Children.Count == 0;
+            RunTests.IsChecked = !s.NoTestsRun;
             MakeReports.IsChecked = s.MakeReports && task.Children.Count == 0;
             NwfName.Text = s.NwfName ?? "";
             _folder = Field(Folder, FolderFrom, FolderLink, x => x.Folder, ExportNodes.FolderOf, FolderBrowse);
@@ -210,7 +211,7 @@ namespace RASv2.ClashAnalysis.UI
             string.Join(";", _models.Select(m => m.Path + ">" + m.Model.NwcName + ">" + m.Model.Block)), _testsOwn,
             string.Join(";", _tests.Select(r => r.Path)), _hideOwn, string.Join(";", _hide.Select(h => h.Xml)), _formatsOwn, string.Join(";", Checked()), _export == null, _exportEdits, _editedOwn, EditedOn.IsChecked, EditedMode.SelectedIndex,
             EditedDate1.Text, EditedDate2.Text,
-            MakeNwf.IsChecked, MakeReports.IsChecked, NwfName.Text, Own(_folder), Own(_nwc), Own(_nwf), Own(_report), Own(_view), _imported.Count);
+            MakeNwf.IsChecked, RunTests.IsChecked, MakeReports.IsChecked, NwfName.Text, Own(_folder), Own(_nwc), Own(_nwf), Own(_report), Own(_view), _imported.Count);
 
         private static string Own(InheritField f) => f.Value ?? "\u0001";
 
@@ -755,6 +756,7 @@ namespace RASv2.ClashAnalysis.UI
             MakeReports = MakeReports.IsChecked == true,
             NwfName = NwfName.Text.Trim().Length > 0 ? NwfName.Text.Trim() : null,
             MakeNwf = MakeNwf.IsChecked == true,
+            NoTestsRun = RunTests.IsChecked != true,
             // выключатель «NWC» — только в списке задач: панель его не меняет
             NoNwc = _task.Settings.NoNwc,
             Skipped = _task.Settings.Skipped,
