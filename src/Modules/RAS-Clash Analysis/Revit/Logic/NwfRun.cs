@@ -17,6 +17,8 @@ namespace RASv2.ClashAnalysis.Logic
         public List<string> Tests { get; set; } = new List<string>();
         /// <summary>Подпись файлов проверок (RunStates.TestsSignature) — запомнить после сборки.</summary>
         public string TestsSignature { get; set; }
+        /// <summary>Настройки отчёта — общие (шестерёнка).</summary>
+        public ReportOptions ReportOptions { get; set; }
         /// <summary>Отчёты после прогона проверок: формат — папка (папка отчётов строки, {Дата} — время запуска).</summary>
         public List<NwfToolReport> Reports { get; set; } = new List<NwfToolReport>();
         /// <summary>«Выполнять проверки» у строки: нет — проверки не загружаются и не прогоняются.</summary>
@@ -45,7 +47,7 @@ namespace RASv2.ClashAnalysis.Logic
                     // «Выполнять проверки» снята — проверок в задании нет (NWF — без них, человек — вручную)
                     Tests = row.Settings.NoTestsRun ? new List<string>()
                         : (ExportNodes.TestsOf(row) ?? new List<string>()).Where(t => !string.IsNullOrWhiteSpace(t)).ToList(),
-                    RunTests = !row.Settings.NoTestsRun,
+                    RunTests = !row.Settings.NoTestsRun, ReportOptions = (common.Report ?? ReportOptions.Defaults()).Clone(),
                 };
                 // отчёты — у строки «Формировать отчёты» (и проверки выполняются: отчёт — по их результатам; разработчик, 08.11.2026)
                 if (ExportNodes.MakesReports(row) && plan.RunTests && plan.Tests.Count > 0)

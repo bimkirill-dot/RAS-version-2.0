@@ -6,9 +6,10 @@
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Fg}" FontFamily="Segoe UI" FontSize="13">
     <!-- Общие настройки «Задач выгрузки» (шестерёнка главного окна, DECISIONS.md модуля) — всё, что одно на компанию. Меню разделов
          слева (разработчик, 07.11.2026: «зачем всё в одно меню вмещаем — боковое меню с разделами»): «Общее» — метки, отделы,
-         копирование моделей; «NWC» (было «Экспорт NWC», 07.11.2026) — параметры NWC Exporter (как в окне экспортёра Navisworks в Revit: подписи и значения —
+         копирование моделей; «Экспорт NWC» (разработчик, 08.11.2026) — параметры NWC Exporter (как в окне экспортёра Navisworks в Revit: подписи и значения —
          дословно из экспортёра Revit 2026, порядок — по снимку разработчика), имя NWC, очистка модели перед экспортом. Разделы для
-         выгрузки RVT и пересохранения моделей — когда до них дойдём. Подпись — вправо до общей границы, значение — слева, строки
+         выгрузки RVT и пересохранения моделей — когда до них дойдём. «Настройки отчётов» (08.11.2026) — как вкладка «Отчёт» Clash
+         Detective: содержимое, группы конфликтов, только отфильтрованные, статусы. Подпись — вправо до общей границы, значение — слева, строки
          разделены линиями. Кнопки, поля, кисти — общие образцы ядра (подключаются до разметки); ключи своих стилей не совпадают с
          кистями ядра. -->
     <Window.Resources>
@@ -117,7 +118,8 @@
             <ListBox x:Name="Nav" BorderThickness="0" Background="Transparent" ItemContainerStyle="{StaticResource NavItem}"
                      SelectionChanged="Nav_Changed" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBoxItem Content="Общее" Tag="General" />
-                <ListBoxItem Content="NWC" Tag="Nwc" />
+                <ListBoxItem Content="Экспорт NWC" Tag="Nwc" />
+                <ListBoxItem Content="Настройки отчётов" Tag="Report" />
             </ListBox>
         </Border>
 
@@ -375,6 +377,64 @@
                         <Grid.ColumnDefinitions><ColumnDefinition Width="320" /><ColumnDefinition /></Grid.ColumnDefinitions>
                         <TextBlock Style="{StaticResource OptionName}" Text="Связи IFC" />
                         <CheckBox Grid.Column="1" x:Name="RemoveIfc" />
+                    </Grid>
+                </Border>
+            </StackPanel>
+
+            <!-- ══ Настройки отчётов: как вкладка «Отчёт» Clash Detective (разработчик, 08.11.2026) ══ -->
+            <StackPanel x:Name="ReportSection" Visibility="Collapsed">
+                <DockPanel Style="{StaticResource HeadBar}">
+                    <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Content="По умолчанию" Click="ReportDefaults_Click" />
+                    <TextBlock Style="{StaticResource Head}" Text="Содержимое" />
+                </DockPanel>
+                <ItemsControl x:Name="ReportFields" Margin="0,6,0,0">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><UniformGrid Columns="3" /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <CheckBox Content="{Binding Name}" IsChecked="{Binding On}" Margin="0,4,12,4" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <DockPanel Margin="0,10,0,0">
+                    <TextBlock DockPanel.Dock="Left" FontFamily="Segoe MDL2 Assets" FontSize="14" Text="&#xE7BA;" Foreground="{StaticResource NoteWarn}"
+                               Margin="0,1,8,0" VerticalAlignment="Top" />
+                    <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Muted}" FontSize="12"
+                               Text="Сайт коллизий берёт из отчёта точку конфликта, путь к элементу, дату обнаружения, расположение сетки, статус и номера элементов Revit («Быстрый показ свойств»). Без них на сайте не будет «Показать в Revit», дат и сетки — эти поля лучше не снимать." />
+                </DockPanel>
+
+                <DockPanel Style="{StaticResource HeadBar}" Margin="0,22,0,2">
+                    <TextBlock Style="{StaticResource Head}" Text="Включить конфликты" />
+                </DockPanel>
+                <Border Style="{StaticResource OptionRow}">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="320" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource OptionName}" Text="Для групп конфликтов включить" />
+                        <ComboBox Grid.Column="1" x:Name="GroupMode" Width="240" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource OptionRow}">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="320" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource OptionName}" Text="Включить только отфильтрованные результаты" />
+                        <CheckBox Grid.Column="1" x:Name="FilteredOnly" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource OptionRow}">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="320" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource OptionName}" Text="Включить эти статусы" />
+                        <ItemsControl Grid.Column="1" x:Name="ReportStatuses" VerticalAlignment="Center">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <CheckBox Content="{Binding Name}" IsChecked="{Binding On}" Margin="0,4,16,4" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </Grid>
                 </Border>
             </StackPanel>

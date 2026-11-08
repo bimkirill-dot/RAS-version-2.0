@@ -192,6 +192,38 @@ namespace RASv2.Tests
                     if (File.Exists(tmp)) File.Delete(tmp);
                 }
             });
+            yield return Case("настройки отчётов (08.11.2026): по умолчанию — как в Navisworks и для сайта; файл туда и обратно; прежний файл", () =>
+            {
+                var d = ReportOptions.Defaults();
+                Check(d.Fields.All(f => ReportOptions.AllFields.Contains(f)) && d.Statuses.SequenceEqual(ReportOptions.AllStatuses), "названия — из списков Navisworks");
+                Check(new[] { "Точка конфликта", "Путь к элементу", "Дата обнаружения", "Быстрый показ свойств", "Расположение сетки", "Статус" }.All(d.Fields.Contains),
+                      "поля, нужные сайту, — по умолчанию отмечены");
+                Check(d.GroupMode == "Только заголовки групп" && !d.FilteredOnly, "группы, фильтр — как в Navisworks");
+                var s = new ExportSettings();
+                s.Report.Fields.Remove("Изображение");
+                s.Report.Statuses = new List<string> { "Новая", "Активн." };
+                s.Report.GroupMode = "Все";
+                s.Report.FilteredOnly = true;
+                var copy = new ExportSettings();
+                copy.CopyFrom(s);
+                s.Report.Fields.Add("Описание");
+                Check(!copy.Report.Fields.Contains("Описание"), "CopyFrom — своя копия");
+                var tmp = Path.Combine(Path.GetTempPath(), "ras-tests-" + Guid.NewGuid().ToString("N") + ".json");
+                try
+                {
+                    ExportFiles.Save(tmp, ExportFiles.FromCommon(copy));
+                    var back = ExportFiles.Load(tmp).Settings.Report;
+                    Check(!back.Fields.Contains("Изображение") && back.Statuses.Count == 2 && back.GroupMode == "Все" && back.FilteredOnly, "файл туда и обратно");
+                    // файл до 08.11.2026 — без раздела отчётов: по умолчанию
+                    ExportFiles.Save(tmp, ExportFiles.FromCommon(new ExportSettings { Report = null }));
+                    back = ExportFiles.Load(tmp).Settings.Report;
+                    Check(back != null && back.Fields.SequenceEqual(d.Fields) && back.GroupMode == d.GroupMode, "прежний файл — по умолчанию");
+                }
+                finally
+                {
+                    if (File.Exists(tmp)) File.Delete(tmp);
+                }
+            });
             yield return Case("{Блок} и {Отдел} — найденные в имени модели, не по номеру части", () =>
             {
                 var codes = new[] { "AR", "KJ", "OV" };
@@ -846,6 +878,8 @@ namespace RASv2.Tests
                 var withReports = NwfRunPlan.Build(roots[0], common, new DateTime(2026, 11, 8, 18, 5, 0)).Single(p => p.Row == mid);
                 Check(withReports.Reports.Select(r => r.Format).SequenceEqual(new[] { "XML", "HTML" }) &&
                       withReports.Reports[0].Folder.EndsWith(@"\Отчеты\08.11.2026 18-05"), "XML и HTML — в папку с датой и временем: " + withReports.Reports[0].Folder);
+                Check(withReports.ReportOptions != null && withReports.ReportOptions.GroupMode == common.Report.GroupMode &&
+                      !ReferenceEquals(withReports.ReportOptions, common.Report), "настройки отчётов — копией общих");
                 mid.Settings.NoTestsRun = true;
                 Check(NwfRunPlan.Build(roots[0], common).Single(p => p.Row == mid).Reports.Count == 0, "проверки не выполняются — отчётов нет");
                 mid.Settings.NoTestsRun = false;

@@ -65,6 +65,9 @@ namespace RASv2.ClashAnalysis.Logic
     {
         public NwcOptions Nwc { get; set; } = new NwcOptions();
 
+        /// <summary>Настройки отчётов Clash Detective (шестерёнка → «Настройки отчётов», 08.11.2026).</summary>
+        public ReportOptions Report { get; set; } = ReportOptions.Defaults();
+
         // что удалить из копии модели перед выгрузкой (разработчик, 02.11.2026: «можно вынести в общие настройки»); связанное
         // в NWC и так не попадёт, импортированный DWG — попадёт
         public bool RemoveRevitLinks { get; set; } = true;
@@ -105,6 +108,7 @@ namespace RASv2.ClashAnalysis.Logic
         public void CopyFrom(ExportSettings s)
         {
             Nwc = s.Nwc.Clone();
+            Report = (s.Report ?? ReportOptions.Defaults()).Clone();
             RemoveRevitLinks = s.RemoveRevitLinks;
             RemoveCad = s.RemoveCad;
             RemovePointClouds = s.RemovePointClouds;

@@ -12,8 +12,9 @@ namespace RASv2.ClashAnalysis.UI
     /// <summary>
     /// Общие настройки «Задач выгрузки» (шестерёнка) — всё, что одно на компанию, по разделам меню слева (разработчик, 07.11.2026):
     /// «Общее» — метки, отделы, копирование моделей; «Экспорт NWC» — параметры NWC Exporter (как в окне экспортёра Navisworks в
-    /// Revit, те же подписи и порядок), имя NWC («обрезать всё после …»), очистка модели перед экспортом. «По умолчанию» — только
-    /// параметры экспортёра. Правится копия: «Отмена» оставляет как было.
+    /// Revit, те же подписи и порядок), имя NWC («обрезать всё после …»), очистка модели перед экспортом; «Настройки отчётов»
+    /// (08.11.2026) — как вкладка «Отчёт» Clash Detective. «По умолчанию» — у параметров экспортёра и у отчётов. Правится копия:
+    /// «Отмена» оставляет как было.
     /// </summary>
     public partial class ExportSettingsWindow : Window
     {
@@ -23,6 +24,16 @@ namespace RASv2.ClashAnalysis.UI
 
         private readonly ExportSettings _settings;
         private readonly ObservableCollection<DepartmentTemplate> _departments = new ObservableCollection<DepartmentTemplate>();
+
+        /// <summary>Галочка списка: поле или статус отчёта.</summary>
+        public sealed class Pick
+        {
+            public string Name { get; set; }
+            public bool On { get; set; }
+        }
+
+        private readonly ObservableCollection<Pick> _fields = new ObservableCollection<Pick>();
+        private readonly ObservableCollection<Pick> _statuses = new ObservableCollection<Pick>();
         private readonly bool _ready;
 
         public ExportSettingsWindow(ExportSettings settings)
@@ -33,6 +44,9 @@ namespace RASv2.ClashAnalysis.UI
             var today = DateTime.Today;
             foreach (var f in ExportSettings.DateFormats) DateFormat.Items.Add(new ComboBoxItem { Content = today.ToString(f), Tag = f });
             DepartmentsList.ItemsSource = _departments;
+            ReportFields.ItemsSource = _fields;
+            ReportStatuses.ItemsSource = _statuses;
+            foreach (var g in ReportOptions.GroupModes) GroupMode.Items.Add(g);
             FillAll(settings);
             Nav.SelectedIndex = 0;
             _ready = true;
@@ -65,6 +79,7 @@ namespace RASv2.ClashAnalysis.UI
             var tag = (string)((ListBoxItem)Nav.SelectedItem)?.Tag;
             General.Visibility = tag == "General" ? Visibility.Visible : Visibility.Collapsed;
             NwcSection.Visibility = tag == "Nwc" ? Visibility.Visible : Visibility.Collapsed;
+            ReportSection.Visibility = tag == "Report" ? Visibility.Visible : Visibility.Collapsed;
             Scroll.ScrollToTop();
         }
 
@@ -80,7 +95,10 @@ namespace RASv2.ClashAnalysis.UI
             LinkedFiles.IsChecked, Parts.IsChecked, MissingMaterials.IsChecked, Levels.IsChecked, Scope.SelectedIndex, ViewName.Text,
             RoomGeometry.IsChecked, RemoveRevitLinks.IsChecked, RemoveCad.IsChecked, RemovePointClouds.IsChecked, RemoveIfc.IsChecked,
             TrimAfter.Text, BlockPrefix.Text, DateFormat.SelectedIndex, ParallelCopies.Text,
-            string.Join(";", _departments.Select(d => d.Department)));
+            string.Join(";", _departments.Select(d => d.Department)), Picked(_fields), Picked(_statuses), GroupMode.SelectedIndex,
+            FilteredOnly.IsChecked);
+
+        private static string Picked(ObservableCollection<Pick> picks) => string.Join(";", picks.Where(p => p.On).Select(p => p.Name));
 
         /// <summary>Окно — из настроек (открытие и «Импорт…»).</summary>
         private void FillAll(ExportSettings s)
@@ -96,7 +114,21 @@ namespace RASv2.ClashAnalysis.UI
             ParallelCopies.Text = s.ParallelCopies.ToString(CultureInfo.InvariantCulture);
             _departments.Clear();
             foreach (var d in s.Departments) _departments.Add(d.Clone());
+            FillReport(s.Report ?? ReportOptions.Defaults());
         }
+
+        /// <summary>Настройки отчётов — все поля и статусы Navisworks по порядку, отмечены — из настроек.</summary>
+        private void FillReport(ReportOptions r)
+        {
+            _fields.Clear();
+            foreach (var f in ReportOptions.AllFields) _fields.Add(new Pick { Name = f, On = r.Fields.Contains(f) });
+            _statuses.Clear();
+            foreach (var s in ReportOptions.AllStatuses) _statuses.Add(new Pick { Name = s, On = r.Statuses.Contains(s) });
+            GroupMode.SelectedIndex = Math.Max(0, Array.IndexOf(ReportOptions.GroupModes, r.GroupMode));
+            FilteredOnly.IsChecked = r.FilteredOnly;
+        }
+
+        private void ReportDefaults_Click(object sender, RoutedEventArgs e) => FillReport(ReportOptions.Defaults());
 
         private void FillNwc(NwcOptions s)
         {
@@ -251,6 +283,13 @@ namespace RASv2.ClashAnalysis.UI
             result.Departments = _departments.Where(d => !string.IsNullOrWhiteSpace(d.Department))
                 .Select(d => new DepartmentTemplate { Department = d.Department.Trim() })
                 .ToList();
+            result.Report = new ReportOptions
+            {
+                Fields = _fields.Where(p => p.On).Select(p => p.Name).ToList(),
+                Statuses = _statuses.Where(p => p.On).Select(p => p.Name).ToList(),
+                GroupMode = (string)GroupMode.SelectedItem ?? ReportOptions.GroupModes[0],
+                FilteredOnly = FilteredOnly.IsChecked == true,
+            };
             return result;
         }
 
@@ -263,6 +302,7 @@ namespace RASv2.ClashAnalysis.UI
             if (prefix.Length == 0 || !prefix.All(char.IsLetter)) return "{Блок}: часть имени — буквы перед цифрами блока (например, S).";
             if (!int.TryParse(ParallelCopies.Text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var copies) || copies < 1 || copies > 8)
                 return "Копий с Revit Server одновременно — число от 1 до 8.";
+            if (!_statuses.Any(p => p.On)) return "Настройки отчётов: отметьте хотя бы один статус — иначе в отчёте будет только сводка.";
             return ExportNodes.CheckDepartmentCodes(_departments.Select(d => d.Department));
         }
     }

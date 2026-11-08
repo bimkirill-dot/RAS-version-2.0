@@ -34,6 +34,47 @@ namespace RASv2.ClashAnalysis.Logic
         [DataMember(Order = 5)] public bool ReplaceTests { get; set; }
         /// <summary>Отчёты после прогона проверок: формат и папка (папка отчётов строки на время запуска).</summary>
         [DataMember(Order = 6)] public List<NwfToolReport> Reports { get; set; } = new List<NwfToolReport>();
+        /// <summary>Настройки отчёта (шестерёнка → «Настройки отчётов»).</summary>
+        [DataMember(Order = 7)] public ReportOptions ReportOptions { get; set; }
+    }
+
+    /// <summary>
+    /// Настройки отчёта — как вкладка «Отчёт» Clash Detective (разработчик, 08.11.2026: «добавим в шестерёнку эти настройки из
+    /// Navisworks, чтобы при случае можно было настроить»): содержимое, статусы, группы, «только отфильтрованные». Названия — как в
+    /// Navisworks 2023 (ru); программа включает в Navisworks поля и статусы с этими названиями.
+    /// </summary>
+    [DataContract]
+    public sealed class ReportOptions
+    {
+        public static readonly string[] AllFields =
+        {
+            "Сводка", "Точка конфликта", "Дата обнаружения", "Назначение", "Дата утверждения", "Кем утверждено", "Имя слоя", "Путь к элементу",
+            "Идентификатор элемента", "Статус", "Расстояние", "Описание", "Комментарии", "Быстрый показ свойств", "Изображение",
+            "Даты моделирования", "Событие моделирования", "Группа конфликтов", "Расположение сетки",
+        };
+        public static readonly string[] AllStatuses = { "Новая", "Активн.", "Проанализировано", "Утверждено", "Исправлено" };
+        public static readonly string[] GroupModes = { "Только заголовки групп", "Только отдельные конфликты", "Все" };
+
+        /// <summary>
+        /// Как в Navisworks по умолчанию и ещё «Дата обнаружения» и «Расположение сетки» — их читает сайт коллизий (когда найдена,
+        /// где на сетке; без даты сайт берёт её из названия папки).
+        /// </summary>
+        public static ReportOptions Defaults() => new ReportOptions
+        {
+            Fields = new List<string> { "Сводка", "Точка конфликта", "Дата обнаружения", "Путь к элементу", "Статус", "Быстрый показ свойств", "Изображение", "Расположение сетки" },
+            Statuses = AllStatuses.ToList(), GroupMode = GroupModes[0], FilteredOnly = false,
+        };
+
+        [DataMember(Order = 1)] public List<string> Fields { get; set; } = new List<string>();
+        [DataMember(Order = 2)] public List<string> Statuses { get; set; } = new List<string>();
+        [DataMember(Order = 3)] public string GroupMode { get; set; }
+        [DataMember(Order = 4)] public bool FilteredOnly { get; set; }
+
+        public ReportOptions Clone() => new ReportOptions
+        {
+            Fields = (Fields ?? new List<string>()).ToList(), Statuses = (Statuses ?? new List<string>()).ToList(), GroupMode = GroupMode,
+            FilteredOnly = FilteredOnly,
+        };
     }
 
     [DataContract]

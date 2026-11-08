@@ -9,6 +9,7 @@ using Autodesk.Navisworks.Api.Clash;
 using Autodesk.Navisworks.Api.Interop;
 using NwApp = Autodesk.Navisworks.Api.Application;
 using Autodesk.Navisworks.Api.Plugins;
+using RASv2.ClashAnalysis.Logic;
 
 namespace RASv2.ClashAnalysis.NwfBuild
 {
@@ -68,6 +69,7 @@ namespace RASv2.ClashAnalysis.NwfBuild
             var result = parameters[0];
             var folder = parameters[1];
             var format = parameters[2];
+            var options = parameters.Length > 3 && File.Exists(parameters[3]) ? NwfTool.Read<ReportOptions>(parameters[3]) : ReportOptions.Defaults();
             var lines = new List<string>();
             try
             {
@@ -99,23 +101,31 @@ namespace RASv2.ClashAnalysis.NwfBuild
                     Directory.CreateDirectory(folder);
                     LcClClashReport.SetCurrentReportFormatter(f.Index);
                     LcClClashReport.SetCurrentReportDriver(d.Index);
-                    // фильтр результатов — не включать: в отчёт — все результаты проверок по отмеченным статусам
-                    LcClClashReport.SetCurrentFilterMode(false);
-                    // статусы, которые попадают в отчёт, — все (без окна Navisworks ни одного не отмечено: в отчёте была только сводка)
+                    // настройки отчёта (шестерёнка → «Настройки отчётов»): статусы, содержимое, группы, «только отфильтрованные»; без окна
+                    // Navisworks ни один статус не отмечен — в отчёте была бы только сводка
+                    LcClClashReport.SetCurrentFilterMode(options.FilteredOnly);
                     var statuses = new List<string>();
                     for (var s = 0; s < LcClClashReport.NumStatusFlags(); s++)
                     {
                         var flag = LcClClashReport.GetStatusFlag(s);
-                        flag.SetEnabled(true);
                         flag.GetUserNameW(out var sn);
-                        statuses.Add(sn);
+                        var on = options.Statuses.Any(x => string.Equals(x.Trim(), (sn ?? "").Trim(), StringComparison.OrdinalIgnoreCase));
+                        flag.SetEnabled(on);
+                        statuses.Add(sn + (on ? "+" : "-"));
                     }
                     var fields = new List<string>();
                     for (var s = 0; s < LcClClashReport.NumReportFields(); s++)
                     {
                         var field = LcClClashReport.GetReportField(s);
                         field.GetUserNameW(out var fn);
-                        fields.Add(fn + (field.GetEnabled() ? "+" : "-"));
+                        var on = options.Fields.Any(x => string.Equals(x.Trim(), (fn ?? "").Trim(), StringComparison.OrdinalIgnoreCase));
+                        field.SetEnabled(on);
+                        fields.Add(fn + (on ? "+" : "-"));
+                    }
+                    for (var g = 0; g < LcClClashReport.NumGroupModes(); g++)
+                    {
+                        LcClClashReport.GetGroupModeName(g, out var gn);
+                        if (string.Equals((gn ?? "").Trim(), (options.GroupMode ?? "").Trim(), StringComparison.OrdinalIgnoreCase)) LcClClashReport.SetCurrentGroupMode(g);
                     }
                     // в отчёт — только результаты из выбора (окно Clash Detective кладёт туда все): все результаты и группы всех проверок
                     var selector = new LcClashReportResultSelector();
@@ -134,6 +144,8 @@ namespace RASv2.ClashAnalysis.NwfBuild
                 }
                 lines.Add("форматы: " + string.Join(" | ", formatters.Select(x => x.Name + " [" + x.Inner + "]")));
                 lines.Add("виды: " + string.Join(" | ", drivers.Select(x => x.Name + " [" + x.Inner + "]")));
+                var groups = Enumerable.Range(0, LcClClashReport.NumGroupModes()).Select(i => { LcClClashReport.GetGroupModeName(i, out var g); return g; }).ToList();
+                lines.Add("группы: " + string.Join(" | ", groups) + "; сейчас: " + LcClClashReport.GetCurrentGroupMode());
             }
             catch (Exception ex)
             {

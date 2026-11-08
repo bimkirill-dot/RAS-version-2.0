@@ -314,10 +314,12 @@ namespace RASv2.ClashAnalysis.NwfBuild
             {
                 Console.WriteLine(NwfTool.StepLine(i, "Отчёт: " + r.Format));
                 var result = Path.Combine(Path.GetTempPath(), "ras-nwf-report-" + Guid.NewGuid().ToString("N") + ".txt");
+                var options = Path.Combine(Path.GetTempPath(), "ras-nwf-report-" + Guid.NewGuid().ToString("N") + ".json");
                 try
                 {
                     var c = Stopwatch.StartNew();
-                    app.ExecuteAddInPlugin(NwfTool.ReportPlugin, result, r.Folder, r.Format);
+                    NwfTool.Write(options, item.ReportOptions ?? ReportOptions.Defaults());
+                    app.ExecuteAddInPlugin(NwfTool.ReportPlugin, result, r.Folder, r.Format, options);
                     var lines = File.Exists(result) ? File.ReadAllLines(result, Encoding.UTF8) : new[] { "ошибка: модуль отчётов не ответил" };
                     var ok = lines.FirstOrDefault() == "ok";
                     var files = Directory.Exists(r.Folder) ? Directory.GetFiles(r.Folder, "*", SearchOption.AllDirectories).Length : 0;
@@ -328,7 +330,7 @@ namespace RASv2.ClashAnalysis.NwfBuild
                 }
                 finally
                 {
-                    if (File.Exists(result)) File.Delete(result);
+                    foreach (var f in new[] { result, options }) if (File.Exists(f)) File.Delete(f);
                 }
             }
             notes.Add("отчётов: " + made + " из " + item.Reports.Count);
