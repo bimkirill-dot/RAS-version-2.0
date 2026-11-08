@@ -139,7 +139,7 @@ namespace RASv2.ClashAnalysis.UI
             var block = ExportNames.Block(SampleModel, BlockPrefix.Text);
             var department = ExportNames.Department(SampleModel, _departments.Select(d => d.Department));
             LabelsExample.Text = "Пример: " + SampleModel + " → {Блок} " + Or(block) + " · {Отдел} " + Or(department) +
-                                 " · {Дата} " + DateTime.Today.ToString(SelectedDateFormat);
+                                 " · {Дата} " + ExportNodes.DateLabel(DateTime.Now, SelectedDateFormat);
         }
 
         private static string Or(string s) => string.IsNullOrEmpty(s) ? "не найден" : s;

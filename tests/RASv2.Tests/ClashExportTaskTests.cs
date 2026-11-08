@@ -249,11 +249,14 @@ namespace RASv2.Tests
                 Check(ExportNodes.NwcPath(s1, m, c) == ExportNodes.NwcPath(mid, mid.Settings.Models[0], c), "одна модель — один NWC на обе критичности");
                 Check(ExportNodes.NwfPath(s1, c) == root + @"\NWF\S1_ВК.nwf" && ExportNodes.NwfPath(mid, c) == root + @"\NWF\S1_СК.nwf",
                     ExportNodes.NwfPath(s1, c));
-                Check(ExportNodes.ReportPath(s1, c, new DateTime(2026, 11, 2), "XML") == root + @"\Отчеты\02.11.2026", "отчёты по умолчанию");
+                // {Дата} — со временем записи (08.11.2026): два прогона в один день — разные папки
+                Check(ExportNodes.ReportPath(s1, c, new DateTime(2026, 11, 2, 17, 5, 0), "XML") == root + @"\Отчеты\02.11.2026 17-05", "отчёты по умолчанию");
+                Check(ExportNodes.ReportPath(s1, c, new DateTime(2026, 11, 2, 9, 30, 0), "XML") != ExportNodes.ReportPath(s1, c, new DateTime(2026, 11, 2, 17, 5, 0), "XML"),
+                      "в один день — разные папки");
                 top.Settings.ReportFolder = @"Отчеты\{Дата}\{Формат}";
                 s1.Settings.ReportFolder = @"Отчеты\{Дата}\S1\Высокая критичность\{Формат}";
-                Check(ExportNodes.ReportPath(s1, c, new DateTime(2026, 11, 2), "HTML") == root + @"\Отчеты\02.11.2026\S1\Высокая критичность\HTML" &&
-                      ExportNodes.ReportPath(mid, c, new DateTime(2026, 11, 2), "XML") == root + @"\Отчеты\02.11.2026\XML", "своя и от задачи");
+                Check(ExportNodes.ReportPath(s1, c, new DateTime(2026, 11, 2), "HTML") == root + @"\Отчеты\02.11.2026 00-00\S1\Высокая критичность\HTML" &&
+                      ExportNodes.ReportPath(mid, c, new DateTime(2026, 11, 2), "XML") == root + @"\Отчеты\02.11.2026 00-00\XML", "своя и от задачи");
                 top.Settings.NwcFolder = @"{Блок}\NWC\{Отдел}";
                 Check(ExportNodes.NwcPath(s1, m, c).EndsWith(@"\S1\NWC\KJ\0000_01_01_S1_KJ01_01_M3.nwc"), "отдел — по модели");
                 high.Settings.NwfFolder = @"D:\NWF\S1";

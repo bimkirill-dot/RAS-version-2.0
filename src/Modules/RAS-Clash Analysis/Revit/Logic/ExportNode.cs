@@ -442,9 +442,16 @@ namespace RASv2.ClashAnalysis.Logic
             {
                 ["Блок"] = block ?? "",
                 ["Отдел"] = model == null ? "" : ExportNames.Department(model.Path, common.Departments.Select(d => d.Department)),
-                ["Дата"] = date.ToString(common.DateFormat),
+                ["Дата"] = DateLabel(date, common.DateFormat),
                 ["Формат"] = format ?? "",
             };
+
+        /// <summary>
+        /// {Дата} — дата в выбранном формате и время записи («08.11.2026 17-55»; разработчик, 08.11.2026: «не перезаписывать проверки,
+        /// сделанные в одну дату — пусть папка с датой создаётся ещё и со временем»). Двоеточия в имени папки быть не может — дефис.
+        /// {Дата} — только в папке отчётов (NWC и NWF — постоянные).
+        /// </summary>
+        public static string DateLabel(DateTime when, string format) => when.ToString(format) + " " + when.ToString("HH-mm");
 
         /// <summary>Строка папки — внутри папки проекта; полный путь («\\сервер\…», «D:\…») — как есть.</summary>
         public static string InProject(string projectFolder, string folder)

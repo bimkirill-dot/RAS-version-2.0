@@ -713,7 +713,7 @@ namespace RASv2.ClashAnalysis.UI
 
             var on = Checked();
             var format = on.Contains("HTML") ? "HTML" : on.FirstOrDefault() ?? "";
-            var report = ExportNodes.InProject(root, ExportNames.Fill(ReportFolder.Text, ExportNodes.Labels(block, null, _common, DateTime.Today, format)));
+            var report = ExportNodes.InProject(root, ExportNames.Fill(ReportFolder.Text, ExportNodes.Labels(block, null, _common, DateTime.Now, format)));
             ReportExample.Text = report.Length == 0 ? "Папка не задана" : "Пример: " + report;
             ReportExample.ToolTip = report;
         }
