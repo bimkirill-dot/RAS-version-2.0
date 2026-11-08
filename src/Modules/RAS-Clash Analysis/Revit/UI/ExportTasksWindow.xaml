@@ -230,6 +230,9 @@
                                     <StackPanel Grid.ColumnSpan="7" HorizontalAlignment="Right" Orientation="Horizontal" VerticalAlignment="Center"
                                                 Style="{StaticResource RowActions}" Background="{DynamicResource Hover}">
                                         <Button Style="{StaticResource RowIcon}" Content="&#xE768;" Click="Run_Click" ToolTip="Выгрузить NWC и собрать NWF" />
+                                        <!-- повторить все ошибки прошлого запуска — NWC и NWF одним запуском (08.11.2026) -->
+                                        <Button Style="{StaticResource RowIcon}" Tag="Все" Content="&#xE72C;" FontSize="12" Click="Retry_Click"
+                                                Visibility="{Binding RetryAllVisibility}" ToolTip="Повторить все ошибки — NWC и NWF" />
                                         <Button Style="{StaticResource RowIcon}" Content="&#xE710;" Click="AddSub_Click" ToolTip="Новая подзадача" />
                                         <!-- копия строки с подзадачами (вторая критичность — копия первой; задача — тоже, 07.11.2026) -->
                                         <Button Style="{StaticResource RowIcon}" Content="&#xE8C8;" Click="Copy_Click" ToolTip="Копия" />

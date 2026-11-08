@@ -197,13 +197,18 @@ namespace RASv2.ClashAnalysis.UI
 
         /// <summary>
         /// ↻ у красного треугольника функции: заново — только её ошибки (NWC — эти NWC и NWF, в которые они входят; NWF — только
-        /// NWF с ошибками). Tag кнопки — «NWC» / «NWF».
+        /// NWF с ошибками). Tag кнопки — «NWC» / «NWF»; «Все» — общая ↻ в кнопках строки (разработчик, 08.11.2026: «общая круглая
+        /// стрелочка — повторить все ошибки»): NWC и NWF с ошибками одним запуском (у включённых функций — как их ↻).
         /// </summary>
         private void Retry_Click(object sender, RoutedEventArgs e)
         {
             var row = RowOf(sender);
-            var kind = (string)((FrameworkElement)sender).Tag;
-            var errors = row.LastRun?.Errors.Where(x => RunStates.KindOf(x.Path) == kind).ToList();
+            var tag = (string)((FrameworkElement)sender).Tag;
+            var kinds = tag != "Все" ? new[] { tag } : new[]
+            {
+                row.NwcRetryVisibility == Visibility.Visible ? "NWC" : null, row.NwfRetryVisibility == Visibility.Visible ? "NWF" : null,
+            };
+            var errors = row.LastRun?.Errors.Where(x => kinds.Contains(RunStates.KindOf(x.Path))).ToList();
             if (errors == null || errors.Count == 0) return;
             if (!Leave()) return;
             Start(new RunRequest

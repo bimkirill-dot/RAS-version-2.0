@@ -138,6 +138,9 @@ namespace RASv2.ClashAnalysis.UI
             public Visibility NwfOkVisibility => Show(Marks && NwfOn && Mark("NWF") == StepMark.Ok);
             public Visibility NwfErrorVisibility => Show(Marks && NwfOn && Mark("NWF") == StepMark.Errors);
             public Visibility NwfRetryVisibility => Show(Marks && NwfOn && Mark("NWF") == StepMark.Errors);
+            /// <summary>Общая ↻ в кнопках строки — когда есть что повторять у NWC или NWF (разработчик, 08.11.2026).</summary>
+            public Visibility RetryAllVisibility =>
+                Show(NwcRetryVisibility == Visibility.Visible || NwfRetryVisibility == Visibility.Visible);
             public string NwfStatusTip => RunStates.StepTip(_run, "NWF", new List<string>(), false);
             public string RunAt => _run == null ? "" : _run.At.ToString("dd.MM HH:mm");
             public string RunAtTip => _run == null ? null : $"Запускал {_run.By}, {_run.At:dd.MM.yyyy HH:mm}";
