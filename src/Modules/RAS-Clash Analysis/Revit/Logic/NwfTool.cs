@@ -30,6 +30,8 @@ namespace RASv2.ClashAnalysis.Logic
         [DataMember(Order = 3)] public List<string> HideSets { get; set; } = new List<string>();
         /// <summary>Файлы проверок Clash Detective (.xml) — загружаются, если в NWF проверок ещё нет; затем — прогон всех проверок.</summary>
         [DataMember(Order = 4)] public List<string> Tests { get; set; } = new List<string>();
+        /// <summary>Файл проверок сменился и человек согласился заменить: проверки NWF — убрать и загрузить заново.</summary>
+        [DataMember(Order = 5)] public bool ReplaceTests { get; set; }
     }
 
     /// <summary>

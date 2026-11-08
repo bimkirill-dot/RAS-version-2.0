@@ -79,6 +79,12 @@ namespace RASv2.ClashAnalysis.NwfBuild
             var doc = NwApp.ActiveDocument;
             var data = doc.GetClash().TestsData;
             var tests = All(data.Tests).ToList();
+            if (parameters.Length > 1 && parameters[1] == "clear")
+            {
+                data.TestsClear();
+                File.WriteAllText(parameters[0], "0");
+                return 0;
+            }
             if (parameters.Length > 1 && parameters[1] == "run")
             {
                 data.TestsRunAllTests();

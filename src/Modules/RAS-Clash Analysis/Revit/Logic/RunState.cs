@@ -63,11 +63,22 @@ namespace RASv2.ClashAnalysis.Logic
         [DataMember(Order = 3)] public DateTime At { get; set; } = DateTime.Now;
     }
 
+    /// <summary>С какими файлами проверок собрана NWF: подпись (содержимое файлов) — заметить, что файл сменился.</summary>
+    [DataContract]
+    public sealed class NwfTests
+    {
+        [DataMember(Order = 1)] public string Nwf { get; set; }
+        [DataMember(Order = 2)] public string Signature { get; set; }
+        [DataMember(Order = 3)] public List<string> Files { get; set; } = new List<string>();
+        [DataMember(Order = 4)] public DateTime At { get; set; } = DateTime.Now;
+    }
+
     [DataContract]
     public sealed class RunStateFile
     {
         [DataMember(Order = 1)] public List<RowRun> Rows { get; set; } = new List<RowRun>();
         [DataMember(Order = 2)] public List<ItemTime> Items { get; set; } = new List<ItemTime>();
+        [DataMember(Order = 3)] public List<NwfTests> Tests { get; set; } = new List<NwfTests>();
     }
 
     /// <summary>Модель строки для жёлтого «модель изменилась»: дата модели (null — не узнали) и дата её NWC (null — NWC нет).</summary>
@@ -114,6 +125,7 @@ namespace RASv2.ClashAnalysis.Logic
                     var f = (RunStateFile)new DataContractJsonSerializer(typeof(RunStateFile)).ReadObject(s);
                     f.Rows = f.Rows ?? new List<RowRun>();
                     f.Items = f.Items ?? new List<ItemTime>();
+                    f.Tests = f.Tests ?? new List<NwfTests>();
                     foreach (var r in f.Rows)
                     {
                         r.Errors = r.Errors ?? new List<RunIssue>();
@@ -130,10 +142,15 @@ namespace RASv2.ClashAnalysis.Logic
         }
 
         /// <summary>Записать поверх того, что в файле сейчас (коллега мог выгрузить другую строку): строки — по ключу, NWC — по пути.</summary>
-        public static void Save(string path, IEnumerable<RowRun> rows, IEnumerable<ItemTime> items)
+        public static void Save(string path, IEnumerable<RowRun> rows, IEnumerable<ItemTime> items, IEnumerable<NwfTests> tests = null)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path));
             var file = Load(path);
+            foreach (var t in tests ?? Enumerable.Empty<NwfTests>())
+            {
+                file.Tests.RemoveAll(x => string.Equals(x.Nwf, t.Nwf, StringComparison.OrdinalIgnoreCase));
+                file.Tests.Add(t);
+            }
             foreach (var r in rows)
             {
                 file.Rows.RemoveAll(x => string.Equals(x.Key, r.Key, StringComparison.OrdinalIgnoreCase));
@@ -162,6 +179,33 @@ namespace RASv2.ClashAnalysis.Logic
                 }
             }
         }
+
+        /// <summary>
+        /// Подпись файлов проверок — по их содержимому (файл поправили на месте — подпись другая) и порядку; файла нет — его имя. Пусто —
+        /// пустая строка.
+        /// </summary>
+        public static string TestsSignature(IEnumerable<string> files, Func<string, byte[]> read = null)
+        {
+            read = read ?? (f => File.Exists(f) ? File.ReadAllBytes(f) : null);
+            using (var sha = System.Security.Cryptography.SHA1.Create())
+            {
+                var parts = new List<string>();
+                foreach (var f in files.Where(x => !string.IsNullOrWhiteSpace(x)))
+                {
+                    byte[] data;
+                    try { data = read(f); } catch (Exception) { data = null; }
+                    parts.Add(data == null ? "нет:" + ExportNodes.FileName(f).ToLowerInvariant() : BitConverter.ToString(sha.ComputeHash(data)).Replace("-", ""));
+                }
+                return string.Join("|", parts);
+            }
+        }
+
+        /// <summary>
+        /// Файл проверок строки сменился с прошлой сборки этой NWF (разработчик, 08.11.2026: «окно с предупреждением, что файл проверок
+        /// изменился, — да или нет»): прошлая подпись есть и другая. Не собирали с проверками — нет (спрашивать не о чем).
+        /// </summary>
+        public static NwfTests TestsChanged(RunStateFile file, string nwf, string signature) =>
+            file?.Tests.FirstOrDefault(x => string.Equals(x.Nwf, nwf, StringComparison.OrdinalIgnoreCase) && x.Signature != signature);
 
         public static RowRun Find(RunStateFile file, ExportTask task) =>
             file?.Rows.FirstOrDefault(r => string.Equals(r.Key, Key(task), StringComparison.OrdinalIgnoreCase));

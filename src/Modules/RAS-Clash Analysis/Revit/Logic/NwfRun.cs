@@ -15,6 +15,10 @@ namespace RASv2.ClashAnalysis.Logic
         public List<HideSet> HideSets { get; set; } = new List<HideSet>();
         /// <summary>Файлы проверок строки (свои или от строки выше).</summary>
         public List<string> Tests { get; set; } = new List<string>();
+        /// <summary>Подпись файлов проверок (RunStates.TestsSignature) — запомнить после сборки.</summary>
+        public string TestsSignature { get; set; }
+        /// <summary>Файл проверок сменился, человек согласился — проверки в NWF заменяются.</summary>
+        public bool ReplaceTests { get; set; }
     }
 
     /// <summary>

@@ -105,7 +105,7 @@ namespace RASv2.ClashAnalysis.Export
                 Items = todo.Select(i => new NwfToolItem
                 {
                     Nwf = plans[i].NwfPath, Nwcs = plans[i].Nwcs.ToList(), HideSets = plans[i].HideSets.Select(h => h.Xml).ToList(),
-                    Tests = plans[i].Tests.ToList(),
+                    Tests = plans[i].Tests.ToList(), ReplaceTests = plans[i].ReplaceTests,
                 }).ToList(),
             };
             var jobFile = Path.Combine(work, "job.json");

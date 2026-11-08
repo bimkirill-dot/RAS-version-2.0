@@ -985,6 +985,14 @@ namespace RASv2.Tests
                 {
                     if (Directory.Exists(dir)) Directory.Delete(dir, true);
                 }
+                // файл проверок сменился с прошлой сборки NWF — спросить (08.11.2026)
+                var a1 = RunStates.TestsSignature(new[] { @"\\s\a.xml" }, f => new byte[] { 1, 2 });
+                var a2 = RunStates.TestsSignature(new[] { @"\\s\a.xml" }, f => new byte[] { 1, 3 });
+                Check(a1 != a2 && a1 == RunStates.TestsSignature(new[] { @"\\s\a.xml" }, f => new byte[] { 1, 2 }), "подпись — по содержимому");
+                Check(RunStates.TestsSignature(new[] { @"\\s\нет.xml" }, f => null) == "нет:нет.xml", "файла нет — имя");
+                var st = new RunStateFile { Tests = { new NwfTests { Nwf = @"\\s\S1.nwf", Signature = a1 } } };
+                Check(RunStates.TestsChanged(st, @"\\s\S1.nwf", a2) != null && RunStates.TestsChanged(st, @"\\s\S1.nwf", a1) == null &&
+                      RunStates.TestsChanged(st, @"\\s\S2.nwf", a2) == null, "сменился — только у той NWF, где была другая подпись");
                 Check(RunStates.EstimateText(null) == "—" && RunStates.EstimateText(20) == "≈ 1 мин" && RunStates.EstimateText(725) == "≈ 12 мин" &&
                       RunStates.EstimateText(4800) == "≈ 1 ч 20 мин" && RunStates.EstimateText(7200) == "≈ 2 ч", "текст времени");
                 Check(RunStates.Elapsed(TimeSpan.FromSeconds(245)) == "4:05" && RunStates.Elapsed(TimeSpan.FromSeconds(3730)) == "1:02:10", "идёт");

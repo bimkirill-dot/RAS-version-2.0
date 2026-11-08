@@ -245,6 +245,14 @@ namespace RASv2.ClashAnalysis.NwfBuild
             var info = Path.Combine(Path.GetTempPath(), "ras-nwf-tests-" + Guid.NewGuid().ToString("N") + ".txt");
             try
             {
+                if (item.ReplaceTests)
+                {
+                    // файл проверок сменился, человек согласился — прежние проверки (с их результатами) — убрать
+                    Console.WriteLine(NwfTool.StepLine(i, "Замена проверок"));
+                    app.ExecuteAddInPlugin(NwfTool.TestsPlugin, info, "clear");
+                    Say("   прежние проверки убраны — файл проверок сменился (подтверждено)");
+                    notes.Add("проверки заменены");
+                }
                 app.ExecuteAddInPlugin(NwfTool.TestsPlugin, info, "count");
                 var have = File.Exists(info) && int.TryParse(File.ReadAllText(info).Trim(), out var n) ? n : 0;
                 if (have > 0) Say("   проверок в NWF: " + have + " — заново не загружаются (статусы и комментарии коллизий остаются), только прогон");

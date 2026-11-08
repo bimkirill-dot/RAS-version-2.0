@@ -59,6 +59,7 @@ namespace RASv2.ClashAnalysis.Export
                 jobs = jobs.Where(j => only.Contains(j.NwcPath)).ToList();
                 nwfPlans = nwfPlans.Where(n => only.Contains(n.NwfPath) || n.Nwcs.Any(only.Contains)).ToList();
             }
+            AskTests(owner, task, nwfPlans);
             var todo = jobs.Count(j => j.Skip == null) + nwfPlans.Count(n => n.Skip == null);
             if (todo == 0)
             {
@@ -152,6 +153,7 @@ namespace RASv2.ClashAnalysis.Export
                     // NWC готовы (свои и фоновых) — NWF; остановили — NWF не собираются
                     if (view.Cancelled) NwfStage.Stopped(nwfItems, view.Changed);
                     else NwfStage.Run(nwfPlans, nwfItems, journal, view.Changed, () => view.Cancelled, view.Pump);
+                    RememberTests(task, nwfPlans, nwfItems, journal);
                 }
                 catch (Exception ex)
                 {
@@ -171,6 +173,59 @@ namespace RASv2.ClashAnalysis.Export
                 foreach (var path in remoteJournals.Where(File.Exists)) ShareFile(journal, path, ExportNodes.FolderOf(root));
             }
             return outcome;
+        }
+
+        /// <summary>
+        /// Файл проверок строки сменился с прошлой сборки её NWF — спросить (разработчик, 08.11.2026): «Да» — проверки в NWF заменятся
+        /// новыми (результаты, статусы и комментарии прежних коллизий пропадут), «Нет» — прежние остаются, только прогон.
+        /// </summary>
+        private static void AskTests(Window owner, ExportTask task, List<NwfPlan> plans)
+        {
+            var path = RunStates.PathOf(task);
+            if (path == null) return;
+            var state = RunStates.Load(path);
+            foreach (var p in plans.Where(p => p.Skip == null && p.Tests.Count > 0))
+            {
+                p.TestsSignature = RunStates.TestsSignature(p.Tests);
+                var was = RunStates.TestsChanged(state, p.NwfPath, p.TestsSignature);
+                if (was == null || !File.Exists(p.NwfPath)) continue;
+                var text = $"Файл проверок у «{p.Row.Name}» изменился с прошлой сборки NWF ({was.At:dd.MM.yyyy HH:mm}).\n\n" +
+                           "Сейчас: " + string.Join(", ", p.Tests.Select(Path.GetFileName)) + "\n" +
+                           (was.Files.Count > 0 ? "Было: " + string.Join(", ", was.Files.Select(Path.GetFileName)) + "\n" : "") +
+                           $"\nПроверки в NWF «{Path.GetFileName(p.NwfPath)}» заменятся новыми — результаты, статусы и комментарии прежних коллизий пропадут.\n\n" +
+                           "Да — заменить. Нет — оставить прежние проверки (только прогон).";
+                p.ReplaceTests = MessageBox.Show(owner, text, "Файл проверок изменился", MessageBoxButton.YesNo, MessageBoxImage.Warning,
+                    MessageBoxResult.No) == MessageBoxResult.Yes;
+            }
+        }
+
+        /// <summary>
+        /// С какими файлами проверок собрана NWF — в состояние задачи (после сборки без ошибки). «Нет» в вопросе — прежняя подпись
+        /// остаётся: в следующий раз спросит снова.
+        /// </summary>
+        private static void RememberTests(ExportTask task, List<NwfPlan> plans, List<NwcProgress> items, ExportJournal journal)
+        {
+            var path = RunStates.PathOf(task);
+            if (path == null) return;
+            var state = RunStates.Load(path);
+            var marks = new List<NwfTests>();
+            for (var i = 0; i < plans.Count; i++)
+            {
+                var p = plans[i];
+                if (items[i].State != NwcState.Done || p.Tests.Count == 0) continue;
+                var known = state.Tests.Any(x => string.Equals(x.Nwf, p.NwfPath, StringComparison.OrdinalIgnoreCase));
+                if (known && !p.ReplaceTests && RunStates.TestsChanged(state, p.NwfPath, p.TestsSignature) != null) continue;
+                marks.Add(new NwfTests { Nwf = p.NwfPath, Signature = p.TestsSignature ?? RunStates.TestsSignature(p.Tests), Files = p.Tests.ToList() });
+            }
+            if (marks.Count == 0) return;
+            try
+            {
+                RunStates.Save(path, new RowRun[0], new ItemTime[0], marks);
+            }
+            catch (Exception ex)
+            {
+                journal.Line("какие файлы проверок у NWF — не записано: " + ex.Message);
+            }
         }
 
         /// <summary>Версия Revit файла модели (не Revit Server): из самого файла; не прочитался — 0 (выгружает этот Revit).</summary>
