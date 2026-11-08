@@ -233,7 +233,8 @@ namespace RASv2.ClashAnalysis.UI
             string.Join(";", _tests.Select(r => r.Path)), _hideOwn, string.Join(";", _hide.Select(h => h.Xml)), _formatsOwn, string.Join(";", Checked()), _export == null, _exportEdits, _editedOwn, EditedOn.IsChecked, EditedMode.SelectedIndex,
             EditedDate1.Text, EditedDate2.Text,
             MakeNwf.IsChecked, RunTests.IsChecked, MakeReports.IsChecked, NwfName.Text, Own(_folder), Own(_nwc), Own(_nwf), Own(_report), Own(_view), _imported.Count,
-            MakeNwc.IsChecked, MakeRvt.IsChecked, Own(_rvt), Resave.IsChecked, _rvtOptions == null, _resaveOptions == null, _exportEdits);
+            MakeNwc.IsChecked, MakeRvt.IsChecked, Own(_rvt), Resave.IsChecked, _rvtOptions == null, _resaveOptions == null, _exportEdits, RvtAuditBox.IsChecked, RvtWorksetsBox.SelectedIndex,
+            RvtOverwriteBox.IsChecked, RvtTrimBox.Text, ResaveCompactBox.IsChecked, ResaveAuditBox.IsChecked, ResaveBackupBox.Text);
 
         private static string Own(InheritField f) => f.Value ?? "\u0001";
 
@@ -246,6 +247,7 @@ namespace RASv2.ClashAnalysis.UI
         {
             Changed();
             if (_ready) ShowEdited();
+            if (_ready) ShowBackupNote();
         }
 
         private static IEnumerable<ExportModel> Copies(IEnumerable<ExportModel> models) =>
@@ -701,33 +703,33 @@ namespace RASv2.ClashAnalysis.UI
 
         // ── «Настройки RVT»: по общим или свои (08.11.2026) ──
 
+        /// <summary>
+        /// «Настройки RVT» — поля здесь же (разработчик, 08.11.2026: «не отдельным окном — прямо тут, как у NWC»): по общим или уровня
+        /// выше — серые, со значениями оттуда; свои — правятся.
+        /// </summary>
         private void ShowRvtOptions()
         {
             var owner = _parent == null ? null : ExportNodes.OwnerOf(_parent, x => x.Rvt);
             var inherited = owner == null ? "По общим настройкам" : "от «" + owner.Name + "»";
             RvtOptionsFrom.Text = _rvtOptions != null ? "Свои" : inherited;
+            RvtOptionsEdit.Visibility = _rvtOptions != null ? Visibility.Collapsed : Visibility.Visible;
             RvtOptionsReset.Content = "Вернуть " + (owner == null ? "по общим настройкам" : inherited);
             RvtOptionsReset.Visibility = _rvtOptions != null ? Visibility.Visible : Visibility.Collapsed;
+            var o = _rvtOptions ?? InheritedRvt();
+            RvtAuditBox.IsChecked = o.Audit;
+            RvtWorksetsBox.SelectedIndex = o.KeepWorksets ? 0 : 1;
+            RvtOverwriteBox.IsChecked = o.Overwrite;
+            RvtTrimBox.Text = o.TrimAfter ?? "";
+            RvtOptionsBox.IsEnabled = _rvtOptions != null;
+            RvtOptionsBox.Opacity = _rvtOptions != null ? 1 : 0.55;
         }
+
+        private RvtOptions InheritedRvt() => (_parent == null ? _common.Rvt : ExportNodes.RvtOptionsOf(_parent, _common)) ?? new RvtOptions();
 
         private void RvtOptionsEdit_Click(object sender, RoutedEventArgs e)
         {
-            // начать с того, что действует сейчас: своих, уровня выше или общих
-            var current = _common.Clone();
-            current.Rvt = (_rvtOptions ?? (_parent == null ? _common.Rvt : ExportNodes.RvtOptionsOf(_parent, _common)) ?? new RvtOptions()).Clone();
-            try
-            {
-                var name = TaskName.Text.Trim().Length > 0 ? TaskName.Text.Trim() : "новая строка";
-                if (new ExportSettingsWindow(current, name, "Rvt") { Owner = Owner }.Free().ShowDialog() != true) return;
-            }
-            catch (Exception ex)
-            {
-                // исключение сквозь вложенный ShowDialog роняет Revit (CLAUDE.md, «Правила, о которые уже спотыкались»)
-                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: настройки RVT строки не открылись", ex);
-                ShowError("Окно настроек RVT не открылось — подробности в журнале плагина.");
-                return;
-            }
-            _rvtOptions = current.Rvt.Clone();
+            // начать с того, что действует сейчас: уровня выше или общих
+            _rvtOptions = InheritedRvt().Clone();
             _exportEdits++;
             ShowRvtOptions();
         }
@@ -746,27 +748,26 @@ namespace RASv2.ClashAnalysis.UI
             var owner = _parent == null ? null : ExportNodes.OwnerOf(_parent, x => x.ResaveOptions);
             var inherited = owner == null ? "По общим настройкам" : "от «" + owner.Name + "»";
             ResaveOptionsFrom.Text = _resaveOptions != null ? "Свои" : inherited;
+            ResaveOptionsEdit.Visibility = _resaveOptions != null ? Visibility.Collapsed : Visibility.Visible;
             ResaveOptionsReset.Content = "Вернуть " + (owner == null ? "по общим настройкам" : inherited);
             ResaveOptionsReset.Visibility = _resaveOptions != null ? Visibility.Visible : Visibility.Collapsed;
+            var o = _resaveOptions ?? InheritedResave();
+            ResaveCompactBox.IsChecked = o.Compact;
+            ResaveAuditBox.IsChecked = o.Audit;
+            ResaveBackupBox.Text = o.BackupFolder ?? "";
+            ResaveOptionsBox.IsEnabled = _resaveOptions != null;
+            ResaveOptionsBox.Opacity = _resaveOptions != null ? 1 : 0.55;
+            ShowBackupNote();
         }
+
+        private void ShowBackupNote() =>
+            ResaveBackupNote.Text = ResaveBackupBox.Text.Trim().Length == 0 ? "Пусто — на этом компьютере: " + ResaveOptions.DefaultBackupDir : "";
+
+        private ResaveOptions InheritedResave() => (_parent == null ? _common.Resave : ExportNodes.ResaveOptionsOf(_parent, _common)) ?? new ResaveOptions();
 
         private void ResaveOptionsEdit_Click(object sender, RoutedEventArgs e)
         {
-            var current = _common.Clone();
-            current.Resave = (_resaveOptions ?? (_parent == null ? _common.Resave : ExportNodes.ResaveOptionsOf(_parent, _common)) ?? new ResaveOptions()).Clone();
-            try
-            {
-                var name = TaskName.Text.Trim().Length > 0 ? TaskName.Text.Trim() : "новая строка";
-                if (new ExportSettingsWindow(current, name, "Resave") { Owner = Owner }.Free().ShowDialog() != true) return;
-            }
-            catch (Exception ex)
-            {
-                // исключение сквозь вложенный ShowDialog роняет Revit (CLAUDE.md, «Правила, о которые уже спотыкались»)
-                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: настройки пересохранения строки не открылись", ex);
-                ShowError("Окно настроек пересохранения не открылось — подробности в журнале плагина.");
-                return;
-            }
-            _resaveOptions = current.Resave.Clone();
+            _resaveOptions = InheritedResave().Clone();
             _exportEdits++;
             ShowResaveOptions();
         }
@@ -869,8 +870,15 @@ namespace RASv2.ClashAnalysis.UI
             MakeRvt = MakeRvt.IsChecked == true,
             RvtFolder = _rvt.Value,
             Resave = Resave.IsChecked == true,
-            Rvt = _rvtOptions?.Clone(),
-            ResaveOptions = _resaveOptions?.Clone(),
+            Rvt = _rvtOptions == null ? null : new RvtOptions
+            {
+                Audit = RvtAuditBox.IsChecked == true, KeepWorksets = RvtWorksetsBox.SelectedIndex != 1, Overwrite = RvtOverwriteBox.IsChecked == true,
+                TrimAfter = RvtTrimBox.Text.Trim(),
+            },
+            ResaveOptions = _resaveOptions == null ? null : new ResaveOptions
+            {
+                Compact = ResaveCompactBox.IsChecked == true, Audit = ResaveAuditBox.IsChecked == true, BackupFolder = ResaveBackupBox.Text.Trim(),
+            },
             Skipped = _task.Settings.Skipped,
             Folder = _folder.Value,
             NwcFolder = _nwc.Value,

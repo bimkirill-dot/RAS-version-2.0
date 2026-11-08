@@ -580,19 +580,56 @@
                         </StackPanel>
                     </Grid>
                 </StackPanel>
-                <!-- настройки выгрузки RVT — по общим или свои (то же окно, что шестерёнка → «Экспорт RVT»; как у NWC) -->
+                <!-- настройки выгрузки RVT — по общим или свои -->
                 <Grid Style="{StaticResource RowGrid}">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
                     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                     <TextBlock Style="{StaticResource Cap}" Text="Настройки RVT" />
                     <WrapPanel Grid.Column="1" VerticalAlignment="Top">
                         <TextBlock x:Name="RvtOptionsFrom" VerticalAlignment="Center" Margin="0,4,10,4" />
-                        <Button Style="{StaticResource SideLink}" Content="Изменить" Click="RvtOptionsEdit_Click" />
+                        <Button x:Name="RvtOptionsEdit" Style="{StaticResource SideLink}" Content="Изменить" Click="RvtOptionsEdit_Click" />
                     </WrapPanel>
                     <StackPanel Style="{StaticResource Side}">
                         <Button x:Name="RvtOptionsReset" Style="{StaticResource SideLink}" Click="RvtOptionsReset_Click" />
                     </StackPanel>
                 </Grid>
+                <!-- настройки выгрузки RVT — здесь же (разработчик, 08.11.2026: «не отдельным окном, а прямо тут, как у NWC»): по общим —
+                     серые, «Изменить» — свои у строки (и у подзадач), «Вернуть» — снова по общим -->
+                <StackPanel x:Name="RvtOptionsBox">
+                    <Grid Style="{StaticResource RowGrid}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                        <TextBlock Style="{StaticResource Cap}" Text="Проверка при открытии (Audit)" />
+                        <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
+                            <CheckBox x:Name="RvtAuditBox" VerticalAlignment="Center" Checked="Any_Changed" Unchecked="Any_Changed" ToolTip="Revit исправляет ошибки модели; открытие дольше" />
+                        </DockPanel>
+                    </Grid>
+                    <Grid Style="{StaticResource RowGrid}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                        <TextBlock Style="{StaticResource Cap}" Text="Рабочие наборы" />
+                        <ComboBox Grid.Column="1" x:Name="RvtWorksetsBox" HorizontalAlignment="Left" Width="240" MinHeight="28"
+                                  VerticalContentAlignment="Center" VerticalAlignment="Top" SelectionChanged="Any_Changed">
+                            <ComboBoxItem Content="Оставить, все освободить" />
+                            <ComboBoxItem Content="Без рабочих наборов" />
+                        </ComboBox>
+                    </Grid>
+                    <Grid Style="{StaticResource RowGrid}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                        <TextBlock Style="{StaticResource Cap}" Text="Перезаписывать, если RVT уже есть" />
+                        <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
+                            <CheckBox x:Name="RvtOverwriteBox" VerticalAlignment="Center" Checked="Any_Changed" Unchecked="Any_Changed" ToolTip="Снята — модель с уже лежащим RVT пропускается" />
+                        </DockPanel>
+                    </Grid>
+                    <Grid Style="{StaticResource RowGrid}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                        <TextBlock Style="{StaticResource Cap}" Text="Имя RVT: обрезать всё после" />
+                        <TextBox Grid.Column="1" x:Name="RvtTrimBox" HorizontalAlignment="Left" Width="160" VerticalAlignment="Top" TextChanged="Any_Changed"
+                                 ToolTip="Часть имени модели, после которой всё отрезается; пусто — имя модели как есть" />
+                    </Grid>
+                </StackPanel>
 
                 <!-- ══ Пересохранение RVT — свой раздел (разработчик, 08.11.2026): на то же место, сжатые, освобождённые ══ -->
                 <Border Style="{StaticResource SectionHead}">
@@ -614,12 +651,42 @@
                     <TextBlock Style="{StaticResource Cap}" Text="Настройки пересохранения" />
                     <WrapPanel Grid.Column="1" VerticalAlignment="Top">
                         <TextBlock x:Name="ResaveOptionsFrom" VerticalAlignment="Center" Margin="0,4,10,4" />
-                        <Button Style="{StaticResource SideLink}" Content="Изменить" Click="ResaveOptionsEdit_Click" />
+                        <Button x:Name="ResaveOptionsEdit" Style="{StaticResource SideLink}" Content="Изменить" Click="ResaveOptionsEdit_Click" />
                     </WrapPanel>
                     <StackPanel Style="{StaticResource Side}">
                         <Button x:Name="ResaveOptionsReset" Style="{StaticResource SideLink}" Click="ResaveOptionsReset_Click" />
                     </StackPanel>
                 </Grid>
+                <!-- настройки пересохранения — здесь же, как у RVT -->
+                <StackPanel x:Name="ResaveOptionsBox">
+                    <Grid Style="{StaticResource RowGrid}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                        <TextBlock Style="{StaticResource Cap}" Text="Сжать модель" />
+                        <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
+                            <CheckBox x:Name="ResaveCompactBox" VerticalAlignment="Center" Checked="Any_Changed" Unchecked="Any_Changed" ToolTip="«Сжать файл» при сохранении — меньше вес, сохранение дольше" />
+                        </DockPanel>
+                    </Grid>
+                    <Grid Style="{StaticResource RowGrid}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                        <TextBlock Style="{StaticResource Cap}" Text="Проверить модель (Audit)" />
+                        <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
+                            <CheckBox x:Name="ResaveAuditBox" VerticalAlignment="Center" Checked="Any_Changed" Unchecked="Any_Changed" ToolTip="Revit исправляет ошибки модели при открытии; открытие дольше" />
+                        </DockPanel>
+                    </Grid>
+                    <Grid Style="{StaticResource RowGrid}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                        <TextBlock Style="{StaticResource Cap}" Text="Папка резервных копий" />
+                        <Button Grid.Column="2" x:Name="ResaveBackupBrowse" Style="{StaticResource Browse}" Tag="{Binding ElementName=ResaveBackupBox}" Click="Browse_Click" />
+                        <StackPanel Grid.Column="1">
+                            <TextBox x:Name="ResaveBackupBox" TextChanged="Any_Changed"
+                                     ToolTip="Прежние модели перед заменой: на каждый запуск — папка с датой и временем; пусто — на этом компьютере" />
+                            <TextBlock x:Name="ResaveBackupNote" Style="{StaticResource Note}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
             </StackPanel>
         </ScrollViewer>
     </DockPanel>

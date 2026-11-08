@@ -73,19 +73,6 @@ namespace RASv2.ClashAnalysis.UI
             Width = 780;
         }
 
-        /// <summary>
-        /// Настройки строки одним разделом (панель строки → «Изменить»; разработчик, 08.11.2026: «по общим, но чтобы можно было
-        /// изменить, как у NWC»): «Rvt» — «Экспорт RVT», «Resave» — «Пересохранение RVT».
-        /// </summary>
-        public ExportSettingsWindow(ExportSettings settings, string taskName, string section) : this(settings)
-        {
-            Title = (section == "Resave" ? "Настройки пересохранения — " : "Настройки RVT — ") + taskName;
-            FileButtons.Visibility = Visibility.Collapsed;
-            NavBox.Visibility = Visibility.Collapsed;
-            Nav.SelectedItem = Nav.Items.Cast<ListBoxItem>().First(i => (string)i.Tag == section);
-            Width = 780;
-        }
-
         private void BackupBrowse_Click(object sender, RoutedEventArgs e)
         {
             var current = ResaveBackup.Text.Trim().Length > 0 ? ResaveBackup.Text.Trim() : ResaveOptions.DefaultBackupDir;
