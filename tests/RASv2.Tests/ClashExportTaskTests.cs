@@ -924,19 +924,19 @@ namespace RASv2.Tests
                 var j2 = NwcRunPlan.Build(roots2[0], common, 2026, notes, null, when);
                 Check(j2.Where(j => j.Rows.Contains(mid2.Name)).All(j => j.Resave && j.Skip == null) && j2.Count(j => j.Resave) == 2,
                       "пересохранение — у моделей «Средней», и без NWC не пропуск");
-                mid2.Settings.Rvt = new RvtOptions { ResaveCompact = false, BackupFolder = @"\\srv\Копии" };
+                mid2.Settings.ResaveOptions = new ResaveOptions { Compact = false, BackupFolder = @"\\srv\Копии" };
                 var own = NwcRunPlan.Build(mid2, common, 2026, notes, null, when);
                 Check(own.All(j => j.BackupDir == @"\\srv\Копии\08.11.2026 18-05"), "резервные копии — в папку запуска с датой и временем: " + own[0].BackupDir);
-                Check(own.All(j => !j.Export.Rvt.ResaveCompact && j.Export.Rvt.BackupDir == @"\\srv\Копии") && common.Rvt.ResaveCompact,
-                      "свои «Настройки RVT» строки — в параметры модели, общие не меняются");
-                Check(ExportNodes.RvtOptionsOf(mid2, common).BackupFolder == @"\\srv\Копии" && ExportNodes.RvtOptionsOf(roots2[0], common) == common.Rvt, "чьи настройки");
-                Check(mid2.Settings.Clone().Resave && mid2.Settings.Clone().Rvt.BackupFolder == @"\\srv\Копии", "копия строки — с пересохранением");
-                Check(new RvtOptions().ResaveCompact && new RvtOptions().ResaveAudit && new RvtOptions().BackupDir == RvtOptions.DefaultBackupDir,
+                Check(own.All(j => !j.Export.Resave.Compact && j.Export.Resave.BackupDir == @"\\srv\Копии") && common.Resave.Compact,
+                      "свои «Настройки пересохранения» строки — в параметры модели, общие не меняются");
+                Check(ExportNodes.ResaveOptionsOf(mid2, common).BackupFolder == @"\\srv\Копии" && ExportNodes.ResaveOptionsOf(roots2[0], common) == common.Resave, "чьи настройки");
+                Check(mid2.Settings.Clone().Resave && mid2.Settings.Clone().ResaveOptions.BackupFolder == @"\\srv\Копии", "копия строки — с пересохранением");
+                Check(new ResaveOptions().Compact && new ResaveOptions().Audit && new ResaveOptions().BackupDir == ResaveOptions.DefaultBackupDir,
                       "по умолчанию: сжать, проверить, копии — на этом компьютере");
                 var key = RunStates.ResaveKey(@"RSN://srv/Проект/a.rvt");
                 Check(RunStates.KindOf(key) == "RESAVE" && RunStates.KindOf(@"RSN://srv/Проект/a.rvt") == "RVT", "итог пересохранения — своя функция");
                 var h2 = NwcWorkers.FromHandoff(NwcWorkers.ToHandoff(own[0]));
-                Check(h2.Resave && h2.Export.Rvt.BackupFolder == @"\\srv\Копии" && h2.BackupDir == own[0].BackupDir, "задание фоновому Revit — с пересохранением и своими настройками");
+                Check(h2.Resave && h2.Export.Resave.BackupFolder == @"\\srv\Копии" && h2.BackupDir == own[0].BackupDir, "задание фоновому Revit — с пересохранением и своими настройками");
                 Check(ExportNodes.SetFlag(roots2[0], RowFlag.Resave, true, common) == null && roots2[0].Self().All(t => t.Settings.Resave), "выключатель — у всей ветки");
                 var tmp = Path.Combine(Path.GetTempPath(), "ras-tests-" + Guid.NewGuid().ToString("N") + ".json");
                 try

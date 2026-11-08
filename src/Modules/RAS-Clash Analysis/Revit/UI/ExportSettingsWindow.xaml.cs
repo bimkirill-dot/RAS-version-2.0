@@ -74,21 +74,21 @@ namespace RASv2.ClashAnalysis.UI
         }
 
         /// <summary>
-        /// «Настройки RVT» строки (панель строки → раздел RVT → «Изменить»; разработчик, 08.11.2026: «по общим, но чтобы можно было
-        /// изменить, как у NWC»): только раздел RVT — выгрузка и пересохранение.
+        /// Настройки строки одним разделом (панель строки → «Изменить»; разработчик, 08.11.2026: «по общим, но чтобы можно было
+        /// изменить, как у NWC»): «Rvt» — «Экспорт RVT», «Resave» — «Пересохранение RVT».
         /// </summary>
-        public ExportSettingsWindow(ExportSettings settings, string taskName, bool rvt) : this(settings)
+        public ExportSettingsWindow(ExportSettings settings, string taskName, string section) : this(settings)
         {
-            Title = "Настройки RVT — " + taskName;
+            Title = (section == "Resave" ? "Настройки пересохранения — " : "Настройки RVT — ") + taskName;
             FileButtons.Visibility = Visibility.Collapsed;
             NavBox.Visibility = Visibility.Collapsed;
-            Nav.SelectedIndex = 2;
+            Nav.SelectedItem = Nav.Items.Cast<ListBoxItem>().First(i => (string)i.Tag == section);
             Width = 780;
         }
 
         private void BackupBrowse_Click(object sender, RoutedEventArgs e)
         {
-            var current = ResaveBackup.Text.Trim().Length > 0 ? ResaveBackup.Text.Trim() : RvtOptions.DefaultBackupDir;
+            var current = ResaveBackup.Text.Trim().Length > 0 ? ResaveBackup.Text.Trim() : ResaveOptions.DefaultBackupDir;
             var path = FolderDialog.Pick(this, Directory.Exists(current) ? current : "", "Папка резервных копий");
             if (path != null) ResaveBackup.Text = path;
         }
@@ -101,6 +101,7 @@ namespace RASv2.ClashAnalysis.UI
             NwcSection.Visibility = tag == "Nwc" ? Visibility.Visible : Visibility.Collapsed;
             ReportSection.Visibility = tag == "Report" ? Visibility.Visible : Visibility.Collapsed;
             RvtSection.Visibility = tag == "Rvt" ? Visibility.Visible : Visibility.Collapsed;
+            ResaveSection.Visibility = tag == "Resave" ? Visibility.Visible : Visibility.Collapsed;
             Scroll.ScrollToTop();
         }
 
@@ -142,9 +143,10 @@ namespace RASv2.ClashAnalysis.UI
             RvtWorksets.SelectedIndex = r.KeepWorksets ? 0 : 1;
             RvtOverwrite.IsChecked = r.Overwrite;
             RvtTrimAfter.Text = r.TrimAfter ?? "";
-            ResaveCompact.IsChecked = r.ResaveCompact;
-            ResaveAudit.IsChecked = r.ResaveAudit;
-            ResaveBackup.Text = r.BackupFolder ?? "";
+            var o = s.Resave ?? new ResaveOptions();
+            ResaveCompact.IsChecked = o.Compact;
+            ResaveAudit.IsChecked = o.Audit;
+            ResaveBackup.Text = o.BackupFolder ?? "";
         }
 
         /// <summary>Настройки отчётов — все поля и статусы Navisworks по порядку, отмечены — из настроек.</summary>
@@ -195,7 +197,7 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Примеры на одном имени модели: под «Имя NWC» — имя NWC, под «Метками» — {Блок}, {Отдел}, {Дата} (по тому, что сейчас в окне).</summary>
         private void UpdateExample()
         {
-            ResaveBackupNote.Text = ResaveBackup.Text.Trim().Length == 0 ? "Пусто — на этом компьютере: " + RvtOptions.DefaultBackupDir : "";
+            ResaveBackupNote.Text = ResaveBackup.Text.Trim().Length == 0 ? "Пусто — на этом компьютере: " + ResaveOptions.DefaultBackupDir : "";
             var rvt = ExportNames.NwcName(SampleModel, RvtTrimAfter.Text, out var rvtMatches);
             RvtNameExample.Text = "Пример: " + SampleModel + " → " + rvt + ".rvt" +
                                   (RvtTrimAfter.Text.Trim().Length == 0 ? " (имя модели)" : rvtMatches ? "" : " (в имени нет «" + RvtTrimAfter.Text.Trim() + "» — как есть)");
@@ -320,8 +322,11 @@ namespace RASv2.ClashAnalysis.UI
             result.Rvt = new RvtOptions
             {
                 Audit = RvtAudit.IsChecked == true, KeepWorksets = RvtWorksets.SelectedIndex != 1, Overwrite = RvtOverwrite.IsChecked == true,
-                TrimAfter = RvtTrimAfter.Text.Trim(), ResaveCompact = ResaveCompact.IsChecked == true, ResaveAudit = ResaveAudit.IsChecked == true,
-                BackupFolder = ResaveBackup.Text.Trim(),
+                TrimAfter = RvtTrimAfter.Text.Trim(),
+            };
+            result.Resave = new ResaveOptions
+            {
+                Compact = ResaveCompact.IsChecked == true, Audit = ResaveAudit.IsChecked == true, BackupFolder = ResaveBackup.Text.Trim(),
             };
             result.Report = new ReportOptions
             {

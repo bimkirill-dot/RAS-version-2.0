@@ -106,8 +106,9 @@ namespace RASv2.ClashAnalysis.UI
         // свои параметры выгрузки (null — от уровня выше или общие); _exportEdits — для «Отмена с правками спрашивает»
         private ExportOverride _export;
         private int _exportEdits;
-        // свои «Настройки RVT» (null — от уровня выше или общие)
+        // свои «Настройки RVT» и «Настройки пересохранения» (null — от уровня выше или общие)
         private RvtOptions _rvtOptions;
+        private ResaveOptions _resaveOptions;
         private string _serverFolder;
 
         public event PropertyChangedEventHandler PropertyChanged;
@@ -157,6 +158,7 @@ namespace RASv2.ClashAnalysis.UI
             MakeRvt.IsChecked = s.MakeRvt;
             Resave.IsChecked = s.Resave;
             _rvtOptions = s.Rvt?.Clone();
+            _resaveOptions = s.ResaveOptions?.Clone();
             NwfName.Text = s.NwfName ?? "";
             _folder = Field(Folder, FolderFrom, FolderLink, x => x.Folder, ExportNodes.FolderOf, false, FolderBrowse);
             // папки NWC, NWF, отчётов — полным путём (разработчик, 07–08.11.2026: «пишем полный путь к папкам; в полях — тоже полный»):
@@ -191,6 +193,7 @@ namespace RASv2.ClashAnalysis.UI
             ShowEdited();
             ShowExport();
             ShowRvtOptions();
+            ShowResaveOptions();
             _opened = State();
         }
 
@@ -230,7 +233,7 @@ namespace RASv2.ClashAnalysis.UI
             string.Join(";", _tests.Select(r => r.Path)), _hideOwn, string.Join(";", _hide.Select(h => h.Xml)), _formatsOwn, string.Join(";", Checked()), _export == null, _exportEdits, _editedOwn, EditedOn.IsChecked, EditedMode.SelectedIndex,
             EditedDate1.Text, EditedDate2.Text,
             MakeNwf.IsChecked, RunTests.IsChecked, MakeReports.IsChecked, NwfName.Text, Own(_folder), Own(_nwc), Own(_nwf), Own(_report), Own(_view), _imported.Count,
-            MakeNwc.IsChecked, MakeRvt.IsChecked, Own(_rvt), Resave.IsChecked, _rvtOptions == null, _exportEdits);
+            MakeNwc.IsChecked, MakeRvt.IsChecked, Own(_rvt), Resave.IsChecked, _rvtOptions == null, _resaveOptions == null, _exportEdits);
 
         private static string Own(InheritField f) => f.Value ?? "\u0001";
 
@@ -715,7 +718,7 @@ namespace RASv2.ClashAnalysis.UI
             try
             {
                 var name = TaskName.Text.Trim().Length > 0 ? TaskName.Text.Trim() : "новая строка";
-                if (new ExportSettingsWindow(current, name, true) { Owner = Owner }.Free().ShowDialog() != true) return;
+                if (new ExportSettingsWindow(current, name, "Rvt") { Owner = Owner }.Free().ShowDialog() != true) return;
             }
             catch (Exception ex)
             {
@@ -734,6 +737,45 @@ namespace RASv2.ClashAnalysis.UI
             _rvtOptions = null;
             _exportEdits++;
             ShowRvtOptions();
+        }
+
+        // ── «Настройки пересохранения»: по общим или свои (08.11.2026) ──
+
+        private void ShowResaveOptions()
+        {
+            var owner = _parent == null ? null : ExportNodes.OwnerOf(_parent, x => x.ResaveOptions);
+            var inherited = owner == null ? "По общим настройкам" : "от «" + owner.Name + "»";
+            ResaveOptionsFrom.Text = _resaveOptions != null ? "Свои" : inherited;
+            ResaveOptionsReset.Content = "Вернуть " + (owner == null ? "по общим настройкам" : inherited);
+            ResaveOptionsReset.Visibility = _resaveOptions != null ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void ResaveOptionsEdit_Click(object sender, RoutedEventArgs e)
+        {
+            var current = _common.Clone();
+            current.Resave = (_resaveOptions ?? (_parent == null ? _common.Resave : ExportNodes.ResaveOptionsOf(_parent, _common)) ?? new ResaveOptions()).Clone();
+            try
+            {
+                var name = TaskName.Text.Trim().Length > 0 ? TaskName.Text.Trim() : "новая строка";
+                if (new ExportSettingsWindow(current, name, "Resave") { Owner = Owner }.Free().ShowDialog() != true) return;
+            }
+            catch (Exception ex)
+            {
+                // исключение сквозь вложенный ShowDialog роняет Revit (CLAUDE.md, «Правила, о которые уже спотыкались»)
+                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: настройки пересохранения строки не открылись", ex);
+                ShowError("Окно настроек пересохранения не открылось — подробности в журнале плагина.");
+                return;
+            }
+            _resaveOptions = current.Resave.Clone();
+            _exportEdits++;
+            ShowResaveOptions();
+        }
+
+        private void ResaveOptionsReset_Click(object sender, RoutedEventArgs e)
+        {
+            _resaveOptions = null;
+            _exportEdits++;
+            ShowResaveOptions();
         }
 
         // ── примеры ──
@@ -828,6 +870,7 @@ namespace RASv2.ClashAnalysis.UI
             RvtFolder = _rvt.Value,
             Resave = Resave.IsChecked == true,
             Rvt = _rvtOptions?.Clone(),
+            ResaveOptions = _resaveOptions?.Clone(),
             Skipped = _task.Settings.Skipped,
             Folder = _folder.Value,
             NwcFolder = _nwc.Value,

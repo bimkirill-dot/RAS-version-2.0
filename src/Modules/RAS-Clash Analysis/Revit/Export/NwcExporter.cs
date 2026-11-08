@@ -115,8 +115,8 @@ namespace RASv2.ClashAnalysis.Export
                 if (job.RvtPath != null) _j.Line("       RVT  →  " + job.RvtPath);
                 if (job.Resave)
                 {
-                    var r = job.Export.Rvt ?? new RvtOptions();
-                    _j.Line($"       пересохранение на место: сжать {Yes(r.ResaveCompact)}, проверить (Audit) {Yes(r.ResaveAudit)}; резервная копия → {job.BackupDir ?? r.BackupDir}");
+                    var r = job.Export.Resave ?? new ResaveOptions();
+                    _j.Line($"       пересохранение на место: сжать {Yes(r.Compact)}, проверить (Audit) {Yes(r.Audit)}; резервная копия → {job.BackupDir ?? r.BackupDir}");
                 }
                 _j.Line($"       модель: {job.Model.Path}{(job.Model.Year > 0 ? $" (Revit {job.Model.Year})" : "")}; строки: {string.Join(", ", job.Rows)}");
                 _j.Line($"       вид: {(job.Export.Nwc.Scope == NwcScope.View ? "«" + job.View + "»" : "целый проект")}; " + OptionsText(job.Export.Nwc) +
@@ -303,7 +303,7 @@ namespace RASv2.ClashAnalysis.Export
                 // RVT без рабочих наборов — их убирает только открытие («отсоединить и удалить рабочие наборы»): без NWC — сразу так; с NWC —
                 // NWC по обычному открытию (виды — с рабочими наборами), потом второе открытие той же копии (без нового копирования)
                 var discard = wantRvt && workshared && !rvt.KeepWorksets;
-                var audit = wantRvt && rvt.Audit || wantResave && rvt.ResaveAudit;
+                var audit = wantRvt && rvt.Audit || wantResave && (job.Export.Resave ?? new ResaveOptions()).Audit;
                 void Open(bool dropWorksets)
                 {
                     var options = new OpenOptions { Audit = audit };
@@ -331,7 +331,7 @@ namespace RASv2.ClashAnalysis.Export
                     {
                         Step("Пересохранение на место", () => ResaveTo(doc, job));
                         p.Resave = NwcState.Done;
-                        p.ResaveNote = "пересохранена" + ((job.Export.Rvt ?? new RvtOptions()).ResaveCompact ? ", сжата" : "");
+                        p.ResaveNote = "пересохранена" + ((job.Export.Resave ?? new ResaveOptions()).Compact ? ", сжата" : "");
                     }
                     catch (Exception ex) when (wantNwc || wantRvt)
                     {
@@ -515,7 +515,7 @@ namespace RASv2.ClashAnalysis.Export
         /// <summary>Резервная копия модели перед пересохранением — нетронутая копия, в папку запуска (дата и время), прежние не трогаются.</summary>
         private void Backup(string copy, NwcJob job)
         {
-            var dir = job.BackupDir ?? (job.Export.Rvt ?? new RvtOptions()).BackupDir;
+            var dir = job.BackupDir ?? (job.Export.Resave ?? new ResaveOptions()).BackupDir;
             Directory.CreateDirectory(dir);
             var target = System.IO.Path.Combine(dir, ExportNodes.FileName(job.Model.Path));
             var tmp = target + ".ras-tmp";
@@ -531,16 +531,16 @@ namespace RASv2.ClashAnalysis.Export
         /// </summary>
         private void ResaveTo(Document doc, NwcJob job)
         {
-            var rvt = job.Export.Rvt ?? new RvtOptions();
+            var resave = job.Export.Resave ?? new ResaveOptions();
             var central = doc.IsWorkshared;
-            var options = new SaveAsOptions { OverwriteExistingFile = true, Compact = rvt.ResaveCompact };
+            var options = new SaveAsOptions { OverwriteExistingFile = true, Compact = resave.Compact };
             if (central) options.SetWorksharingOptions(new WorksharingSaveAsOptions { SaveAsCentral = true });
             var server = ExportNodes.IsServerPath(job.Model.Path);
             long before = !server && File.Exists(job.Model.Path) ? new FileInfo(job.Model.Path).Length : -1;
             doc.SaveAs(ModelPathUtils.ConvertUserVisiblePathToModelPath(job.Model.Path), options);
             if (central) Relinquish(doc);
             var after = !server && File.Exists(job.Model.Path) ? new FileInfo(job.Model.Path).Length : -1;
-            _j.Line($"   пересохранена: {job.Model.Path}" + (central ? " — центральная, с рабочими наборами" : "") + (rvt.ResaveCompact ? ", сжата" : "") +
+            _j.Line($"   пересохранена: {job.Model.Path}" + (central ? " — центральная, с рабочими наборами" : "") + (resave.Compact ? ", сжата" : "") +
                     (before > 0 && after > 0 ? $"; было {NwcHistory.SizeText(before)}, стало {NwcHistory.SizeText(after)}" : ""));
         }
 
@@ -690,7 +690,7 @@ namespace RASv2.ClashAnalysis.Export
             {
                 try
                 {
-                    var dir = job.BackupDir ?? (job.Export.Rvt ?? new RvtOptions()).BackupDir;
+                    var dir = job.BackupDir ?? (job.Export.Resave ?? new ResaveOptions()).BackupDir;
                     try
                     {
                         Directory.CreateDirectory(dir);

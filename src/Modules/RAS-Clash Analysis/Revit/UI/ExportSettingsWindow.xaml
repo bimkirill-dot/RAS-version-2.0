@@ -119,7 +119,8 @@
                      SelectionChanged="Nav_Changed" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBoxItem Content="Общее" Tag="General" />
                 <ListBoxItem Content="Экспорт NWC" Tag="Nwc" />
-                <ListBoxItem Content="RVT" Tag="Rvt" />
+                <ListBoxItem Content="Экспорт RVT" Tag="Rvt" />
+                <ListBoxItem Content="Пересохранение RVT" Tag="Resave" />
                 <ListBoxItem Content="Настройки отчётов" Tag="Report" />
             </ListBox>
         </Border>
@@ -382,8 +383,7 @@
                 </Border>
             </StackPanel>
 
-            <!-- ══ RVT (разработчик, 08.11.2026): выгрузка для заказчика — проверка при открытии, рабочие наборы, что с уже лежащим, имя;
-                 пересохранение на место — сжать, проверить, папка резервных копий ══ -->
+            <!-- ══ Экспорт RVT — для заказчика (разработчик, 08.11.2026): проверка при открытии, рабочие наборы, что с уже лежащим, имя ══ -->
             <StackPanel x:Name="RvtSection" Visibility="Collapsed">
                 <DockPanel Style="{StaticResource HeadBar}">
                     <TextBlock Style="{StaticResource Head}" Text="Выгрузка RVT" />
@@ -430,9 +430,12 @@
                     <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Muted}" FontSize="12"
                                Text="Каждая модель строки открывается отсоединённо (если у строки стоит и NWC — тем же открытием, после NWC), из неё удаляются все связи — Revit, DWG и другие CAD, облака точек, IFC, — три раза выполняется очистка от неиспользуемого, и модель сохраняется в папку RVT строки в своей версии Revit. В Revit 2023 стандартной очистки для плагинов нет — удаляются неиспользуемые семейства и типы; в Revit 2026 — стандартная очистка." />
                 </DockPanel>
+            </StackPanel>
 
+            <!-- ══ Пересохранение RVT — свой раздел (разработчик, 08.11.2026): сжать, проверить, папка резервных копий ══ -->
+            <StackPanel x:Name="ResaveSection" Visibility="Collapsed">
                 <!-- пересохранение на место (разработчик, 08.11.2026: «чтобы уменьшить вес файла»; «сжать», «проверить», папка копий — меняется) -->
-                <DockPanel Style="{StaticResource HeadBar}" Margin="0,26,0,2">
+                <DockPanel Style="{StaticResource HeadBar}">
                     <TextBlock Style="{StaticResource Head}" Text="Пересохранение на место" />
                 </DockPanel>
                 <Border Style="{StaticResource OptionRow}">

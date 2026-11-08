@@ -84,6 +84,12 @@ namespace RASv2.ClashAnalysis.Logic
                         export = ReferenceEquals(export, common) ? common.Clone() : export;
                         export.Rvt = rvtOwner.Settings.Rvt.Clone();
                     }
+                    var resaveOwner = ExportNodes.OwnerOf(row, s => s.ResaveOptions);
+                    if (resaveOwner != null)
+                    {
+                        export = ReferenceEquals(export, common) ? common.Clone() : export;
+                        export.Resave = resaveOwner.Settings.ResaveOptions.Clone();
+                    }
                     var job = new NwcJob
                     {
                         Model = model, Export = export, View = ExportNodes.ViewOf(row, common), Edited = ExportNodes.EditedOf(row),
@@ -91,7 +97,7 @@ namespace RASv2.ClashAnalysis.Logic
                         RvtPath = row.Settings.MakeRvt ? ExportNodes.RvtPath(row, model, common, when) : null,
                         Resave = row.Settings.Resave,
                     };
-                    job.BackupDir = System.IO.Path.Combine((export.Rvt ?? new RvtOptions()).BackupDir, ExportNodes.DateLabel(when, common.DateFormat));
+                    job.BackupDir = System.IO.Path.Combine((export.Resave ?? new ResaveOptions()).BackupDir, ExportNodes.DateLabel(when, common.DateFormat));
                     if (byPath.TryGetValue(job.NwcPath, out var same))
                     {
                         same.Rows.Add(row.Name);

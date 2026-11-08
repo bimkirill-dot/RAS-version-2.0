@@ -106,8 +106,10 @@ namespace RASv2.ClashAnalysis.Logic
         /// отсоединённо с рабочими наборами, «Сохранить как» центральную туда же, освободить всё. Своё у строки, не наследуется.
         /// </summary>
         [DataMember(Order = 24, EmitDefaultValue = false)] public bool Resave { get; set; }
-        /// <summary>Свои «Настройки RVT» (выгрузка и пересохранение) вместо общих; null — от уровня выше, нигде — общие.</summary>
+        /// <summary>Свои «Настройки RVT» (выгрузка) вместо общих; null — от уровня выше, нигде — общие.</summary>
         [DataMember(Order = 25, EmitDefaultValue = false)] public RvtOptions Rvt { get; set; }
+        /// <summary>Свои «Настройки пересохранения» вместо общих; null — от уровня выше, нигде — общие.</summary>
+        [DataMember(Order = 26, EmitDefaultValue = false)] public ResaveOptions ResaveOptions { get; set; }
 
         /// <summary>Задача верхнего уровня: всё своё, по умолчанию — регламент 15.10 (вида нет — из общих настроек).</summary>
         /// <summary>
@@ -128,6 +130,7 @@ namespace RASv2.ClashAnalysis.Logic
             HideNames = HideNames?.ToList(), ReportFormats = ReportFormats?.ToList(), Export = Export?.Clone(),
             HideSets = HideSets?.Select(h => h.Clone()).ToList(), MakeReports = MakeReports, Edited = Edited?.Clone(), NoNwc = NoNwc, Skipped = Skipped, NoTestsRun = NoTestsRun,
             MakeRvt = MakeRvt, RvtFolder = RvtFolder, Resave = Resave, Rvt = Rvt?.Clone(),
+            ResaveOptions = ResaveOptions?.Clone(),
         };
     }
 
@@ -516,6 +519,10 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>«Настройки RVT» строки: свои или уровня выше (панель → «Изменить»); нигде — общие.</summary>
         public static RvtOptions RvtOptionsOf(ExportTask task, ExportSettings common) =>
             OwnerOf(task, s => s.Rvt)?.Settings.Rvt ?? common.Rvt ?? new RvtOptions();
+
+        /// <summary>«Настройки пересохранения» строки: свои или уровня выше; нигде — общие.</summary>
+        public static ResaveOptions ResaveOptionsOf(ExportTask task, ExportSettings common) =>
+            OwnerOf(task, s => s.ResaveOptions)?.Settings.ResaveOptions ?? common.Resave ?? new ResaveOptions();
 
         /// <summary>Папка отчётов строки на дату запуска (одна на весь запуск) и формат («XML», «HTML»).</summary>
         public static string ReportPath(ExportTask task, ExportSettings common, DateTime runDate, string format) =>

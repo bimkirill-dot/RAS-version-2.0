@@ -548,7 +548,7 @@
 
                 <!-- ══ RVT — для заказчика (разработчик, 08.11.2026): модели строки без связей, очищенные, в папку RVT ══ -->
                 <Border Style="{StaticResource SectionHead}">
-                    <TextBlock Style="{StaticResource SectionTitle}" Text="RVT" />
+                    <TextBlock Style="{StaticResource SectionTitle}" Text="Экспорт RVT" />
                 </Border>
                 <Grid Style="{StaticResource RowGrid}">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
@@ -580,17 +580,7 @@
                         </StackPanel>
                     </Grid>
                 </StackPanel>
-                <!-- пересохранение на место (разработчик, 08.11.2026: «уменьшить вес файла») — тот же выключатель, что в списке -->
-                <Grid Style="{StaticResource RowGrid}">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                    <TextBlock Style="{StaticResource Cap}" Text="Пересохранить RVT" />
-                    <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
-                        <CheckBox x:Name="Resave" VerticalAlignment="Center" Checked="Any_Changed" Unchecked="Any_Changed"
-                                  ToolTip="Модели строки — на то же место, сжатые и освобождённые; перед заменой — резервная копия" />
-                    </DockPanel>
-                </Grid>
-                <!-- настройки выгрузки и пересохранения — по общим или свои (то же окно, что шестерёнка → RVT; как у NWC) -->
+                <!-- настройки выгрузки RVT — по общим или свои (то же окно, что шестерёнка → «Экспорт RVT»; как у NWC) -->
                 <Grid Style="{StaticResource RowGrid}">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
                     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
@@ -601,6 +591,33 @@
                     </WrapPanel>
                     <StackPanel Style="{StaticResource Side}">
                         <Button x:Name="RvtOptionsReset" Style="{StaticResource SideLink}" Click="RvtOptionsReset_Click" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- ══ Пересохранение RVT — свой раздел (разработчик, 08.11.2026): на то же место, сжатые, освобождённые ══ -->
+                <Border Style="{StaticResource SectionHead}">
+                    <TextBlock Style="{StaticResource SectionTitle}" Text="Пересохранение RVT" />
+                </Border>
+                <!-- тот же выключатель, что в списке -->
+                <Grid Style="{StaticResource RowGrid}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <TextBlock Style="{StaticResource Cap}" Text="Пересохранить RVT" />
+                    <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
+                        <CheckBox x:Name="Resave" VerticalAlignment="Center" Checked="Any_Changed" Unchecked="Any_Changed"
+                                  ToolTip="Модели строки — на то же место, сжатые и освобождённые; перед заменой — резервная копия" />
+                    </DockPanel>
+                </Grid>
+                <Grid Style="{StaticResource RowGrid}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <TextBlock Style="{StaticResource Cap}" Text="Настройки пересохранения" />
+                    <WrapPanel Grid.Column="1" VerticalAlignment="Top">
+                        <TextBlock x:Name="ResaveOptionsFrom" VerticalAlignment="Center" Margin="0,4,10,4" />
+                        <Button Style="{StaticResource SideLink}" Content="Изменить" Click="ResaveOptionsEdit_Click" />
+                    </WrapPanel>
+                    <StackPanel Style="{StaticResource Side}">
+                        <Button x:Name="ResaveOptionsReset" Style="{StaticResource SideLink}" Click="ResaveOptionsReset_Click" />
                     </StackPanel>
                 </Grid>
             </StackPanel>

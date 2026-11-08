@@ -61,12 +61,20 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>RVT с таким именем уже лежит: перезаписать — да; нет — пропустить.</summary>
         public bool Overwrite { get; set; } = true;
 
-        // ── пересохранение на место (разработчик, 08.11.2026: «чтобы уменьшить вес файла») ──
-        /// <summary>«Сжать модель» при пересохранении.</summary>
-        public bool ResaveCompact { get; set; } = true;
-        /// <summary>«Проверить модель» (Audit) при открытии для пересохранения.</summary>
-        public bool ResaveAudit { get; set; } = true;
-        /// <summary>Папка резервных копий — прежняя модель перед заменой (одна на модель); пусто — на этом компьютере (DefaultBackupDir).</summary>
+        public RvtOptions Clone() => (RvtOptions)MemberwiseClone();
+    }
+
+    /// <summary>
+    /// «Пересохранение RVT» — свой раздел со своими настройками (разработчик, 08.11.2026: «пересохранять RVT — свой отдельный раздел»):
+    /// сжать, проверить, папка резервных копий.
+    /// </summary>
+    public sealed class ResaveOptions
+    {
+        /// <summary>«Сжать модель» при сохранении.</summary>
+        public bool Compact { get; set; } = true;
+        /// <summary>«Проверить модель» (Audit) при открытии.</summary>
+        public bool Audit { get; set; } = true;
+        /// <summary>Папка резервных копий (в ней — папка на каждый запуск); пусто — на этом компьютере (DefaultBackupDir).</summary>
         public string BackupFolder { get; set; } = "";
 
         public static string DefaultBackupDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -75,7 +83,7 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>Куда класть резервные копии: заданная папка или по умолчанию.</summary>
         public string BackupDir => string.IsNullOrWhiteSpace(BackupFolder) ? DefaultBackupDir : BackupFolder.Trim();
 
-        public RvtOptions Clone() => (RvtOptions)MemberwiseClone();
+        public ResaveOptions Clone() => (ResaveOptions)MemberwiseClone();
     }
 
     /// <summary>
@@ -102,6 +110,9 @@ namespace RASv2.ClashAnalysis.Logic
 
         /// <summary>Выгрузка RVT (шестерёнка → «Экспорт RVT», 08.11.2026).</summary>
         public RvtOptions Rvt { get; set; } = new RvtOptions();
+
+        /// <summary>Пересохранение RVT на место (шестерёнка → «Пересохранение RVT», 08.11.2026).</summary>
+        public ResaveOptions Resave { get; set; } = new ResaveOptions();
 
         // что удалить из копии модели перед выгрузкой (разработчик, 02.11.2026: «можно вынести в общие настройки»); связанное
         // в NWC и так не попадёт, импортированный DWG — попадёт
@@ -145,6 +156,7 @@ namespace RASv2.ClashAnalysis.Logic
             Nwc = s.Nwc.Clone();
             Report = (s.Report ?? ReportOptions.Defaults()).Clone();
             Rvt = (s.Rvt ?? new RvtOptions()).Clone();
+            Resave = (s.Resave ?? new ResaveOptions()).Clone();
             RemoveRevitLinks = s.RemoveRevitLinks;
             RemoveCad = s.RemoveCad;
             RemovePointClouds = s.RemovePointClouds;
@@ -162,6 +174,7 @@ namespace RASv2.ClashAnalysis.Logic
             var copy = (ExportSettings)MemberwiseClone();
             copy.Nwc = Nwc.Clone();
             copy.Rvt = (Rvt ?? new RvtOptions()).Clone();
+            copy.Resave = (Resave ?? new ResaveOptions()).Clone();
             copy.Report = Report?.Clone();
             copy.Departments = Departments.Select(d => d.Clone()).ToList();
             return copy;
