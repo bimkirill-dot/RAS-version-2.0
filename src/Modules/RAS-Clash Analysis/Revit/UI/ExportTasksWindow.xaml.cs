@@ -33,8 +33,8 @@ namespace RASv2.ClashAnalysis.UI
             /// <summary>Ширина таблицы — какие столбцы показывать.</summary>
             public void Fit(double width)
             {
-                var wide = width >= 860;
-                var time = width >= 660;
+                var wide = width >= 796;
+                var time = width >= 596;
                 if (wide == _wide && time == _time) return;
                 _wide = wide;
                 _time = time;
