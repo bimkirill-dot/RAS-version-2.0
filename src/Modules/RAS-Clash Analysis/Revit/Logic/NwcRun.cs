@@ -22,8 +22,15 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>Строки дерева, которым нужна эта NWC: по первой взяты настройки.</summary>
         public List<string> Rows { get; } = new List<string>();
         public string Skip { get; set; }
-        /// <summary>«NWC» выключен у всех строк этой NWC — не выгружается (Skip), а NWC, что уже есть, нужна NWF и «Выгружено».</summary>
+        /// <summary>
+        /// «NWC» выключен у всех строк этой NWC: NWC не выгружается (NWC, что уже есть, нужна NWF); нет и RVT — модель не открывается (Skip).
+        /// </summary>
         public bool Off { get; set; }
+        /// <summary>
+        /// RVT модели («Экспортировать RVT» у строки, 08.11.2026): тем же открытием, после NWC — связи удалить, очистить, сохранить сюда;
+        /// null — RVT не нужен.
+        /// </summary>
+        public string RvtPath { get; set; }
         /// <summary>Строка окна хода — не NWC, а NWF строки (Export\NwfStage): имя — «S1_ВК.nwf».</summary>
         public bool IsNwf { get; set; }
         public string Name { get; set; }
@@ -39,8 +46,11 @@ namespace RASv2.ClashAnalysis.Logic
     public static class NwcRunPlan
     {
         /// <param name="installed">Установлен ли Revit этой версии (для проверок); null — по Revit.exe в Program Files.</param>
-        public static List<NwcJob> Build(ExportTask start, ExportSettings common, int revitYear, List<string> notes, Func<int, bool> installed = null)
+        /// <param name="runDate">Время запуска — {Дата} в папке RVT; null — сейчас.</param>
+        public static List<NwcJob> Build(ExportTask start, ExportSettings common, int revitYear, List<string> notes, Func<int, bool> installed = null,
+            DateTime? runDate = null)
         {
+            var when = runDate ?? DateTime.Now;
             var jobs = new List<NwcJob>();
             var byPath = new Dictionary<string, NwcJob>(StringComparer.OrdinalIgnoreCase);
             // снятые галочкой подзадачи (07.11.2026) — не делаются; их модели не выгружает и строка выше (модели подзадач у неё — копией)
@@ -64,11 +74,18 @@ namespace RASv2.ClashAnalysis.Logic
                     {
                         Model = model, Export = export, View = ExportNodes.ViewOf(row, common), Edited = ExportNodes.EditedOf(row),
                         NwcPath = ExportNodes.NwcPath(row, model, common),
+                        RvtPath = row.Settings.MakeRvt ? ExportNodes.RvtPath(row, model, common, when) : null,
                     };
                     if (byPath.TryGetValue(job.NwcPath, out var same))
                     {
                         same.Rows.Add(row.Name);
                         if (!row.Settings.NoNwc) same.Off = false;
+                        if (job.RvtPath != null)
+                        {
+                            if (same.RvtPath == null) same.RvtPath = job.RvtPath;
+                            else if (!string.Equals(same.RvtPath, job.RvtPath, StringComparison.OrdinalIgnoreCase))
+                                notes.Add($"RVT «{job.ModelName}»: у строк «{same.Rows[0]}» и «{row.Name}» разные папки RVT — сохраняется в «{same.RvtPath}».");
+                        }
                         if (!string.Equals(same.Model.Path, model.Path, StringComparison.OrdinalIgnoreCase))
                             notes.Add($"Одна NWC «{ExportNodes.FileName(job.NwcPath)}» — у двух моделей: «{same.Model.Path}» и «{model.Path}» (строка «{row.Name}»). Выгружается первая — проверьте имена NWC.");
                         else if (Signature(same) != Signature(job))
@@ -79,13 +96,17 @@ namespace RASv2.ClashAnalysis.Logic
                         notes.Add($"Модель «{job.ModelName}» есть у «{row.Name}», но ни у одной подзадачи — выгружается по настройкам «{row.Name}».");
                     job.Rows.Add(row.Name);
                     job.Off = row.Settings.NoNwc;
-                    job.Skip = SkipReason(model, revitYear, installed) ??
-                               (IsRooted(job.NwcPath) ? null : $"не задана папка: ни «Папки задачи», ни полного пути в «Папке для NWC» у «{row.Name}»");
+                    job.Skip = SkipReason(model, revitYear, installed);
                     byPath[job.NwcPath] = job;
                     jobs.Add(job);
                 }
             }
-            foreach (var j in jobs.Where(j => j.Off && j.Skip == null)) j.Skip = "выгрузка NWC выключена (галочка «NWC»)";
+            // папки и выключатели — после слияния строк: NWC нужна хоть одной строке, RVT — хоть одной
+            foreach (var j in jobs.Where(j => j.Skip == null))
+                j.Skip = j.Off && j.RvtPath == null ? "выгрузка NWC выключена (галочка «NWC»)"
+                    : !j.Off && !IsRooted(j.NwcPath) ? $"не задана папка: ни «Папки задачи», ни полного пути в «Папке для NWC» у «{j.Rows[0]}»"
+                    : j.RvtPath != null && !IsRooted(j.RvtPath) ? $"не задана папка: ни «Папки задачи», ни полного пути в «Папке для RVT» у «{j.Rows[0]}»"
+                    : null;
             foreach (var g in jobs.GroupBy(j => j.Model.Path, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
                 notes.Add($"Модель «{ExportNames.BareName(g.Key)}» выгружается {g.Count()} раза — в разные папки: " +
                           string.Join(", ", g.Select(j => j.NwcPath)) + ". Модель откроется столько же раз.");

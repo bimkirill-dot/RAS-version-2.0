@@ -51,12 +51,21 @@ namespace RASv2.ClashAnalysis.Export
                 return null;
             }
             var notes = new List<string>();
-            var jobs = NwcRunPlan.Build(task, common, year, notes);
+            var started = DateTime.Now;
+            var jobs = NwcRunPlan.Build(task, common, year, notes, null, started);
             // NWF строк с галочкой «Формировать NWF» — после NWC (DECISIONS.md модуля, «Этап 2 — сборка NWF»)
             var nwfPlans = NwfRunPlan.Build(task, common);
             if (only != null)
             {
-                jobs = jobs.Where(j => only.Contains(j.NwcPath)).ToList();
+                // повтор: NWC — только если её путь в списке, RVT — так же (повтор RVT не выгружает NWC заново)
+                var rvtNames = new HashSet<string>(only.Where(o => RunStates.KindOf(o) == "RVT").Select(ExportNodes.FileName), StringComparer.OrdinalIgnoreCase);
+                foreach (var j in jobs)
+                {
+                    if (!only.Contains(j.NwcPath) && !j.Off) j.Off = true;
+                    // RVT — и по имени файла: в папке RVT может быть {Дата} — у повтора она своя
+                    if (j.RvtPath != null && !only.Contains(j.RvtPath) && !rvtNames.Contains(ExportNodes.FileName(j.RvtPath))) j.RvtPath = null;
+                }
+                jobs = jobs.Where(j => !j.Off || j.RvtPath != null).ToList();
                 nwfPlans = nwfPlans.Where(n => only.Contains(n.NwfPath) || n.Nwcs.Any(only.Contains)).ToList();
             }
             AskTests(owner, task, nwfPlans);
@@ -104,12 +113,14 @@ namespace RASv2.ClashAnalysis.Export
                     foreach (var p in g)
                         p.Job.Skip = $"модель Revit {g.Key} — на этом компьютере нет Revit {g.Key}";
                 others = others.Where(g => File.Exists(NwcRemote.RevitExe(g.Key))).ToList();
-                // своих моделей нет — экспортёр этого Revit не нужен (Revit 2026 со сломанным экспортёром отдаёт модели 2023 Revit 2023)
-                if (local.Count > 0 && !OptionalFunctionalityUtils.IsNavisworksExporterAvailable())
+                // своих моделей нет — экспортёр этого Revit не нужен (Revit 2026 со сломанным экспортёром отдаёт модели 2023 Revit 2023);
+                // только RVT — экспортёр не нужен (08.11.2026)
+                var needNwc = local.Where(p => !p.Job.Off).ToList();
+                if (needNwc.Count > 0 && !OptionalFunctionalityUtils.IsNavisworksExporterAvailable())
                 {
-                    foreach (var p in local) p.Job.Skip = $"в этом Revit {year} нет модуля экспорта Navisworks (NWC) — установите «Navisworks NWC Export Utility» для Revit {year}";
-                    journal.Error($"в Revit {year} нет модуля экспорта Navisworks (NWC): {local.Count} {ExportTask.ModelsWord(local.Count)} не выгружаются");
-                    local.Clear();
+                    foreach (var p in needNwc) p.Job.Skip = $"в этом Revit {year} нет модуля экспорта Navisworks (NWC) — установите «Navisworks NWC Export Utility» для Revit {year}";
+                    journal.Error($"в Revit {year} нет модуля экспорта Navisworks (NWC): {needNwc.Count} {ExportTask.ModelsWord(needNwc.Count)} не выгружаются");
+                    local = local.Except(needNwc).ToList();
                 }
                 // шапка — после раскладки: пропуски «нет Revit …», «нет модуля экспорта» — уже в плане
                 exporter.Header(runTitle, common, jobs, notes);

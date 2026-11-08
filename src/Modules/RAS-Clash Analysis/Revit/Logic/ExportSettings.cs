@@ -47,6 +47,24 @@ namespace RASv2.ClashAnalysis.Logic
     }
 
     /// <summary>
+    /// «Экспорт RVT» — общие настройки (шестерёнка, разработчик, 08.11.2026): проверка при открытии, рабочие наборы, имя RVT, что
+    /// делать с уже лежащим RVT.
+    /// </summary>
+    public sealed class RvtOptions
+    {
+        /// <summary>Проверка (Audit) при открытии модели: Revit исправляет ошибки; открытие дольше. По умолчанию — нет.</summary>
+        public bool Audit { get; set; }
+        /// <summary>Рабочие наборы: оставить (новый центральный файл, все освобождены) — да; нет — обычный файл без рабочих наборов.</summary>
+        public bool KeepWorksets { get; set; } = true;
+        /// <summary>Имя RVT: обрезать всё после этой части имени модели (как у NWC); пусто — имя модели.</summary>
+        public string TrimAfter { get; set; } = "";
+        /// <summary>RVT с таким именем уже лежит: перезаписать — да; нет — пропустить.</summary>
+        public bool Overwrite { get; set; } = true;
+
+        public RvtOptions Clone() => (RvtOptions)MemberwiseClone();
+    }
+
+    /// <summary>
     /// Отдел: код в имени модели («KJ» — в «…_KJ01_…») — для {Отдел}. Эталона и шаблона вида больше нет (разработчик, 03.11.2026:
     /// «лабуду с rvt / rte убираем — просто проверяем свой вид Navisworks перед выгрузкой»); в прежних файлах эти поля не читаются.
     /// </summary>
@@ -67,6 +85,9 @@ namespace RASv2.ClashAnalysis.Logic
 
         /// <summary>Настройки отчётов Clash Detective (шестерёнка → «Настройки отчётов», 08.11.2026).</summary>
         public ReportOptions Report { get; set; } = ReportOptions.Defaults();
+
+        /// <summary>Выгрузка RVT (шестерёнка → «Экспорт RVT», 08.11.2026).</summary>
+        public RvtOptions Rvt { get; set; } = new RvtOptions();
 
         // что удалить из копии модели перед выгрузкой (разработчик, 02.11.2026: «можно вынести в общие настройки»); связанное
         // в NWC и так не попадёт, импортированный DWG — попадёт
@@ -109,6 +130,7 @@ namespace RASv2.ClashAnalysis.Logic
         {
             Nwc = s.Nwc.Clone();
             Report = (s.Report ?? ReportOptions.Defaults()).Clone();
+            Rvt = (s.Rvt ?? new RvtOptions()).Clone();
             RemoveRevitLinks = s.RemoveRevitLinks;
             RemoveCad = s.RemoveCad;
             RemovePointClouds = s.RemovePointClouds;
@@ -125,6 +147,8 @@ namespace RASv2.ClashAnalysis.Logic
         {
             var copy = (ExportSettings)MemberwiseClone();
             copy.Nwc = Nwc.Clone();
+            copy.Rvt = (Rvt ?? new RvtOptions()).Clone();
+            copy.Report = Report?.Clone();
             copy.Departments = Departments.Select(d => d.Clone()).ToList();
             return copy;
         }

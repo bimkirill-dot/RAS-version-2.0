@@ -93,7 +93,7 @@ namespace RASv2.ClashAnalysis.UI
         private readonly ObservableCollection<FileRow> _tests = new ObservableCollection<FileRow>();
         private readonly ObservableCollection<HideSet> _hide = new ObservableCollection<HideSet>();
         private readonly List<ExportTask> _imported = new List<ExportTask>();
-        private readonly InheritField _folder, _nwc, _nwf, _report, _view;
+        private readonly InheritField _folder, _nwc, _nwf, _report, _view, _rvt;
         private readonly bool _hasView;
         private readonly bool _ready;
         private readonly string _opened;
@@ -150,6 +150,9 @@ namespace RASv2.ClashAnalysis.UI
             MakeNwf.IsEnabled = task.Children.Count == 0;
             RunTests.IsChecked = !s.NoTestsRun;
             MakeReports.IsChecked = s.MakeReports && task.Children.Count == 0;
+            // «Экспортировать NWC» и «Экспортировать RVT» — те же выключатели, что в списке задач (08.11.2026)
+            MakeNwc.IsChecked = !s.NoNwc;
+            MakeRvt.IsChecked = s.MakeRvt;
             NwfName.Text = s.NwfName ?? "";
             _folder = Field(Folder, FolderFrom, FolderLink, x => x.Folder, ExportNodes.FolderOf, false, FolderBrowse);
             // папки NWC, NWF, отчётов — полным путём (разработчик, 07–08.11.2026: «пишем полный путь к папкам; в полях — тоже полный»):
@@ -157,6 +160,7 @@ namespace RASv2.ClashAnalysis.UI
             _nwc = Field(NwcFolder, NwcFrom, NwcLink, x => x.NwcFolder, ExportNodes.NwcFolderOf, true, NwcBrowse, NwcChips);
             _nwf = Field(NwfFolder, NwfFrom, NwfLink, x => x.NwfFolder, ExportNodes.NwfFolderOf, true, NwfBrowse);
             _report = Field(ReportFolder, ReportFrom, ReportLink, x => x.ReportFolder, ExportNodes.ReportFolderOf, true, ReportBrowse, ReportChips);
+            _rvt = Field(RvtFolder, RvtFrom, RvtLink, x => x.RvtFolder, ExportNodes.RvtFolderOf, true, RvtBrowse, RvtChips);
             // вид — нигде не задан — «по общим настройкам» (разработчик, 02.11.2026), и у задачи верхнего уровня тоже
             var viewOwner = _parent == null ? null : ExportNodes.OwnerOf(_parent, x => x.ViewName);
             _view = new InheritField(ViewName, ViewFrom, ViewLink, null, s.ViewName,
@@ -220,7 +224,8 @@ namespace RASv2.ClashAnalysis.UI
             string.Join(";", _models.Select(m => m.Path + ">" + m.Model.NwcName + ">" + m.Model.Block)), _testsOwn,
             string.Join(";", _tests.Select(r => r.Path)), _hideOwn, string.Join(";", _hide.Select(h => h.Xml)), _formatsOwn, string.Join(";", Checked()), _export == null, _exportEdits, _editedOwn, EditedOn.IsChecked, EditedMode.SelectedIndex,
             EditedDate1.Text, EditedDate2.Text,
-            MakeNwf.IsChecked, RunTests.IsChecked, MakeReports.IsChecked, NwfName.Text, Own(_folder), Own(_nwc), Own(_nwf), Own(_report), Own(_view), _imported.Count);
+            MakeNwf.IsChecked, RunTests.IsChecked, MakeReports.IsChecked, NwfName.Text, Own(_folder), Own(_nwc), Own(_nwf), Own(_report), Own(_view), _imported.Count,
+            MakeNwc.IsChecked, MakeRvt.IsChecked, Own(_rvt));
 
         private static string Own(InheritField f) => f.Value ?? "\u0001";
 
@@ -706,6 +711,10 @@ namespace RASv2.ClashAnalysis.UI
             NwfFields.Opacity = nwfOn ? 1 : 0.45;
             ReportFields.IsEnabled = reportsOn;
             ReportFields.Opacity = reportsOn ? 1 : 0.45;
+            // RVT — как NWC, у любой строки; у строки с подзадачами папка задаётся и для них
+            var rvtOn = !leaf || MakeRvt.IsChecked == true;
+            RvtFields.IsEnabled = rvtOn;
+            RvtFields.Opacity = rvtOn ? 1 : 0.45;
             // {Блок} — общий блок моделей строки; разные — для примера первый из них (сохранить с {Блок} не даст проверка)
             var blocks = models.Select(m => ExportNodes.BlockOf(m, _common)).Where(b => b.Length > 0)
                 .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -768,8 +777,10 @@ namespace RASv2.ClashAnalysis.UI
             NwfName = NwfName.Text.Trim().Length > 0 ? NwfName.Text.Trim() : null,
             MakeNwf = MakeNwf.IsChecked == true,
             NoTestsRun = RunTests.IsChecked != true,
-            // выключатель «NWC» — только в списке задач: панель его не меняет
-            NoNwc = _task.Settings.NoNwc,
+            // выключатели «NWC» и «RVT» — и в списке задач, и здесь (08.11.2026)
+            NoNwc = MakeNwc.IsChecked != true,
+            MakeRvt = MakeRvt.IsChecked == true,
+            RvtFolder = _rvt.Value,
             Skipped = _task.Settings.Skipped,
             Folder = _folder.Value,
             NwcFolder = _nwc.Value,
@@ -953,7 +964,8 @@ namespace RASv2.ClashAnalysis.UI
                    ?? (MakeNwf.IsChecked == true ? ExportNodes.CheckNwfName(NwfNameText()) : null)
                    ?? (_nwc.Own ? ExportNodes.CheckNwcFolder(NwcFolder.Text) : null)
                    ?? (_nwf.Own ? ExportNodes.CheckNwfFolder(NwfFolder.Text) : null)
-                   ?? (_report.Own ? ExportNodes.CheckReportFolder(ReportFolder.Text) : null);
+                   ?? (_report.Own ? ExportNodes.CheckReportFolder(ReportFolder.Text) : null)
+                   ?? (_rvt.Own ? ExportNodes.CheckRvtFolder(RvtFolder.Text) : null);
         }
 
         /// <summary>Названия проверок файла (.xml Clash Detective) — тем же чтением, что на сайте («Категории проверок»).</summary>

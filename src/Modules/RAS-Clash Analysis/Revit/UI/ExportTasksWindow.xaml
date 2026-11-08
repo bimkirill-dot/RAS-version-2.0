@@ -132,6 +132,7 @@
                         <ColumnDefinition Width="94" />
                         <ColumnDefinition Width="76" />
                         <ColumnDefinition Width="64" />
+                        <ColumnDefinition Width="76" />
                         <ColumnDefinition Width="104" />
                         <ColumnDefinition Width="{Binding Time}" />
                     </Grid.ColumnDefinitions>
@@ -140,8 +141,9 @@
                     <TextBlock Grid.Column="2" Style="{StaticResource ColHead}" Text="NWC" ToolTip="Выгружать NWC; рядом — как прошла в последний раз" />
                     <TextBlock Grid.Column="3" Style="{StaticResource ColHead}" Text="NWF" ToolTip="Формировать NWF; рядом — как прошла в последний раз" />
                     <TextBlock Grid.Column="4" Style="{StaticResource ColHead}" Text="Отчёты" ToolTip="Формировать отчёты" />
-                    <TextBlock Grid.Column="5" Style="{StaticResource ColHead}" Text="Запуск" ToolTip="Когда строку запускали последний раз" />
-                    <TextBlock Grid.Column="6" Style="{StaticResource ColHead}" Text="Время" Visibility="{Binding TimeVisibility}"
+                    <TextBlock Grid.Column="5" Style="{StaticResource ColHead}" Text="RVT" ToolTip="Экспортировать RVT для заказчика; рядом — как прошёл в последний раз" />
+                    <TextBlock Grid.Column="6" Style="{StaticResource ColHead}" Text="Запуск" ToolTip="Когда строку запускали последний раз" />
+                    <TextBlock Grid.Column="7" Style="{StaticResource ColHead}" Text="Время" Visibility="{Binding TimeVisibility}"
                                ToolTip="Сколько займёт — по прошлым выгрузкам" />
                 </Grid>
             </Border>
@@ -164,6 +166,7 @@
                                         <ColumnDefinition Width="94" />
                                         <ColumnDefinition Width="76" />
                                         <ColumnDefinition Width="64" />
+                                        <ColumnDefinition Width="76" />
                                         <ColumnDefinition Width="104" />
                                         <ColumnDefinition Width="{Binding Layout.Time}" />
                                     </Grid.ColumnDefinitions>
@@ -223,16 +226,30 @@
                                     </StackPanel>
                                     <CheckBox Grid.Column="4" HorizontalAlignment="Left" Tag="Reports" IsChecked="{Binding Columns.ReportsState, Mode=OneWay}"
                                               IsEnabled="{Binding Columns.ReportsEnabled}" Click="Flag_Click" ToolTip="Формировать отчёты" />
-                                    <TextBlock Grid.Column="5" Style="{StaticResource Cell}" Text="{Binding RunAt}" ToolTip="{Binding RunAtTip}" />
-                                    <TextBlock Grid.Column="6" Style="{StaticResource Cell}" Text="{Binding TimeText}" Foreground="{DynamicResource Muted}"
+                                    <!-- RVT для заказчика (08.11.2026): выключатель и итог, как у NWF -->
+                                    <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <CheckBox Tag="Rvt" IsChecked="{Binding Columns.RvtState, Mode=OneWay}" Click="Flag_Click"
+                                                  ToolTip="Экспортировать RVT" />
+                                        <Button Style="{StaticResource CellButton}" Margin="6,0,0,0" Click="Status_Click" ToolTip="{Binding RvtStatusTip}"
+                                                ToolTipService.ShowDuration="60000">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Style="{StaticResource Mark}" Text="&#xE930;" Foreground="{StaticResource MarkOk}" Visibility="{Binding RvtOkVisibility}" />
+                                                <TextBlock Style="{StaticResource Mark}" Text="&#xE7BA;" Foreground="{DynamicResource Error}" Visibility="{Binding RvtErrorVisibility}" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Style="{StaticResource RowIcon}" Tag="RVT" Content="&#xE72C;" Width="22" FontSize="12" Margin="0"
+                                                Click="Retry_Click" Visibility="{Binding RvtRetryVisibility}" ToolTip="Повторить только RVT с ошибками" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="6" Style="{StaticResource Cell}" Text="{Binding RunAt}" ToolTip="{Binding RunAtTip}" />
+                                    <TextBlock Grid.Column="7" Style="{StaticResource Cell}" Text="{Binding TimeText}" Foreground="{DynamicResource Muted}"
                                                ToolTip="{Binding TimeTip}" Visibility="{Binding Layout.TimeVisibility}" />
                                     <!-- фон — как у строки под мышью и выбранной: кнопки видны только у них -->
-                                    <StackPanel Grid.ColumnSpan="7" HorizontalAlignment="Right" Orientation="Horizontal" VerticalAlignment="Center"
+                                    <StackPanel Grid.ColumnSpan="8" HorizontalAlignment="Right" Orientation="Horizontal" VerticalAlignment="Center"
                                                 Style="{StaticResource RowActions}" Background="{DynamicResource Hover}">
                                         <Button Style="{StaticResource RowIcon}" Content="&#xE768;" Click="Run_Click" ToolTip="Выгрузить NWC и собрать NWF" />
                                         <!-- повторить все ошибки прошлого запуска — NWC и NWF одним запуском (08.11.2026) -->
                                         <Button Style="{StaticResource RowIcon}" Tag="Все" Content="&#xE72C;" FontSize="12" Click="Retry_Click"
-                                                Visibility="{Binding RetryAllVisibility}" ToolTip="Повторить все ошибки — NWC и NWF" />
+                                                Visibility="{Binding RetryAllVisibility}" ToolTip="Повторить все ошибки — NWC, NWF и RVT" />
                                         <Button Style="{StaticResource RowIcon}" Content="&#xE710;" Click="AddSub_Click" ToolTip="Новая подзадача" />
                                         <!-- копия строки с подзадачами (вторая критичность — копия первой; задача — тоже, 07.11.2026) -->
                                         <Button Style="{StaticResource RowIcon}" Content="&#xE8C8;" Click="Copy_Click" ToolTip="Копия" />

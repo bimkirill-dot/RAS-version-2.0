@@ -207,6 +207,7 @@ namespace RASv2.ClashAnalysis.UI
             var kinds = tag != "Все" ? new[] { tag } : new[]
             {
                 row.NwcRetryVisibility == Visibility.Visible ? "NWC" : null, row.NwfRetryVisibility == Visibility.Visible ? "NWF" : null,
+                row.RvtRetryVisibility == Visibility.Visible ? "RVT" : null,
             };
             var errors = row.LastRun?.Errors.Where(x => kinds.Contains(RunStates.KindOf(x.Path))).ToList();
             if (errors == null || errors.Count == 0) return;
@@ -264,16 +265,21 @@ namespace RASv2.ClashAnalysis.UI
             Refresh();
         }
 
-        /// <summary>Что пойдёт в запуск — по строкам ветки: у каждой её NWC и NWF; строка запуска — с начала.</summary>
+        /// <summary>Что пойдёт в запуск — по строкам ветки: у каждой её NWC, NWF и RVT; строка запуска — с начала.</summary>
         private void StartLive(RunRequest request, List<NwcProgress> items)
         {
             _runItems = items;
             _live.Clear();
             var inRun = new HashSet<string>(items.Select(p => p.Job.NwcPath), StringComparer.OrdinalIgnoreCase);
+            // RVT строки — по её модели (NWC тот же путь; {Дата} в папке RVT — время запуска, заново не вычислить)
+            var rvtOf = items.Where(p => p.Job.RvtPath != null).ToDictionary(p => p.Job.NwcPath, p => p.Job.RvtPath, StringComparer.OrdinalIgnoreCase);
             foreach (var row in request.Task.Self())
             {
                 var paths = new HashSet<string>(RowPaths(row).Where(inRun.Contains), StringComparer.OrdinalIgnoreCase);
                 if (row == request.Task) paths.UnionWith(inRun);
+                if (row.Settings.MakeRvt || row == request.Task)
+                    foreach (var n in paths.ToList())
+                        if (rvtOf.TryGetValue(n, out var rvt)) paths.Add(rvt);
                 if (paths.Count == 0) continue;
                 _live[row] = new RowLive { Paths = paths, Start = row == request.Task ? DateTime.Now : (DateTime?)null };
             }
@@ -288,9 +294,15 @@ namespace RASv2.ClashAnalysis.UI
         {
             var itemTimes = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
             foreach (var p in outcome.Items.Where(p => p.Time > TimeSpan.Zero)) itemTimes[p.Job.NwcPath] = p.Time.TotalSeconds;
+            ItemResult Result(NwcState s) => s == NwcState.Done ? ItemResult.Done : s == NwcState.Failed ? ItemResult.Failed : ItemResult.Skipped;
+            // модель — NWC и RVT по отдельности (одно открытие, две функции; 08.11.2026): NWC выключена — пропуск
             var results = outcome.Items.Select(p => (p.Job.NwcPath, p.Job.ModelName,
-                p.State == NwcState.Done ? ItemResult.Done : p.State == NwcState.Failed ? ItemResult.Failed : ItemResult.Skipped,
-                p.Note ?? p.Job.Skip)).ToList();
+                p.Job.Off && !p.Job.IsNwf ? ItemResult.Skipped : Result(p.Nwc ?? p.State),
+                p.Job.Off && !p.Job.IsNwf ? p.Job.Skip ?? "выгрузка NWC выключена (галочка «NWC»)" : p.NwcNote ?? p.Note ?? p.Job.Skip)).ToList();
+            results.AddRange(outcome.Items.Where(p => p.Job.RvtPath != null).Select(p => (p.Job.RvtPath, p.Job.ModelName,
+                Result(p.Rvt ?? p.State), p.RvtNote ?? p.Note ?? p.Job.Skip)));
+            // повтор ошибок: NWC, которую не повторяли (повтор только RVT), — не в итог
+            if (request.Only != null) results.RemoveAll(r => RunStates.KindOf(r.Item1) == "NWC" && !request.Only.Contains(r.Item1));
             var now = DateTime.Now;
             var records = new List<RowRun>();
             foreach (var pair in _live)

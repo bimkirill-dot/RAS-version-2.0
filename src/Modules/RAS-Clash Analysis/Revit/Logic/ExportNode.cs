@@ -94,6 +94,13 @@ namespace RASv2.ClashAnalysis.Logic
         /// — вручную (разработчик, 08.11.2026). Своё у строки, не наследуется; по умолчанию выполнять — поэтому «не».
         /// </summary>
         [DataMember(Order = 21, EmitDefaultValue = false)] public bool NoTestsRun { get; set; }
+        /// <summary>
+        /// «Экспортировать RVT» — модели строки отдельными RVT для заказчика (разработчик, 08.11.2026): связи удалить, очистить от
+        /// неиспользуемого три раза, сохранить в «Папку для RVT», рабочие наборы — по общим настройкам. Своё у строки, не наследуется.
+        /// </summary>
+        [DataMember(Order = 22, EmitDefaultValue = false)] public bool MakeRvt { get; set; }
+        /// <summary>Папка для RVT — метки {Блок}, {Отдел}, {Дата}; по умолчанию пусто — папка задачи (разработчик, 08.11.2026).</summary>
+        [DataMember(Order = 23, EmitDefaultValue = false)] public string RvtFolder { get; set; }
 
         /// <summary>Задача верхнего уровня: всё своё, по умолчанию — регламент 15.10 (вида нет — из общих настроек).</summary>
         /// <summary>
@@ -103,7 +110,7 @@ namespace RASv2.ClashAnalysis.Logic
         public static NodeSettings Top() => new NodeSettings
         {
             Models = new List<ExportModel>(), TestsFiles = new List<string>(), HideSets = new List<HideSet>(), Folder = "", NwcFolder = "",
-            NwfFolder = "", ReportFolder = "", ReportFormats = new List<string> { "XML", "HTML" },
+            NwfFolder = "", ReportFolder = "", RvtFolder = "", ReportFormats = new List<string> { "XML", "HTML" },
         };
 
         public NodeSettings Clone() => new NodeSettings
@@ -113,6 +120,7 @@ namespace RASv2.ClashAnalysis.Logic
             NwfFolder = NwfFolder, ReportFolder = ReportFolder, Xml = Xml, Html = Html, ViewName = ViewName, MakeNwf = MakeNwf,
             HideNames = HideNames?.ToList(), ReportFormats = ReportFormats?.ToList(), Export = Export?.Clone(),
             HideSets = HideSets?.Select(h => h.Clone()).ToList(), MakeReports = MakeReports, Edited = Edited?.Clone(), NoNwc = NoNwc, Skipped = Skipped, NoTestsRun = NoTestsRun,
+            MakeRvt = MakeRvt, RvtFolder = RvtFolder,
         };
     }
 
@@ -218,12 +226,13 @@ namespace RASv2.ClashAnalysis.Logic
         public bool? NwcState { get; set; }
         public bool? NwfState { get; set; }
         public bool? ReportsState { get; set; }
+        public bool? RvtState { get; set; }
         /// <summary>Отчёты — у строк без подзадач (и без «NWF» — по готовой NWF); ни одной — галочка серая.</summary>
         public bool ReportsEnabled { get; set; }
     }
 
     /// <summary>Выключатели списка задач (разработчик, 07.11.2026: «выключатель должен быть у всего»).</summary>
-    public enum RowFlag { Nwc, Nwf, Reports }
+    public enum RowFlag { Nwc, Nwf, Reports, Rvt }
 
     /// <summary>Настройка строки по дереву, блоки, где что лежит, строки окна, проверки окна настроек.</summary>
     public static class ExportNodes
@@ -235,6 +244,7 @@ namespace RASv2.ClashAnalysis.Logic
         public static readonly string[] NwfFolderLabels = new string[0];
         public static readonly string[] NwfNameLabels = new string[0];
         public static readonly string[] ReportFolderLabels = { "Дата", "Формат" };
+        public static readonly string[] RvtFolderLabels = { "Блок", "Отдел", "Дата" };
 
         // верхняя задача без значения (файл от прежней версии) — по умолчанию
         private static readonly NodeSettings Defaults = NodeSettings.Top();
@@ -281,6 +291,7 @@ namespace RASv2.ClashAnalysis.Logic
         public static string NwcFolderOf(ExportTask task) => Get(task, s => s.NwcFolder);
         public static string NwfFolderOf(ExportTask task) => Get(task, s => s.NwfFolder);
         public static string ReportFolderOf(ExportTask task) => Get(task, s => s.ReportFolder);
+        public static string RvtFolderOf(ExportTask task) => Get(task, s => s.RvtFolder) ?? "";
         public static string StartServerFolder(ExportTask task) => Get(task, s => s.ServerFolder) ?? "";
         public static List<string> FormatsOf(ExportTask task) => Get(task, s => s.ReportFormats);
 
@@ -363,6 +374,7 @@ namespace RASv2.ClashAnalysis.Logic
                 NwfState = FlagState(task, RowFlag.Nwf),
                 ReportsState = FlagState(task, RowFlag.Reports),
                 ReportsEnabled = FlagRows(task, RowFlag.Reports).Any(),
+                RvtState = FlagState(task, RowFlag.Rvt),
             };
         }
 
@@ -370,18 +382,20 @@ namespace RASv2.ClashAnalysis.Logic
 
         /// <summary>
         /// К каким строкам относится выключатель: NWC — строка и все ниже (у строки с подзадачами — её модели, которых нет ниже);
-        /// NWF и отчёты — строки без подзадач (каждая галочка — и по отдельности, 08.11.2026).
+        /// NWF и отчёты — строки без подзадач (каждая галочка — и по отдельности, 08.11.2026); RVT — как NWC (08.11.2026).
         /// </summary>
         private static IEnumerable<ExportTask> FlagRows(ExportTask task, RowFlag flag) =>
-            flag == RowFlag.Nwc ? task.Self() : task.Self().Where(t => t.Children.Count == 0);
+            flag == RowFlag.Nwc || flag == RowFlag.Rvt ? task.Self() : task.Self().Where(t => t.Children.Count == 0);
 
         private static bool FlagOf(ExportTask t, RowFlag flag) =>
-            flag == RowFlag.Nwc ? !t.Settings.NoNwc : flag == RowFlag.Nwf ? t.Settings.MakeNwf : t.Settings.MakeReports;
+            flag == RowFlag.Nwc ? !t.Settings.NoNwc : flag == RowFlag.Nwf ? t.Settings.MakeNwf
+            : flag == RowFlag.Rvt ? t.Settings.MakeRvt : t.Settings.MakeReports;
 
         private static void SetFlagOf(ExportTask t, RowFlag flag, bool on)
         {
             if (flag == RowFlag.Nwc) t.Settings.NoNwc = !on;
             else if (flag == RowFlag.Nwf) t.Settings.MakeNwf = on;
+            else if (flag == RowFlag.Rvt) t.Settings.MakeRvt = on;
             else t.Settings.MakeReports = on;
         }
 
@@ -474,6 +488,18 @@ namespace RASv2.ClashAnalysis.Logic
             var labels = Labels("", null, common, DateTime.Today);
             return InProject(FolderOf(task), ExportNames.Fill(NwfFolderOf(task), labels)) + "\\" + ExportNames.Fill(NwfNameOf(task), labels).Trim() + ".nwf";
         }
+
+        /// <summary>
+        /// RVT модели строки (выгрузка RVT, 08.11.2026): папка — «Папка для RVT» по дереву с метками {Блок}, {Отдел}, {Дата} (время
+        /// запуска), пусто — папка задачи; имя — из имени модели по правилу общих настроек («обрезать всё после …», пусто — как есть).
+        /// </summary>
+        public static string RvtPath(ExportTask task, ExportModel model, ExportSettings common, DateTime runDate) =>
+            InProject(FolderOf(task), ExportNames.Fill(RvtFolderOf(task), Labels(BlockOf(model, common), model, common, runDate))) + "\\" +
+            RvtNameOf(model, common) + ".rvt";
+
+        /// <summary>Имя RVT модели: из имени модели по правилу «Экспорта RVT» (своё «обрезать всё после …»; пусто — имя модели).</summary>
+        public static string RvtNameOf(ExportModel model, ExportSettings common) =>
+            ExportNames.NwcName(model.Path, (common.Rvt ?? new RvtOptions()).TrimAfter, out _);
 
         /// <summary>Папка отчётов строки на дату запуска (одна на весь запуск) и формат («XML», «HTML»).</summary>
         public static string ReportPath(ExportTask task, ExportSettings common, DateTime runDate, string format) =>
@@ -578,6 +604,10 @@ namespace RASv2.ClashAnalysis.Logic
             }
             return null;
         }
+
+        /// <summary>Папка для RVT: {Блок}, {Отдел}, {Дата}; null — всё верно.</summary>
+        public static string CheckRvtFolder(string folder) =>
+            CheckLabels(folder, "Папка для RVT", RvtFolderLabels, "в папке RVT — только {Блок}, {Отдел} и {Дата}");
 
         /// <summary>Папка для отчётов: только {Дата}, {Формат}; null — всё верно.</summary>
         public static string CheckReportFolder(string folder) =>

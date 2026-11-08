@@ -240,7 +240,7 @@ namespace RASv2.ClashAnalysis.Logic
                 run.Done += previous.Done;
                 run.Seconds = previous.Seconds;
                 // функции, которые не повторяли, — как были; повторённые — сделанное прежде и теперь, ошибки — какие остались
-                foreach (var kind in new[] { "NWC", "NWF" })
+                foreach (var kind in new[] { "NWC", "NWF", "RVT" })
                 {
                     var before = StepOf(previous, kind);
                     var now = run.Steps.FirstOrDefault(x => x.Kind == kind);
@@ -258,8 +258,10 @@ namespace RASv2.ClashAnalysis.Logic
             return run;
         }
 
-        /// <summary>Функция по файлу: NWF — «.nwf», остальное — NWC.</summary>
-        public static string KindOf(string path) => (path ?? "").EndsWith(".nwf", StringComparison.OrdinalIgnoreCase) ? "NWF" : "NWC";
+        /// <summary>Функция по файлу: NWF — «.nwf», RVT — «.rvt» (08.11.2026), остальное — NWC.</summary>
+        public static string KindOf(string path) =>
+            (path ?? "").EndsWith(".nwf", StringComparison.OrdinalIgnoreCase) ? "NWF"
+            : (path ?? "").EndsWith(".rvt", StringComparison.OrdinalIgnoreCase) ? "RVT" : "NWC";
 
         /// <summary>Итог функции в запуске; запуск до 07.11.2026 (без Steps) — по ошибкам и числу выгруженных (тогда — NWC).</summary>
         public static StepRun StepOf(RowRun run, string kind)

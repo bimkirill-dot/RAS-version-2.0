@@ -863,6 +863,74 @@ namespace RASv2.Tests
                 Check(NwcRunPlan.ExportedText(new List<(string, DateTime?)> { (@"\\s\a.nwc", null) }, out _) == "—", "нет ни одной");
                 Check(NwcRunPlan.ExportedText(new List<(string, DateTime?)>(), out tip) == "—" && tip == null, "NWC у строки нет");
             });
+            yield return Case("RVT (08.11.2026): тем же открытием, что NWC; папка с {Дата}; только RVT; имя; выключатель; итог функции", () =>
+            {
+                var roots = Sample(out var high, out var mid);
+                var when = new DateTime(2026, 11, 8, 18, 5, 0);
+                var notes = new List<string>();
+                Check(NwcRunPlan.Build(roots[0], common, 2026, notes, null, when).All(j => j.RvtPath == null), "без галочки — RVT нет");
+                mid.Settings.MakeRvt = true;
+                mid.Settings.RvtFolder = @"RVT\{Блок}\{Дата}";
+                var jobs = NwcRunPlan.Build(roots[0], common, 2026, notes, null, when);
+                var kj = jobs.Single(j => j.NwcPath.EndsWith(@"S1\NWC\0000_01_01_S1_KJ01_01_M3.nwc"));
+                Check(kj.RvtPath == @"\\srv\2025_Арман Кала 7 очередь\RVT\S1\08.11.2026 18-05\0000_01_01_S1_KJ01_01_M3.rvt" && !kj.Off && kj.Skip == null,
+                      "модель «Средней» — NWC и RVT одной строкой плана: " + kj.RvtPath);
+                Check(jobs.Single(j => j.NwcPath.EndsWith("S1_OV01_01_M3.nwc")).RvtPath == null, "модель без RVT у своих строк — без RVT");
+                common.Rvt.TrimAfter = "M3";
+                Check(NwcRunPlan.Build(mid, common, 2026, notes, null, when).All(j => j.RvtPath.EndsWith(@"_M3.rvt")) &&
+                      ExportNodes.RvtNameOf(new ExportModel { Path = "0000_01_01_S1_KJ01_01_M3_BIM_Alma.rvt" }, common) == "0000_01_01_S1_KJ01_01_M3", "имя — своё правило «обрезать после»");
+                common.Rvt.TrimAfter = "";
+                // только RVT: «NWC» снята — модель всё равно открывается, NWC не выгружается
+                foreach (var t in roots[0].Self()) t.Settings.NoNwc = true;
+                jobs = NwcRunPlan.Build(roots[0], common, 2026, notes, null, when);
+                Check(jobs.Where(j => j.RvtPath != null).All(j => j.Off && j.Skip == null) &&
+                      jobs.Where(j => j.RvtPath == null).All(j => j.Skip == "выгрузка NWC выключена (галочка «NWC»)"), "только RVT — не пропуск; ни NWC, ни RVT — пропуск");
+                foreach (var t in roots[0].Self()) t.Settings.NoNwc = false;
+                // папки нет — пропуск с причиной
+                roots[1].Settings.MakeRvt = true;
+                roots[1].Settings.Folder = "";
+                roots[1].Settings.NoNwc = true;
+                Check(NwcRunPlan.Build(roots[1], common, 2026, notes, null, when).All(j => j.Skip.Contains("«Папке для RVT»")), "без папки RVT — пропуск");
+                // выключатель в списке — как у NWC: у строки с подзадачами — у всех ниже
+                var rows = ExportNodes.Rows(roots, new HashSet<ExportTask>());
+                Check(ExportNodes.Columns(rows[0]).RvtState == null && ExportNodes.Columns(rows[4]).RvtState == true, "у задачи — по-разному, у «Средней» — да");
+                Check(ExportNodes.SetFlag(roots[0], RowFlag.Rvt, true, common) == null && roots[0].Self().All(t => t.Settings.MakeRvt) &&
+                      ExportNodes.Columns(rows[0]).RvtState == true, "включён у всей ветки");
+                Check(mid.Settings.Clone().MakeRvt && mid.Settings.Clone().RvtFolder == @"RVT\{Блок}\{Дата}", "копия строки — с RVT");
+                Check(ExportNodes.CheckRvtFolder(@"RVT\{Блок}\{Отдел}\{Дата}") == null && ExportNodes.CheckRvtFolder(@"RVT\{Формат}") != null, "метки папки RVT");
+                // фоновый Revit другой версии — RVT и «только RVT» доезжают
+                var only = jobs.First(j => j.RvtPath != null);
+                only.Off = true;
+                var back = NwcWorkers.FromHandoff(NwcWorkers.ToHandoff(only));
+                Check(back.RvtPath == only.RvtPath && back.Off, "задание фоновому Revit — с RVT");
+                // итог функции RVT — своим значком
+                Check(RunStates.KindOf(@"\\s\a.rvt") == "RVT" && RunStates.KindOf(@"\\s\a.nwc") == "NWC" && RunStates.KindOf(@"\\s\a.nwf") == "NWF", "функция по файлу");
+                var run = RunStates.Record(mid, new[] { @"\\s\a.nwc", @"\\s\a.rvt" },
+                    new[] { (@"\\s\a.nwc", "a", ItemResult.Done, "1 МБ"), (@"\\s\a.rvt", "a", ItemResult.Failed, "RVT занят") }, when, 60, null, null);
+                Check(RunStates.MarkOf(run, "NWC") == StepMark.Ok && RunStates.MarkOf(run, "RVT") == StepMark.Errors, "NWC — зелёный, RVT — красный");
+                // общие настройки «Экспорт RVT»: по умолчанию, копия, файл без раздела — по умолчанию
+                var d = new RvtOptions();
+                Check(!d.Audit && d.KeepWorksets && d.Overwrite && d.TrimAfter == "", "по умолчанию: без проверки, рабочие наборы оставить, перезаписывать, имя модели");
+                var s = new ExportSettings();
+                s.Rvt.KeepWorksets = false;
+                var c = new ExportSettings();
+                c.CopyFrom(s);
+                s.Rvt.Audit = true;
+                Check(!c.Rvt.KeepWorksets && !c.Rvt.Audit && !s.Clone().Rvt.KeepWorksets && !ReferenceEquals(s.Clone().Rvt, s.Rvt), "CopyFrom и Clone — своя копия");
+                var tmp = Path.Combine(Path.GetTempPath(), "ras-tests-" + Guid.NewGuid().ToString("N") + ".json");
+                try
+                {
+                    ExportFiles.Save(tmp, ExportFiles.FromCommon(s));
+                    var r = ExportFiles.Load(tmp).Settings.Rvt;
+                    Check(r.Audit && !r.KeepWorksets, "файл туда и обратно");
+                    ExportFiles.Save(tmp, ExportFiles.FromCommon(new ExportSettings { Rvt = null }));
+                    Check(ExportFiles.Load(tmp).Settings.Rvt?.KeepWorksets == true, "прежний файл — по умолчанию");
+                }
+                finally
+                {
+                    if (File.Exists(tmp)) File.Delete(tmp);
+                }
+            });
             yield return Case("NWF: какие строки собирают, из каких NWC; строки хода программы; что добавить в постоянную NWF; какой Navisworks", () =>
             {
                 var roots = Sample(out var high, out var mid);

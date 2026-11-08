@@ -119,6 +119,7 @@
                      SelectionChanged="Nav_Changed" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBoxItem Content="Общее" Tag="General" />
                 <ListBoxItem Content="Экспорт NWC" Tag="Nwc" />
+                <ListBoxItem Content="Экспорт RVT" Tag="Rvt" />
                 <ListBoxItem Content="Настройки отчётов" Tag="Report" />
             </ListBox>
         </Border>
@@ -379,6 +380,61 @@
                         <CheckBox Grid.Column="1" x:Name="RemoveIfc" />
                     </Grid>
                 </Border>
+            </StackPanel>
+
+            <!-- ══ Экспорт RVT — для заказчика (разработчик, 08.11.2026): проверка при открытии, рабочие наборы, имя, что с уже лежащим ══ -->
+            <StackPanel x:Name="RvtSection" Visibility="Collapsed">
+                <DockPanel Style="{StaticResource HeadBar}">
+                    <TextBlock Style="{StaticResource Head}" Text="Открытие модели" />
+                </DockPanel>
+                <Border Style="{StaticResource OptionRow}">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="320" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource OptionName}" Text="Проверка при открытии (Audit)" />
+                        <CheckBox Grid.Column="1" x:Name="RvtAudit" ToolTip="Revit исправляет ошибки модели; открытие дольше" />
+                    </Grid>
+                </Border>
+
+                <DockPanel Style="{StaticResource HeadBar}" Margin="0,22,0,2">
+                    <TextBlock Style="{StaticResource Head}" Text="Сохранение" />
+                </DockPanel>
+                <Border Style="{StaticResource OptionRow}">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="320" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource OptionName}" Text="Рабочие наборы" />
+                        <ComboBox Grid.Column="1" x:Name="RvtWorksets" Width="260">
+                            <ComboBoxItem Content="Оставить, все освободить" />
+                            <ComboBoxItem Content="Без рабочих наборов" />
+                        </ComboBox>
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource OptionRow}">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="320" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource OptionName}" Text="Перезаписывать, если RVT уже есть" />
+                        <CheckBox Grid.Column="1" x:Name="RvtOverwrite" ToolTip="Снята — модель с уже лежащим RVT пропускается" />
+                    </Grid>
+                </Border>
+
+                <DockPanel Style="{StaticResource HeadBar}" Margin="0,22,0,2">
+                    <TextBlock Style="{StaticResource Head}" Text="Имя RVT" />
+                </DockPanel>
+                <Border Style="{StaticResource OptionRow}">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="320" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource OptionName}" Text="Обрезать всё после" />
+                        <TextBox Grid.Column="1" x:Name="RvtTrimAfter" Width="160" HorizontalAlignment="Left" TextChanged="Any_Changed"
+                                 ToolTip="Часть имени модели, после которой всё отрезается; пусто — имя модели как есть" />
+                    </Grid>
+                </Border>
+                <TextBlock x:Name="RvtNameExample" Foreground="{DynamicResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="320,6,0,0" />
+
+                <DockPanel Margin="0,22,0,0">
+                    <TextBlock DockPanel.Dock="Left" FontFamily="Segoe MDL2 Assets" FontSize="14" Text="&#xE946;" Foreground="{DynamicResource Muted}"
+                               Margin="0,1,8,0" VerticalAlignment="Top" />
+                    <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Muted}" FontSize="12"
+                               Text="Каждая модель строки открывается отсоединённо (если у строки стоит и NWC — тем же открытием, после NWC), из неё удаляются все связи — Revit, DWG и другие CAD, облака точек, IFC, — три раза выполняется очистка от неиспользуемого, и модель сохраняется в папку RVT строки в своей версии Revit. В Revit 2023 стандартной очистки для плагинов нет — удаляются неиспользуемые семейства и типы; в Revit 2026 — стандартная очистка." />
+                </DockPanel>
             </StackPanel>
 
             <!-- ══ Настройки отчётов: как вкладка «Отчёт» Clash Detective (разработчик, 08.11.2026) ══ -->

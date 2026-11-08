@@ -99,10 +99,17 @@ namespace RASv2.ClashAnalysis.Export
                     var state = Enum.TryParse<NwcState>(s.State, out var st) ? st : p.State;
                     var note = s.Note;
                     var step = state == NwcState.Waiting ? $"ждёт фоновый Revit {Year}" : $"Revit {Year}: {s.Step}";
-                    if (p.State == state && p.Step == step && p.Note == note) continue;
+                    NwcState? Part(string s) => Enum.TryParse<NwcState>(s ?? "", out var x) ? x : (NwcState?)null;
+                    var nwc = Part(s.Nwc);
+                    var rvt = Part(s.Rvt);
+                    if (p.State == state && p.Step == step && p.Note == note && p.Nwc == nwc && p.Rvt == rvt) continue;
                     p.State = state;
                     p.Step = step;
                     p.Note = note;
+                    p.Nwc = nwc;
+                    p.Rvt = rvt;
+                    p.NwcNote = s.NwcNote;
+                    p.RvtNote = s.RvtNote;
                     p.Time = TimeSpan.FromSeconds(s.Seconds);
                     changed(p);
                 }

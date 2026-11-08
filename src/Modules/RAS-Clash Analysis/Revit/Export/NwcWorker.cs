@@ -152,6 +152,7 @@ namespace RASv2.ClashAnalysis.Export
                         Items = items.Select((p, i) => new HandoffState
                         {
                             Index = i, State = p.State.ToString(), Step = p.Step, Note = p.Note, Seconds = p.Time.TotalSeconds,
+                            Nwc = p.Nwc?.ToString(), Rvt = p.Rvt?.ToString(), NwcNote = p.NwcNote, RvtNote = p.RvtNote,
                         }).ToList(),
                     });
                 }
@@ -162,15 +163,21 @@ namespace RASv2.ClashAnalysis.Export
             }
 
             Save(false);
-            if (!OptionalFunctionalityUtils.IsNavisworksExporterAvailable())
+            // без модуля экспорта NWC не выгрузить, а только RVT — можно (08.11.2026)
+            if (!OptionalFunctionalityUtils.IsNavisworksExporterAvailable() && items.Any(p => !p.Job.Off))
             {
-                foreach (var p in items)
+                var why = $"в Revit {_year} нет модуля экспорта Navisworks (NWC)";
+                foreach (var p in items.Where(p => !p.Job.Off))
                 {
                     p.State = NwcState.Failed;
-                    p.Note = $"в Revit {_year} нет модуля экспорта Navisworks (NWC)";
+                    p.Note = why;
                 }
-                Save(true, $"в Revit {_year} нет модуля экспорта Navisworks (NWC)");
-                return;
+                if (items.All(p => !p.Job.Off))
+                {
+                    Save(true, why);
+                    return;
+                }
+                foreach (var p in items.Where(p => !p.Job.Off)) p.Job.Skip = why;
             }
             try
             {

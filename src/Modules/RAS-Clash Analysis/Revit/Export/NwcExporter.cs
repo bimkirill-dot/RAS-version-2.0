@@ -26,6 +26,11 @@ namespace RASv2.ClashAnalysis.Export
         public TimeSpan Time { get; set; }
         /// <summary>Когда менялась модель (проверка до открытия) — в историю выгрузок.</summary>
         public DateTime? ModelModified { get; set; }
+        /// <summary>Итог NWC и RVT модели по отдельности (одно открытие — две функции, 08.11.2026); null — функция не нужна.</summary>
+        public NwcState? Nwc { get; set; }
+        public NwcState? Rvt { get; set; }
+        public string NwcNote { get; set; }
+        public string RvtNote { get; set; }
     }
 
     /// <summary>Понятная ошибка модели — в журнал и окно без стека (стек — у непредвиденных, и они же — в ras.log).</summary>
@@ -35,6 +40,8 @@ namespace RASv2.ClashAnalysis.Export
     }
 
     /// <summary>
+    /// Выгрузка RVT (08.11.2026) — тем же открытием, после NWC: удалить все связи, очистить от неиспользуемого три раза, «Сохранить как»
+    /// в папку RVT (рабочие наборы — оставить и освободить или без них, по общим настройкам).
     /// Выгрузка NWC (DECISIONS.md модуля, «Порядок на одну модель», «Выгрузка NWC — первая версия»): на каждую модель — копия во
     /// временную папку, связи в копии — «не загружать», открыть отсоединённой со всеми рабочими наборами, удалить внешнее (связи
     /// Revit, IFC, DWG, облака точек), проверить и очистить вид, выгрузить NWC во временную папку, заменить прежнюю NWC, закрыть
@@ -85,6 +92,13 @@ namespace RASv2.ClashAnalysis.Export
                     $"плагин {typeof(NwcExporter).Assembly.GetName().Version}, .NET {Environment.Version}");
             _j.Line($"Временная папка: {TempRoot}; свободно на диске: {FreeSpace(TempRoot)}");
             _j.Line($"Удалять перед выгрузкой: связи Revit {Yes(common.RemoveRevitLinks)}, DWG и CAD {Yes(common.RemoveCad)}, облака точек {Yes(common.RemovePointClouds)}, IFC {Yes(common.RemoveIfc)} (общие; строка может задать свои)");
+            if (jobs.Any(x => x.RvtPath != null))
+            {
+                var r = common.Rvt ?? new RvtOptions();
+                _j.Line($"RVT: проверка при открытии {Yes(r.Audit)}; рабочие наборы — {(r.KeepWorksets ? "оставить, все освободить" : "без рабочих наборов")}; " +
+                        $"имя — {(string.IsNullOrWhiteSpace(r.TrimAfter) ? "как у модели" : "обрезать всё после «" + r.TrimAfter.Trim() + "»")}; уже есть — {(r.Overwrite ? "перезаписать" : "пропустить")}; " +
+                        $"связи — все удаляются; очистка от неиспользуемого — 3 раза ({PurgeKind})");
+            }
             // что выгружать, решает человек (разработчик, 07.11.2026: «не нужно самому пропускать модели — для этого есть
             // „Экспортировать модели, отредактированные после“»): модели, которые не менялись, тоже выгружаются
             _j.Line($"NWC к выгрузке: {jobs.Count(x => x.Skip == null)}, пропускаются: {jobs.Count(x => x.Skip != null)}");
@@ -92,7 +106,8 @@ namespace RASv2.ClashAnalysis.Export
             foreach (var job in jobs)
             {
                 i++;
-                _j.Line($"  {i,3}. {job.ModelName}  →  {job.NwcPath}");
+                _j.Line($"  {i,3}. {job.ModelName}  →  {(job.Off ? "NWC не выгружается" : job.NwcPath)}");
+                if (job.RvtPath != null) _j.Line("       RVT  →  " + job.RvtPath);
                 _j.Line($"       модель: {job.Model.Path}{(job.Model.Year > 0 ? $" (Revit {job.Model.Year})" : "")}; строки: {string.Join(", ", job.Rows)}");
                 _j.Line($"       вид: {(job.Export.Nwc.Scope == NwcScope.View ? "«" + job.View + "»" : "целый проект")}; " + OptionsText(job.Export.Nwc) +
                         (job.Edited?.On == true ? $"; отбор: отредактированные {job.Edited.Mode} {job.Edited.From:dd.MM.yyyy}{(job.Edited.To != null ? "–" + job.Edited.To.Value.ToString("dd.MM.yyyy") : "")}" : ""));
@@ -187,6 +202,12 @@ namespace RASv2.ClashAnalysis.Export
         {
             var job = p.Job;
             p.State = NwcState.Working;
+            // что делать с моделью: NWC — галочка «NWC»; RVT — галочка «RVT» (не пропущен и не упал до открытия — CheckRvt)
+            var wantNwc = !job.Off;
+            var wantRvt = job.RvtPath != null && p.Rvt == null;
+            if (wantNwc) p.Nwc = NwcState.Working;
+            if (wantRvt) p.Rvt = NwcState.Waiting;
+            var rvt = job.Export.Rvt ?? new RvtOptions();
             var temp = System.IO.Path.Combine(TempRoot, DateTime.Now.ToString("HHmmss") + "_" + Guid.NewGuid().ToString("N").Substring(0, 6));
             var copy = System.IO.Path.Combine(temp, ExportNodes.FileName(job.Model.Path));
             var nwcName = ExportNodes.FileName(job.NwcPath);
@@ -195,6 +216,7 @@ namespace RASv2.ClashAnalysis.Export
             var entry = new NwcHistory.Entry { Nwc = job.NwcPath, At = DateTime.Now };
             var clock = Stopwatch.StartNew();
             ModelPrefetch.Copy ahead = null;
+            var rvtSaved = false;
             try
             {
                 Step("Копия модели", () =>
@@ -250,70 +272,137 @@ namespace RASv2.ClashAnalysis.Export
 
                 Step("Связи — не загружать", () => DoNotLoadLinks(copyPath));
 
-                void Open()
+                // RVT без рабочих наборов — их убирает только открытие («отсоединить и удалить рабочие наборы»): без NWC — сразу так; с NWC —
+                // NWC по обычному открытию (виды — с рабочими наборами), потом второе открытие той же копии (без нового копирования)
+                var discard = wantRvt && workshared && !rvt.KeepWorksets;
+                var audit = wantRvt && rvt.Audit;
+                void Open(bool dropWorksets)
                 {
-                    var options = new OpenOptions { Audit = false };
+                    var options = new OpenOptions { Audit = audit };
                     if (workshared)
                     {
-                        options.DetachFromCentralOption = DetachFromCentralOption.DetachAndPreserveWorksets;
-                        options.SetOpenWorksetsConfiguration(new WorksetConfiguration(WorksetConfigurationOption.OpenAllWorksets));
+                        if (dropWorksets) options.DetachFromCentralOption = DetachFromCentralOption.DetachAndDiscardWorksets;
+                        else
+                        {
+                            options.DetachFromCentralOption = DetachFromCentralOption.DetachAndPreserveWorksets;
+                            options.SetOpenWorksetsConfiguration(new WorksetConfiguration(WorksetConfigurationOption.OpenAllWorksets));
+                        }
                     }
                     doc = _app.OpenDocumentFile(copyPath, options);
                     if (doc == null) throw new NwcError("Revit не открыл модель");
                     _j.Line($"   открыта: «{doc.Title}»; элементов: {new FilteredElementCollector(doc).WhereElementIsNotElementType().GetElementCount()}" +
-                            (doc.IsWorkshared ? $"; рабочих наборов: {new FilteredWorksetCollector(doc).OfKind(WorksetKind.UserWorkset).Count()}" : ""));
+                            (doc.IsWorkshared ? $"; рабочих наборов: {new FilteredWorksetCollector(doc).OfKind(WorksetKind.UserWorkset).Count()}" : "") +
+                            (dropWorksets ? "; рабочие наборы удалены (RVT — без них)" : "") + (audit ? "; с проверкой (Audit)" : ""));
                 }
-                Step("Открытие", Open);
+                Step(audit ? "Открытие с проверкой" : "Открытие", () => Open(discard && !wantNwc));
 
-                // вид до удаления — замер (07.11.2026, модель АР: 86 видимых — только камеры и рамки, а у разработчика в Revit на этом
-                // виде всё есть). Та же модель, тот же Revit то пустой вид, то полный (08.11.2026: два запуска — 0, третий — 35 588; никто
-                // ничего не нажимал) — пустой сразу после открытия: закрыть и открыть ещё раз; снова пустой — ошибка с пробами (PrepareView)
-                var before = job.Export.Nwc.Scope == NwcScope.View ? CountVisibleModel(doc, job.View) : -1;
-                if (before >= 0) _j.Line($"   до удаления на виде «{job.View}» видно элементов модели: {before}");
-                if (before == 0)
+                if (wantNwc)
                 {
-                    _j.Warn($"{job.ModelName}: вид «{job.View}» пустой сразу после открытия — модель закрывается и открывается ещё раз");
-                    var first = doc;
-                    doc = null;
-                    Step("Закрытие (пустой вид)", () => first.Close(false));
-                    Step("Открытие (второй раз)", Open);
-                    before = CountVisibleModel(doc, job.View);
-                    _j.Line($"   после повторного открытия на виде видно элементов модели: {before}");
+                    try
+                    {
+                        // вид до удаления — замер (07.11.2026, модель АР: 86 видимых — только камеры и рамки, а у разработчика в Revit на этом
+                        // виде всё есть). Та же модель, тот же Revit то пустой вид, то полный (08.11.2026: два запуска — 0, третий — 35 588;
+                        // никто ничего не нажимал) — пустой сразу после открытия: закрыть и открыть ещё раз; снова пустой — ошибка с пробами
+                        var before = job.Export.Nwc.Scope == NwcScope.View ? CountVisibleModel(doc, job.View) : -1;
+                        if (before >= 0) _j.Line($"   до удаления на виде «{job.View}» видно элементов модели: {before}");
+                        if (before == 0)
+                        {
+                            _j.Warn($"{job.ModelName}: вид «{job.View}» пустой сразу после открытия — модель закрывается и открывается ещё раз");
+                            var first = doc;
+                            doc = null;
+                            Step("Закрытие (пустой вид)", () => first.Close(false));
+                            Step("Открытие (второй раз)", () => Open(false));
+                            before = CountVisibleModel(doc, job.View);
+                            _j.Line($"   после повторного открытия на виде видно элементов модели: {before}");
+                        }
+                        Step("Удаление внешнего", () => RemoveExternal(doc, job.Export));
+
+                        View3D view = null;
+                        Step("Вид", () => view = PrepareView(doc, job, entry));
+
+                        var exported = System.IO.Path.Combine(temp, nwcName + ".nwc");
+                        Step("Выгрузка NWC", () =>
+                        {
+                            // с копией наперёд своя временная папка не создавалась (копия — в папке pre_…), а NWC пишется сюда (06.11.2026)
+                            Directory.CreateDirectory(temp);
+                            doc.Export(temp, nwcName, Options(job.Export.Nwc, view));
+                            if (!File.Exists(exported)) throw new NwcError("Revit не создал NWC (выгрузка прошла без ошибки, а файла нет)");
+                            entry.Size = new FileInfo(exported).Length;
+                            if (entry.Size == 0) throw new NwcError("NWC пустая (0 байт)");
+                            _j.Line($"   NWC: {NwcHistory.SizeText(entry.Size)}");
+                        });
+
+                        Step("Замена NWC", () => Replace(exported, job.NwcPath));
+
+                        entry.Seconds = clock.Elapsed.TotalSeconds;
+                        entry.Signature = NwcRunPlan.Signature(job);
+                        entry.ModelModified = p.ModelModified;
+                        foreach (var note in NwcHistory.Compare(_history.Last(job.NwcPath), entry)) _j.Warn(job.ModelName + ": " + note);
+                        _history.Put(entry);
+                        _written.Add(entry);
+                        p.Nwc = NwcState.Done;
+                        p.NwcNote = NwcHistory.SizeText(entry.Size);
+                    }
+                    catch (Exception ex) when (doc != null && wantRvt)
+                    {
+                        // NWC не вышла, модель открыта — RVT всё равно сохраняется (функции независимы)
+                        p.Nwc = NwcState.Failed;
+                        p.NwcNote = ex is NwcError ? ex.Message : $"{p.Step}: {ex.Message}";
+                        _j.Error(job.ModelName + " — NWC: " + p.NwcNote, ex is NwcError ? null : ex);
+                        if (!(ex is NwcError)) RASv2.Core.Log.Write("ClashAnalysis", "Выгрузка NWC: " + job.Model.Path + " — шаг «" + p.Step + "»", ex);
+                    }
                 }
-                Step("Удаление внешнего", () => RemoveExternal(doc, job.Export));
 
-                View3D view = null;
-                Step("Вид", () => view = PrepareView(doc, job, entry));
-
-                var exported = System.IO.Path.Combine(temp, nwcName + ".nwc");
-                Step("Выгрузка NWC", () =>
+                if (wantRvt)
                 {
-                    // с копией наперёд своя временная папка не создавалась (копия — в папке pre_…), а NWC пишется сюда (06.11.2026)
-                    Directory.CreateDirectory(temp);
-                    doc.Export(temp, nwcName, Options(job.Export.Nwc, view));
-                    if (!File.Exists(exported)) throw new NwcError("Revit не создал NWC (выгрузка прошла без ошибки, а файла нет)");
-                    entry.Size = new FileInfo(exported).Length;
-                    if (entry.Size == 0) throw new NwcError("NWC пустая (0 байт)");
-                    _j.Line($"   NWC: {NwcHistory.SizeText(entry.Size)}");
-                });
-
-                Step("Замена NWC", () => Replace(exported, job.NwcPath));
-
-                entry.Seconds = clock.Elapsed.TotalSeconds;
-                entry.Signature = NwcRunPlan.Signature(job);
-                entry.ModelModified = p.ModelModified;
-                foreach (var note in NwcHistory.Compare(_history.Last(job.NwcPath), entry)) _j.Warn(job.ModelName + ": " + note);
-                _history.Put(entry);
-                _written.Add(entry);
-                p.State = NwcState.Done;
-                p.Step = "выгружена";
-                p.Note = NwcHistory.SizeText(entry.Size);
+                    p.Rvt = NwcState.Working;
+                    try
+                    {
+                        if (discard && wantNwc)
+                        {
+                            var first = doc;
+                            doc = null;
+                            Step("Закрытие (RVT — без рабочих наборов)", () => first.Close(false));
+                            Step(audit ? "Открытие с проверкой, без рабочих наборов" : "Открытие без рабочих наборов", () => Open(true));
+                        }
+                        // все связи — как «Диспетчер связей → Удалить» (разработчик, 08.11.2026), какие бы настройки удаления ни были у NWC
+                        Step("RVT: удаление связей", () => RemoveExternal(doc, AllExternal(job.Export), "RAS: удалить связи перед сохранением RVT"));
+                        Step("RVT: очистка от неиспользуемого", () => Purge(doc));
+                        long size = 0;
+                        Step("RVT: сохранение", () => size = SaveRvt(doc, job.RvtPath));
+                        rvtSaved = true;
+                        p.Rvt = NwcState.Done;
+                        p.RvtNote = NwcHistory.SizeText(size);
+                    }
+                    catch (Exception ex) when (wantNwc && p.Nwc == NwcState.Done)
+                    {
+                        p.Rvt = NwcState.Failed;
+                        p.RvtNote = ex is NwcError ? ex.Message : $"{p.Step}: {ex.Message}";
+                        _j.Error(job.ModelName + " — RVT: " + p.RvtNote, ex is NwcError ? null : ex);
+                        if (!(ex is NwcError)) RASv2.Core.Log.Write("ClashAnalysis", "Выгрузка RVT: " + job.Model.Path + " — шаг «" + p.Step + "»", ex);
+                    }
+                }
+                p.State = p.Nwc == NwcState.Failed || p.Rvt == NwcState.Failed ? NwcState.Failed : NwcState.Done;
+                p.Step = p.State == NwcState.Done ? "выгружена" : "ошибка";
+                p.Note = Notes(p);
             }
             catch (Exception ex)
             {
+                // копия, открытие — общие у NWC и RVT: ошибка — у той и другой (что не сделано)
+                var note = ex is NwcError ? ex.Message : $"{p.Step}: {ex.Message}";
                 p.State = NwcState.Failed;
-                p.Note = ex is NwcError ? ex.Message : $"{p.Step}: {ex.Message}";
-                _j.Error(job.ModelName + " — " + p.Note, ex is NwcError ? null : ex);
+                if (wantNwc && p.Nwc != NwcState.Done && p.Nwc != NwcState.Failed)
+                {
+                    p.Nwc = NwcState.Failed;
+                    p.NwcNote = note;
+                }
+                if (wantRvt && p.Rvt != NwcState.Done && p.Rvt != NwcState.Failed)
+                {
+                    p.Rvt = NwcState.Failed;
+                    p.RvtNote = note;
+                }
+                p.Note = Notes(p) ?? note;
+                _j.Error(job.ModelName + " — " + note, ex is NwcError ? null : ex);
                 if (!(ex is NwcError)) RASv2.Core.Log.Write("ClashAnalysis", "Выгрузка NWC: " + job.Model.Path + " — шаг «" + p.Step + "»", ex);
             }
             finally
@@ -322,6 +411,19 @@ namespace RASv2.ClashAnalysis.Export
                 {
                     try { Step("Закрытие", () => doc.Close(false)); }
                     catch (Exception ex) { _j.Error(job.ModelName + " — модель не закрылась: " + ex.Message, ex); }
+                }
+                // папка «…_backup» центрального файла — заказчику не нужна (Revit заведёт её снова при первой синхронизации)
+                if (rvtSaved)
+                {
+                    var backup = BackupDir(job.RvtPath);
+                    try
+                    {
+                        if (Directory.Exists(backup)) Directory.Delete(backup, true);
+                    }
+                    catch (Exception ex)
+                    {
+                        _j.Line("   папка резервных копий RVT не удалена: " + backup + " — " + ex.Message);
+                    }
                 }
                 // копия наперёд — удалить и освободить место следующей
                 if (ahead != null) _prefetch.Done(ahead);
@@ -336,6 +438,128 @@ namespace RASv2.ClashAnalysis.Export
                 if (_revitMessages > RevitMessagesPerModel) _j.Line($"   сообщений Revit всего: {_revitMessages} (в журнале — первые {RevitMessagesPerModel})");
             }
         }
+
+        /// <summary>Итог модели строкой: только NWC — как было («12 МБ»); с RVT — «NWC: …; RVT: …».</summary>
+        private static string Notes(NwcProgress p)
+        {
+            if (p.Rvt == null) return p.NwcNote;
+            var parts = new List<string>();
+            if (p.Nwc != null) parts.Add("NWC: " + (p.NwcNote ?? StateText(p.Nwc.Value)));
+            parts.Add("RVT: " + (p.RvtNote ?? StateText(p.Rvt.Value)));
+            return string.Join("; ", parts);
+        }
+
+        /// <summary>Удалить все связи (RVT для заказчика): Revit, IFC, DWG и CAD, облака точек — настройки удаления NWC не важны.</summary>
+        private static ExportSettings AllExternal(ExportSettings s)
+        {
+            var all = s.Clone();
+            all.RemoveRevitLinks = all.RemoveCad = all.RemovePointClouds = all.RemoveIfc = true;
+            return all;
+        }
+
+        /// <summary>Чем очищается модель: в Revit 2026 — стандартная очистка, в Revit 2023 её в API нет — неиспользуемые семейства и типы.</summary>
+#if REVIT2023
+        private const string PurgeKind = "Revit 2023: неиспользуемые семейства и типы — «Советник по производительности»";
+        private static readonly Guid PurgeRule = new Guid("e8c63650-70b7-435a-9010-ec97660c1bda");
+#else
+        private const string PurgeKind = "стандартная «Очистить от неиспользуемых»";
+#endif
+
+        /// <summary>
+        /// «Очистить от неиспользуемых» три раза подряд (разработчик, 08.11.2026: «три раза — самый оптимальный вариант»): удалённое
+        /// освобождает следующее (тип — семейство, семейство — материал). Ничего не нашлось — дальше не повторять.
+        /// </summary>
+        private void Purge(Document doc)
+        {
+            var total = 0;
+            for (var pass = 1; pass <= 3; pass++)
+            {
+                var ids = Unused(doc);
+                int deleted = 0, failed = 0;
+                if (ids.Count > 0)
+                    using (var t = new Transaction(doc, "RAS: очистить от неиспользуемого"))
+                    {
+                        t.Start();
+                        foreach (var id in ids)
+                        {
+                            // удалён вместе с другим (тип — с семейством)
+                            if (doc.GetElement(id) == null) continue;
+                            try
+                            {
+                                doc.Delete(id);
+                                deleted++;
+                            }
+                            catch (Exception)
+                            {
+                                failed++;
+                            }
+                        }
+                        var status = t.Commit();
+                        if (status != TransactionStatus.Committed) throw new NwcError("очистка не применилась: " + status);
+                    }
+                total += deleted;
+                _j.Line($"   очистка {pass}: неиспользуемых {ids.Count}, удалено {deleted}" + (failed > 0 ? $", не удалось {failed}" : ""));
+                if (ids.Count == 0) break;
+            }
+            _j.Line($"   очищено всего: {total} ({PurgeKind})");
+        }
+
+        private static List<ElementId> Unused(Document doc)
+        {
+#if REVIT2023
+            var adviser = PerformanceAdviser.GetPerformanceAdviser();
+            var rule = adviser.GetAllRuleIds().FirstOrDefault(r => r.Guid == PurgeRule);
+            if (rule == null) throw new NwcError("в Revit нет правила «Неиспользуемые семейства и типы» — очистка не выполнена");
+            return adviser.ExecuteRules(doc, new List<PerformanceAdviserRuleId> { rule })
+                .SelectMany(m => m.GetFailingElements()).Distinct().ToList();
+#else
+            return doc.GetUnusedElements(new HashSet<ElementId>()).ToList();
+#endif
+        }
+
+        /// <summary>
+        /// «Сохранить как» RVT: прежний (и его «…_backup») — удалить; с рабочими наборами — новый центральный файл и «Освободить всё»;
+        /// без них — обычный файл. Размер RVT.
+        /// </summary>
+        private long SaveRvt(Document doc, string target)
+        {
+            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(target));
+            if (File.Exists(target))
+            {
+                File.Delete(target);
+                _j.Line("   прежний RVT удалён: " + target);
+            }
+            var backup = BackupDir(target);
+            if (Directory.Exists(backup)) Directory.Delete(backup, true);
+            var central = doc.IsWorkshared;
+            var options = new SaveAsOptions { OverwriteExistingFile = true, MaximumBackups = 1 };
+            if (central) options.SetWorksharingOptions(new WorksharingSaveAsOptions { SaveAsCentral = true });
+            doc.SaveAs(target, options);
+            if (central)
+            {
+                try
+                {
+                    WorksharingUtils.RelinquishOwnership(doc, new RelinquishOptions(true), new TransactWithCentralOptions());
+                }
+                catch (Exception ex)
+                {
+                    _j.Line("   «Освободить всё» не вышло (" + ex.Message + ") — синхронизация с освобождением");
+                    var sync = new SynchronizeWithCentralOptions { Comment = "RAS: выгрузка RVT — освободить всё", SaveLocalBefore = false, SaveLocalAfter = false };
+                    sync.SetRelinquishOptions(new RelinquishOptions(true));
+                    doc.SynchronizeWithCentral(new TransactWithCentralOptions(), sync);
+                }
+                var owned = new FilteredWorksetCollector(doc).OfKind(WorksetKind.UserWorkset).Where(w => w.IsEditable).Select(w => w.Name).ToList();
+                if (owned.Count == 0) _j.Line("   рабочие наборы освобождены");
+                else _j.Warn($"{doc.Title}: рабочие наборы не освобождены ({owned.Count}): " + string.Join(", ", owned.Take(10)));
+            }
+            if (!File.Exists(target)) throw new NwcError("Revit не записал RVT (сохранение прошло без ошибки, а файла нет)");
+            var size = new FileInfo(target).Length;
+            _j.Line($"   RVT записан: {target} — {NwcHistory.SizeText(size)}, " + (central ? "центральный файл с рабочими наборами" : "без рабочих наборов"));
+            return size;
+        }
+
+        private static string BackupDir(string rvt) =>
+            System.IO.Path.Combine(System.IO.Path.GetDirectoryName(rvt) ?? "", System.IO.Path.GetFileNameWithoutExtension(rvt) + "_backup");
 
         /// <summary>Шаг: имя — в окно хода и журнал, время и память — в журнал; ошибка шага — дальше, к модели.</summary>
         private void Step(string name, Action action)
@@ -356,21 +580,43 @@ namespace RASv2.ClashAnalysis.Export
             }
         }
 
-        /// <summary>До копии: NWC не занята, папка есть и доступна, дата модели и отбор «отредактированные». true — пропустить.</summary>
+        /// <summary>
+        /// До копии: NWC не занята, папка есть и доступна; RVT — то же, уже лежит и «не перезаписывать» — RVT пропускается; дата модели
+        /// и отбор «отредактированные». true — пропустить модель.
+        /// </summary>
         private bool Before(NwcJob job)
         {
-            var folder = System.IO.Path.GetDirectoryName(job.NwcPath);
-            try
+            var rvtOnly = false;
+            if (job.RvtPath != null)
             {
-                Directory.CreateDirectory(folder);
+                try
+                {
+                    if (CheckRvt(job)) return true;
+                }
+                catch (NwcError ex) when (!job.Off)
+                {
+                    // RVT не выйдет — NWC всё равно выгружается
+                    _current.Rvt = NwcState.Failed;
+                    _current.RvtNote = ex.Message;
+                    _j.Error(job.ModelName + " — RVT: " + ex.Message);
+                }
+                rvtOnly = job.Off;
             }
-            catch (Exception ex)
-            {
-                throw new NwcError($"папка NWC недоступна: {folder} — {ex.Message}");
-            }
-            var exists = File.Exists(job.NwcPath);
+            var exists = rvtOnly ? File.Exists(job.RvtPath) : File.Exists(job.NwcPath);
             DateTime? nwcDate = null;
-            if (exists)
+            if (!rvtOnly)
+            {
+                var folder = System.IO.Path.GetDirectoryName(job.NwcPath);
+                try
+                {
+                    Directory.CreateDirectory(folder);
+                }
+                catch (Exception ex)
+                {
+                    throw new NwcError($"папка NWC недоступна: {folder} — {ex.Message}");
+                }
+            }
+            if (!rvtOnly && exists)
             {
                 var info = new FileInfo(job.NwcPath);
                 nwcDate = info.LastWriteTime;
@@ -384,21 +630,63 @@ namespace RASv2.ClashAnalysis.Export
                     throw new NwcError("NWC занята — открыта в Navisworks? Закройте её и повторите");
                 }
             }
-            else
+            else if (!rvtOnly)
                 _j.Line("   прежней NWC нет");
 
             var modified = _modified = ModelDate(job.Model);
             _j.Line(modified == null ? "   дата изменения модели не известна" : $"   модель изменена: {modified:dd.MM.yyyy HH:mm}");
-            var last = _history.Last(job.NwcPath);
+            var last = rvtOnly ? null : _history.Last(job.NwcPath);
             if (last?.Signature != null && last.Signature != NwcRunPlan.Signature(job))
                 _j.Line("   вид или параметры выгрузки поменялись с прошлого раза — NWC выгружается заново");
-            var fresh = NwcRunPlan.Fresh(job, modified, nwcDate, last);
+            var fresh = rvtOnly ? null : NwcRunPlan.Fresh(job, modified, nwcDate, last);
             if (fresh != null) _j.Line("   модель не менялась с прошлой выгрузки, выгружается: " + fresh);
             if (!NwcRunPlan.Due(job, modified, exists))
             {
-                _current.Step = _current.Note = $"не изменялась в срок ({modified:dd.MM.yyyy}) — NWC актуальна";
+                _current.Step = _current.Note = $"не изменялась в срок ({modified:dd.MM.yyyy}) — {(rvtOnly ? "RVT актуален" : "NWC актуальна")}";
                 _j.Line("   пропущена по отбору «отредактированные»: " + _current.Note);
                 return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// RVT до копии: папка есть и доступна; RVT уже лежит — «не перезаписывать» (общие настройки): RVT пропускается (true — и вся
+        /// модель, если NWC у неё не выгружается), иначе — не занят ли.
+        /// </summary>
+        private bool CheckRvt(NwcJob job)
+        {
+            var folder = System.IO.Path.GetDirectoryName(job.RvtPath);
+            try
+            {
+                Directory.CreateDirectory(folder);
+            }
+            catch (Exception ex)
+            {
+                throw new NwcError($"папка RVT недоступна: {folder} — {ex.Message}");
+            }
+            if (!File.Exists(job.RvtPath))
+            {
+                _j.Line("   прежнего RVT нет");
+                return false;
+            }
+            var info = new FileInfo(job.RvtPath);
+            _j.Line($"   прежний RVT: {NwcHistory.SizeText(info.Length)}, {info.LastWriteTime:dd.MM.yyyy HH:mm}");
+            if (!(job.Export.Rvt ?? new RvtOptions()).Overwrite)
+            {
+                _current.Rvt = NwcState.Skipped;
+                _current.RvtNote = "RVT уже есть — не перезаписывается (общие настройки → «Экспорт RVT»)";
+                _j.Line("   " + _current.RvtNote);
+                if (!job.Off) return false;
+                _current.Step = _current.Note = _current.RvtNote;
+                return true;
+            }
+            try
+            {
+                using (new FileStream(job.RvtPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None)) { }
+            }
+            catch (IOException)
+            {
+                throw new NwcError("RVT занят — открыт в Revit? Закройте его и повторите");
             }
             return false;
         }
@@ -463,7 +751,7 @@ namespace RASv2.ClashAnalysis.Export
         }
 
         /// <summary>Удалить связи Revit, IFC, DWG и другие CAD (связанные и импортированные), облака точек — по настройкам строки; что осталось — несостыковка.</summary>
-        private void RemoveExternal(Document doc, ExportSettings s)
+        private void RemoveExternal(Document doc, ExportSettings s, string transaction = "RAS: удалить внешнее перед выгрузкой NWC")
         {
             // номера и имена — до удаления: удалили тип связи DWG — Revit удалил и его вставки, и имя удалённого элемента уже не
             // прочитать (04.11.2026: «The referenced object is not valid» — выгрузка падала на этом шаге)
@@ -476,7 +764,7 @@ namespace RASv2.ClashAnalysis.Export
                 ("DWG и CAD — вставки", s.RemoveCad, Snap(new FilteredElementCollector(doc).OfClass(typeof(ImportInstance)))),
                 ("облака точек", s.RemovePointClouds, Snap(new FilteredElementCollector(doc).OfClass(typeof(PointCloudType)))),
             };
-            using (var t = new Transaction(doc, "RAS: удалить внешнее перед выгрузкой NWC"))
+            using (var t = new Transaction(doc, transaction))
             {
                 t.Start();
                 foreach (var g in groups)

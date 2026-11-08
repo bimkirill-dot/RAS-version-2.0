@@ -31,7 +31,7 @@ namespace RASv2.ClashAnalysis.UI
             /// <summary>Ширина таблицы — какие столбцы показывать.</summary>
             public void Fit(double width)
             {
-                var time = width >= 660;
+                var time = width >= 736;
                 if (time == _time) return;
                 _time = time;
                 PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(null));
@@ -131,9 +131,14 @@ namespace RASv2.ClashAnalysis.UI
             public Visibility NwfOkVisibility => Show(Marks && NwfOn && Mark("NWF") == StepMark.Ok);
             public Visibility NwfErrorVisibility => Show(Marks && NwfOn && Mark("NWF") == StepMark.Errors);
             public Visibility NwfRetryVisibility => Show(Marks && NwfOn && Mark("NWF") == StepMark.Errors);
-            /// <summary>Общая ↻ в кнопках строки — когда есть что повторять у NWC или NWF (разработчик, 08.11.2026).</summary>
+            private bool RvtOn => Columns.RvtState != false;
+            public Visibility RvtOkVisibility => Show(Marks && RvtOn && Mark("RVT") == StepMark.Ok);
+            public Visibility RvtErrorVisibility => Show(Marks && RvtOn && Mark("RVT") == StepMark.Errors);
+            public Visibility RvtRetryVisibility => Show(Marks && RvtOn && Mark("RVT") == StepMark.Errors);
+            public string RvtStatusTip => RunStates.StepTip(_run, "RVT", new List<string>(), false);
+            /// <summary>Общая ↻ в кнопках строки — когда есть что повторять у NWC, NWF или RVT (разработчик, 08.11.2026).</summary>
             public Visibility RetryAllVisibility =>
-                Show(NwcRetryVisibility == Visibility.Visible || NwfRetryVisibility == Visibility.Visible);
+                Show(NwcRetryVisibility == Visibility.Visible || NwfRetryVisibility == Visibility.Visible || RvtRetryVisibility == Visibility.Visible);
             public string NwfStatusTip => RunStates.StepTip(_run, "NWF", new List<string>(), false);
             public string RunAt => _run == null ? "" : _run.At.ToString("dd.MM HH:mm");
             public string RunAtTip => _run == null ? null : $"Запускал {_run.By}, {_run.At:dd.MM.yyyy HH:mm}";
@@ -571,7 +576,8 @@ namespace RASv2.ClashAnalysis.UI
             var box = (CheckBox)sender;
             var row = RowOf(sender);
             var flag = (RowFlag)System.Enum.Parse(typeof(RowFlag), (string)box.Tag);
-            var state = flag == RowFlag.Nwc ? row.Columns.NwcState : flag == RowFlag.Nwf ? row.Columns.NwfState : row.Columns.ReportsState;
+            var state = flag == RowFlag.Nwc ? row.Columns.NwcState : flag == RowFlag.Nwf ? row.Columns.NwfState
+                : flag == RowFlag.Rvt ? row.Columns.RvtState : row.Columns.ReportsState;
             var on = state != true;
             Change(row.Item, () => ExportNodes.SetFlag(row.Item, flag, on, Settings));
         }

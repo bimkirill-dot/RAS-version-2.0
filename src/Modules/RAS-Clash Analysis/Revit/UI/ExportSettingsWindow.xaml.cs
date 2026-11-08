@@ -80,6 +80,7 @@ namespace RASv2.ClashAnalysis.UI
             General.Visibility = tag == "General" ? Visibility.Visible : Visibility.Collapsed;
             NwcSection.Visibility = tag == "Nwc" ? Visibility.Visible : Visibility.Collapsed;
             ReportSection.Visibility = tag == "Report" ? Visibility.Visible : Visibility.Collapsed;
+            RvtSection.Visibility = tag == "Rvt" ? Visibility.Visible : Visibility.Collapsed;
             Scroll.ScrollToTop();
         }
 
@@ -96,7 +97,7 @@ namespace RASv2.ClashAnalysis.UI
             RoomGeometry.IsChecked, RemoveRevitLinks.IsChecked, RemoveCad.IsChecked, RemovePointClouds.IsChecked, RemoveIfc.IsChecked,
             TrimAfter.Text, BlockPrefix.Text, DateFormat.SelectedIndex, ParallelCopies.Text,
             string.Join(";", _departments.Select(d => d.Department)), Picked(_fields), Picked(_statuses), GroupMode.SelectedIndex,
-            FilteredOnly.IsChecked);
+            FilteredOnly.IsChecked, RvtAudit.IsChecked, RvtWorksets.SelectedIndex, RvtOverwrite.IsChecked, RvtTrimAfter.Text);
 
         private static string Picked(ObservableCollection<Pick> picks) => string.Join(";", picks.Where(p => p.On).Select(p => p.Name));
 
@@ -115,6 +116,11 @@ namespace RASv2.ClashAnalysis.UI
             _departments.Clear();
             foreach (var d in s.Departments) _departments.Add(d.Clone());
             FillReport(s.Report ?? ReportOptions.Defaults());
+            var r = s.Rvt ?? new RvtOptions();
+            RvtAudit.IsChecked = r.Audit;
+            RvtWorksets.SelectedIndex = r.KeepWorksets ? 0 : 1;
+            RvtOverwrite.IsChecked = r.Overwrite;
+            RvtTrimAfter.Text = r.TrimAfter ?? "";
         }
 
         /// <summary>Настройки отчётов — все поля и статусы Navisworks по порядку, отмечены — из настроек.</summary>
@@ -165,6 +171,9 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Примеры на одном имени модели: под «Имя NWC» — имя NWC, под «Метками» — {Блок}, {Отдел}, {Дата} (по тому, что сейчас в окне).</summary>
         private void UpdateExample()
         {
+            var rvt = ExportNames.NwcName(SampleModel, RvtTrimAfter.Text, out var rvtMatches);
+            RvtNameExample.Text = "Пример: " + SampleModel + " → " + rvt + ".rvt" +
+                                  (RvtTrimAfter.Text.Trim().Length == 0 ? " (имя модели)" : rvtMatches ? "" : " (в имени нет «" + RvtTrimAfter.Text.Trim() + "» — как есть)");
             var nwc = ExportNames.NwcName(SampleModel, TrimAfter.Text, out var matches);
             NameExample.Text = "Пример: " + SampleModel + " → " + nwc +
                                (TrimAfter.Text.Trim().Length == 0 ? " (не обрезается)" : matches ? "" : " (в имени нет «" + TrimAfter.Text.Trim() + "» — как есть)");
@@ -283,6 +292,11 @@ namespace RASv2.ClashAnalysis.UI
             result.Departments = _departments.Where(d => !string.IsNullOrWhiteSpace(d.Department))
                 .Select(d => new DepartmentTemplate { Department = d.Department.Trim() })
                 .ToList();
+            result.Rvt = new RvtOptions
+            {
+                Audit = RvtAudit.IsChecked == true, KeepWorksets = RvtWorksets.SelectedIndex != 1, Overwrite = RvtOverwrite.IsChecked == true,
+                TrimAfter = RvtTrimAfter.Text.Trim(),
+            };
             result.Report = new ReportOptions
             {
                 Fields = _fields.Where(p => p.On).Select(p => p.Name).ToList(),

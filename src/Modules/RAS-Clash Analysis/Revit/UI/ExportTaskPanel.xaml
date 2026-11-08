@@ -170,6 +170,15 @@
                 <Border Style="{StaticResource SectionHead}">
                     <TextBlock Style="{StaticResource SectionTitle}" Text="NWC" />
                 </Border>
+                <!-- тот же выключатель, что «NWC» в списке задач (разработчик, 08.11.2026) -->
+                <Grid Style="{StaticResource RowGrid}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <TextBlock Style="{StaticResource Cap}" Text="Экспортировать NWC" />
+                    <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
+                        <CheckBox x:Name="MakeNwc" VerticalAlignment="Center" Checked="Any_Changed" Unchecked="Any_Changed" />
+                    </DockPanel>
+                </Grid>
                 <!-- вида нет, если в общих «Экспорт: Целый проект» -->
                 <Grid x:Name="ViewRow" Style="{StaticResource RowGrid}">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
@@ -533,6 +542,41 @@
                         <StackPanel Style="{StaticResource Side}">
                             <TextBlock x:Name="ReportFrom" Style="{StaticResource From}" />
                             <Button x:Name="ReportLink" Style="{StaticResource SideLink}" />
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+
+                <!-- ══ RVT — для заказчика (разработчик, 08.11.2026): модели строки без связей, очищенные, в папку RVT ══ -->
+                <Border Style="{StaticResource SectionHead}">
+                    <TextBlock Style="{StaticResource SectionTitle}" Text="RVT" />
+                </Border>
+                <Grid Style="{StaticResource RowGrid}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <TextBlock Style="{StaticResource Cap}" Text="Экспортировать RVT" />
+                    <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
+                        <CheckBox x:Name="MakeRvt" VerticalAlignment="Center" Checked="Any_Changed" Unchecked="Any_Changed"
+                                  ToolTip="Модели строки — отдельными RVT: без связей, очищенные от неиспользуемого; как — в общих настройках («Экспорт RVT»)" />
+                    </DockPanel>
+                </Grid>
+                <StackPanel x:Name="RvtFields">
+                    <Grid Style="{StaticResource RowGrid}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                        <TextBlock Style="{StaticResource Cap}" Text="Папка для RVT" />
+                        <Button Grid.Column="2" x:Name="RvtBrowse" Style="{StaticResource Browse}" Tag="{Binding ElementName=RvtFolder}" Click="Browse_Click" />
+                        <StackPanel Grid.Column="1">
+                            <TextBox x:Name="RvtFolder" TextChanged="Any_Changed" />
+                            <StackPanel x:Name="RvtChips" Orientation="Horizontal" Margin="0,2,0,0">
+                                <TextBlock Style="{StaticResource Note}" Text="Метки:" />
+                                <Button Style="{StaticResource Chip}" Content="{}{Блок}" Tag="{Binding ElementName=RvtFolder}" Click="Chip_Click" />
+                                <Button Style="{StaticResource Chip}" Content="{}{Отдел}" Tag="{Binding ElementName=RvtFolder}" Click="Chip_Click" />
+                                <Button Style="{StaticResource Chip}" Content="{}{Дата}" Tag="{Binding ElementName=RvtFolder}" Click="Chip_Click" />
+                            </StackPanel>
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource Side}">
+                            <TextBlock x:Name="RvtFrom" Style="{StaticResource From}" />
+                            <Button x:Name="RvtLink" Style="{StaticResource SideLink}" />
                         </StackPanel>
                     </Grid>
                 </StackPanel>
