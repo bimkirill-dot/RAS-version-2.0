@@ -102,7 +102,8 @@ namespace RASv2.Tests
                 s1.Settings.MakeReports = true;
                 Check(ExportNodes.MakesReports(s1), "отчёты — у строки с NWF и галочкой");
                 s1.Settings.MakeNwf = false;
-                Check(!ExportNodes.MakesReports(s1), "без NWF отчётов нет");
+                Check(ExportNodes.MakesReports(s1), "отчёты — и без NWF (по готовой NWF, 08.11.2026)");
+                Check(!ExportNodes.MakesReports(high), "у строки с подзадачами — нет");
             });
             yield return Case("NWF: у строки без подзадач с галочкой; имя — своё или название строки, не наследуется", () =>
             {
@@ -826,7 +827,8 @@ namespace RASv2.Tests
                 Check(C(0).NwcState == true && C(0).ReportsState == false && C(0).ReportsEnabled, "NWC — да, отчёты — нет");
                 Check(ExportNodes.SetFlag(s1, RowFlag.Nwf, false, common) == null && !s1.Settings.MakeNwf && C(2).Nwf == "—" && C(1).NwfState == null && C(0).NwfState == null,
                       "снята у S1 — у «Высокой» и задачи по-разному");
-                Check(ExportNodes.SetFlag(s1, RowFlag.Reports, true, common) != null, "отчёты без NWF — нельзя");
+                Check(ExportNodes.SetFlag(s1, RowFlag.Reports, true, common) == null && s1.Settings.MakeReports && C(2).ReportsState == true,
+                      "отчёты без NWF — можно (по готовой NWF)");
                 Check(ExportNodes.SetFlag(high, RowFlag.Nwf, true, common) == null && s1.Settings.MakeNwf && s2.Settings.MakeNwf && !high.Settings.MakeNwf &&
                       C(1).NwfState == true, "у строки с подзадачами — у всех ниже, у неё самой — нет");
                 s2.Settings.NwfName = "S1_ВК";
@@ -888,6 +890,23 @@ namespace RASv2.Tests
                 var noTests = NwfRunPlan.Build(roots[0], common).Single(p => p.Row == mid);
                 Check(!noTests.RunTests && noTests.Tests.Count == 0 && mid.Settings.Clone().NoTestsRun, "снята — без проверок");
                 mid.Settings.NoTestsRun = false;
+                // галочки по отдельности (08.11.2026): «Отчёты» без «NWF» — по готовой NWF: прогон и отчёты, без скрытия
+                mid.Settings.MakeNwf = false;
+                mid.Settings.MakeReports = true;
+                mid.Settings.HideSets = new List<HideSet> { SearchSets.FromName("временн") };
+                var only = NwfRunPlan.Build(roots[0], common, null, f => true).Single(p => p.Row == mid);
+                Check(only.ReportsOnly && only.Skip == null && only.Reports.Count == 2 && only.HideSets.Count == 0 && only.RunTests,
+                      "только отчёты: NWF есть — прогон и отчёты, без скрытия: " + only.Skip);
+                Check(NwfRunPlan.Build(roots[0], common, null, f => false).Single(p => p.Row == mid).Skip.StartsWith("NWF ещё нет"), "NWF нет — пропуск");
+                mid.Settings.NoTestsRun = true;
+                Check(NwfRunPlan.Build(roots[0], common, null, f => true).Single(p => p.Row == mid).Skip.Contains("«Выполнять проверки» снята"),
+                      "проверки не выполняются — отчётов нет, пропуск");
+                mid.Settings.NoTestsRun = false;
+                Check(!NwfRunPlan.Build(roots[0], common, null, f => true).Any(p => p.Row == high.Children[0] && p.ReportsOnly), "с «NWF» — не «только отчёты»");
+                mid.Settings.MakeReports = false;
+                Check(NwfRunPlan.Build(roots[0], common).All(p => p.Row != mid), "ни NWF, ни отчётов — строки нет");
+                mid.Settings.MakeNwf = true;
+                mid.Settings.HideSets = null;
                 roots[1].Settings.MakeNwf = true;
                 roots[1].Settings.Folder = "";
                 Check(NwfRunPlan.Build(roots[1], common)[0].Skip.StartsWith("не задана папка"), "без папки — пропуск");

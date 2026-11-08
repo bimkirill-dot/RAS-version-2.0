@@ -36,6 +36,8 @@ namespace RASv2.ClashAnalysis.Logic
         [DataMember(Order = 6)] public List<NwfToolReport> Reports { get; set; } = new List<NwfToolReport>();
         /// <summary>Настройки отчёта (шестерёнка → «Настройки отчётов»).</summary>
         [DataMember(Order = 7)] public ReportOptions ReportOptions { get; set; }
+        /// <summary>Только отчёты: готовая NWF — прогон проверок, отчёты, сохранить; модели не добавлять, не скрывать (08.11.2026).</summary>
+        [DataMember(Order = 8)] public bool ReportsOnly { get; set; }
     }
 
     /// <summary>

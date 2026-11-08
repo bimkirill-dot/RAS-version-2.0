@@ -218,7 +218,7 @@ namespace RASv2.ClashAnalysis.Logic
         public bool? NwcState { get; set; }
         public bool? NwfState { get; set; }
         public bool? ReportsState { get; set; }
-        /// <summary>Отчёты — только у строк, собирающих NWF: ни одной — галочка серая.</summary>
+        /// <summary>Отчёты — у строк без подзадач (и без «NWF» — по готовой NWF); ни одной — галочка серая.</summary>
         public bool ReportsEnabled { get; set; }
     }
 
@@ -266,8 +266,12 @@ namespace RASv2.ClashAnalysis.Logic
         public static List<HideSet> HideSetsOf(ExportTask task) => Get(task, s => s.HideSets);
         /// <summary>Отбор моделей по дате изменения: свой или уровня выше; нигде — нет (выгружать все).</summary>
         public static ModelDateFilter EditedOf(ExportTask task) => OwnerOf(task, s => s.Edited)?.Settings.Edited;
-        /// <summary>Строка выгружает отчёты: собирает NWF и «Формировать отчёты».</summary>
-        public static bool MakesReports(ExportTask task) => MakesNwf(task) && task.Settings.MakeReports;
+        /// <summary>
+        /// Строка выгружает отчёты: «Формировать отчёты» у строки без подзадач. Без «NWF» — по готовой NWF строки (разработчик,
+        /// 08.11.2026: «каждая галочка работает и по отдельности: стоят только отчёты — плагин находит NWF, обновляет проверки и
+        /// выгружает отчёты»).
+        /// </summary>
+        public static bool MakesReports(ExportTask task) => task.Settings.MakeReports && task.Children.Count == 0;
         /// <summary>Имя NWF строки — своё (не наследуется), пусто — название строки.</summary>
         public static string NwfNameOf(ExportTask task) =>
             (string.IsNullOrWhiteSpace(task.Settings.NwfName) ? task.Name ?? "" : task.Settings.NwfName).Trim();
@@ -366,12 +370,10 @@ namespace RASv2.ClashAnalysis.Logic
 
         /// <summary>
         /// К каким строкам относится выключатель: NWC — строка и все ниже (у строки с подзадачами — её модели, которых нет ниже);
-        /// NWF — строки без подзадач; отчёты — строки без подзадач, которые собирают NWF.
+        /// NWF и отчёты — строки без подзадач (каждая галочка — и по отдельности, 08.11.2026).
         /// </summary>
         private static IEnumerable<ExportTask> FlagRows(ExportTask task, RowFlag flag) =>
-            flag == RowFlag.Nwc ? task.Self()
-            : flag == RowFlag.Nwf ? task.Self().Where(t => t.Children.Count == 0)
-            : task.Self().Where(MakesNwf);
+            flag == RowFlag.Nwc ? task.Self() : task.Self().Where(t => t.Children.Count == 0);
 
         private static bool FlagOf(ExportTask t, RowFlag flag) =>
             flag == RowFlag.Nwc ? !t.Settings.NoNwc : flag == RowFlag.Nwf ? t.Settings.MakeNwf : t.Settings.MakeReports;
@@ -398,8 +400,7 @@ namespace RASv2.ClashAnalysis.Logic
         public static string SetFlag(ExportTask task, RowFlag flag, bool on, ExportSettings common)
         {
             var rows = FlagRows(task, flag).ToList();
-            if (rows.Count == 0)
-                return flag == RowFlag.Reports ? "Отчёты делает строка, которая собирает NWF: сначала включите NWF." : "Здесь нечего включать.";
+            if (rows.Count == 0) return "Здесь нечего включать.";
             var was = rows.Select(t => FlagOf(t, flag)).ToList();
             foreach (var t in rows) SetFlagOf(t, flag, on);
             string error = null;

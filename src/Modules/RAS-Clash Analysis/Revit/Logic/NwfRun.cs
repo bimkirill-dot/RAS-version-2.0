@@ -25,25 +25,36 @@ namespace RASv2.ClashAnalysis.Logic
         public bool RunTests { get; set; } = true;
         /// <summary>Файл проверок сменился, человек согласился — проверки в NWF заменяются.</summary>
         public bool ReplaceTests { get; set; }
+        /// <summary>
+        /// Только отчёты (у строки «Отчёты» без «NWF», 08.11.2026): готовая NWF — открыть, прогнать проверки, записать отчёты, сохранить;
+        /// модели не добавляются, скрытие не делается.
+        /// </summary>
+        public bool ReportsOnly { get; set; }
     }
 
     /// <summary>
     /// Какие NWF собирать после NWC (DECISIONS.md модуля, «Этап 2 — сборка NWF»): строки ветки с галочкой «Формировать NWF» (без
-    /// подзадач), NWC — по моделям строки, теми же путями, что у выгрузки NWC.
+    /// подзадач), NWC — по моделям строки, теми же путями, что у выгрузки NWC. Галочки — и по отдельности (разработчик, 08.11.2026):
+    /// «NWF» без «NWC» — NWF обновляется из NWC, какие есть на диске (скрытие, проверки — заново, файл проверок сменился — вопрос);
+    /// «Отчёты» без «NWF» — по готовой NWF строки: прогон проверок и отчёты (ReportsOnly).
     /// </summary>
     public static class NwfRunPlan
     {
         /// <param name="runDate">Время запуска — {Дата} папки отчётов (одно на весь запуск: все форматы — в одну папку).</param>
-        public static List<NwfPlan> Build(ExportTask start, ExportSettings common, DateTime? runDate = null)
+        /// <param name="exists">Есть ли файл (NWF для «только отчётов»); null — File.Exists.</param>
+        public static List<NwfPlan> Build(ExportTask start, ExportSettings common, DateTime? runDate = null, Func<string, bool> exists = null)
         {
             var when = runDate ?? DateTime.Now;
+            exists = exists ?? System.IO.File.Exists;
             var plans = new List<NwfPlan>();
-            foreach (var row in start.Active().Where(ExportNodes.MakesNwf))
+            foreach (var row in start.Active().Where(r => ExportNodes.MakesNwf(r) || ExportNodes.MakesReports(r)))
             {
+                var reportsOnly = !ExportNodes.MakesNwf(row);
                 var plan = new NwfPlan
                 {
-                    Row = row, NwfPath = ExportNodes.NwfPath(row, common),
-                    HideSets = (ExportNodes.HideSetsOf(row) ?? new List<HideSet>()).Where(h => !string.IsNullOrWhiteSpace(h.Xml)).ToList(),
+                    Row = row, NwfPath = ExportNodes.NwfPath(row, common), ReportsOnly = reportsOnly,
+                    HideSets = reportsOnly ? new List<HideSet>()
+                        : (ExportNodes.HideSetsOf(row) ?? new List<HideSet>()).Where(h => !string.IsNullOrWhiteSpace(h.Xml)).ToList(),
                     // «Выполнять проверки» снята — проверок в задании нет (NWF — без них, человек — вручную)
                     Tests = row.Settings.NoTestsRun ? new List<string>()
                         : (ExportNodes.TestsOf(row) ?? new List<string>()).Where(t => !string.IsNullOrWhiteSpace(t)).ToList(),
@@ -57,9 +68,15 @@ namespace RASv2.ClashAnalysis.Logic
                     .Where(m => !string.IsNullOrWhiteSpace(m.Path))
                     .Select(m => ExportNodes.NwcPath(row, m, common))
                     .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-                if (plan.Nwcs.Count == 0) plan.Skip = "у строки нет моделей — NWF не из чего собрать";
-                else if (!NwcRunPlan.IsRooted(plan.NwfPath))
+                if (!NwcRunPlan.IsRooted(plan.NwfPath))
                     plan.Skip = $"не задана папка: ни «Папки задачи», ни полного пути в «Папке для NWF» у «{row.Name}»";
+                else if (reportsOnly && !plan.RunTests)
+                    plan.Skip = "отчёты — по результатам проверок, а «Выполнять проверки» снята";
+                else if (reportsOnly && plan.Tests.Count == 0)
+                    plan.Skip = "отчёты — по результатам проверок, а файлов проверок у строки нет";
+                else if (reportsOnly && !exists(plan.NwfPath))
+                    plan.Skip = "NWF ещё нет — отчёты делаются по готовой NWF; включите «NWF», чтобы собрать её";
+                else if (!reportsOnly && plan.Nwcs.Count == 0) plan.Skip = "у строки нет моделей — NWF не из чего собрать";
                 plans.Add(plan);
             }
             return plans;

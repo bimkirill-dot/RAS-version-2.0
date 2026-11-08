@@ -697,9 +697,11 @@ namespace RASv2.ClashAnalysis.UI
             // задаются для подзадач — правятся
             var leaf = _task.Children.Count == 0;
             var makes = MakeNwf.IsChecked == true;
-            MakeReports.IsEnabled = leaf && makes;
-            var nwfOn = !leaf || makes;
-            var reportsOn = !leaf || makes && MakeReports.IsChecked == true;
+            // отчёты — и без «NWF», по готовой NWF строки (08.11.2026): тогда имя и папка NWF нужны — найти её
+            var reports = MakeReports.IsChecked == true;
+            MakeReports.IsEnabled = leaf;
+            var nwfOn = !leaf || makes || reports;
+            var reportsOn = !leaf || reports;
             NwfFields.IsEnabled = nwfOn;
             NwfFields.Opacity = nwfOn ? 1 : 0.45;
             ReportFields.IsEnabled = reportsOn;

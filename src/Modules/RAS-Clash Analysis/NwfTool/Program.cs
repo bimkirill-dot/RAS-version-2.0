@@ -93,15 +93,20 @@ namespace RASv2.ClashAnalysis.NwfBuild
         private static string One(NavisworksApplication app, int i, NwfToolItem item)
         {
             var nwf = item.Nwf;
-            Say("── " + nwf);
-            Console.WriteLine(NwfTool.StepLine(i, "Проверка NWC"));
-            var present = item.Nwcs.Where(File.Exists).ToList();
-            var missing = item.Nwcs.Where(n => !File.Exists(n)).ToList();
-            foreach (var n in present) Say("   NWC: " + n + " — " + Size(n) + ", записана " + File.GetLastWriteTime(n).ToString("dd.MM.yyyy HH:mm"));
-            foreach (var n in missing) Say("   NWC нет: " + n);
-            if (present.Count == 0) throw new ToolError("нет ни одной NWC строки — сначала выгрузите NWC");
-
+            Say("── " + nwf + (item.ReportsOnly ? " — только отчёты" : ""));
             var exists = File.Exists(nwf);
+            // только отчёты (08.11.2026): по готовой NWF — NWC не проверяются и не добавляются, скрытие не делается
+            if (item.ReportsOnly && !exists) throw new ToolError("NWF ещё нет — отчёты делаются по готовой NWF; включите «NWF», чтобы собрать её");
+            var present = item.ReportsOnly ? new List<string>() : item.Nwcs.Where(File.Exists).ToList();
+            var missing = item.ReportsOnly ? new List<string>() : item.Nwcs.Where(n => !File.Exists(n)).ToList();
+            if (!item.ReportsOnly)
+            {
+                Console.WriteLine(NwfTool.StepLine(i, "Проверка NWC"));
+                foreach (var n in present) Say("   NWC: " + n + " — " + Size(n) + ", записана " + File.GetLastWriteTime(n).ToString("dd.MM.yyyy HH:mm"));
+                foreach (var n in missing) Say("   NWC нет: " + n);
+                if (present.Count == 0) throw new ToolError("нет ни одной NWC строки — сначала выгрузите NWC");
+            }
+
             var notes = new List<string>();
             if (exists)
             {
@@ -125,7 +130,10 @@ namespace RASv2.ClashAnalysis.NwfBuild
                 var c = Stopwatch.StartNew();
                 app.OpenFile(nwf);
                 Say("   NWF открыта за " + Sec(c) + " (NWC — с диска, какие сейчас)");
-
+            }
+            if (exists && !item.ReportsOnly)
+            {
+                var c = Stopwatch.StartNew();
                 Console.WriteLine(NwfTool.StepLine(i, "Модели в NWF"));
                 var list = Path.Combine(Path.GetTempPath(), "ras-nwf-models-" + Guid.NewGuid().ToString("N") + ".txt");
                 try
@@ -159,7 +167,7 @@ namespace RASv2.ClashAnalysis.NwfBuild
                     if (File.Exists(list)) File.Delete(list);
                 }
             }
-            else
+            else if (!exists)
             {
                 Console.WriteLine(NwfTool.StepLine(i, "Сборка: " + Path.GetFileName(present[0])));
                 var c = Stopwatch.StartNew();
@@ -176,7 +184,7 @@ namespace RASv2.ClashAnalysis.NwfBuild
 
             // скрыть — до проверок (разработчик, 07.11.2026: «сначала скрыть по загруженным условиям, потом проверка»; Navisworks скрытое
             // в проверки не берёт — проверено им); ничего не нашлось — пропуск («что поделать»)
-            if (item.HideSets.Count > 0) Hide(app, i, item, notes);
+            if (item.HideSets.Count > 0 && !item.ReportsOnly) Hide(app, i, item, notes);
             if (item.Tests.Count > 0) Tests(app, i, item, notes);
             // отчёты — после прогона, по каждому формату (разработчик, 08.11.2026)
             if (item.Tests.Count > 0 && item.Reports.Count > 0) Reports(app, i, item, notes);
@@ -188,6 +196,7 @@ namespace RASv2.ClashAnalysis.NwfBuild
             if (!File.Exists(nwf)) throw new ToolError("Navisworks не записал NWF (сохранение прошло без ошибки, а файла нет)");
             Say("   NWF записана: " + nwf + " — " + Size(nwf) + ", " + Sec(save));
             if (missing.Count > 0) notes.Add("нет NWC: " + missing.Count);
+            if (item.ReportsOnly) return "только отчёты" + (notes.Count > 0 ? ": " + string.Join("; ", notes) : "");
             return (exists ? "обновлена" : "собрана") + ": NWC " + present.Count + (notes.Count > 0 ? "; " + string.Join("; ", notes) : "");
         }
 #else

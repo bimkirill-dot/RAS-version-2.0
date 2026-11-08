@@ -30,7 +30,7 @@ namespace RASv2.ClashAnalysis.Export
                     Model = new ExportModel { Path = p.NwfPath }, NwcPath = p.NwfPath, Skip = p.Skip, IsNwf = true,
                     Name = ExportNodes.FileName(p.NwfPath),
                 },
-                Step = "ждёт NWC",
+                Step = p.ReportsOnly ? "ждёт" : "ждёт NWC",
             }).ToList();
 
         /// <summary>В шапку журнала: какие NWF и из каких NWC.</summary>
@@ -40,8 +40,10 @@ namespace RASv2.ClashAnalysis.Export
             j.Line($"NWF после NWC: {plans.Count(p => p.Skip == null)}, пропускаются: {plans.Count(p => p.Skip != null)}");
             foreach (var p in plans)
             {
-                j.Line($"   NWF «{p.Row.Name}»: {p.NwfPath}" + (p.Skip != null ? " — пропускается: " + p.Skip : ""));
-                foreach (var n in p.Nwcs) j.Line("      ← " + n);
+                j.Line($"   NWF «{p.Row.Name}»: {p.NwfPath}" + (p.ReportsOnly ? " — только отчёты (готовая NWF: прогон проверок и отчёты)" : "") +
+                       (p.Skip != null ? " — пропускается: " + p.Skip : ""));
+                if (!p.ReportsOnly)
+                    foreach (var n in p.Nwcs) j.Line("      ← " + n);
                 foreach (var h in p.HideSets) j.Line($"      скрыть: «{h.Name}» — {h.Text}");
                 foreach (var t in p.Tests) j.Line("      проверки: " + t);
                 if (!p.RunTests) j.Line("      проверки: не выполняются («Выполнять проверки» снята) — вручную");
@@ -108,6 +110,7 @@ namespace RASv2.ClashAnalysis.Export
                 {
                     Nwf = plans[i].NwfPath, Nwcs = plans[i].Nwcs.ToList(), HideSets = plans[i].HideSets.Select(h => h.Xml).ToList(),
                     Tests = plans[i].Tests.ToList(), ReplaceTests = plans[i].ReplaceTests, Reports = plans[i].Reports.ToList(), ReportOptions = plans[i].ReportOptions,
+                    ReportsOnly = plans[i].ReportsOnly,
                 }).ToList(),
             };
             var jobFile = Path.Combine(work, "job.json");
