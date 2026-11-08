@@ -53,7 +53,11 @@ namespace RASv2.ClashAnalysis
             _year = context.RevitYear;
             _settingsPath = Path.Combine(context.UserDataDir, "view-settings.json");
             _settings = ViewSettings.Load(_settingsPath);
-            _exportDir = Path.Combine(context.SharedDataDir, "Задачи выгрузки");
+            // задачи и общие настройки «Менеджера задач» — у каждого свои (разработчик, 08.11.2026: «отменим многопользовательскую
+            // лабуду — пусть у каждого пользователя будут свои задачи»): %AppData%\RAS_v_2.0\RAS-Clash Analysis\Задачи выгрузки; было —
+            // общая папка на сервере, оттуда — один раз копией, пока своих нет
+            _exportDir = Path.Combine(context.UserDataDir, "Задачи выгрузки");
+            TakeShared(Path.Combine(context.SharedDataDir, "Задачи выгрузки"), _exportDir);
             var window = IntPtr.Zero;
             try { window = context.Application.MainWindowHandle; }
             catch (Exception) { /* окна ещё нет — Revit вперёд выходить не будет, остальное работает */ }
@@ -174,6 +178,29 @@ namespace RASv2.ClashAnalysis
         }
 
         /// <summary>«Задачи выгрузки» — окно дерева задач.</summary>
+        /// <summary>
+        /// Своих задач ещё нет, а в прежней общей папке на сервере есть — забрать копией (общая папка не меняется). Не вышло — с пустого:
+        /// причина — в журнал плагина.
+        /// </summary>
+        private void TakeShared(string shared, string mine)
+        {
+            try
+            {
+                if (Directory.Exists(mine) || !Directory.Exists(shared)) return;
+                foreach (var file in Directory.GetFiles(shared, "*.json", SearchOption.AllDirectories))
+                {
+                    var target = Path.Combine(mine, file.Substring(shared.Length).TrimStart(Path.DirectorySeparatorChar));
+                    Directory.CreateDirectory(Path.GetDirectoryName(target));
+                    File.Copy(file, target, false);
+                }
+                _log.Info("Менеджер задач: задачи и общие настройки — из прежней общей папки " + shared + " в свою " + mine);
+            }
+            catch (Exception ex)
+            {
+                _log.Error("Менеджер задач: прежние задачи из общей папки не скопированы — " + shared, ex);
+            }
+        }
+
         // «Менеджер задач» — немодальный (разработчик, 08.11.2026: «чтобы с Revit можно было взаимодействовать, пока открыто окно»):
         // одно окно на Revit; Revit API из него — внешним событием (RevitCalls)
         private ExportTasksWindow _tasksWindow;

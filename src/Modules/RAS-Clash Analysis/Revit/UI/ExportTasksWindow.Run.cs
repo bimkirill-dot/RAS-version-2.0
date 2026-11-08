@@ -437,7 +437,7 @@ namespace RASv2.ClashAnalysis.UI
                 catch (Exception ex)
                 {
                     RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: задача не удалена с сервера — " + t.Name, ex);
-                    MessageBox.Show(this, "Задача «" + t.Name + "» не удалена с сервера: " + ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show(this, "Задача «" + t.Name + "» не удалена: " + ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
             foreach (var root in touched.Where(_roots.Contains)) SaveTop(root);

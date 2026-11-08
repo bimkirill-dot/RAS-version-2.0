@@ -178,7 +178,7 @@ namespace RASv2.ClashAnalysis.UI
         private readonly List<ExportTask> _picked = new List<ExportTask>();
         private ExportTask _anchor;
 
-        /// <summary>Задачи и общие настройки — из общего хранилища на сервере: открыли окно — видно свежее у всех.</summary>
+        /// <summary>Задачи и общие настройки — свои у каждого пользователя (с 08.11.2026; было — общее хранилище на сервере).</summary>
         public ExportTasksWindow(ExportStore store)
         {
             RASv2.Core.WindowTheme.Apply(this);
@@ -194,9 +194,9 @@ namespace RASv2.ClashAnalysis.UI
             }
             catch (System.Exception ex)
             {
-                // сервер недоступен — смотреть можно нечего, править нельзя: правки не дошли бы до коллег
-                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: общее хранилище не прочитано — " + store.ProjectsDir, ex);
-                ShowBanner("Сервер недоступен — задачи не загрузились. Проверьте сеть и откройте окно снова.");
+                // папка задач не читается — править нельзя: записалось бы поверх того, что не прочитано
+                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: папка задач не прочитана — " + store.ProjectsDir, ex);
+                ShowBanner("Задачи не загрузились — подробности в журнале плагина («О плагине» → «Показать журнал ошибок»).");
                 Toolbar.Visibility = Visibility.Collapsed;
                 RowsList.IsEnabled = false;
             }
@@ -268,7 +268,7 @@ namespace RASv2.ClashAnalysis.UI
             catch (System.Exception ex)
             {
                 RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: задача не записана на сервер — " + top.Name, ex);
-                MessageBox.Show(this, "Задача «" + top.Name + "» не сохранена на сервере: " + ex.Message +
+                MessageBox.Show(this, "Задача «" + top.Name + "» не сохранена: " + ex.Message +
                                       "\n\nПравки остались в этом окне — закроете его, и они пропадут.", Title, MessageBoxButton.OK, MessageBoxImage.Error);
                 return false;
             }
@@ -502,7 +502,7 @@ namespace RASv2.ClashAnalysis.UI
                 catch (System.Exception ex)
                 {
                     RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: задача не удалена с сервера — " + task.Name, ex);
-                    MessageBox.Show(this, "Задача «" + task.Name + "» не удалена с сервера: " + ex.Message, Title, MessageBoxButton.OK,
+                    MessageBox.Show(this, "Задача «" + task.Name + "» не удалена: " + ex.Message, Title, MessageBoxButton.OK,
                         MessageBoxImage.Error);
                 }
             }
@@ -522,7 +522,7 @@ namespace RASv2.ClashAnalysis.UI
                 catch (System.Exception ex)
                 {
                     RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: общие настройки не записаны на сервер", ex);
-                    MessageBox.Show(this, "Общие настройки не сохранены на сервере: " + ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show(this, "Общие настройки не сохранены: " + ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
                 }
                 // примеры в панели — по общим настройкам: открыть строку заново, если в ней нет правок
                 if (_panel != null && !_panel.Dirty) Show(_selected);
