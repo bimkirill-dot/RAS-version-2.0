@@ -112,7 +112,7 @@
             <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
                 <StackPanel x:Name="Toolbar" DockPanel.Dock="Right" Orientation="Horizontal">
                     <!-- импорт задачи из файла коллеги (02.11.2026); Segoe MDL2: E8B5 — импорт -->
-                    <Button Style="{StaticResource IconButton}" Content="&#xE8B5;" Click="Import_Click" ToolTip="Импорт задачи…" />
+                    <Button Style="{StaticResource IconButton}" Content="&#xE8E5;" Click="Import_Click" ToolTip="Импорт задачи…" />
                     <Button Style="{StaticResource IconButton}" Content="&#xE710;" Margin="4,0,0,0" Click="AddTop_Click" ToolTip="Новая задача" />
                     <Button Style="{StaticResource IconButton}" Content="&#xE713;" Margin="4,0,0,0" Click="Settings_Click"
                             ToolTip="Общие настройки" />
