@@ -33,6 +33,11 @@ namespace RASv2.ClashAnalysis.Logic
         public string RvtPath { get; set; }
         /// <summary>Пересохранить модель на место («Пересохранить RVT» у строки, 08.11.2026) — первым делом, пока модель не тронута.</summary>
         public bool Resave { get; set; }
+        /// <summary>
+        /// Папка резервных копий этого запуска: папка копий из настроек и в ней — дата и время запуска (разработчик, 08.11.2026: «зачем
+        /// заменяет — при пакетном пересохранении это ничего не даст; пусть создаётся папка со временем пересохранения, лишнее удалят сами»).
+        /// </summary>
+        public string BackupDir { get; set; }
         /// <summary>Строка окна хода — не NWC, а NWF строки (Export\NwfStage): имя — «S1_ВК.nwf».</summary>
         public bool IsNwf { get; set; }
         public string Name { get; set; }
@@ -86,6 +91,7 @@ namespace RASv2.ClashAnalysis.Logic
                         RvtPath = row.Settings.MakeRvt ? ExportNodes.RvtPath(row, model, common, when) : null,
                         Resave = row.Settings.Resave,
                     };
+                    job.BackupDir = System.IO.Path.Combine((export.Rvt ?? new RvtOptions()).BackupDir, ExportNodes.DateLabel(when, common.DateFormat));
                     if (byPath.TryGetValue(job.NwcPath, out var same))
                     {
                         same.Rows.Add(row.Name);

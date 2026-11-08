@@ -116,7 +116,7 @@ namespace RASv2.ClashAnalysis.Export
                 if (job.Resave)
                 {
                     var r = job.Export.Rvt ?? new RvtOptions();
-                    _j.Line($"       пересохранение на место: сжать {Yes(r.ResaveCompact)}, проверить (Audit) {Yes(r.ResaveAudit)}; резервная копия → {r.BackupDir}");
+                    _j.Line($"       пересохранение на место: сжать {Yes(r.ResaveCompact)}, проверить (Audit) {Yes(r.ResaveAudit)}; резервная копия → {job.BackupDir ?? r.BackupDir}");
                 }
                 _j.Line($"       модель: {job.Model.Path}{(job.Model.Year > 0 ? $" (Revit {job.Model.Year})" : "")}; строки: {string.Join(", ", job.Rows)}");
                 _j.Line($"       вид: {(job.Export.Nwc.Scope == NwcScope.View ? "«" + job.View + "»" : "целый проект")}; " + OptionsText(job.Export.Nwc) +
@@ -512,10 +512,10 @@ namespace RASv2.ClashAnalysis.Export
             return string.Join("; ", parts);
         }
 
-        /// <summary>Резервная копия модели перед пересохранением — нетронутая копия, одна на модель (следующая заменяет прежнюю).</summary>
+        /// <summary>Резервная копия модели перед пересохранением — нетронутая копия, в папку запуска (дата и время), прежние не трогаются.</summary>
         private void Backup(string copy, NwcJob job)
         {
-            var dir = (job.Export.Rvt ?? new RvtOptions()).BackupDir;
+            var dir = job.BackupDir ?? (job.Export.Rvt ?? new RvtOptions()).BackupDir;
             Directory.CreateDirectory(dir);
             var target = System.IO.Path.Combine(dir, ExportNodes.FileName(job.Model.Path));
             var tmp = target + ".ras-tmp";
@@ -690,7 +690,7 @@ namespace RASv2.ClashAnalysis.Export
             {
                 try
                 {
-                    var dir = (job.Export.Rvt ?? new RvtOptions()).BackupDir;
+                    var dir = job.BackupDir ?? (job.Export.Rvt ?? new RvtOptions()).BackupDir;
                     try
                     {
                         Directory.CreateDirectory(dir);

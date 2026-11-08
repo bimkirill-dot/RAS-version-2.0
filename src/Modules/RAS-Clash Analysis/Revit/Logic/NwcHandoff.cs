@@ -26,6 +26,8 @@ namespace RASv2.ClashAnalysis.Logic
         [DataMember(Order = 11, EmitDefaultValue = false)] public bool NwcOff { get; set; }
         /// <summary>Пересохранить модель на место (08.11.2026).</summary>
         [DataMember(Order = 12, EmitDefaultValue = false)] public bool Resave { get; set; }
+        /// <summary>Папка резервных копий запуска.</summary>
+        [DataMember(Order = 13, EmitDefaultValue = false)] public string BackupDir { get; set; }
     }
 
     /// <summary>
@@ -122,7 +124,7 @@ namespace RASv2.ClashAnalysis.Logic
         {
             ModelPath = job.Model.Path, ModelYear = job.Model.Year, NwcName = job.Model.NwcName, Block = job.Model.Block,
             NwcPath = job.NwcPath, View = job.View, Export = job.Export, Edited = job.Edited, Rows = job.Rows.ToList(),
-            RvtPath = job.RvtPath, NwcOff = job.Off, Resave = job.Resave,
+            RvtPath = job.RvtPath, NwcOff = job.Off, Resave = job.Resave, BackupDir = job.BackupDir,
         };
 
         public static NwcJob FromHandoff(HandoffJob h)
@@ -131,7 +133,7 @@ namespace RASv2.ClashAnalysis.Logic
             {
                 Model = new ExportModel { Path = h.ModelPath, Year = h.ModelYear, NwcName = h.NwcName, Block = h.Block },
                 NwcPath = h.NwcPath, View = h.View, Export = h.Export ?? new ExportSettings(), Edited = h.Edited,
-                RvtPath = h.RvtPath, Off = h.NwcOff, Resave = h.Resave,
+                RvtPath = h.RvtPath, Off = h.NwcOff, Resave = h.Resave, BackupDir = h.BackupDir,
             };
             job.Rows.AddRange(h.Rows ?? new List<string>());
             return job;

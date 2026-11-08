@@ -77,7 +77,7 @@ namespace RASv2.ClashAnalysis.Export
                            string.Join("\n", resave.Take(15).Select(j => "• " + j.ModelName)) + (resave.Count > 15 ? "\n…" : "") +
                            "\n\nУ коллег, которые работают с этими моделями, прежние локальные копии перестанут синхронизироваться: " +
                            "несинхронизированные изменения пропадут, локальные копии придётся создать заново. Пусть все синхронизируются и закроют модели.\n\n" +
-                           "Перед заменой прежняя модель копируется в папку резервных копий.\n\nПродолжить?";
+                           "Перед заменой прежние модели копируются в папку резервных копий: " + resave[0].BackupDir + "\n\nПродолжить?";
                 if (MessageBox.Show(owner, text, "Пересохранение моделей", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
                     return null;
             }
