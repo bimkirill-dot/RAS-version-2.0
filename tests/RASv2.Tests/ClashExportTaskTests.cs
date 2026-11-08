@@ -1083,7 +1083,12 @@ namespace RASv2.Tests
                 roots[1].Settings.NoNwc = true;
                 roots[1].Settings.Resave = true;
                 Check(NwcRunPlan.Build(roots[1], common, 2026, new List<string>()).All(j => j.Skip == null && j.Resave), "только пересохранение — без папок");
+                // NWC включён (по умолчанию), папки нет, а пересохранение есть — модель не пропускается, NWC — с причиной (09.11.2026)
                 roots[1].Settings.NoNwc = false;
+                var plain = new List<string>();
+                var mixed = NwcRunPlan.Build(roots[1], common, 2026, plain);
+                Check(mixed.All(j => j.Skip == null && j.Off && j.NwcSkip.StartsWith("не задана папка") && j.Resave) &&
+                      plain.Any(n => n.StartsWith("NWC не выгружаются")), "без папки — только NWC пропускается, пересохранение делается");
                 roots[1].Settings.Resave = false;
 
                 var at = new DateTime(2026, 11, 7, 15, 20, 0);

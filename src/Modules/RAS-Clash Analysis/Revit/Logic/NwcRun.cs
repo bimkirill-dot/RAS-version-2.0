@@ -31,6 +31,8 @@ namespace RASv2.ClashAnalysis.Logic
         /// null — RVT не нужен.
         /// </summary>
         public string RvtPath { get; set; }
+        /// <summary>Почему NWC не выгружается, хотя галочка стоит (нет папки), — а модель открывается ради другого (09.11.2026).</summary>
+        public string NwcSkip { get; set; }
         /// <summary>Пересохранить модель на место («Пересохранить RVT» у строки, 08.11.2026) — первым делом, пока модель не тронута.</summary>
         public bool Resave { get; set; }
         /// <summary>
@@ -124,12 +126,39 @@ namespace RASv2.ClashAnalysis.Logic
                     jobs.Add(job);
                 }
             }
-            // папки и выключатели — после слияния строк: NWC нужна хоть одной строке, RVT — хоть одной
+            // папки и выключатели — после слияния строк: NWC нужна хоть одной строке, RVT — хоть одной. Нет папки у одной функции, а у
+            // модели есть другая работа (пересохранение, RVT) — пропускается только эта функция, модель — нет (разработчик, 09.11.2026:
+            // задача без папки для пересохранения писала «выгружать нечего: не задана папка NWC»)
+            var dropped = new Dictionary<string, int>();
+            void Drop(string what) => dropped[what] = dropped.TryGetValue(what, out var n) ? n + 1 : 1;
             foreach (var j in jobs.Where(j => j.Skip == null))
-                j.Skip = j.Off && j.RvtPath == null && !j.Resave ? "выгрузка NWC выключена (галочка «NWC»)"
-                    : !j.Off && !IsRooted(j.NwcPath) ? $"не задана папка: ни «Папки задачи», ни полного пути в «Папке для NWC» у «{j.Rows[0]}»"
-                    : j.RvtPath != null && !IsRooted(j.RvtPath) ? $"не задана папка: ни «Папки задачи», ни полного пути в «Папке для RVT» у «{j.Rows[0]}»"
-                    : null;
+            {
+                if (j.RvtPath != null && !IsRooted(j.RvtPath))
+                {
+                    var why = $"не задана папка: ни «Папки задачи», ни полного пути в «Папке для RVT» у «{j.Rows[0]}»";
+                    if (j.Off && !j.Resave)
+                    {
+                        j.Skip = why;
+                        continue;
+                    }
+                    j.RvtPath = null;
+                    Drop("RVT не выгружаются — " + why);
+                }
+                if (!j.Off && !IsRooted(j.NwcPath))
+                {
+                    var why = $"не задана папка: ни «Папки задачи», ни полного пути в «Папке для NWC» у «{j.Rows[0]}»";
+                    if (j.RvtPath == null && !j.Resave)
+                    {
+                        j.Skip = why;
+                        continue;
+                    }
+                    j.Off = true;
+                    j.NwcSkip = why;
+                    Drop("NWC не выгружаются — " + why);
+                }
+                if (j.Off && j.RvtPath == null && !j.Resave) j.Skip = "выгрузка NWC выключена (галочка «NWC»)";
+            }
+            foreach (var d in dropped) notes.Add($"{d.Key} (моделей: {d.Value}); остальное у этих моделей делается.");
             foreach (var g in jobs.GroupBy(j => j.Model.Path, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
                 notes.Add($"Модель «{ExportNames.BareName(g.Key)}» выгружается {g.Count()} раза — в разные папки: " +
                           string.Join(", ", g.Select(j => j.NwcPath)) + ". Модель откроется столько же раз.");

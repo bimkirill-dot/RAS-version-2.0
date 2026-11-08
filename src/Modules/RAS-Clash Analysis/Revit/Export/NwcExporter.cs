@@ -111,7 +111,7 @@ namespace RASv2.ClashAnalysis.Export
             foreach (var job in jobs)
             {
                 i++;
-                _j.Line($"  {i,3}. {job.ModelName}  →  {(job.Off ? "NWC не выгружается" : job.NwcPath)}");
+                _j.Line($"  {i,3}. {job.ModelName}  →  {(job.Off ? "NWC не выгружается" + (job.NwcSkip != null ? " — " + job.NwcSkip : "") : job.NwcPath)}");
                 if (job.RvtPath != null) _j.Line("       RVT  →  " + job.RvtPath);
                 if (job.Resave)
                 {

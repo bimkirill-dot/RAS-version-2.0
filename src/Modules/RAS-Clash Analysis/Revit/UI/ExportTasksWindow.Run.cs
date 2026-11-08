@@ -303,7 +303,7 @@ namespace RASv2.ClashAnalysis.UI
             // модель — NWC и RVT по отдельности (одно открытие, две функции; 08.11.2026): NWC выключена — пропуск
             var results = outcome.Items.Select(p => (p.Job.NwcPath, p.Job.ModelName,
                 p.Job.Off && !p.Job.IsNwf ? ItemResult.Skipped : Result(p.Nwc ?? p.State),
-                p.Job.Off && !p.Job.IsNwf ? p.Job.Skip ?? "выгрузка NWC выключена (галочка «NWC»)" : p.NwcNote ?? p.Note ?? p.Job.Skip)).ToList();
+                p.Job.Off && !p.Job.IsNwf ? p.Job.NwcSkip ?? p.Job.Skip ?? "выгрузка NWC выключена (галочка «NWC»)" : p.NwcNote ?? p.Note ?? p.Job.Skip)).ToList();
             results.AddRange(outcome.Items.Where(p => p.Job.RvtPath != null).Select(p => (p.Job.RvtPath, p.Job.ModelName,
                 Result(p.Rvt ?? p.State), p.RvtNote ?? p.Note ?? p.Job.Skip)));
             results.AddRange(outcome.Items.Where(p => p.Job.Resave).Select(p => (RunStates.ResaveKey(p.Job.Model.Path), p.Job.ModelName,
