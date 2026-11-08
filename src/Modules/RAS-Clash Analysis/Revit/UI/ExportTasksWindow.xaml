@@ -122,24 +122,24 @@
             <Border DockPanel.Dock="Top" Height="1" Background="{DynamicResource Line}" Margin="0,0,0,6" />
 
             <!-- шапка таблицы (разработчик, 05.11.2026: «список — таблицей»): столбцы — как у строк; справа — место полосы прокрутки.
-                 Выключатели NWC / NWF — по наброску, принятому 07.11.2026 («давай попробуем»; «Форматы» убраны в тот же день: «не нужно»); «Подзадачи» убраны
-                 (видно по дереву); «Отчёты» убраны 08.11.2026 (разработчик: «из списка уберём столбец „Отчёты“») — галочка в панели строки -->
+                 Выключатели NWC / NWF / Отчёты — по наброску, принятому 07.11.2026 («давай попробуем»; «Форматы» убраны в тот же день: «не нужно»); «Подзадачи» убраны
+                 (видно по дереву); «Проверки» убраны 08.11.2026 (разработчик) — файлы проверок в панели строки -->
             <Border x:Name="TableHead" DockPanel.Dock="Top" BorderThickness="1" BorderBrush="Transparent" Padding="6,0,8,4" Margin="0,0,4,0">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="2.6*" />
                         <ColumnDefinition Width="58" />
-                        <ColumnDefinition Width="{Binding Tests}" />
                         <ColumnDefinition Width="94" />
                         <ColumnDefinition Width="76" />
+                        <ColumnDefinition Width="64" />
                         <ColumnDefinition Width="104" />
                         <ColumnDefinition Width="{Binding Time}" />
                     </Grid.ColumnDefinitions>
                     <TextBlock Style="{StaticResource ColHead}" Text="Название" Margin="66,0,10,0" />
                     <TextBlock Grid.Column="1" Style="{StaticResource ColHead}" Text="Модели" />
-                    <TextBlock Grid.Column="2" Style="{StaticResource ColHead}" Text="Проверки" Visibility="{Binding WideVisibility}" />
-                    <TextBlock Grid.Column="3" Style="{StaticResource ColHead}" Text="NWC" ToolTip="Выгружать NWC; рядом — как прошла в последний раз" />
-                    <TextBlock Grid.Column="4" Style="{StaticResource ColHead}" Text="NWF" ToolTip="Формировать NWF; рядом — как прошла в последний раз" />
+                    <TextBlock Grid.Column="2" Style="{StaticResource ColHead}" Text="NWC" ToolTip="Выгружать NWC; рядом — как прошла в последний раз" />
+                    <TextBlock Grid.Column="3" Style="{StaticResource ColHead}" Text="NWF" ToolTip="Формировать NWF; рядом — как прошла в последний раз" />
+                    <TextBlock Grid.Column="4" Style="{StaticResource ColHead}" Text="Отчёты" ToolTip="Формировать отчёты" />
                     <TextBlock Grid.Column="5" Style="{StaticResource ColHead}" Text="Запуск" ToolTip="Когда строку запускали последний раз" />
                     <TextBlock Grid.Column="6" Style="{StaticResource ColHead}" Text="Время" Visibility="{Binding TimeVisibility}"
                                ToolTip="Сколько займёт — по прошлым выгрузкам" />
@@ -161,9 +161,9 @@
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="2.6*" />
                                         <ColumnDefinition Width="58" />
-                                        <ColumnDefinition Width="{Binding Layout.Tests}" />
                                         <ColumnDefinition Width="94" />
                                         <ColumnDefinition Width="76" />
+                                        <ColumnDefinition Width="64" />
                                         <ColumnDefinition Width="104" />
                                         <ColumnDefinition Width="{Binding Layout.Time}" />
                                     </Grid.ColumnDefinitions>
@@ -187,13 +187,11 @@
                                     </DockPanel>
                                     <TextBlock Grid.Column="1" Style="{StaticResource Cell}" Text="{Binding ModelsText}" Foreground="{Binding ModelsBrush}"
                                                ToolTip="{Binding ModelsTip}" />
-                                    <TextBlock Grid.Column="2" Style="{StaticResource Cell}" Text="{Binding TestsText}" Foreground="{Binding TestsBrush}"
-                                               ToolTip="{Binding TestsTip}" Visibility="{Binding Layout.WideVisibility}" />
                                     <!-- выключатели: у строки с подзадачами — сразу у всех ниже, «■» — у подзадач по-разному. Рядом — как функция прошла
                                          в последний раз (разработчик, 07.11.2026): галочка в кружке — без ошибок (не голая галочка — не путать с
                                          выключателем), красный треугольник — ошибки и ↻ — повторить только их, жёлтый — модель изменилась после
                                          NWC, «?» — Revit Server дату не сообщил; щелчок по значку — журнал -->
-                                    <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                                         <CheckBox Tag="Nwc" IsChecked="{Binding Columns.NwcState, Mode=OneWay}" Click="Flag_Click"
                                                   ToolTip="Выгружать NWC" />
                                         <Button Style="{StaticResource CellButton}" Margin="6,0,0,0" Click="Status_Click" ToolTip="{Binding NwcStatusTip}"
@@ -210,7 +208,7 @@
                                                 Click="Retry_Click" Visibility="{Binding NwcRetryVisibility}" ToolTip="Повторить только NWC с ошибками" />
                                     </StackPanel>
                                     <!-- имя NWF — в подсказке: обычно это название строки, а столбец с именем не оставлял места названиям -->
-                                    <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
                                         <CheckBox Tag="Nwf" IsChecked="{Binding Columns.NwfState, Mode=OneWay}" Click="Flag_Click"
                                                   ToolTip="{Binding NwfTip}" />
                                         <Button Style="{StaticResource CellButton}" Margin="6,0,0,0" Click="Status_Click" ToolTip="{Binding NwfStatusTip}"
@@ -223,6 +221,8 @@
                                         <Button Style="{StaticResource RowIcon}" Tag="NWF" Content="&#xE72C;" Width="22" FontSize="12" Margin="0"
                                                 Click="Retry_Click" Visibility="{Binding NwfRetryVisibility}" ToolTip="Повторить только NWF с ошибками" />
                                     </StackPanel>
+                                    <CheckBox Grid.Column="4" HorizontalAlignment="Left" Tag="Reports" IsChecked="{Binding Columns.ReportsState, Mode=OneWay}"
+                                              IsEnabled="{Binding Columns.ReportsEnabled}" Click="Flag_Click" ToolTip="Формировать отчёты" />
                                     <TextBlock Grid.Column="5" Style="{StaticResource Cell}" Text="{Binding RunAt}" ToolTip="{Binding RunAtTip}" />
                                     <TextBlock Grid.Column="6" Style="{StaticResource Cell}" Text="{Binding TimeText}" Foreground="{DynamicResource Muted}"
                                                ToolTip="{Binding TimeTip}" Visibility="{Binding Layout.TimeVisibility}" />

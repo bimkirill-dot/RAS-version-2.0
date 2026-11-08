@@ -18,25 +18,21 @@ namespace RASv2.ClashAnalysis.UI
     public partial class ExportTasksWindow : Window
     {
         /// <summary>
-        /// Ширины столбцов таблицы — общие у шапки и строк: узко — «Проверки» скрываются, совсем узко — и «Время»
-        /// (название, модели, выключатели, статус и запуск — всегда).
+        /// Ширины столбцов таблицы — общие у шапки и строк: узко — «Время» скрывается (название, модели, выключатели и запуск —
+        /// всегда). Столбец «Проверки» убран 08.11.2026 (разработчик).
         /// </summary>
         public sealed class TableLayout : System.ComponentModel.INotifyPropertyChanged
         {
             public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
-            private bool _wide = true, _time = true;
-            public GridLength Tests => _wide ? new GridLength(0.9, GridUnitType.Star) : new GridLength(0);
+            private bool _time = true;
             public GridLength Time => _time ? new GridLength(72) : new GridLength(0);
-            public Visibility WideVisibility => _wide ? Visibility.Visible : Visibility.Collapsed;
             public Visibility TimeVisibility => _time ? Visibility.Visible : Visibility.Collapsed;
 
             /// <summary>Ширина таблицы — какие столбцы показывать.</summary>
             public void Fit(double width)
             {
-                var wide = width >= 796;
-                var time = width >= 596;
-                if (wide == _wide && time == _time) return;
-                _wide = wide;
+                var time = width >= 660;
+                if (time == _time) return;
                 _time = time;
                 PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(null));
             }
@@ -96,9 +92,6 @@ namespace RASv2.ClashAnalysis.UI
             public string ModelsText => Columns.Models + (Columns.ModelsFrom != null ? " ↑" : "");
             public string ModelsTip => Columns.ModelsFrom != null ? "от «" + Columns.ModelsFrom + "»" : null;
             public Brush ModelsBrush => Shade(Columns.ModelsFrom != null || Columns.Models == "0");
-            public string TestsText => Columns.Tests + (Columns.TestsFrom != null ? " ↑" : "");
-            public string TestsTip => Columns.Tests == "—" ? null : Columns.Tests + (Columns.TestsFrom != null ? "\nот «" + Columns.TestsFrom + "»" : "");
-            public Brush TestsBrush => Shade(Columns.TestsFrom != null || Columns.Tests == "—");
             // имя NWF — в подсказке у галочки
             public string NwfTip => "Формировать NWF" + (Columns.NwfOn ? ": " + Columns.Nwf : "");
 
