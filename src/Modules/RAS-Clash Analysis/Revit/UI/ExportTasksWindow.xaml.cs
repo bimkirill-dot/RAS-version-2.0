@@ -152,6 +152,12 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Версия Revit — для выбора моделей с Revit Server (настройки серверов — свои у каждой версии).</summary>
         public int RevitYear { get; set; } = 2026;
 
+        /// <summary>
+        /// Выполнить в Revit (внешним событием: окно немодальное, Revit API — только в вызове от Revit); параметр действия — UIApplication.
+        /// Вне Revit (снимки окна) — null: действие выполняется сразу.
+        /// </summary>
+        public System.Action<System.Action<object>> InRevit { get; set; }
+
         /// <summary>Revit (UIApplication) — для выгрузки; вне Revit (снимки окна) — null. object — чтобы окно открывалось без Revit API.</summary>
         public object Revit { get; set; }
 

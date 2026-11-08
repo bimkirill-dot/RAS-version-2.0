@@ -174,14 +174,33 @@ namespace RASv2.ClashAnalysis
         }
 
         /// <summary>«Задачи выгрузки» — окно дерева задач.</summary>
+        // «Менеджер задач» — немодальный (разработчик, 08.11.2026: «чтобы с Revit можно было взаимодействовать, пока открыто окно»):
+        // одно окно на Revit; Revit API из него — внешним событием (RevitCalls)
+        private ExportTasksWindow _tasksWindow;
+        private RevitCalls _revitCalls;
+
         internal void ShowExportTasks(UIApplication app)
         {
             try
             {
-                var window = new ExportTasksWindow(new ExportStore(_exportDir, Environment.UserName)) { RevitYear = _year, Revit = app };
+                if (_tasksWindow != null)
+                {
+                    if (_tasksWindow.WindowState == System.Windows.WindowState.Minimized) _tasksWindow.WindowState = System.Windows.WindowState.Normal;
+                    _tasksWindow.Activate();
+                    return;
+                }
+                // внешнее событие создаётся здесь — внутри команды Revit
+                if (_revitCalls == null) _revitCalls = new RevitCalls((what, ex) => _log.Error(what, ex));
+                var calls = _revitCalls;
+                var window = new ExportTasksWindow(new ExportStore(_exportDir, Environment.UserName))
+                {
+                    RevitYear = _year, Revit = app, InRevit = action => calls.Post(ui => action(ui)),
+                };
                 var owner = app.MainWindowHandle;
                 if (owner != IntPtr.Zero) new WindowInteropHelper(window).Owner = owner;
-                window.ShowDialog();
+                window.Closed += (s, e) => _tasksWindow = null;
+                _tasksWindow = window;
+                window.Show();
             }
             catch (Exception ex)
             {

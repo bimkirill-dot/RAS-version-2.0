@@ -171,7 +171,28 @@ namespace RASv2.ClashAnalysis.UI
             if (!Leave()) return;
             // новая строка, от сохранения которой отказались, — исчезла
             if (!_roots.SelectMany(r => r.Self()).Contains(task)) return;
-            RunOne(new RunRequest { Task = task });
+            Start(new RunRequest { Task = task });
+        }
+
+        // выгрузка поставлена в Revit и ещё не началась — второй ▷ не ставит вторую
+        private bool _starting;
+
+        /// <summary>Выгрузка — в Revit: окно немодальное, Revit API — внешним событием, когда Revit свободен (InRevit).</summary>
+        private void Start(RunRequest request)
+        {
+            if (InRevit == null)
+            {
+                RunOne(request);
+                return;
+            }
+            if (_starting) return;
+            _starting = true;
+            InRevit(ui =>
+            {
+                _starting = false;
+                Revit = ui;
+                RunOne(request);
+            });
         }
 
         /// <summary>
@@ -185,7 +206,7 @@ namespace RASv2.ClashAnalysis.UI
             var errors = row.LastRun?.Errors.Where(x => RunStates.KindOf(x.Path) == kind).ToList();
             if (errors == null || errors.Count == 0) return;
             if (!Leave()) return;
-            RunOne(new RunRequest
+            Start(new RunRequest
             {
                 Task = row.Item, Previous = row.LastRun,
                 Only = new HashSet<string>(errors.Select(x => x.Path), StringComparer.OrdinalIgnoreCase),
