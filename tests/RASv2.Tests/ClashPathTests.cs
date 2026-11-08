@@ -46,6 +46,9 @@ namespace RASv2.Tests
                 Check(ReportPath.Date("8.10.26") == new DateTime(2026, 10, 8), "короткий год");
                 Check(ReportPath.Date("Прогон 08.10.2026 повторный") == new DateTime(2026, 10, 8), "с текстом");
                 Check(ReportPath.Date("31.02.2026") == null && ReportPath.Date("S08") == null, "неверная / не дата");
+                // папки отчётов «Задач выгрузки»: {Дата} — со временем записи (08.11.2026)
+                Check(ReportPath.Date("08.11.2026 18-05") == new DateTime(2026, 11, 8) && ReportPath.Date("2026-11-08 18-05") == new DateTime(2026, 11, 8) &&
+                      ReportPath.Date("2026.11.08 18-05") == new DateTime(2026, 11, 8), "дата со временем «ЧЧ-мм» — дата");
             });
             yield return Case("дата отчёта: из отчёта → из папки (с временем файла) → время файла", () =>
             {
