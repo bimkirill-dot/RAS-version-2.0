@@ -426,14 +426,14 @@ namespace RASv2.ClashAnalysis.UI
         /// </summary>
         private void AddHide_Click(object sender, RoutedEventArgs e)
         {
-            var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Поисковые наборы Navisworks (*.xml)|*.xml" };
+            var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Поисковые наборы или поиск Navisworks (*.xml)|*.xml" };
             if (dialog.ShowDialog(Owner) != true) return;
             try
             {
                 List<HideSet> sets;
                 int skipped;
                 using (var stream = File.OpenRead(dialog.FileName))
-                    sets = SearchSets.Read(stream, out skipped);
+                    sets = SearchSets.Read(stream, out skipped, Path.GetFileNameWithoutExtension(dialog.FileName));
                 var added = 0;
                 foreach (var s in sets)
                 {

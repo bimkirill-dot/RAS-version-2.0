@@ -317,6 +317,13 @@ namespace RASv2.Tests
                 Check(sets[0].Xml.StartsWith("<selectionset name=\"Временные\"") && sets[0].Xml.Contains("<findspec"), "набор — как в файле");
                 var refused = false;
                 try { SearchSets.Read(new MemoryStream(System.Text.Encoding.UTF8.GetBytes("<a/>")), out _); } catch (InvalidDataException) { refused = true; }
+                // экспорт поиска «Найти элементы» — без набора (08.11.2026): правило с названием по файлу
+                var find = "<exchange units=\"ft\"><findspec mode=\"all\" disjoint=\"0\"><conditions><condition test=\"contains\" flags=\"10\">" +
+                           "<category><name internal=\"LcRevitData_Element\">Объект</name></category><property><name internal=\"LcRevitPropertyElementName\">Имя</name>" +
+                           "</property><value><data type=\"wstring\">еменн</data></value></condition></conditions><locator>/</locator></findspec></exchange>";
+                var found = SearchSets.Read(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(find)), out _, "Скрыть_Временные-Конструкции");
+                Check(found.Count == 1 && found[0].Name == "Скрыть_Временные-Конструкции" && found[0].Text == "Объект › Имя содержит «еменн»" &&
+                      found[0].Xml.StartsWith("<selectionset name=\"Скрыть_Временные-Конструкции\"><findspec"), "экспорт поиска: " + found[0].Xml);
                 Check(refused, "не тот файл — понятный отказ");
                 var old = SearchSets.FromName("врем<енн");
                 Check(old.Text == "Элемент › Имя содержит «врем<енн»" && old.Xml.Contains("врем&lt;енн"), "прежняя строка — набор «Имя содержит»");

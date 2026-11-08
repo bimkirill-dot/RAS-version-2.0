@@ -32,8 +32,12 @@ namespace RASv2.ClashAnalysis.Logic
     /// </summary>
     public static class SearchSets
     {
-        /// <summary>Поисковые наборы файла; skipped — сколько простых наборов выбора пропущено. Не тот файл — InvalidDataException.</summary>
-        public static List<HideSet> Read(Stream stream, out int skipped)
+        /// <summary>
+        /// Поисковые наборы файла; skipped — сколько простых наборов выбора пропущено. Не тот файл — InvalidDataException. Годится и
+        /// экспорт самого поиска («Найти элементы» → экспорт; разработчик, 08.11.2026: «это файл, который получаешь из Navisworks через
+        /// скрыть элементы») — &lt;exchange&gt;&lt;findspec&gt; без набора: правило с названием name (имя файла).
+        /// </summary>
+        public static List<HideSet> Read(Stream stream, out int skipped, string name = null)
         {
             XDocument doc;
             try
@@ -45,10 +49,20 @@ namespace RASv2.ClashAnalysis.Logic
                 throw new InvalidDataException("Это не файл поисковых наборов Navisworks.", ex);
             }
             var sets = doc.Root?.Element("selectionsets");
-            if (doc.Root?.Name.LocalName != "exchange" || sets == null)
-                throw new InvalidDataException("Это не файл поисковых наборов Navisworks (Наборы → Экспорт поисковых наборов).");
+            var searches = doc.Root?.Elements("findspec").ToList() ?? new List<XElement>();
+            if (doc.Root?.Name.LocalName != "exchange" || sets == null && searches.Count == 0)
+                throw new InvalidDataException("Это не файл Navisworks с условиями поиска: нужен экспорт поисковых наборов (Наборы → Экспорт " +
+                                               "поисковых наборов) или поиска («Найти элементы» → Экспорт).");
             var result = new List<HideSet>();
             skipped = 0;
+            // экспорт самого поиска — набором с названием по файлу (в NWF ищется так же)
+            var title = string.IsNullOrWhiteSpace(name) ? "Поиск" : name.Trim();
+            for (var i = 0; i < searches.Count; i++)
+            {
+                var set = new XElement("selectionset", new XAttribute("name", searches.Count == 1 ? title : title + " " + (i + 1)), new XElement(searches[i]));
+                result.Add(new HideSet { Name = (string)set.Attribute("name"), Text = Describe(searches[i]), Xml = set.ToString(SaveOptions.DisableFormatting) });
+            }
+            if (sets == null) return result;
             foreach (var set in sets.Descendants("selectionset"))
             {
                 var spec = set.Element("findspec");
