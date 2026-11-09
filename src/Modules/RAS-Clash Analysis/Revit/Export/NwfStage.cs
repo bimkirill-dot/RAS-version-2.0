@@ -48,6 +48,7 @@ namespace RASv2.ClashAnalysis.Export
                 foreach (var t in p.Tests) j.Line("      проверки: " + t);
                 if (!p.RunTests) j.Line("      проверки: не выполняются («Выполнять проверки» снята) — вручную");
                 foreach (var r in p.Reports) j.Line($"      отчёт «{r.Format}» → {r.Folder}");
+                if (p.ReportsSkip != null) j.Line("      " + p.ReportsSkip);
             }
             j.Line("");
         }
@@ -66,12 +67,38 @@ namespace RASv2.ClashAnalysis.Export
         public static void Run(List<NwfPlan> plans, List<NwcProgress> items, ExportJournal j, Action<NwcProgress> changed, Func<bool> cancelled,
             Action<int> pump)
         {
-            foreach (var p in items.Where(p => p.Job.Skip != null))
+            // «только отчёты», а их не сделать (NWF нет, проверок нет…) — ошибка, не пропуск: человек отчёты просил
+            for (var k = 0; k < items.Count; k++)
             {
-                p.State = NwcState.Skipped;
+                var p = items[k];
+                if (p.Job.Skip == null) continue;
+                p.State = plans[k].ReportsOnly ? NwcState.Failed : NwcState.Skipped;
                 p.Step = p.Note = p.Job.Skip;
+                if (p.State == NwcState.Failed) j.Error(p.Job.ModelName + " — отчёты: " + p.Job.Skip);
                 changed(p);
             }
+            try
+            {
+                RunTool(plans, items, j, changed, cancelled, pump);
+            }
+            finally
+            {
+                // NWF собрана, а отчётов не будет — строка красная с причиной
+                for (var k = 0; k < items.Count; k++)
+                {
+                    if (plans[k].ReportsSkip == null || items[k].State != NwcState.Done) continue;
+                    items[k].State = NwcState.Failed;
+                    items[k].Note = (items[k].Note == null ? "" : items[k].Note + "; ") + plans[k].ReportsSkip;
+                    items[k].Step = items[k].Note;
+                    j.Error(items[k].Job.ModelName + " — " + plans[k].ReportsSkip);
+                    changed(items[k]);
+                }
+            }
+        }
+
+        private static void RunTool(List<NwfPlan> plans, List<NwcProgress> items, ExportJournal j, Action<NwcProgress> changed, Func<bool> cancelled,
+            Action<int> pump)
+        {
             var todo = Enumerable.Range(0, plans.Count).Where(i => plans[i].Skip == null).ToList();
             if (todo.Count == 0) return;
             j.Line("");

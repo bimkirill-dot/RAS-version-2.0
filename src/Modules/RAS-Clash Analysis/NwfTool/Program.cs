@@ -187,7 +187,8 @@ namespace RASv2.ClashAnalysis.NwfBuild
             if (item.HideSets.Count > 0 && !item.ReportsOnly) Hide(app, i, item, notes);
             if (item.Tests.Count > 0) Tests(app, i, item, notes);
             // отчёты — после прогона, по каждому формату (разработчик, 08.11.2026)
-            if (item.Tests.Count > 0 && item.Reports.Count > 0) Reports(app, i, item, notes);
+            var failedReports = new List<string>();
+            if (item.Tests.Count > 0 && item.Reports.Count > 0) Reports(app, i, item, notes, failedReports);
 
             Console.WriteLine(NwfTool.StepLine(i, "Сохранение NWF"));
             Directory.CreateDirectory(Path.GetDirectoryName(nwf));
@@ -196,6 +197,11 @@ namespace RASv2.ClashAnalysis.NwfBuild
             if (!File.Exists(nwf)) throw new ToolError("Navisworks не записал NWF (сохранение прошло без ошибки, а файла нет)");
             Say("   NWF записана: " + nwf + " — " + Size(nwf) + ", " + Sec(save));
             if (missing.Count > 0) notes.Add("нет NWC: " + missing.Count);
+            // отчёт не записан — ошибка строки NWF (разработчик, 09.11.2026: «отчёты не выгрузились, а плагин никакой ошибки не выдал»);
+            // NWF при этом сохранена
+            if (failedReports.Count > 0)
+                throw new ToolError((item.ReportsOnly ? "NWF сохранена" : exists ? "NWF обновлена" : "NWF собрана") + ", но отчёты не записаны: " +
+                                    string.Join("; ", failedReports));
             if (item.ReportsOnly) return "только отчёты" + (notes.Count > 0 ? ": " + string.Join("; ", notes) : "");
             return (exists ? "обновлена" : "собрана") + ": NWC " + present.Count + (notes.Count > 0 ? "; " + string.Join("; ", notes) : "");
         }
@@ -316,7 +322,7 @@ namespace RASv2.ClashAnalysis.NwfBuild
         }
 
         /// <summary>Отчёты Clash Detective: по формату — в его папку (модуль программы ReportPlugin); не вышло — пометка, NWF всё равно сохраняется.</summary>
-        private static void Reports(NavisworksApplication app, int i, NwfToolItem item, List<string> notes)
+        private static void Reports(NavisworksApplication app, int i, NwfToolItem item, List<string> notes, List<string> failed)
         {
             var made = 0;
             foreach (var r in item.Reports)
@@ -328,14 +334,29 @@ namespace RASv2.ClashAnalysis.NwfBuild
                 {
                     var c = Stopwatch.StartNew();
                     NwfTool.Write(options, item.ReportOptions ?? ReportOptions.Defaults());
-                    app.ExecuteAddInPlugin(NwfTool.ReportPlugin, result, r.Folder, r.Format, options);
-                    var lines = File.Exists(result) ? File.ReadAllLines(result, Encoding.UTF8) : new[] { "ошибка: модуль отчётов не ответил" };
-                    var ok = lines.FirstOrDefault() == "ok";
+                    string[] lines;
+                    try
+                    {
+                        app.ExecuteAddInPlugin(NwfTool.ReportPlugin, result, r.Folder, r.Format, options);
+                        lines = File.Exists(result) ? File.ReadAllLines(result, Encoding.UTF8) : new[] { "ошибка: модуль отчётов не ответил" };
+                    }
+                    catch (Exception ex)
+                    {
+                        lines = new[] { "ошибка: " + ex.Message };
+                    }
                     var files = Directory.Exists(r.Folder) ? Directory.GetFiles(r.Folder, "*", SearchOption.AllDirectories).Length : 0;
-                    Say($"   отчёт «{r.Format}»: " + (ok ? $"записан в {r.Folder} — файлов {files}, {Sec(c)}" : lines.FirstOrDefault()));
+                    // «записан», а файлов нет — тоже не записан
+                    var ok = lines.FirstOrDefault() == "ok" && files > 0;
+                    Say($"   отчёт «{r.Format}»: " + (ok ? $"записан в {r.Folder} — файлов {files}, {Sec(c)}"
+                        : lines.FirstOrDefault() == "ok" ? "Navisworks ответил «записан», а файлов в папке нет: " + r.Folder : lines.FirstOrDefault()));
                     foreach (var l in lines.Skip(1)) Say("     " + l);
                     if (ok) made++;
-                    else notes.Add("отчёт «" + r.Format + "» не записан");
+                    else
+                    {
+                        notes.Add("отчёт «" + r.Format + "» не записан");
+                        var why = lines.FirstOrDefault() == "ok" ? "файлов нет" : (lines.FirstOrDefault() ?? "").Replace("ошибка: ", "");
+                        failed.Add("«" + r.Format + "» — " + why);
+                    }
                 }
                 finally
                 {

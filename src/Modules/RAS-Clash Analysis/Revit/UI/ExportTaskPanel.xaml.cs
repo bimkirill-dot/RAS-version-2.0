@@ -46,7 +46,7 @@ namespace RASv2.ClashAnalysis.UI
                 set
                 {
                     _modified = value;
-                    Notify(nameof(DateText), nameof(ModifiedText));
+                    Notify(nameof(DateText), nameof(ModifiedText), nameof(NwcStale), nameof(Tip));
                 }
             }
 
@@ -80,7 +80,7 @@ namespace RASv2.ClashAnalysis.UI
                 set
                 {
                     _nwcTime = value;
-                    Notify(nameof(Tip));
+                    Notify(nameof(Tip), nameof(NwcStale));
                 }
             }
 
@@ -91,7 +91,20 @@ namespace RASv2.ClashAnalysis.UI
             public double RowOpacity => _grey || Model.Off ? 0.4 : 1;
             public string NwcName => ExportNodes.NwcNameOf(Model, _common);
             public string Block => ExportNodes.BlockOf(Model, _common) is string b && b.Length > 0 ? b : "—";
-            public string YearText => Model.Year > 0 ? Model.Year.ToString() : "—";
+            /// <summary>
+            /// Где модель (разработчик, 09.11.2026: вместо версии Revit — «путь на Revit Server»): Revit Server — сервер и папки, без
+            /// «RSN://»; файл — папка.
+            /// </summary>
+            public string PathText
+            {
+                get
+                {
+                    var folder = Folder;
+                    return folder.StartsWith("RSN://", StringComparison.OrdinalIgnoreCase) ? folder.Substring("RSN://".Length) : folder;
+                }
+            }
+            /// <summary>Модель изменилась после выгрузки NWC — дата NWC жёлтым.</summary>
+            public bool NwcStale => _nwcTime != null && _modified != null && _modified > _nwcTime;
             public string ModifiedText => _modified == null ? "—" : _modified.Value.ToString("dd.MM.yyyy HH:mm");
 
             /// <summary>Подсказка строки: путь, имя NWC и когда выгружена, имя RVT, отдел; отключена или не проходит отбор — почему серая.</summary>
@@ -99,12 +112,12 @@ namespace RASv2.ClashAnalysis.UI
             {
                 get
                 {
-                    var lines = new List<string> { Path };
+                    var lines = new List<string> { Path + (Model.Year > 0 ? " (Revit " + Model.Year + ")" : "") };
                     lines.Add("NWC: " + NwcName + ".nwc" + (_nwcTime != null ? " — выгружена " + _nwcTime.Value.ToString("dd.MM.yyyy HH:mm") : " — ещё не выгружалась"));
                     if (!string.IsNullOrEmpty(RvtName)) lines.Add("RVT: " + RvtName + ".rvt");
                     var department = ExportNames.Department(Path, _common.Departments.Select(d => d.Department));
                     if (department.Length > 0) lines.Add("Отдел: " + department);
-                    if (_nwcTime != null && _modified != null && _modified > _nwcTime) lines.Add("Модель изменилась после выгрузки NWC");
+                    if (NwcStale) lines.Add("Модель изменилась после выгрузки NWC");
                     if (Model.Off) lines.Add("Отключена — не делается: ни NWC, ни RVT, ни пересохранение");
                     else if (_grey) lines.Add("Не изменялась в выбранный срок — пропускается отбором «Экспортировать модели, отредактированные…»");
                     return string.Join("\n", lines);
@@ -376,7 +389,9 @@ namespace RASv2.ClashAnalysis.UI
             ModelsSummary.Text = sorted.Count + " " + ExportTask.ModelsWord(sorted.Count);
             // свой раздел — таблица видна всегда (было — «Показать» / «Скрыть»)
             ModelsShow.Visibility = Visibility.Collapsed;
-            ModelsPanel.Visibility = sorted.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            // своя таблица — видна и пустой («+» — в ней); от строки выше и пустая — не нужна
+            ModelsPanel.Visibility = sorted.Count > 0 || _modelsOwn ? Visibility.Visible : Visibility.Collapsed;
+            ModelsEmpty.Visibility = sorted.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             ShowSortHeads();
             UpdateExamples();
         }
@@ -386,7 +401,7 @@ namespace RASv2.ClashAnalysis.UI
         {
             Func<ModelRow, object> key = _sortKey == "Nwc" ? r => r.NwcName
                 : _sortKey == "Block" ? r => (object)ExportNodes.BlockOf(r.Model, _common)
-                : _sortKey == "Year" ? r => r.Model.Year
+                : _sortKey == "Path" ? r => r.PathText
                 : _sortKey == "Date" ? r => r.Modified ?? DateTime.MinValue
                 : (Func<ModelRow, object>)(r => r.DisplayName);
             IComparer<object> cmp = Comparer<object>.Create((a, b) => a is string sa && b is string sb
@@ -397,7 +412,7 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Заголовки таблицы моделей: стрелка — у столбца, по которому порядок.</summary>
         private void ShowSortHeads()
         {
-            foreach (var (b, name) in new[] { (SortName, "Модель"), (SortNwc, "Имя NWC"), (SortBlock, "Блок"), (SortYear, "Revit"), (SortDate, "Изменена") })
+            foreach (var (b, name) in new[] { (SortName, "Модель"), (SortNwc, "Имя NWC"), (SortBlock, "Блок"), (SortPath, "Путь"), (SortDate, "Изменена") })
                 b.Content = name + ((string)b.Tag == _sortKey ? (_sortDown ? " ↓" : " ↑") : "");
         }
 

@@ -972,7 +972,8 @@ namespace RASv2.Tests
                 Check(withReports.ReportOptions != null && withReports.ReportOptions.GroupMode == common.Report.GroupMode &&
                       !ReferenceEquals(withReports.ReportOptions, common.Report), "настройки отчётов — копией общих");
                 mid.Settings.NoTestsRun = true;
-                Check(NwfRunPlan.Build(roots[0], common).Single(p => p.Row == mid).Reports.Count == 0, "проверки не выполняются — отчётов нет");
+                Check(NwfRunPlan.Build(roots[0], common).Single(p => p.Row == mid) is NwfPlan np && np.Reports.Count == 0 &&
+                      np.ReportsSkip.Contains("«Выполнять проверки» снята"), "проверки не выполняются — отчётов нет, с причиной (09.11.2026)");
                 mid.Settings.NoTestsRun = false;
                 mid.Settings.MakeReports = false;
                 mid.Settings.NoTestsRun = true;

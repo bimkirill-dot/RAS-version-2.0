@@ -30,6 +30,10 @@ namespace RASv2.ClashAnalysis.Logic
         /// модели не добавляются, скрытие не делается.
         /// </summary>
         public bool ReportsOnly { get; set; }
+        /// <summary>
+        /// «Формировать отчёты» стоит, а отчётов не будет — почему (09.11.2026: раньше — молча): строка NWF после сборки — ошибкой.
+        /// </summary>
+        public string ReportsSkip { get; set; }
     }
 
     /// <summary>
@@ -60,10 +64,17 @@ namespace RASv2.ClashAnalysis.Logic
                         : (ExportNodes.TestsOf(row) ?? new List<string>()).Where(t => !string.IsNullOrWhiteSpace(t)).ToList(),
                     RunTests = !row.Settings.NoTestsRun, ReportOptions = (common.Report ?? ReportOptions.Defaults()).Clone(),
                 };
-                // отчёты — у строки «Формировать отчёты» (и проверки выполняются: отчёт — по их результатам; разработчик, 08.11.2026)
-                if (ExportNodes.MakesReports(row) && plan.RunTests && plan.Tests.Count > 0)
-                    plan.Reports = (ExportNodes.FormatsOf(row) ?? new List<string>())
-                        .Select(f => new NwfToolReport { Format = f, Folder = ExportNodes.ReportPath(row, common, when, f) }).ToList();
+                // отчёты — у строки «Формировать отчёты» (и проверки выполняются: отчёт — по их результатам; разработчик, 08.11.2026); не
+                // выйдет — причина (разработчик, 09.11.2026: «отчёты не выгрузились, а ошибки не было»)
+                if (ExportNodes.MakesReports(row))
+                {
+                    var formats = ExportNodes.FormatsOf(row) ?? new List<string>();
+                    if (!plan.RunTests) plan.ReportsSkip = "отчёты не выгружены: «Выполнять проверки» снята — отчёт строится по результатам проверок";
+                    else if (plan.Tests.Count == 0) plan.ReportsSkip = "отчёты не выгружены: у строки нет файлов проверок";
+                    else if (formats.Count == 0) plan.ReportsSkip = "отчёты не выгружены: не выбран ни один формат";
+                    else
+                        plan.Reports = formats.Select(f => new NwfToolReport { Format = f, Folder = ExportNodes.ReportPath(row, common, when, f) }).ToList();
+                }
                 plan.Nwcs = (ExportNodes.ModelsOf(row) ?? new List<ExportModel>())
                     .Where(m => !string.IsNullOrWhiteSpace(m.Path))
                     .Select(m => ExportNodes.NwcPath(row, m, common))

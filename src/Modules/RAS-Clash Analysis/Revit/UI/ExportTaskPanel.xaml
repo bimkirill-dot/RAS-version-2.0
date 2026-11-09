@@ -196,15 +196,14 @@
                         <!-- пакетное удаление (разработчик, 05.11.2026): выделить в списке (Ctrl, Shift, Ctrl+A) — убрать разом; Delete — то же -->
                         <Button x:Name="ModelsRemove" Style="{StaticResource SideLink}" Margin="0,0,12,0" Click="RemoveSelected_Click"
                                 Visibility="Collapsed" />
-                        <Button x:Name="AddModels" Content="Добавить модели…" Click="AddModels_Click" />
                     </WrapPanel>
                     <StackPanel Style="{StaticResource Side}">
                         <TextBlock x:Name="ModelsFrom" Style="{StaticResource From}" />
                         <Button x:Name="ModelsLink" Style="{StaticResource SideLink}" Click="ModelsLink_Click" />
                     </StackPanel>
                 </Grid>
-                <!-- модели — таблицей (разработчик, 09.11.2026): галочка (снята — модель не делается совсем), модель, имя NWC, блок, версия
-                     Revit, когда изменена; путь, имя RVT, отдел, когда выгружена NWC — в подсказке строки; щелчок по заголовку — порядок;
+                <!-- модели — таблицей (разработчик, 09.11.2026): галочка (снята — модель не делается совсем), модель, имя NWC, блок, путь
+                     на Revit Server или папка (было — версия Revit: «не надо»), когда изменена; путь, имя RVT, отдел, когда выгружена NWC — в подсказке строки; щелчок по заголовку — порядок;
                      выделение — Ctrl, Shift, Ctrl+A — для «Убрать выбранные»; корзина — при наведении -->
                 <Border x:Name="ModelsPanel" Background="{DynamicResource Row}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
                         CornerRadius="4" Padding="4" Margin="0,0,0,8">
@@ -215,7 +214,7 @@
                                 <ColumnDefinition Width="3*" />
                                 <ColumnDefinition Width="2*" />
                                 <ColumnDefinition Width="46" />
-                                <ColumnDefinition Width="46" />
+                                <ColumnDefinition Width="2*" />
                                 <ColumnDefinition Width="112" />
                                 <ColumnDefinition Width="30" />
                             </Grid.ColumnDefinitions>
@@ -223,9 +222,15 @@
                             <Button Grid.Column="1" x:Name="SortName" Style="{StaticResource SortHead}" Tag="Name" Click="ModelsSort_Click" />
                             <Button Grid.Column="2" x:Name="SortNwc" Style="{StaticResource SortHead}" Tag="Nwc" Click="ModelsSort_Click" />
                             <Button Grid.Column="3" x:Name="SortBlock" Style="{StaticResource SortHead}" Tag="Block" Click="ModelsSort_Click" />
-                            <Button Grid.Column="4" x:Name="SortYear" Style="{StaticResource SortHead}" Tag="Year" Click="ModelsSort_Click" />
+                            <Button Grid.Column="4" x:Name="SortPath" Style="{StaticResource SortHead}" Tag="Path" Click="ModelsSort_Click"
+                                    ToolTip="Где модель: папка на Revit Server или сетевая папка" />
                             <Button Grid.Column="5" x:Name="SortDate" Style="{StaticResource SortHead}" Tag="Date" Click="ModelsSort_Click" />
+                            <!-- «+» — добавить модели (разработчик, 09.11.2026: «вместо огромной кнопки — плюсик в таблице, как у задач») -->
+                            <Button Grid.Column="6" x:Name="AddModels" Style="{StaticResource IconButton}" Content="&#xE710;" Width="26" Height="24"
+                                    FontSize="12" Margin="0,-4,0,-4" HorizontalAlignment="Center" Click="AddModels_Click" ToolTip="Добавить модели…" />
                         </Grid>
+                        <TextBlock x:Name="ModelsEmpty" DockPanel.Dock="Bottom" Style="{StaticResource Note}" Margin="9,4,0,6"
+                                   Text="Моделей нет — «+» справа вверху" />
                         <ListBox x:Name="ModelsList" MaxHeight="420" SelectionMode="Extended" Background="Transparent" BorderThickness="0"
                                  Padding="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
                                  SelectionChanged="ModelsList_SelectionChanged" KeyDown="ModelsList_KeyDown">
@@ -263,7 +268,7 @@
                                             <ColumnDefinition Width="3*" />
                                             <ColumnDefinition Width="2*" />
                                             <ColumnDefinition Width="46" />
-                                            <ColumnDefinition Width="46" />
+                                            <ColumnDefinition Width="2*" />
                                             <ColumnDefinition Width="112" />
                                             <ColumnDefinition Width="30" />
                                         </Grid.ColumnDefinitions>
@@ -275,7 +280,9 @@
                                         <TextBlock Grid.Column="2" Text="{Binding NwcName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                                                    Margin="0,0,10,0" Foreground="{DynamicResource Muted}" Opacity="{Binding RowOpacity}" />
                                         <TextBlock Grid.Column="3" Text="{Binding Block}" VerticalAlignment="Center" Opacity="{Binding RowOpacity}" />
-                                        <TextBlock Grid.Column="4" Text="{Binding YearText}" VerticalAlignment="Center" Opacity="{Binding RowOpacity}" />
+                                        <!-- где модель (разработчик, 09.11.2026: вместо версии Revit — «путь на Revit Server») -->
+                                        <TextBlock Grid.Column="4" Text="{Binding PathText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                                   Margin="0,0,10,0" Foreground="{DynamicResource Muted}" Opacity="{Binding RowOpacity}" />
                                         <TextBlock Grid.Column="5" Text="{Binding ModifiedText}" VerticalAlignment="Center" Opacity="{Binding RowOpacity}" />
                                         <Button Grid.Column="6" Content="&#xE74D;" ToolTip="Убрать модель" Click="DeleteModel_Click"
                                                 Visibility="{Binding DataContext.ModelsEditVisibility, RelativeSource={RelativeSource AncestorType=UserControl}}">
