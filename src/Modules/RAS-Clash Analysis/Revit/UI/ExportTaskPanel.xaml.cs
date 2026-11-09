@@ -241,7 +241,7 @@ namespace RASv2.ClashAnalysis.UI
             // папки NWC, NWF, отчётов — полным путём (разработчик, 07–08.11.2026: «пишем полный путь к папкам; в полях — тоже полный»):
             // короткие (от папки задачи, как было) — показываются целиком и так и сохранятся
             _nwc = Field(NwcFolder, NwcFrom, NwcLink, x => x.NwcFolder, ExportNodes.NwcFolderOf, true, NwcBrowse, NwcChips);
-            _nwf = Field(NwfFolder, NwfFrom, NwfLink, x => x.NwfFolder, ExportNodes.NwfFolderOf, true, NwfBrowse);
+            _nwf = Field(NwfFolder, NwfFrom, NwfLink, x => x.NwfFolder, ExportNodes.NwfFolderOf, true, NwfBrowse, NwfChips);
             _report = Field(ReportFolder, ReportFrom, ReportLink, x => x.ReportFolder, ExportNodes.ReportFolderOf, true, ReportBrowse, ReportChips);
             _rvt = Field(RvtFolder, RvtFrom, RvtLink, x => x.RvtFolder, ExportNodes.RvtFolderOf, true, RvtBrowse, RvtChips);
             // вид — нигде не задан — «по общим настройкам» (разработчик, 02.11.2026), и у задачи верхнего уровня тоже

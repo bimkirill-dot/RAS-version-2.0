@@ -72,6 +72,8 @@ namespace RASv2.ClashAnalysis.Logic
                     if (!plan.RunTests) plan.ReportsSkip = "отчёты не выгружены: «Выполнять проверки» снята — отчёт строится по результатам проверок";
                     else if (plan.Tests.Count == 0) plan.ReportsSkip = "отчёты не выгружены: у строки нет файлов проверок";
                     else if (formats.Count == 0) plan.ReportsSkip = "отчёты не выгружены: не выбран ни один формат";
+                    else if (ExportNodes.HasLabel(ExportNodes.ReportPath(row, common, when, formats[0])))
+                        plan.ReportsSkip = "отчёты не выгружены: {Блок} в папке отчётов не определить — у моделей строки разные блоки или блок не найден";
                     else
                         plan.Reports = formats.Select(f => new NwfToolReport { Format = f, Folder = ExportNodes.ReportPath(row, common, when, f) }).ToList();
                 }
@@ -79,7 +81,9 @@ namespace RASv2.ClashAnalysis.Logic
                     .Where(m => !string.IsNullOrWhiteSpace(m.Path))
                     .Select(m => ExportNodes.NwcPath(row, m, common))
                     .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-                if (!NwcRunPlan.IsRooted(plan.NwfPath))
+                if (ExportNodes.HasLabel(plan.NwfPath))
+                    plan.Skip = $"{{Блок}} в папке или имени NWF не определить: у моделей «{row.Name}» разные блоки или блок не найден";
+                else if (!NwcRunPlan.IsRooted(plan.NwfPath))
                     plan.Skip = $"не задана папка: ни «Папки задачи», ни полного пути в «Папке для NWF» у «{row.Name}»";
                 else if (reportsOnly && !plan.RunTests)
                     plan.Skip = "отчёты — по результатам проверок, а «Выполнять проверки» снята";

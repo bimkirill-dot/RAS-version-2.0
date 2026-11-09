@@ -299,13 +299,24 @@ namespace RASv2.Tests
             yield return Case("проверки строк: NWC без даты, NWF постоянная, отчёты без отдела, неизвестная метка", () =>
             {
                 Check(ExportNodes.CheckNwcFolder(@"{Блок}\NWC\{Отдел}") == null && ExportNodes.CheckNwcFolder(@"{Блок}\{Дата}") != null, "NWC — без даты");
-                Check(ExportNodes.CheckNwfFolder(@"NWF\S1") == null && ExportNodes.CheckNwfFolder("{Блок}") != null &&
-                      ExportNodes.CheckNwfFolder(@"NWF\{Дата}") != null, "папка NWF — без меток");
-                Check(ExportNodes.CheckNwfName("S1_ВК") == null && ExportNodes.CheckNwfName("{Блок}_ВК") != null, "имя NWF — без меток");
+                Check(ExportNodes.CheckNwfFolder(@"NWF\S1") == null && ExportNodes.CheckNwfFolder("{Блок}") == null &&
+                      ExportNodes.CheckNwfFolder(@"NWF\{Дата}") != null, "папка NWF — только {Блок} (09.11.2026)");
+                Check(ExportNodes.CheckNwfName("S1_ВК") == null && ExportNodes.CheckNwfName("{Блок}_ВК") == null && ExportNodes.CheckNwfName("{Дата}_ВК") != null,
+                      "имя NWF — только {Блок}");
                 Check(ExportNodes.CheckNwfName(" ") != null && ExportNodes.CheckNwfName("S1:ВК") != null, "пусто и недопустимые знаки");
                 Check(ExportNodes.CheckReportFolder(@"Отчеты\{Дата}\S1\ВК\{Формат}") == null && ExportNodes.CheckReportFolder(@"{Отдел}") != null &&
-                      ExportNodes.CheckReportFolder(@"{Блок}\{Дата}") != null,
-                    "отчёты — с форматом, без отдела");
+                      ExportNodes.CheckReportFolder(@"{Блок}\{Дата}") == null,
+                    "отчёты — с форматом и блоком (09.11.2026), без отдела");
+                // {Блок} строки — общий блок её моделей; разные — NWF не делается, с причиной
+                var rb = Sample(out var rbHigh, out var rbMid);
+                rbMid.Settings.NwfFolder = @"NWF\{Блок}";
+                rbMid.Settings.MakeReports = true;
+                rbMid.Settings.ReportFolder = @"Отчеты\{Блок}\{Дата}";
+                Check(ExportNodes.RowBlock(rbMid, common) == "S1" && ExportNodes.NwfPath(rbMid, common).EndsWith(@"\NWF\S1\S1_СК.nwf"), "блок строки — S1");
+                var rbPlan = NwfRunPlan.Build(rbMid, common, new DateTime(2026, 11, 9, 10, 0, 0)).Single();
+                Check(rbPlan.Skip == null && rbPlan.Reports[0].Folder.Contains(@"\Отчеты\S1\09.11.2026 10-00"), "отчёты — в папку блока: " + rbPlan.Reports[0].Folder);
+                rbMid.Settings.Models.Add(new ExportModel { Path = "0000_01_01_S2_KJ01_01_M3.rvt" });
+                Check(ExportNodes.RowBlock(rbMid, common) == "" && NwfRunPlan.Build(rbMid, common).Single().Skip.StartsWith("{Блок}"), "разные блоки — NWF с причиной");
                 var bad = ExportNodes.CheckReportFolder(@"{Проект}\{Дата}");
                 Check(bad != null && bad.Contains("{Проект}"), "неизвестная метка: " + bad);
             });
