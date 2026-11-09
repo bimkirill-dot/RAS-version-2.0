@@ -113,7 +113,8 @@ namespace RASv2.ClashAnalysis.UI
                 get
                 {
                     var lines = new List<string> { Path + (Model.Year > 0 ? " (Revit " + Model.Year + ")" : "") };
-                    lines.Add("NWC: " + NwcName + ".nwc" + (_nwcTime != null ? " — выгружена " + _nwcTime.Value.ToString("dd.MM.yyyy HH:mm") : " — ещё не выгружалась"));
+                    // когда выгружена — не пишется (разработчик, 09.11.2026: «уберём „выгружалась / не выгружалась“»)
+                    lines.Add("NWC: " + NwcName + ".nwc");
                     if (!string.IsNullOrEmpty(RvtName)) lines.Add("RVT: " + RvtName + ".rvt");
                     var department = ExportNames.Department(Path, _common.Departments.Select(d => d.Department));
                     if (department.Length > 0) lines.Add("Отдел: " + department);
