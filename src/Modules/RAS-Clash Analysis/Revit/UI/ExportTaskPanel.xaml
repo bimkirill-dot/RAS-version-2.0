@@ -375,20 +375,23 @@
                             <TextBlock Text="Только отредактированные" TextWrapping="Wrap"
                                        ToolTip="Выгружать только модели, отредактированные в выбранный срок; остальные — серые в таблице моделей" />
                         </CheckBox>
-                        <ComboBox x:Name="EditedMode" Width="100" MinHeight="28" VerticalContentAlignment="Center" Margin="0,0,6,0"
+                        <ComboBox x:Name="EditedMode" Width="100" MinHeight="28" VerticalContentAlignment="Center" Margin="0,3,8,3"
                                   SelectionChanged="Any_Changed">
                             <ComboBoxItem Content="после" />
                             <ComboBoxItem Content="до" />
                             <ComboBoxItem Content="за период" />
                         </ComboBox>
                         <!-- дата — полем, как остальные (встроенный DatePicker WPF выбивался из окон плагина), и календарём; Segoe MDL2: E787 -->
-                        <StackPanel Orientation="Horizontal">
+                        <!-- поля даты — с отступом сверху и снизу: на узкой панели они переносятся под список и не должны к нему прижиматься (09.11.2026) -->
+                        <StackPanel Orientation="Horizontal" Margin="0,3,10,3">
+                            <!-- «за период» — «с … по …»: подпись переносится вместе со своим полем (09.11.2026) -->
+                            <TextBlock x:Name="EditedSince" Text="с" Width="24" VerticalAlignment="Center" />
                             <TextBox x:Name="EditedDate1" Width="96" TextChanged="Any_Changed" ToolTip="дд.мм.гггг" />
                             <Button x:Name="EditedPick1" Style="{StaticResource IconButton}" Content="&#xE787;" Margin="2,0,0,0"
                                     Tag="{Binding ElementName=EditedDate1}" Click="PickDate_Click" ToolTip="Календарь" />
                         </StackPanel>
-                        <TextBlock x:Name="EditedDash" Text="—" VerticalAlignment="Center" Margin="8,0" />
-                        <StackPanel x:Name="EditedDate2Box" Orientation="Horizontal">
+                        <StackPanel x:Name="EditedDate2Box" Orientation="Horizontal" Margin="0,3">
+                            <TextBlock x:Name="EditedDash" Text="по" Width="24" VerticalAlignment="Center" />
                             <TextBox x:Name="EditedDate2" Width="96" TextChanged="Any_Changed" ToolTip="дд.мм.гггг" />
                             <Button x:Name="EditedPick2" Style="{StaticResource IconButton}" Content="&#xE787;" Margin="2,0,0,0"
                                     Tag="{Binding ElementName=EditedDate2}" Click="PickDate_Click" ToolTip="Календарь" />

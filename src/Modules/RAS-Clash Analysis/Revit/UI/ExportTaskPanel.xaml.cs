@@ -675,7 +675,7 @@ namespace RASv2.ClashAnalysis.UI
             var on = _editedOwn && EditedOn.IsChecked == true;
             EditedMode.IsEnabled = EditedDate1.IsEnabled = EditedDate2.IsEnabled = EditedPick1.IsEnabled = EditedPick2.IsEnabled = on;
             var period = EditedMode.SelectedIndex == 2;
-            EditedDash.Visibility = EditedDate2Box.Visibility = period ? Visibility.Visible : Visibility.Collapsed;
+            EditedSince.Visibility = EditedDash.Visibility = EditedDate2Box.Visibility = period ? Visibility.Visible : Visibility.Collapsed;
             EditedFromText.Text = _editedOwn ? "" : Source(x => x.Edited);
             EditedLink.Content = _editedOwn ? "Вернуть " + Source(x => x.Edited) : "Изменить";
             EditedLink.Visibility = _parent == null ? Visibility.Collapsed : Visibility.Visible;
