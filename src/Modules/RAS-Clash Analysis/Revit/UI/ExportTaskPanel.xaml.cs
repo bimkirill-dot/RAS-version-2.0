@@ -413,7 +413,7 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Заголовки таблицы моделей: стрелка — у столбца, по которому порядок.</summary>
         private void ShowSortHeads()
         {
-            foreach (var (b, name) in new[] { (SortName, "Модель"), (SortNwc, "Имя NWC"), (SortBlock, "Блок"), (SortPath, "Путь"), (SortDate, "Изменена") })
+            foreach (var (b, name) in new[] { (SortName, "Модель (" + _shownRows.Count + ")"), (SortNwc, "Имя NWC"), (SortBlock, "Блок"), (SortPath, "Путь"), (SortDate, "Изменена") })
                 b.Content = name + ((string)b.Tag == _sortKey ? (_sortDown ? " ↓" : " ↑") : "");
         }
 
@@ -475,6 +475,8 @@ namespace RASv2.ClashAnalysis.UI
             var n = _modelsOwn ? ModelsList.SelectedItems.Count : 0;
             ModelsRemove.Content = "Убрать выбранные (" + n + ")";
             ModelsRemove.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
+            // строка над таблицей — только когда в ней что-то есть: «от «…»» и «Изменить» у подзадачи или «Убрать выбранные»
+            ModelsHeadRow.Visibility = _parent != null || n > 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private void ModelsList_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateRemove();
@@ -677,6 +679,9 @@ namespace RASv2.ClashAnalysis.UI
             EditedFromText.Text = _editedOwn ? "" : Source(x => x.Edited);
             EditedLink.Content = _editedOwn ? "Вернуть " + Source(x => x.Edited) : "Изменить";
             EditedLink.Visibility = _parent == null ? Visibility.Collapsed : Visibility.Visible;
+            // у задачи верхнего уровня «от «…»» и «Изменить» нет — и места под них не держать
+            EditedSide.Visibility = _parent == null ? Visibility.Collapsed : Visibility.Visible;
+            if (_parent == null) Grid.SetRow(EditedWrap, 0);
             UpdateGrey();
         }
 
