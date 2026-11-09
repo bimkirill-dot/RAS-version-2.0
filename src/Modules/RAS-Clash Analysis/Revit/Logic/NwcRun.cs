@@ -33,6 +33,8 @@ namespace RASv2.ClashAnalysis.Logic
         public string RvtPath { get; set; }
         /// <summary>Почему NWC не выгружается, хотя галочка стоит (нет папки), — а модель открывается ради другого (09.11.2026).</summary>
         public string NwcSkip { get; set; }
+        /// <summary>Модель отключена галочкой у всех строк, где она есть (09.11.2026).</summary>
+        public bool Disabled { get; set; }
         /// <summary>Пересохранить модель на место («Пересохранить RVT» у строки, 08.11.2026) — первым делом, пока модель не тронута.</summary>
         public bool Resave { get; set; }
         /// <summary>
@@ -97,7 +99,7 @@ namespace RASv2.ClashAnalysis.Logic
                         Model = model, Export = export, View = ExportNodes.ViewOf(row, common), Edited = ExportNodes.EditedOf(row),
                         NwcPath = ExportNodes.NwcPath(row, model, common),
                         RvtPath = row.Settings.MakeRvt ? ExportNodes.RvtPath(row, model, common, when) : null,
-                        Resave = row.Settings.Resave,
+                        Resave = row.Settings.Resave, Disabled = model.Off,
                     };
                     job.BackupDir = System.IO.Path.Combine((export.Resave ?? new ResaveOptions()).BackupDir, ExportNodes.DateLabel(when, common.DateFormat));
                     if (byPath.TryGetValue(job.NwcPath, out var same))
@@ -105,6 +107,7 @@ namespace RASv2.ClashAnalysis.Logic
                         same.Rows.Add(row.Name);
                         if (!row.Settings.NoNwc) same.Off = false;
                         if (row.Settings.Resave) same.Resave = true;
+                        if (!model.Off) same.Disabled = false;
                         if (job.RvtPath != null)
                         {
                             if (same.RvtPath == null) same.RvtPath = job.RvtPath;
@@ -133,6 +136,11 @@ namespace RASv2.ClashAnalysis.Logic
             void Drop(string what) => dropped[what] = dropped.TryGetValue(what, out var n) ? n + 1 : 1;
             foreach (var j in jobs.Where(j => j.Skip == null))
             {
+                if (j.Disabled)
+                {
+                    j.Skip = "модель отключена (снята галочка у модели в «Моделях»)";
+                    continue;
+                }
                 if (j.RvtPath != null && !IsRooted(j.RvtPath))
                 {
                     var why = $"не задана папка: ни «Папки задачи», ни полного пути в «Папке для RVT» у «{j.Rows[0]}»";

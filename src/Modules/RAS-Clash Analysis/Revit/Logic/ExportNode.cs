@@ -20,6 +20,11 @@ namespace RASv2.ClashAnalysis.Logic
         /// (у каждой версии — свой); 0 — не известна (файл из сетевой папки). Выгружать — в Revit этой версии или новее.
         /// </summary>
         public int Year { get; set; }
+        /// <summary>
+        /// Галочка у модели снята (разработчик, 09.11.2026: «чтобы какую-то модель можно было принудительно отключить»): модель не
+        /// делается совсем — ни NWC, ни RVT, ни пересохранение; NWF берёт её NWC, что уже лежит.
+        /// </summary>
+        public bool Off { get; set; }
 
         public ExportModel Clone() => (ExportModel)MemberwiseClone();
     }

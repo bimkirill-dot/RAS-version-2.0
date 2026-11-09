@@ -10,6 +10,20 @@
          «Изменить» одной ширины. Кнопки, поля, кисти — общие образцы ядра (подключаются до разметки); ключи своих стилей не
          совпадают с кистями ядра. -->
     <UserControl.Resources>
+        <!-- заголовок столбца таблицы моделей: щелчок — порядок по нему -->
+        <Style x:Key="SortHead" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="Transparent">
+                            <ContentPresenter TextElement.Foreground="{DynamicResource Muted}" TextElement.FontSize="12" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="Note" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource Muted}" />
             <Setter Property="FontSize" Value="12" />
@@ -166,58 +180,15 @@
                     </StackPanel>
                 </Grid>
 
-                <!-- ══ Экспорт ══ -->
+                <!-- ══ Модели — свой раздел (разработчик, 09.11.2026): нужны NWC, выгрузке RVT и пересохранению ══ -->
                 <Border Style="{StaticResource SectionHead}">
-                    <TextBlock Style="{StaticResource SectionTitle}" Text="NWC" />
+                    <TextBlock Style="{StaticResource SectionTitle}" Text="Модели" />
                 </Border>
-                <!-- тот же выключатель, что «NWC» в списке задач (разработчик, 08.11.2026) -->
+                <!-- сколько, от кого, «Добавить модели…» -->
                 <Grid Style="{StaticResource RowGrid}">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
                     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                    <TextBlock Style="{StaticResource Cap}" Text="Экспортировать NWC" />
-                    <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
-                        <CheckBox x:Name="MakeNwc" VerticalAlignment="Center" Checked="Any_Changed" Unchecked="Any_Changed" />
-                    </DockPanel>
-                </Grid>
-                <!-- вида нет, если в общих «Экспорт: Целый проект» -->
-                <Grid x:Name="ViewRow" Style="{StaticResource RowGrid}">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                    <TextBlock Style="{StaticResource Cap}" Text="Выгружать вид" />
-                    <TextBox x:Name="ViewName" Grid.Column="1" VerticalAlignment="Top" />
-                    <StackPanel Style="{StaticResource Side}">
-                        <TextBlock x:Name="ViewFrom" Style="{StaticResource From}" />
-                        <Button x:Name="ViewLink" Style="{StaticResource SideLink}" />
-                    </StackPanel>
-                </Grid>
-
-                <!-- внутри папки задачи; полный путь — тоже можно -->
-                <Grid Style="{StaticResource RowGrid}">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                    <TextBlock Style="{StaticResource Cap}" Text="Папка для NWC" />
-                    <Button Grid.Column="2" x:Name="NwcBrowse" Style="{StaticResource Browse}" Tag="{Binding ElementName=NwcFolder}" Click="Browse_Click" />
-                    <StackPanel Grid.Column="1">
-                        <DockPanel>
-                            <TextBox x:Name="NwcFolder" TextChanged="Any_Changed" />
-                        </DockPanel>
-                        <StackPanel x:Name="NwcChips" Orientation="Horizontal" Margin="0,2,0,0">
-                            <TextBlock Style="{StaticResource Note}" Text="Метки:" />
-                            <Button Style="{StaticResource Chip}" Content="{}{Блок}" Tag="{Binding ElementName=NwcFolder}" Click="Chip_Click" />
-                            <Button Style="{StaticResource Chip}" Content="{}{Отдел}" Tag="{Binding ElementName=NwcFolder}" Click="Chip_Click" />
-                        </StackPanel>
-                    </StackPanel>
-                    <StackPanel Style="{StaticResource Side}">
-                        <TextBlock x:Name="NwcFrom" Style="{StaticResource From}" />
-                        <Button x:Name="NwcLink" Style="{StaticResource SideLink}" />
-                    </StackPanel>
-                </Grid>
-
-                <!-- модели: одной строкой, список по блокам — по «Показать» -->
-                <Grid Style="{StaticResource RowGrid}">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                    <TextBlock Style="{StaticResource Cap}" Text="Модели" />
+                    <TextBlock Style="{StaticResource Cap}" Text="" />
                     <!-- тесно — кнопка переносится на следующую строку, а не обрезается -->
                     <WrapPanel Grid.Column="1" VerticalAlignment="Top">
                         <TextBlock x:Name="ModelsSummary" VerticalAlignment="Center" Margin="0,4,12,4" />
@@ -232,15 +203,30 @@
                         <Button x:Name="ModelsLink" Style="{StaticResource SideLink}" Click="ModelsLink_Click" />
                     </StackPanel>
                 </Grid>
-                <!-- модели: только имя и путь (разработчик, 03.11.2026: «отдел, блок — не надо»); корзина — при наведении; строки
-                     переносятся, а не обрезаются (04.11.2026). Правый край — как у полей (05.11.2026: «подровняй»); выделение — Ctrl, Shift,
-                     Ctrl+A — для «Убрать выбранные» -->
-                <Grid x:Name="ModelsPanel" Margin="0,0,0,8">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                <Border Grid.Column="1" Background="{DynamicResource Row}" BorderBrush="{DynamicResource Line}"
-                        BorderThickness="1" CornerRadius="4" Padding="4">
-                        <ListBox x:Name="ModelsList" MaxHeight="320" SelectionMode="Extended" Background="Transparent" BorderThickness="0"
+                <!-- модели — таблицей (разработчик, 09.11.2026): галочка (снята — модель не делается совсем), модель, имя NWC, блок, версия
+                     Revit, когда изменена; путь, имя RVT, отдел, когда выгружена NWC — в подсказке строки; щелчок по заголовку — порядок;
+                     выделение — Ctrl, Shift, Ctrl+A — для «Убрать выбранные»; корзина — при наведении -->
+                <Border x:Name="ModelsPanel" Background="{DynamicResource Row}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
+                        CornerRadius="4" Padding="4" Margin="0,0,0,8">
+                    <DockPanel>
+                        <Grid DockPanel.Dock="Top" Margin="9,2,3,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="36" />
+                                <ColumnDefinition Width="3*" />
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="46" />
+                                <ColumnDefinition Width="46" />
+                                <ColumnDefinition Width="112" />
+                                <ColumnDefinition Width="30" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource Note}" Text="Вкл." ToolTip="Снята — модель не делается: ни NWC, ни RVT, ни пересохранение" />
+                            <Button Grid.Column="1" x:Name="SortName" Style="{StaticResource SortHead}" Tag="Name" Click="ModelsSort_Click" />
+                            <Button Grid.Column="2" x:Name="SortNwc" Style="{StaticResource SortHead}" Tag="Nwc" Click="ModelsSort_Click" />
+                            <Button Grid.Column="3" x:Name="SortBlock" Style="{StaticResource SortHead}" Tag="Block" Click="ModelsSort_Click" />
+                            <Button Grid.Column="4" x:Name="SortYear" Style="{StaticResource SortHead}" Tag="Year" Click="ModelsSort_Click" />
+                            <Button Grid.Column="5" x:Name="SortDate" Style="{StaticResource SortHead}" Tag="Date" Click="ModelsSort_Click" />
+                        </Grid>
+                        <ListBox x:Name="ModelsList" MaxHeight="420" SelectionMode="Extended" Background="Transparent" BorderThickness="0"
                                  Padding="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
                                  SelectionChanged="ModelsList_SelectionChanged" KeyDown="ModelsList_KeyDown">
                             <!-- выделенная — как выбранная строка дерева: фон наведения и рамка акцентом; толщина рамки не меняется -->
@@ -271,20 +257,27 @@
                             </ListBox.ItemContainerStyle>
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Background="Transparent" Margin="0,2" Opacity="{Binding RowOpacity}">
+                                    <Grid Background="Transparent" Margin="0,3" ToolTip="{Binding Tip}" ToolTipService.ShowDuration="60000">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition />
-                                            <ColumnDefinition Width="32" />
+                                            <ColumnDefinition Width="36" />
+                                            <ColumnDefinition Width="3*" />
+                                            <ColumnDefinition Width="2*" />
+                                            <ColumnDefinition Width="46" />
+                                            <ColumnDefinition Width="46" />
+                                            <ColumnDefinition Width="112" />
+                                            <ColumnDefinition Width="30" />
                                         </Grid.ColumnDefinitions>
-                                        <StackPanel VerticalAlignment="Center" ToolTip="{Binding Path}">
-                                            <TextBlock Text="{Binding DisplayName}" TextWrapping="Wrap" />
-                                            <!-- под именем — какой получится NWC (разработчик, 03.11.2026) и дата изменения, ниже — путь -->
-                                            <TextBlock Style="{StaticResource Note}" TextTrimming="None" TextWrapping="Wrap" Margin="0,1,0,0">
-                                                <Run Text="{Binding Nwc, Mode=OneWay}" /><Run Text="{Binding DateText, Mode=OneWay}" />
-                                            </TextBlock>
-                                            <TextBlock Style="{StaticResource Note}" TextTrimming="None" TextWrapping="Wrap" Text="{Binding Folder}" />
-                                        </StackPanel>
-                                        <Button Grid.Column="1" Content="&#xE74D;" ToolTip="Убрать модель" Click="DeleteModel_Click"
+                                        <CheckBox VerticalAlignment="Center" IsChecked="{Binding On, Mode=OneWay}" Click="ModelOn_Click"
+                                                  IsEnabled="{Binding DataContext.ModelsOwn, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                  ToolTip="Снята — модель не делается: ни NWC, ни RVT, ни пересохранение" />
+                                        <TextBlock Grid.Column="1" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                                   Margin="0,0,10,0" Opacity="{Binding RowOpacity}" />
+                                        <TextBlock Grid.Column="2" Text="{Binding NwcName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                                   Margin="0,0,10,0" Foreground="{DynamicResource Muted}" Opacity="{Binding RowOpacity}" />
+                                        <TextBlock Grid.Column="3" Text="{Binding Block}" VerticalAlignment="Center" Opacity="{Binding RowOpacity}" />
+                                        <TextBlock Grid.Column="4" Text="{Binding YearText}" VerticalAlignment="Center" Opacity="{Binding RowOpacity}" />
+                                        <TextBlock Grid.Column="5" Text="{Binding ModifiedText}" VerticalAlignment="Center" Opacity="{Binding RowOpacity}" />
+                                        <Button Grid.Column="6" Content="&#xE74D;" ToolTip="Убрать модель" Click="DeleteModel_Click"
                                                 Visibility="{Binding DataContext.ModelsEditVisibility, RelativeSource={RelativeSource AncestorType=UserControl}}">
                                             <Button.Style>
                                                 <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
@@ -301,8 +294,8 @@
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>
+                    </DockPanel>
                 </Border>
-                </Grid>
 
                 <!-- отбор моделей по дате изменения (разработчик, 03.11.2026): не изменялась в срок — NWC актуален, в списке — серой -->
                 <Grid Style="{StaticResource RowGrid}">
@@ -359,6 +352,53 @@
                         </StackPanel.Style>
                         <TextBlock x:Name="EditedFromText" Style="{StaticResource From}" />
                         <Button x:Name="EditedLink" Style="{StaticResource SideLink}" Click="EditedLink_Click" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- ══ Экспорт ══ -->
+                <Border Style="{StaticResource SectionHead}">
+                    <TextBlock Style="{StaticResource SectionTitle}" Text="NWC" />
+                </Border>
+                <!-- тот же выключатель, что «NWC» в списке задач (разработчик, 08.11.2026) -->
+                <Grid Style="{StaticResource RowGrid}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <TextBlock Style="{StaticResource Cap}" Text="Экспортировать NWC" />
+                    <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
+                        <CheckBox x:Name="MakeNwc" VerticalAlignment="Center" Checked="Any_Changed" Unchecked="Any_Changed" />
+                    </DockPanel>
+                </Grid>
+                <!-- вида нет, если в общих «Экспорт: Целый проект» -->
+                <Grid x:Name="ViewRow" Style="{StaticResource RowGrid}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <TextBlock Style="{StaticResource Cap}" Text="Выгружать вид" />
+                    <TextBox x:Name="ViewName" Grid.Column="1" VerticalAlignment="Top" />
+                    <StackPanel Style="{StaticResource Side}">
+                        <TextBlock x:Name="ViewFrom" Style="{StaticResource From}" />
+                        <Button x:Name="ViewLink" Style="{StaticResource SideLink}" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- внутри папки задачи; полный путь — тоже можно -->
+                <Grid Style="{StaticResource RowGrid}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <TextBlock Style="{StaticResource Cap}" Text="Папка для NWC" />
+                    <Button Grid.Column="2" x:Name="NwcBrowse" Style="{StaticResource Browse}" Tag="{Binding ElementName=NwcFolder}" Click="Browse_Click" />
+                    <StackPanel Grid.Column="1">
+                        <DockPanel>
+                            <TextBox x:Name="NwcFolder" TextChanged="Any_Changed" />
+                        </DockPanel>
+                        <StackPanel x:Name="NwcChips" Orientation="Horizontal" Margin="0,2,0,0">
+                            <TextBlock Style="{StaticResource Note}" Text="Метки:" />
+                            <Button Style="{StaticResource Chip}" Content="{}{Блок}" Tag="{Binding ElementName=NwcFolder}" Click="Chip_Click" />
+                            <Button Style="{StaticResource Chip}" Content="{}{Отдел}" Tag="{Binding ElementName=NwcFolder}" Click="Chip_Click" />
+                        </StackPanel>
+                    </StackPanel>
+                    <StackPanel Style="{StaticResource Side}">
+                        <TextBlock x:Name="NwcFrom" Style="{StaticResource From}" />
+                        <Button x:Name="NwcLink" Style="{StaticResource SideLink}" />
                     </StackPanel>
                 </Grid>
 

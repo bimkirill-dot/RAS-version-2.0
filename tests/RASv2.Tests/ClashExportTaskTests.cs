@@ -1083,6 +1083,15 @@ namespace RASv2.Tests
                 roots[1].Settings.NoNwc = true;
                 roots[1].Settings.Resave = true;
                 Check(NwcRunPlan.Build(roots[1], common, 2026, new List<string>()).All(j => j.Skip == null && j.Resave), "только пересохранение — без папок");
+                // модель отключена галочкой (09.11.2026) — не делается совсем; у другой строки включена — делается
+                var r2 = Sample(out var high3, out var mid3);
+                mid3.Settings.Models[0].Off = true;
+                var withOff = NwcRunPlan.Build(mid3, common, 2026, new List<string>());
+                Check(withOff[0].Skip == "модель отключена (снята галочка у модели в «Моделях»)" && withOff[1].Skip == null, "отключённая — пропуск");
+                Check(NwcRunPlan.Build(r2[0], common, 2026, new List<string>()).Single(j => j.NwcPath == withOff[0].NwcPath).Skip == null,
+                      "та же модель у «S1_ВК» включена — делается");
+                Check(mid3.Settings.Clone().Models[0].Off, "копия строки — с отключённой моделью");
+                Check(NwfRunPlan.Build(mid3, common).Single().Nwcs.Contains(withOff[0].NwcPath), "NWF — с NWC отключённой модели (та, что лежит)");
                 // NWC включён (по умолчанию), папки нет, а пересохранение есть — модель не пропускается, NWC — с причиной (09.11.2026)
                 roots[1].Settings.NoNwc = false;
                 var plain = new List<string>();

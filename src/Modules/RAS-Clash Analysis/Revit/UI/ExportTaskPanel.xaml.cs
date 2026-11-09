@@ -22,13 +22,22 @@ namespace RASv2.ClashAnalysis.UI
     /// </summary>
     public partial class ExportTaskPanel : UserControl, INotifyPropertyChanged
     {
-        /// <summary>Строка списка моделей: имя (без «.rvt») и путь (разработчик, 03.11.2026: «отдел, блок — не надо»).</summary>
+        /// <summary>
+        /// Строка таблицы моделей (разработчик, 09.11.2026: «табличным видом; галочка — принудительно отключить; имя NWC; дата
+        /// изменения»): галочка, модель, имя NWC, блок, версия Revit, когда изменена; в подсказке — путь, имя RVT, отдел, NWC выгружена.
+        /// </summary>
         public sealed class ModelRow : INotifyPropertyChanged
         {
             public event PropertyChangedEventHandler PropertyChanged;
             private readonly ExportSettings _common;
             private DateTime? _modified;
+            private DateTime? _nwcTime;
             private bool _grey;
+
+            private void Notify(params string[] names)
+            {
+                foreach (var n in names) PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
+            }
 
             /// <summary>Когда изменена модель (Revit Server — сведения о модели, файл — дата файла); не известна — null.</summary>
             public DateTime? Modified
@@ -37,7 +46,7 @@ namespace RASv2.ClashAnalysis.UI
                 set
                 {
                     _modified = value;
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DateText)));
+                    Notify(nameof(DateText), nameof(ModifiedText));
                 }
             }
 
@@ -49,11 +58,58 @@ namespace RASv2.ClashAnalysis.UI
                 {
                     if (_grey == value) return;
                     _grey = value;
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RowOpacity)));
+                    Notify(nameof(RowOpacity), nameof(Tip));
                 }
             }
 
-            public double RowOpacity => _grey ? 0.4 : 1;
+            /// <summary>Галочка у модели: снята — не делается совсем (ExportModel.Off).</summary>
+            public bool On
+            {
+                get => !Model.Off;
+                set
+                {
+                    Model.Off = !value;
+                    Notify(nameof(On), nameof(RowOpacity), nameof(Tip));
+                }
+            }
+
+            /// <summary>Когда записана NWC модели (в фоне); нет — null.</summary>
+            public DateTime? NwcTime
+            {
+                get => _nwcTime;
+                set
+                {
+                    _nwcTime = value;
+                    Notify(nameof(Tip));
+                }
+            }
+
+            /// <summary>Где NWC, имя RVT — по строке панели (ставит панель).</summary>
+            public string NwcFile { get; set; }
+            public string RvtName { get; set; }
+
+            public double RowOpacity => _grey || Model.Off ? 0.4 : 1;
+            public string NwcName => ExportNodes.NwcNameOf(Model, _common);
+            public string Block => ExportNodes.BlockOf(Model, _common) is string b && b.Length > 0 ? b : "—";
+            public string YearText => Model.Year > 0 ? Model.Year.ToString() : "—";
+            public string ModifiedText => _modified == null ? "—" : _modified.Value.ToString("dd.MM.yyyy HH:mm");
+
+            /// <summary>Подсказка строки: путь, имя NWC и когда выгружена, имя RVT, отдел; отключена или не проходит отбор — почему серая.</summary>
+            public string Tip
+            {
+                get
+                {
+                    var lines = new List<string> { Path };
+                    lines.Add("NWC: " + NwcName + ".nwc" + (_nwcTime != null ? " — выгружена " + _nwcTime.Value.ToString("dd.MM.yyyy HH:mm") : " — ещё не выгружалась"));
+                    if (!string.IsNullOrEmpty(RvtName)) lines.Add("RVT: " + RvtName + ".rvt");
+                    var department = ExportNames.Department(Path, _common.Departments.Select(d => d.Department));
+                    if (department.Length > 0) lines.Add("Отдел: " + department);
+                    if (_nwcTime != null && _modified != null && _modified > _nwcTime) lines.Add("Модель изменилась после выгрузки NWC");
+                    if (Model.Off) lines.Add("Отключена — не делается: ни NWC, ни RVT, ни пересохранение");
+                    else if (_grey) lines.Add("Не изменялась в выбранный срок — пропускается отбором «Экспортировать модели, отредактированные…»");
+                    return string.Join("\n", lines);
+                }
+            }
             public string DateText => _modified == null ? "" : "  ·  изм. " + _modified.Value.ToString("dd.MM.yyyy HH:mm");
             public ExportModel Model { get; }
 
@@ -115,6 +171,13 @@ namespace RASv2.ClashAnalysis.UI
 
         /// <summary>Корзина и правка имени NWC у моделей — только у своего списка.</summary>
         public Visibility ModelsEditVisibility => _modelsOwn ? Visibility.Visible : Visibility.Collapsed;
+
+        /// <summary>Галочки у моделей — только у своего списка (как корзина).</summary>
+        public bool ModelsOwn => _modelsOwn;
+
+        // порядок таблицы моделей: по чему и по убыванию ли (щелчок по заголовку)
+        private string _sortKey = "Name";
+        private bool _sortDown;
 
         /// <summary>Названия соседей по уровню — название не должно повторяться (две одинаковые строки не различить).</summary>
         public IReadOnlyCollection<string> TakenNames { get; set; } = new string[0];
@@ -229,7 +292,7 @@ namespace RASv2.ClashAnalysis.UI
 
         /// <summary>Всё, что правится в окне, — строкой: «Отмена» с правками спрашивает.</summary>
         private string State() => string.Join("|", TaskName.Text, _modelsOwn,
-            string.Join(";", _models.Select(m => m.Path + ">" + m.Model.NwcName + ">" + m.Model.Block)), _testsOwn,
+            string.Join(";", _models.Select(m => m.Path + ">" + m.Model.NwcName + ">" + m.Model.Block + ">" + m.Model.Off)), _testsOwn,
             string.Join(";", _tests.Select(r => r.Path)), _hideOwn, string.Join(";", _hide.Select(h => h.Xml)), _formatsOwn, string.Join(";", Checked()), _export == null, _exportEdits, _editedOwn, EditedOn.IsChecked, EditedMode.SelectedIndex,
             EditedDate1.Text, EditedDate2.Text,
             MakeNwf.IsChecked, RunTests.IsChecked, MakeReports.IsChecked, NwfName.Text, Own(_folder), Own(_nwc), Own(_nwf), Own(_report), Own(_view), _imported.Count,
@@ -269,6 +332,7 @@ namespace RASv2.ClashAnalysis.UI
             ModelsLink.Content = _modelsOwn ? "Вернуть " + Source(x => x.Models) : "Изменить";
             ModelsLink.Visibility = _parent == null ? Visibility.Collapsed : Visibility.Visible;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ModelsEditVisibility)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ModelsOwn)));
             Regroup();
         }
 
@@ -288,11 +352,17 @@ namespace RASv2.ClashAnalysis.UI
             ShowModels();
         }
 
-        /// <summary>Модели — по имени (разработчик, 03.11.2026: «только имя и путь»); от уровня выше — только смотреть.</summary>
+        /// <summary>Модели — таблицей, по выбранному столбцу (по умолчанию — по имени); от уровня выше — только смотреть.</summary>
         private void Regroup()
         {
             var rows = _modelsOwn ? _models : Copies(ExportNodes.ModelsOf(_parent)).Select(m => new ModelRow(_common, m)).ToList();
-            var sorted = rows.OrderBy(m => m.DisplayName, StringComparer.CurrentCultureIgnoreCase).ToList();
+            var rvt = _parent == null && _task.Settings.Rvt == null ? _common.Rvt : ExportNodes.RvtOptionsOf(_task, _common);
+            foreach (var r in rows)
+            {
+                r.NwcFile = ExportNodes.NwcPath(_task, r.Model, _common);
+                r.RvtName = ExportNodes.RvtNameOf(r.Model, rvt);
+            }
+            var sorted = Sorted(rows);
             if (_modelsOwn)
             {
                 _models.Clear();
@@ -304,12 +374,49 @@ namespace RASv2.ClashAnalysis.UI
             _shownRows = sorted;
             LoadModelDates(sorted);
             ModelsSummary.Text = sorted.Count + " " + ExportTask.ModelsWord(sorted.Count);
-            ModelsShow.Visibility = sorted.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-            ModelsShow.Content = _showModels ? "Скрыть" : "Показать";
-            ModelsPanel.Visibility = _showModels && sorted.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            // свой раздел — таблица видна всегда (было — «Показать» / «Скрыть»)
+            ModelsShow.Visibility = Visibility.Collapsed;
+            ModelsPanel.Visibility = sorted.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            ShowSortHeads();
             UpdateExamples();
         }
 
+
+        private List<ModelRow> Sorted(IEnumerable<ModelRow> rows)
+        {
+            Func<ModelRow, object> key = _sortKey == "Nwc" ? r => r.NwcName
+                : _sortKey == "Block" ? r => (object)ExportNodes.BlockOf(r.Model, _common)
+                : _sortKey == "Year" ? r => r.Model.Year
+                : _sortKey == "Date" ? r => r.Modified ?? DateTime.MinValue
+                : (Func<ModelRow, object>)(r => r.DisplayName);
+            IComparer<object> cmp = Comparer<object>.Create((a, b) => a is string sa && b is string sb
+                ? ExportNodes.NaturalCompare(sa, sb) : Comparer<object>.Default.Compare(a, b));
+            return (_sortDown ? rows.OrderByDescending(key, cmp) : rows.OrderBy(key, cmp)).ToList();
+        }
+
+        /// <summary>Заголовки таблицы моделей: стрелка — у столбца, по которому порядок.</summary>
+        private void ShowSortHeads()
+        {
+            foreach (var (b, name) in new[] { (SortName, "Модель"), (SortNwc, "Имя NWC"), (SortBlock, "Блок"), (SortYear, "Revit"), (SortDate, "Изменена") })
+                b.Content = name + ((string)b.Tag == _sortKey ? (_sortDown ? " ↓" : " ↑") : "");
+        }
+
+        /// <summary>Щелчок по заголовку — порядок по столбцу; ещё раз — обратный.</summary>
+        private void ModelsSort_Click(object sender, RoutedEventArgs e)
+        {
+            var key = (string)((FrameworkElement)sender).Tag;
+            _sortDown = key == _sortKey && !_sortDown;
+            _sortKey = key;
+            Regroup();
+        }
+
+        /// <summary>Галочка у модели — своё у списка: снята — модель не делается совсем (09.11.2026).</summary>
+        private void ModelOn_Click(object sender, RoutedEventArgs e)
+        {
+            var row = (ModelRow)((FrameworkElement)sender).DataContext;
+            row.On = ((CheckBox)sender).IsChecked == true;
+            Changed();
+        }
 
         private void AddModels_Click(object sender, RoutedEventArgs e)
         {
@@ -655,6 +762,16 @@ namespace RASv2.ClashAnalysis.UI
                     r.Modified = date;
                 }
                 UpdateGrey();
+                // когда выгружена NWC — для подсказки строки
+                foreach (var r in rows.Where(x => NwcRunPlan.IsRooted(x.NwcFile)))
+                {
+                    var file = r.NwcFile;
+                    r.NwcTime = await System.Threading.Tasks.Task.Run(() =>
+                    {
+                        try { return File.Exists(file) ? File.GetLastWriteTime(file) : (DateTime?)null; }
+                        catch (Exception) { return null; }
+                    });
+                }
             }
             catch (Exception ex)
             {
