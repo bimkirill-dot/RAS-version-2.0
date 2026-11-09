@@ -56,8 +56,11 @@
             <Setter Property="Margin" Value="0,0,0,8" />
         </Style>
         <!-- подпись — по высоте первой строки значения (поле — 30) -->
+        <!-- не шире 150 — длинная подпись переносится, а не раздвигает столбец подписей всей панели (09.11.2026: на узкой панели полям
+             оставалось мало места — «Изменит» обрезалось, отбор моделей расползался) -->
         <Style x:Key="Cap" TargetType="TextBlock">
             <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="MaxWidth" Value="150" />
             <Setter Property="Margin" Value="0,6,12,0" />
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
@@ -189,19 +192,16 @@
                 <Grid x:Name="ModelsHeadRow" Style="{StaticResource RowGrid}">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
                     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                    <TextBlock Style="{StaticResource Cap}" Text="" />
-                    <!-- тесно — кнопка переносится на следующую строку, а не обрезается -->
-                    <WrapPanel Grid.Column="1" VerticalAlignment="Top">
+                    <WrapPanel Grid.ColumnSpan="4" VerticalAlignment="Top">
                         <TextBlock x:Name="ModelsSummary" VerticalAlignment="Center" Margin="0,4,12,4" Visibility="Collapsed" />
                         <Button x:Name="ModelsShow" Style="{StaticResource SideLink}" Margin="0,0,12,0" Click="ModelsShow_Click" />
                         <!-- пакетное удаление (разработчик, 05.11.2026): выделить в списке (Ctrl, Shift, Ctrl+A) — убрать разом; Delete — то же -->
+                        <!-- «от «…»» и «Изменить» — здесь же, слева (справа на узкой панели они уходили на вторую строку под пустой) -->
+                        <TextBlock x:Name="ModelsFrom" Style="{StaticResource From}" VerticalAlignment="Center" />
+                        <Button x:Name="ModelsLink" Style="{StaticResource SideLink}" Margin="0,0,12,0" Click="ModelsLink_Click" />
                         <Button x:Name="ModelsRemove" Style="{StaticResource SideLink}" Margin="0,0,12,0" Click="RemoveSelected_Click"
                                 Visibility="Collapsed" />
                     </WrapPanel>
-                    <StackPanel Style="{StaticResource Side}">
-                        <TextBlock x:Name="ModelsFrom" Style="{StaticResource From}" />
-                        <Button x:Name="ModelsLink" Style="{StaticResource SideLink}" Click="ModelsLink_Click" />
-                    </StackPanel>
                 </Grid>
                 <!-- модели — таблицей (разработчик, 09.11.2026): галочка (снята — модель не делается совсем), модель, имя NWC, блок, путь
                      на Revit Server или папка (было — версия Revit: «не надо»), когда изменена; путь, имя RVT, отдел, когда выгружена NWC — в подсказке строки; щелчок по заголовку — порядок;
@@ -213,17 +213,17 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="36" />
                                 <ColumnDefinition Width="3*" />
-                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="{Binding NwcColumn}" />
                                 <ColumnDefinition Width="46" />
-                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="{Binding PathColumn}" />
                                 <ColumnDefinition Width="112" />
                                 <ColumnDefinition Width="30" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Style="{StaticResource Note}" Text="Вкл." ToolTip="Снята — модель не делается: ни NWC, ни RVT, ни пересохранение" />
                             <Button Grid.Column="1" x:Name="SortName" Style="{StaticResource SortHead}" Tag="Name" Click="ModelsSort_Click" />
-                            <Button Grid.Column="2" x:Name="SortNwc" Style="{StaticResource SortHead}" Tag="Nwc" Click="ModelsSort_Click" />
+                            <Button Grid.Column="2" x:Name="SortNwc" Style="{StaticResource SortHead}" Tag="Nwc" Click="ModelsSort_Click" Visibility="{Binding WideTableVisibility}" />
                             <Button Grid.Column="3" x:Name="SortBlock" Style="{StaticResource SortHead}" Tag="Block" Click="ModelsSort_Click" />
-                            <Button Grid.Column="4" x:Name="SortPath" Style="{StaticResource SortHead}" Tag="Path" Click="ModelsSort_Click"
+                            <Button Grid.Column="4" x:Name="SortPath" Style="{StaticResource SortHead}" Tag="Path" Click="ModelsSort_Click" Visibility="{Binding WideTableVisibility}"
                                     ToolTip="Где модель: папка на Revit Server или сетевая папка" />
                             <Button Grid.Column="5" x:Name="SortDate" Style="{StaticResource SortHead}" Tag="Date" Click="ModelsSort_Click" />
                             <!-- «+» — добавить модели (разработчик, 09.11.2026: «вместо огромной кнопки — плюсик в таблице, как у задач») -->
@@ -267,9 +267,9 @@
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="36" />
                                             <ColumnDefinition Width="3*" />
-                                            <ColumnDefinition Width="2*" />
+                                            <ColumnDefinition Width="{Binding DataContext.NwcColumn, RelativeSource={RelativeSource AncestorType=UserControl}}" />
                                             <ColumnDefinition Width="46" />
-                                            <ColumnDefinition Width="2*" />
+                                            <ColumnDefinition Width="{Binding DataContext.PathColumn, RelativeSource={RelativeSource AncestorType=UserControl}}" />
                                             <ColumnDefinition Width="112" />
                                             <ColumnDefinition Width="30" />
                                         </Grid.ColumnDefinitions>
@@ -279,10 +279,12 @@
                                         <TextBlock Grid.Column="1" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                                                    Margin="0,0,10,0" Opacity="{Binding RowOpacity}" />
                                         <TextBlock Grid.Column="2" Text="{Binding NwcName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                                   Visibility="{Binding DataContext.WideTableVisibility, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                    Margin="0,0,10,0" Foreground="{DynamicResource Muted}" Opacity="{Binding RowOpacity}" />
                                         <TextBlock Grid.Column="3" Text="{Binding Block}" VerticalAlignment="Center" Opacity="{Binding RowOpacity}" />
                                         <!-- где модель (разработчик, 09.11.2026: вместо версии Revit — «путь на Revit Server») -->
                                         <TextBlock Grid.Column="4" Text="{Binding PathText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                                   Visibility="{Binding DataContext.WideTableVisibility, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                    Margin="0,0,10,0" Foreground="{DynamicResource Muted}" Opacity="{Binding RowOpacity}" />
                                         <TextBlock Grid.Column="5" Text="{Binding ModifiedText}" VerticalAlignment="Center" Opacity="{Binding RowOpacity}" />
                                         <Button Grid.Column="6" Content="&#xE74D;" ToolTip="Убрать модель" Click="DeleteModel_Click"
@@ -370,9 +372,10 @@
                             </Style>
                         </WrapPanel.Style>
                         <CheckBox x:Name="EditedOn" VerticalAlignment="Center" Margin="0,4,10,4" Checked="Any_Changed" Unchecked="Any_Changed">
-                            <TextBlock Text="Экспортировать модели, отредактированные" TextWrapping="Wrap" />
+                            <TextBlock Text="Только отредактированные" TextWrapping="Wrap"
+                                       ToolTip="Выгружать только модели, отредактированные в выбранный срок; остальные — серые в таблице моделей" />
                         </CheckBox>
-                        <ComboBox x:Name="EditedMode" Width="110" MinHeight="28" VerticalContentAlignment="Center" Margin="0,0,8,0"
+                        <ComboBox x:Name="EditedMode" Width="100" MinHeight="28" VerticalContentAlignment="Center" Margin="0,0,6,0"
                                   SelectionChanged="Any_Changed">
                             <ComboBoxItem Content="после" />
                             <ComboBoxItem Content="до" />
@@ -637,7 +640,7 @@
                 <Grid Style="{StaticResource RowGrid}">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
                     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                    <TextBlock Style="{StaticResource Cap}" Text="Настройки RVT" />
+                    <TextBlock Style="{StaticResource Cap}" Text="Настройки" />
                     <WrapPanel Grid.Column="1" VerticalAlignment="Top">
                         <TextBlock x:Name="RvtOptionsFrom" VerticalAlignment="Center" Margin="0,4,10,4" />
                         <Button x:Name="RvtOptionsEdit" Style="{StaticResource SideLink}" Content="Изменить" Click="RvtOptionsEdit_Click" />
@@ -652,7 +655,7 @@
                     <Grid Style="{StaticResource RowGrid}">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
                         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                        <TextBlock Style="{StaticResource Cap}" Text="Проверка при открытии (Audit)" />
+                        <TextBlock Style="{StaticResource Cap}" Text="Проверка (Audit)" />
                         <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
                             <CheckBox x:Name="RvtAuditBox" VerticalAlignment="Center" Checked="Any_Changed" Unchecked="Any_Changed" ToolTip="Revit исправляет ошибки модели; открытие дольше" />
                         </DockPanel>
@@ -670,7 +673,7 @@
                     <Grid Style="{StaticResource RowGrid}">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
                         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                        <TextBlock Style="{StaticResource Cap}" Text="Перезаписывать, если RVT уже есть" />
+                        <TextBlock Style="{StaticResource Cap}" Text="Перезаписывать RVT" />
                         <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
                             <CheckBox x:Name="RvtOverwriteBox" VerticalAlignment="Center" Checked="Any_Changed" Unchecked="Any_Changed" ToolTip="Снята — модель с уже лежащим RVT пропускается" />
                         </DockPanel>
@@ -678,7 +681,7 @@
                     <Grid Style="{StaticResource RowGrid}">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
                         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                        <TextBlock Style="{StaticResource Cap}" Text="Имя RVT: обрезать всё после" />
+                        <TextBlock Style="{StaticResource Cap}" Text="Обрезать имя после" />
                         <TextBox Grid.Column="1" x:Name="RvtTrimBox" HorizontalAlignment="Left" Width="160" VerticalAlignment="Top" TextChanged="Any_Changed"
                                  ToolTip="Часть имени модели, после которой всё отрезается; пусто — имя модели как есть" />
                     </Grid>
@@ -701,7 +704,7 @@
                 <Grid Style="{StaticResource RowGrid}">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
                     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                    <TextBlock Style="{StaticResource Cap}" Text="Настройки пересохранения" />
+                    <TextBlock Style="{StaticResource Cap}" Text="Настройки" />
                     <WrapPanel Grid.Column="1" VerticalAlignment="Top">
                         <TextBlock x:Name="ResaveOptionsFrom" VerticalAlignment="Center" Margin="0,4,10,4" />
                         <Button x:Name="ResaveOptionsEdit" Style="{StaticResource SideLink}" Content="Изменить" Click="ResaveOptionsEdit_Click" />
@@ -723,7 +726,7 @@
                     <Grid Style="{StaticResource RowGrid}">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
                         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                        <TextBlock Style="{StaticResource Cap}" Text="Проверить модель (Audit)" />
+                        <TextBlock Style="{StaticResource Cap}" Text="Проверка (Audit)" />
                         <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
                             <CheckBox x:Name="ResaveAuditBox" VerticalAlignment="Center" Checked="Any_Changed" Unchecked="Any_Changed" ToolTip="Revit исправляет ошибки модели при открытии; открытие дольше" />
                         </DockPanel>
@@ -731,7 +734,7 @@
                     <Grid Style="{StaticResource RowGrid}">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
                         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                        <TextBlock Style="{StaticResource Cap}" Text="Папка резервных копий" />
+                        <TextBlock Style="{StaticResource Cap}" Text="Резервные копии" />
                         <Button Grid.Column="2" x:Name="ResaveBackupBrowse" Style="{StaticResource Browse}" Tag="{Binding ElementName=ResaveBackupBox}" Click="Browse_Click" />
                         <StackPanel Grid.Column="1">
                             <TextBox x:Name="ResaveBackupBox" TextChanged="Any_Changed"

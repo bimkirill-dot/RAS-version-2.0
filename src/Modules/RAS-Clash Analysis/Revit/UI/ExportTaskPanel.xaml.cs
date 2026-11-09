@@ -898,8 +898,12 @@ namespace RASv2.ClashAnalysis.UI
             ShowBackupNote();
         }
 
-        private void ShowBackupNote() =>
-            ResaveBackupNote.Text = ResaveBackupBox.Text.Trim().Length == 0 ? "Пусто — на этом компьютере: " + ResaveOptions.DefaultBackupDir : "";
+        // путь по умолчанию — в подсказке (под полем он занимал пять строк)
+        private void ShowBackupNote()
+        {
+            ResaveBackupNote.Text = ResaveBackupBox.Text.Trim().Length == 0 ? "Пусто — на этом компьютере" : "";
+            ResaveBackupNote.ToolTip = ResaveOptions.DefaultBackupDir;
+        }
 
         private ResaveOptions InheritedResave() => (_parent == null ? _common.Resave : ExportNodes.ResaveOptionsOf(_parent, _common)) ?? new ResaveOptions();
 
@@ -1091,8 +1095,24 @@ namespace RASv2.ClashAnalysis.UI
         /// <summary>Панель узкая — «от «…»» и «Изменить» под значением, а не справа (разработчик, 03.11.2026: «на любой ширине — удобно»).</summary>
         public bool Narrow { get; private set; }
 
+        /// <summary>
+        /// Таблица моделей на узкой панели (09.11.2026: пять текстовых столбцов не помещались — имена обрезались до «3917_OMA…»):
+        /// «Имя NWC» и «Путь» прячутся, они — в подсказке строки.
+        /// </summary>
+        public bool WideTable { get; private set; } = true;
+        public Visibility WideTableVisibility => WideTable ? Visibility.Visible : Visibility.Collapsed;
+        public GridLength NwcColumn => WideTable ? new GridLength(2, GridUnitType.Star) : new GridLength(0);
+        public GridLength PathColumn => WideTable ? new GridLength(2, GridUnitType.Star) : new GridLength(0);
+
         private void Panel_SizeChanged(object sender, SizeChangedEventArgs e)
         {
+            var wide = e.NewSize.Width >= 680;
+            if (wide != WideTable)
+            {
+                WideTable = wide;
+                foreach (var n in new[] { nameof(WideTable), nameof(WideTableVisibility), nameof(NwcColumn), nameof(PathColumn) })
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
+            }
             var narrow = e.NewSize.Width < 760;
             if (narrow == Narrow) return;
             Narrow = narrow;
