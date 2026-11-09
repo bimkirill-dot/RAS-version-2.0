@@ -55,7 +55,8 @@ namespace RASv2.ClashAnalysis
             _settings = ViewSettings.Load(_settingsPath);
             // задачи и общие настройки «Менеджера задач» — у каждого свои (разработчик, 08.11.2026: «отменим многопользовательскую
             // лабуду — пусть у каждого пользователя будут свои задачи»): %AppData%\RAS_v_2.0\RAS-Clash Analysis\Задачи выгрузки; было —
-            // общая папка на сервере, оттуда — один раз копией, пока своих нет
+            // общая папка на сервере; оттуда — один раз только общие настройки (задачи — нет: 09.11.2026, у нового пользователя
+            // в первый же раз оказывались чужие задачи)
             _exportDir = Path.Combine(context.UserDataDir, "Задачи выгрузки");
             TakeShared(Path.Combine(context.SharedDataDir, "Задачи выгрузки"), _exportDir);
             var window = IntPtr.Zero;
@@ -177,27 +178,25 @@ namespace RASv2.ClashAnalysis
             }
         }
 
-        /// <summary>«Задачи выгрузки» — окно дерева задач.</summary>
         /// <summary>
-        /// Своих задач ещё нет, а в прежней общей папке на сервере есть — забрать копией (общая папка не меняется). Не вышло — с пустого:
-        /// причина — в журнал плагина.
+        /// Своей папки ещё нет — общие настройки (шестерёнка) из прежней общей папки на сервере копией, как начальные (общая папка не
+        /// меняется). Задачи не копируются (разработчик, 09.11.2026: «пользователь первый раз открывает менеджер задач, а у него уже
+        /// есть какие-то задачи») — новый пользователь начинает с пустого списка. Не вышло — по умолчанию: причина — в журнал плагина.
         /// </summary>
         private void TakeShared(string shared, string mine)
         {
             try
             {
-                if (Directory.Exists(mine) || !Directory.Exists(shared)) return;
-                foreach (var file in Directory.GetFiles(shared, "*.json", SearchOption.AllDirectories))
-                {
-                    var target = Path.Combine(mine, file.Substring(shared.Length).TrimStart(Path.DirectorySeparatorChar));
-                    Directory.CreateDirectory(Path.GetDirectoryName(target));
-                    File.Copy(file, target, false);
-                }
-                _log.Info("Менеджер задач: задачи и общие настройки — из прежней общей папки " + shared + " в свою " + mine);
+                if (Directory.Exists(mine)) return;
+                var common = Path.Combine(shared, "Общие настройки.json");
+                if (!File.Exists(common)) return;
+                Directory.CreateDirectory(mine);
+                File.Copy(common, Path.Combine(mine, "Общие настройки.json"), false);
+                _log.Info("Менеджер задач: общие настройки — из прежней общей папки " + shared + " в свою " + mine);
             }
             catch (Exception ex)
             {
-                _log.Error("Менеджер задач: прежние задачи из общей папки не скопированы — " + shared, ex);
+                _log.Error("Менеджер задач: общие настройки из прежней общей папки не скопированы — " + shared, ex);
             }
         }
 
