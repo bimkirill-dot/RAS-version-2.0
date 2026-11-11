@@ -1305,6 +1305,17 @@ namespace RASv2.Tests
                 settings.DeleteEmptyReports = true;
                 Check(settings.Clone().DeleteEmptyReports && !NodeSettings.Top().DeleteEmptyReports, "своё у строки, по умолчанию снята");
                 Check(new ReportOptions { DeleteEmpty = true }.Clone().DeleteEmpty, "в задание программе NWF");
+
+                // у задачи — и у всех подзадач (11.11.2026)
+                var roots = Sample(out var high, out var mid);
+                var leaf = high.Children[0];
+                Check(!ExportNodes.DeletesEmptyReports(leaf), "по умолчанию — нет");
+                roots[0].Settings.DeleteEmptyReports = true;
+                Check(ExportNodes.DeletesEmptyReports(leaf) && ExportNodes.DeleteEmptyFrom(leaf) == roots[0] && ExportNodes.DeleteEmptyFrom(roots[0]) == null,
+                      "от задачи — подзадачам");
+                roots[0].Settings.DeleteEmptyReports = false;
+                high.Settings.DeleteEmptyReports = true;
+                Check(ExportNodes.DeletesEmptyReports(leaf) && !ExportNodes.DeletesEmptyReports(roots[0]) && !ExportNodes.DeletesEmptyReports(mid), "вниз, не вверх");
             });
             yield return Case("удаление: подзадачи", () =>
             {

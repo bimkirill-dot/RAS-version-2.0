@@ -64,7 +64,7 @@ namespace RASv2.ClashAnalysis.Logic
                         : (ExportNodes.TestsOf(row) ?? new List<string>()).Where(t => !string.IsNullOrWhiteSpace(t)).ToList(),
                     RunTests = !row.Settings.NoTestsRun, ReportOptions = (common.Report ?? ReportOptions.Defaults()).Clone(),
                 };
-                plan.ReportOptions.DeleteEmpty = row.Settings.DeleteEmptyReports;
+                plan.ReportOptions.DeleteEmpty = ExportNodes.DeletesEmptyReports(row);
                 // отчёты — у строки «Формировать отчёты» (и проверки выполняются: отчёт — по их результатам; разработчик, 08.11.2026); не
                 // выйдет — причина (разработчик, 09.11.2026: «отчёты не выгрузились, а ошибки не было»)
                 if (ExportNodes.MakesReports(row))

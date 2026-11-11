@@ -118,7 +118,8 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>
         /// «Удалять пустые отчёты» (разработчик, 11.11.2026: «пока мы не пользуемся сайтом — эта галочка нужна»): отчёт проверки без
         /// коллизий или со всеми исправленными — удаляется после записи. Сайту коллизий пустой отчёт нужен (решение 15.10.2026, «Пустые
-        /// отчёты не удалять»): без него сайт не узнает об исправлении — поэтому по умолчанию снята. Своё у строки, не наследуется.
+        /// отчёты не удалять»): без него сайт не узнает об исправлении — поэтому по умолчанию снята. Стоит у строки — и у всех её
+        /// подзадач (разработчик, 11.11.2026: «чтобы галочка из задачи распространялась на все подзадачи»): ExportNodes.DeletesEmptyReports.
         /// </summary>
         [DataMember(Order = 27, EmitDefaultValue = false)] public bool DeleteEmptyReports { get; set; }
 
@@ -306,6 +307,15 @@ namespace RASv2.ClashAnalysis.Logic
         /// выгружает отчёты»).
         /// </summary>
         public static bool MakesReports(ExportTask task) => task.Settings.MakeReports && task.Children.Count == 0;
+        /// <summary>«Удалять пустые» — у строки или у любой строки выше (11.11.2026).</summary>
+        public static bool DeletesEmptyReports(ExportTask task) => task.Settings.DeleteEmptyReports || DeleteEmptyFrom(task) != null;
+        /// <summary>Строка выше с «Удалять пустые» — ближайшая; нет — null.</summary>
+        public static ExportTask DeleteEmptyFrom(ExportTask task)
+        {
+            for (var t = task.Parent; t != null; t = t.Parent)
+                if (t.Settings.DeleteEmptyReports) return t;
+            return null;
+        }
         /// <summary>Имя NWF строки — своё (не наследуется), пусто — название строки.</summary>
         public static string NwfNameOf(ExportTask task) =>
             (string.IsNullOrWhiteSpace(task.Settings.NwfName) ? task.Name ?? "" : task.Settings.NwfName).Trim();

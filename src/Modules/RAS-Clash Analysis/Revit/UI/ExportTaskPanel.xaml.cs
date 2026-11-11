@@ -167,7 +167,7 @@ namespace RASv2.ClashAnalysis.UI
         private readonly bool _hasView;
         private readonly bool _ready;
         private readonly string _opened;
-        private bool _modelsOwn, _testsOwn, _hideOwn, _formatsOwn, _editedOwn, _showModels;
+        private bool _modelsOwn, _testsOwn, _hideOwn, _formatsOwn, _editedOwn, _showModels, _deleteEmptyOwn, _deleteEmptyAbove;
         // строки списка моделей, как сейчас показаны (для дат и серых)
         private List<ModelRow> _shownRows = new List<ModelRow>();
         // даты изменения моделей — на время работы Revit (по пути)
@@ -229,7 +229,13 @@ namespace RASv2.ClashAnalysis.UI
             MakeNwf.IsChecked = s.MakeNwf && task.Children.Count == 0;
             MakeNwf.IsEnabled = task.Children.Count == 0;
             RunTests.IsChecked = !s.NoTestsRun;
-            DeleteEmptyReports.IsChecked = s.DeleteEmptyReports;
+            // «Удалять пустые» стоит у строки выше — и здесь, не снять (11.11.2026); своё значение строки хранится как было
+            _deleteEmptyOwn = s.DeleteEmptyReports;
+            var deleteFrom = ExportNodes.DeleteEmptyFrom(task);
+            DeleteEmptyReports.IsChecked = deleteFrom != null || s.DeleteEmptyReports;
+            DeleteEmptyReports.IsEnabled = deleteFrom == null;
+            _deleteEmptyAbove = deleteFrom != null;
+            DeleteEmptyFrom.Text = deleteFrom == null ? "" : "от «" + deleteFrom.Name + "»";
             MakeReports.IsChecked = s.MakeReports && task.Children.Count == 0;
             // «Экспортировать NWC» и «Экспортировать RVT» — те же выключатели, что в списке задач (08.11.2026)
             MakeNwc.IsChecked = !s.NoNwc;
@@ -310,7 +316,7 @@ namespace RASv2.ClashAnalysis.UI
             string.Join(";", _models.Select(m => m.Path + ">" + m.Model.NwcName + ">" + m.Model.Block + ">" + m.Model.Off)), _testsOwn,
             string.Join(";", _tests.Select(r => r.Path)), _hideOwn, string.Join(";", _hide.Select(h => h.Xml)), _formatsOwn, string.Join(";", Checked()), _export == null, _exportEdits, _editedOwn, EditedOn.IsChecked, EditedMode.SelectedIndex,
             EditedDate1.Text, EditedDate2.Text,
-            MakeNwf.IsChecked, RunTests.IsChecked, MakeReports.IsChecked, NwfName.Text, Own(_folder), Own(_nwc), Own(_nwf), Own(_report), Own(_view), _imported.Count,
+            MakeNwf.IsChecked, RunTests.IsChecked, MakeReports.IsChecked, DeleteEmptyReports.IsChecked, NwfName.Text, Own(_folder), Own(_nwc), Own(_nwf), Own(_report), Own(_view), _imported.Count,
             MakeNwc.IsChecked, MakeRvt.IsChecked, Own(_rvt), Resave.IsChecked, _rvtOptions == null, _resaveOptions == null, _exportEdits, RvtAuditBox.IsChecked, RvtWorksetsBox.SelectedIndex,
             RvtOverwriteBox.IsChecked, RvtTrimBox.Text, ResaveCompactBox.IsChecked, ResaveAuditBox.IsChecked, ResaveBackupBox.Text);
 
@@ -1008,7 +1014,7 @@ namespace RASv2.ClashAnalysis.UI
             NwfName = NwfName.Text.Trim().Length > 0 ? NwfName.Text.Trim() : null,
             MakeNwf = MakeNwf.IsChecked == true,
             NoTestsRun = RunTests.IsChecked != true,
-            DeleteEmptyReports = DeleteEmptyReports.IsChecked == true,
+            DeleteEmptyReports = _deleteEmptyAbove ? _deleteEmptyOwn : DeleteEmptyReports.IsChecked == true,
             // выключатели «NWC» и «RVT» — и в списке задач, и здесь (08.11.2026)
             NoNwc = MakeNwc.IsChecked != true,
             MakeRvt = MakeRvt.IsChecked == true,

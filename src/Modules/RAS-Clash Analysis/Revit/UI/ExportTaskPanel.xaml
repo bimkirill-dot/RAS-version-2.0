@@ -610,7 +610,9 @@
                         <TextBlock Style="{StaticResource Cap}" Text="Удалять пустые" />
                         <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
                             <CheckBox x:Name="DeleteEmptyReports" VerticalAlignment="Center" Checked="Any_Changed" Unchecked="Any_Changed"
-                                      ToolTip="Отчёт проверки, в которой нет коллизий или все исправлены, удаляется. Не ставьте, если отчёты загружаются на сайт коллизий: без пустого отчёта сайт не узнает, что коллизии исправлены" />
+                                      ToolTip="Отчёт проверки, в которой нет коллизий или все исправлены, удаляется — у этой строки и всех её подзадач. Не ставьте, если отчёты загружаются на сайт коллизий: без пустого отчёта сайт не узнает, что коллизии исправлены" />
+                            <!-- стоит у строки выше — «от «…»», галочка не снимается -->
+                            <TextBlock x:Name="DeleteEmptyFrom" Style="{StaticResource From}" Margin="10,0,0,0" VerticalAlignment="Center" />
                         </DockPanel>
                     </Grid>
                 </StackPanel>
