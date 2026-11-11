@@ -229,6 +229,7 @@ namespace RASv2.ClashAnalysis.UI
             MakeNwf.IsChecked = s.MakeNwf && task.Children.Count == 0;
             MakeNwf.IsEnabled = task.Children.Count == 0;
             RunTests.IsChecked = !s.NoTestsRun;
+            DeleteEmptyReports.IsChecked = s.DeleteEmptyReports;
             MakeReports.IsChecked = s.MakeReports && task.Children.Count == 0;
             // «Экспортировать NWC» и «Экспортировать RVT» — те же выключатели, что в списке задач (08.11.2026)
             MakeNwc.IsChecked = !s.NoNwc;
@@ -1007,6 +1008,7 @@ namespace RASv2.ClashAnalysis.UI
             NwfName = NwfName.Text.Trim().Length > 0 ? NwfName.Text.Trim() : null,
             MakeNwf = MakeNwf.IsChecked == true,
             NoTestsRun = RunTests.IsChecked != true,
+            DeleteEmptyReports = DeleteEmptyReports.IsChecked == true,
             // выключатели «NWC» и «RVT» — и в списке задач, и здесь (08.11.2026)
             NoNwc = MakeNwc.IsChecked != true,
             MakeRvt = MakeRvt.IsChecked == true,

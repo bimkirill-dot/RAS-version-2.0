@@ -1288,6 +1288,24 @@ namespace RASv2.Tests
                 jobs = NwcRunPlan.Merge(new List<List<NwcJob>> { a }, notes);
                 Check(jobs.All(j => j.CopyOf == null) && notes.Count == 0, "одна задача — без копий");
             });
+            yield return Case("«Удалять пустые» отчёты: галочка — в задание, файлы проверки — по её названию", () =>
+            {
+                var entries = new[]
+                {
+                    @"C:\О\АР Стены_МЕР Воздуховоды.xml", @"C:\О\АР Стены_МЕР Воздуховоды 2.xml", @"C:\О\КЖ_ВК.html", @"C:\О\КЖ_ВК_files",
+                    @"C:\О\ОВ_ВК (1).xml", @"C:\О\КЖ_ВК.Отверстия.xml",
+                };
+                Check(NwfTool.ReportFilesOf(entries, "АР Стены_МЕР Воздуховоды").SequenceEqual(new[] { entries[0] }), "только своя, не «… 2»");
+                Check(NwfTool.ReportFilesOf(entries, "КЖ_ВК").SequenceEqual(new[] { entries[2], entries[3] }), "HTML — с папкой картинок, не «КЖ_ВК.Отверстия»");
+                Check(NwfTool.ReportFilesOf(entries, "КЖ_ВК.Отверстия").SequenceEqual(new[] { entries[5] }), "точка в названии");
+                Check(NwfTool.ReportFilesOf(new[] { @"C:\О\АР_КЖ.xml" }, "АР/КЖ").Count == 1, "недопустимый знак — «_»");
+                Check(NwfTool.ReportFilesOf(entries, "").Count == 0, "без названия — ничего");
+
+                var settings = NodeSettings.Top();
+                settings.DeleteEmptyReports = true;
+                Check(settings.Clone().DeleteEmptyReports && !NodeSettings.Top().DeleteEmptyReports, "своё у строки, по умолчанию снята");
+                Check(new ReportOptions { DeleteEmpty = true }.Clone().DeleteEmpty, "в задание программе NWF");
+            });
             yield return Case("удаление: подзадачи", () =>
             {
                 var roots = Sample(out var high, out _);

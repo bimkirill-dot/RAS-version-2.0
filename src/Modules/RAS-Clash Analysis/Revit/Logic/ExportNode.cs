@@ -115,6 +115,12 @@ namespace RASv2.ClashAnalysis.Logic
         [DataMember(Order = 25, EmitDefaultValue = false)] public RvtOptions Rvt { get; set; }
         /// <summary>Свои «Настройки пересохранения» вместо общих; null — от уровня выше, нигде — общие.</summary>
         [DataMember(Order = 26, EmitDefaultValue = false)] public ResaveOptions ResaveOptions { get; set; }
+        /// <summary>
+        /// «Удалять пустые отчёты» (разработчик, 11.11.2026: «пока мы не пользуемся сайтом — эта галочка нужна»): отчёт проверки без
+        /// коллизий или со всеми исправленными — удаляется после записи. Сайту коллизий пустой отчёт нужен (решение 15.10.2026, «Пустые
+        /// отчёты не удалять»): без него сайт не узнает об исправлении — поэтому по умолчанию снята. Своё у строки, не наследуется.
+        /// </summary>
+        [DataMember(Order = 27, EmitDefaultValue = false)] public bool DeleteEmptyReports { get; set; }
 
         /// <summary>Задача верхнего уровня: всё своё, по умолчанию — регламент 15.10 (вида нет — из общих настроек).</summary>
         /// <summary>
@@ -135,7 +141,7 @@ namespace RASv2.ClashAnalysis.Logic
             HideNames = HideNames?.ToList(), ReportFormats = ReportFormats?.ToList(), Export = Export?.Clone(),
             HideSets = HideSets?.Select(h => h.Clone()).ToList(), MakeReports = MakeReports, Edited = Edited?.Clone(), NoNwc = NoNwc, Skipped = Skipped, NoTestsRun = NoTestsRun,
             MakeRvt = MakeRvt, RvtFolder = RvtFolder, Resave = Resave, Rvt = Rvt?.Clone(),
-            ResaveOptions = ResaveOptions?.Clone(),
+            ResaveOptions = ResaveOptions?.Clone(), DeleteEmptyReports = DeleteEmptyReports,
         };
     }
 

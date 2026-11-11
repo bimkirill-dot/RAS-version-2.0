@@ -603,6 +603,16 @@
                             <Button x:Name="ReportLink" Style="{StaticResource SideLink}" />
                         </StackPanel>
                     </Grid>
+
+                    <!-- отчёт без коллизий или со всеми исправленными — удалить (разработчик, 11.11.2026); сайту пустой отчёт нужен — снята по умолчанию -->
+                    <Grid Style="{StaticResource RowGrid}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Cap}" Text="Удалять пустые" />
+                        <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
+                            <CheckBox x:Name="DeleteEmptyReports" VerticalAlignment="Center" Checked="Any_Changed" Unchecked="Any_Changed"
+                                      ToolTip="Отчёт проверки, в которой нет коллизий или все исправлены, удаляется. Не ставьте, если отчёты загружаются на сайт коллизий: без пустого отчёта сайт не узнает, что коллизии исправлены" />
+                        </DockPanel>
+                    </Grid>
                 </StackPanel>
 
                 <!-- ══ RVT — для заказчика (разработчик, 08.11.2026): модели строки без связей, очищенные, в папку RVT ══ -->

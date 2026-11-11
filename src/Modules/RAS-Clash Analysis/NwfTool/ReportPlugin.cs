@@ -64,6 +64,45 @@ namespace RASv2.ClashAnalysis.NwfBuild
             }
         }
 
+        /// <summary>
+        /// «Удалять пустые» у строки (разработчик, 11.11.2026): отчёт проверки без результатов или со всеми «Исправлено» — удалить
+        /// (файл по названию проверки, NwfTool.ReportFilesOf). Папка опустела — и её. Что удалено и что не нашлось — строками итога.
+        /// </summary>
+        private static void DeleteEmpty(string folder, List<string> lines)
+        {
+            var tests = NwApp.ActiveDocument.GetClash().TestsData.Tests.OfType<ClashTest>().ToList();
+            var empty = tests.Where(t => !All(t.Children).OfType<ClashResult>().Any(r => r.Status != ClashResultStatus.Resolved)).ToList();
+            if (empty.Count == 0)
+            {
+                lines.Add("пустых отчётов нет (проверок: " + tests.Count + ")");
+                return;
+            }
+            var entries = Directory.GetFiles(folder).Concat(Directory.GetDirectories(folder)).ToList();
+            var deleted = new List<string>();
+            var lost = new List<string>();
+            foreach (var t in empty)
+            {
+                var mine = NwfTool.ReportFilesOf(entries, t.DisplayName);
+                if (mine.Count == 0)
+                {
+                    lost.Add(t.DisplayName);
+                    continue;
+                }
+                foreach (var m in mine)
+                {
+                    if (Directory.Exists(m)) Directory.Delete(m, true);
+                    else File.Delete(m);
+                }
+                deleted.Add(t.DisplayName);
+            }
+            if (deleted.Count > 0)
+                lines.Add(NwfTool.EmptyDeleted + " " + deleted.Count + " из " + tests.Count + " — " + string.Join(", ", deleted));
+            if (lost.Count > 0)
+                lines.Add("пустые, но файла отчёта не нашлось (не удалены): " + string.Join(", ", lost) + "; в папке: " +
+                          string.Join(", ", entries.Select(e => Path.GetFileName(e))));
+            if (!Directory.EnumerateFileSystemEntries(folder).Any()) Directory.Delete(folder);
+        }
+
         public override int Execute(params string[] parameters)
         {
             var result = parameters[0];
@@ -139,6 +178,7 @@ namespace RASv2.ClashAnalysis.NwfBuild
                     var ok = LcClClashReport.WriteReport(LcOpState.GetActiveInstance(), answers, selector, "");
                     lines.Insert(0, ok && answers.Errors.Count == 0 ? "ok" : "ошибка: " + (answers.Errors.Count > 0 ? string.Join("; ", answers.Errors) : "отчёт не записан"));
                     lines.Add("куда: " + string.Join(" | ", answers.Files) + "; результатов в выборе: " + results);
+                    if (ok && answers.Errors.Count == 0 && options.DeleteEmpty) DeleteEmpty(folder, lines);
                     lines.Add("статусы: " + string.Join(", ", statuses));
                     lines.Add("поля: " + string.Join(", ", fields));
                 }

@@ -346,7 +346,7 @@ namespace RASv2.ClashAnalysis.NwfBuild
                     }
                     var files = Directory.Exists(r.Folder) ? Directory.GetFiles(r.Folder, "*", SearchOption.AllDirectories).Length : 0;
                     // «записан», а файлов нет — тоже не записан
-                    var ok = lines.FirstOrDefault() == "ok" && files > 0;
+                    var ok = lines.FirstOrDefault() == "ok" && (files > 0 || lines.Any(l => l.StartsWith(NwfTool.EmptyDeleted)));
                     Say($"   отчёт «{r.Format}»: " + (ok ? $"записан в {r.Folder} — файлов {files}, {Sec(c)}"
                         : lines.FirstOrDefault() == "ok" ? "Navisworks ответил «записан», а файлов в папке нет: " + r.Folder : lines.FirstOrDefault()));
                     foreach (var l in lines.Skip(1)) Say("     " + l);

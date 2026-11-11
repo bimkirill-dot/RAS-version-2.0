@@ -71,11 +71,16 @@ namespace RASv2.ClashAnalysis.Logic
         [DataMember(Order = 2)] public List<string> Statuses { get; set; } = new List<string>();
         [DataMember(Order = 3)] public string GroupMode { get; set; }
         [DataMember(Order = 4)] public bool FilteredOnly { get; set; }
+        /// <summary>
+        /// Удалить отчёты проверок без коллизий или со всеми исправленными (галочка строки «Удалять пустые», 11.11.2026; в общих
+        /// настройках не задаётся — у строки в задании).
+        /// </summary>
+        [DataMember(Order = 5, EmitDefaultValue = false)] public bool DeleteEmpty { get; set; }
 
         public ReportOptions Clone() => new ReportOptions
         {
             Fields = (Fields ?? new List<string>()).ToList(), Statuses = (Statuses ?? new List<string>()).ToList(), GroupMode = GroupMode,
-            FilteredOnly = FilteredOnly,
+            FilteredOnly = FilteredOnly, DeleteEmpty = DeleteEmpty,
         };
     }
 
@@ -109,6 +114,26 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>Встроенный импорт Clash Detective: «Тест конфликтов в формате XML».</summary>
         public const string ImportTests = "NativeExportPluginAdaptor_LcOdpClashTestsImportPlugin_Import.Navisworks";
         public const string Ok = "ok", Fail = "fail", Skip = "skip";
+        /// <summary>Строка итога модуля отчётов: пустые отчёты удалены (все удалены — не ошибка «файлов в папке нет»).</summary>
+        public const string EmptyDeleted = "пустые отчёты удалены:";
+
+        /// <summary>
+        /// Файлы и папки отчёта одной проверки среди записанных в папку отчёта (вид «все проверки раздельно»: файл — по названию
+        /// проверки, недопустимые в имени знаки — «_»; у HTML — и папка «название_files»). Для «Удалять пустые» (11.11.2026).
+        /// </summary>
+        public static List<string> ReportFilesOf(IEnumerable<string> entries, string test)
+        {
+            var bad = System.IO.Path.GetInvalidFileNameChars();
+            var t = (test ?? "").Trim();
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { t, new string(t.Select(c => bad.Contains(c) ? '_' : c).ToArray()) };
+            names.Remove("");
+            return entries.Where(e =>
+            {
+                var name = System.IO.Path.GetFileName((e ?? "").TrimEnd('\\', '/'));
+                return names.Contains(name) || names.Contains(System.IO.Path.GetFileNameWithoutExtension(name)) ||
+                       names.Any(n => name.Equals(n + "_files", StringComparison.OrdinalIgnoreCase));
+            }).ToList();
+        }
 
         public static string StepLine(int index, string step) => "@ " + index + " " + OneLine(step);
 
