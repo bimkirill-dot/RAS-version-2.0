@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- отразить блок: блок слева, его зеркальная копия справа цветом отдела, между ними — ось отражения -->
+  <polygon points="3,5 11,5 11,17 13,17 13,27 3,27" fill="#FFFFFF" stroke="#39424E" stroke-width="2" stroke-linejoin="round"/>
+  <polygon points="29,5 21,5 21,17 19,17 19,27 29,27" fill="#FFFFFF" stroke="#2F6FED" stroke-width="2" stroke-linejoin="round"/>
+  <line x1="16" y1="3" x2="16" y2="7" stroke="#39424E" stroke-width="2" stroke-linecap="round"/>
+  <line x1="16" y1="11" x2="16" y2="15" stroke="#39424E" stroke-width="2" stroke-linecap="round"/>
+  <line x1="16" y1="19" x2="16" y2="23" stroke="#39424E" stroke-width="2" stroke-linecap="round"/>
+  <line x1="16" y1="27" x2="16" y2="29" stroke="#39424E" stroke-width="2" stroke-linecap="round"/>
+</svg>

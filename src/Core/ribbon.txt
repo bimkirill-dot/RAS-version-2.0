@@ -35,6 +35,7 @@
 ModelHistory = только тест
 ClashAnalysis = работает
 SheetManager = работает
+BlockMirrorRotation = только тест
 
 {Люди}
 BIM = Poletayev_BIM
@@ -58,3 +59,7 @@ ClashAnalysis.LinkedId подпись="ID элемента связи"
 ClashAnalysis.ExportTasks подпись="Задачи выгрузки" доступна="Poletayev_BIM"
 [Менеджер листов]
 SheetManager.Sign подпись="Подпись" доступна="BIM"
+
+[[КЖ]]
+[Блоки]
+BlockMirrorRotation.Run подпись="Повернуть блок" доступна="Poletayev_BIM"

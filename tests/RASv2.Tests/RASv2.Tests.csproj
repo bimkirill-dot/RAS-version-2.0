@@ -36,6 +36,7 @@
   <!-- RAS-Sheet Manager: очистка подписей и план добавления — без Revit и AutoCAD, под обе версии -->
   <ItemGroup>
     <Compile Include="..\..\src\Modules\RAS-Sheet Manager\Logic\*.cs" LinkBase="SheetManager" />
+    <Compile Include="..\..\src\Modules\RAS-Block Mirror Rotation\Logic\*.cs" LinkBase="BlockMirrorRotation" />
   </ItemGroup>
 
   <!-- логика RAS-Model History: модуль пока только для Revit 2026 (.NET 8) -->

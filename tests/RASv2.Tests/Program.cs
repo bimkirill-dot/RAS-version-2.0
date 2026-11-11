@@ -42,6 +42,7 @@ namespace RASv2.Tests
             Run("RAS-Sheet Manager: подпись — план добавления", SheetSignTests.Plan);
             Run("RAS-Sheet Manager: подпись — настройки", SheetSignTests.Settings);
             Run("RAS-Sheet Manager: подпись — актуализация, ГИП", SheetSignTests.Audit);
+            Run("RAS-Block Mirror Rotation: отражение, оси, кружки, размеры", BlockMirrorTests.All);
 #if REVIT2026
             Run("RAS-Model History: фильтр", ModelHistoryTests.Filter);
             Run("RAS-Model History: пары «правка + отмена»", ModelHistoryTests.Undo);

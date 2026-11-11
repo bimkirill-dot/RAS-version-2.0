@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Модуль «RAS-Block Mirror Rotation» — отражение блока КЖ («Отразить проект») с восстановлением оформления на видах:
+    оси, уровни, марки, высотные отметки, размеры, текст (MODULE.md, DECISIONS.md модуля). Зависит только от ядра.
+  -->
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <AssemblyName>RASv2.BlockMirrorRotation</AssemblyName>
+    <RootNamespace>RASv2.BlockMirrorRotation</RootNamespace>
+    <UseRevitApi>true</UseRevitApi>
+    <UseWPF>true</UseWPF>
+    <OutputPath>$(RasOut)parts\</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ядро лежит в той же папке сборки — отдельная копия рядом с модулем не нужна -->
+    <ProjectReference Include="..\..\Core\RASv2.Core.csproj" Private="false" />
+    <!-- иконки кнопок: Icons\<имя>32.png и Icons\<имя>16.png, вшиты в сборку (RibbonIcons в ядре) -->
+    <None Remove="Icons\*.png" />
+    <EmbeddedResource Include="Icons\*.png" LogicalName="Icons.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>
