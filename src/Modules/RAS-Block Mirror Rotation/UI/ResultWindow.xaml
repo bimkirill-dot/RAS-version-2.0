@@ -1,10 +1,10 @@
 <Window x:Class="RASv2.BlockMirrorRotation.UI.ResultWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Повернуть блок — итог" Width="760" Height="520" MinWidth="480" MinHeight="300"
+        Title="Отразить блок — итог" Width="760" Height="520" MinWidth="480" MinHeight="300"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Fg}" FontFamily="Segoe UI" FontSize="13">
-    <!-- итог «Повернуть блок» (DECISIONS.md модуля, набросок 11.11.2026): сводка, список «вид → элемент → что не так»
+    <!-- итог «Отразить блок» (DECISIONS.md модуля, набросок 11.11.2026): сводка, список «вид → элемент → что не так»
          (щелчок — вид открыт, элемент выделен), журнал, «Закрыть». Окно немодальное — по Revit можно ходить.
          Кнопки, кисти — общие образцы ядра. -->
     <DockPanel Margin="20,16,20,16">

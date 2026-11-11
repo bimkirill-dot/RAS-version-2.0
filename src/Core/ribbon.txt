@@ -62,4 +62,4 @@ SheetManager.Sign подпись="Подпись" доступна="BIM"
 
 [[КЖ]]
 [Блоки]
-BlockMirrorRotation.Run подпись="Повернуть блок" доступна="Poletayev_BIM"
+BlockMirrorRotation.Mirror подпись="Отразить блок" доступна="Poletayev_BIM"

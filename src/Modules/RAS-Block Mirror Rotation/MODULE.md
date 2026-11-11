@@ -13,7 +13,7 @@
 ## Как устроен
 
 - Модуль — `RASv2.BlockMirrorRotation.csproj` (`IModule.Id` — `BlockMirrorRotation`), Revit 2023 и 2026. Кнопка
-  «Повернуть блок» (`BlockMirrorRotation.Run`, значок — два зеркальных блока и ось, `Icons\Mirror.svg`, отдел КЖ), отдел
+  «Отразить блок» (`BlockMirrorRotation.Mirror`, значок — два зеркальных блока и ось, `Icons\Mirror.svg`, отдел КЖ), отдел
   «КЖ», панель «Блоки».
 - `MirrorApp.cs` — кнопка: проверки → окно `UI\MirrorWindow.xaml` → запомнить оформление (`Revit\Snapshot.cs`) → команда
   Revit «Отразить проект» (`PostCommand`, ось человек выбирает в её окне) → после неё, в простое Revit, — отражение

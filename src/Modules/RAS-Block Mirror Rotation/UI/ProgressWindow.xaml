@@ -1,10 +1,10 @@
 <Window x:Class="RASv2.BlockMirrorRotation.UI.ProgressWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Повернуть блок" Width="440" SizeToContent="Height" ResizeMode="NoResize" WindowStyle="ToolWindow"
+        Title="Отразить блок" Width="440" SizeToContent="Height" ResizeMode="NoResize" WindowStyle="ToolWindow"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Fg}" FontFamily="Segoe UI" FontSize="13">
-    <!-- ход «Повернуть блок» (DECISIONS.md модуля): что делается, вид N из M; «Отмены» нет — наполовину восстановленная
+    <!-- ход «Отразить блок» (DECISIONS.md модуля): что делается, вид N из M; «Отмены» нет — наполовину восстановленная
          модель хуже, чем подождать. Кисти — общие образцы ядра. -->
     <StackPanel Margin="20,16,20,18">
         <TextBlock x:Name="What" FontWeight="SemiBold" />

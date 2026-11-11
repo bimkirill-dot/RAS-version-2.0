@@ -4,7 +4,7 @@ using Autodesk.Revit.UI;
 
 namespace RASv2.BlockMirrorRotation
 {
-    /// <summary>«Повернуть блок»: отразить блок и вернуть оформление (MirrorApp).</summary>
+    /// <summary>«Отразить блок»: отразить блок и вернуть оформление (MirrorApp).</summary>
     [Transaction(TransactionMode.Manual)]
     public sealed class MirrorCommand : IExternalCommand
     {

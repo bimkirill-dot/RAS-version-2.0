@@ -2,7 +2,7 @@ using System.Windows;
 
 namespace RASv2.BlockMirrorRotation.UI
 {
-    /// <summary>«Повернуть блок»: сколько видов, «Переименовать оси», «Выполнить» / «Отмена». Кнопки, кисти — общие образцы ядра.</summary>
+    /// <summary>«Отразить блок»: сколько видов, «Переименовать оси», «Выполнить» / «Отмена». Кнопки, кисти — общие образцы ядра.</summary>
     public partial class MirrorWindow : Window
     {
         public MirrorWindow(int views)

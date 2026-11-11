@@ -17,13 +17,13 @@ using RASv2.Core;
 namespace RASv2.BlockMirrorRotation
 {
     /// <summary>
-    /// Кнопка «Повернуть блок» (DECISIONS.md): проверки → окно → запомнить оформление видов на листах → команда Revit
+    /// Кнопка «Отразить блок» (DECISIONS.md): проверки → окно → запомнить оформление видов на листах → команда Revit
     /// «Отразить проект» (ось — в её окне) → в простое Revit, когда модель изменилась, — найти отражение по точкам элементов
     /// модели → восстановить (одна группа операций — одно Ctrl+Z) → итог и журнал.
     /// </summary>
     public sealed class MirrorApp
     {
-        private const string Title = "Повернуть блок";
+        private const string Title = "Отразить блок";
         // команда Revit ушла, а модель так и не изменилась — через столько ждать перестаём (человек закрыл её окно)
         private static readonly TimeSpan Wait = TimeSpan.FromMinutes(15);
 
@@ -49,7 +49,7 @@ namespace RASv2.BlockMirrorRotation
         {
             Instance = this;
             _context = context;
-            var button = context.AddButton("Run", "Повернуть\nблок", typeof(MirrorCommand),
+            var button = context.AddButton("Mirror", "Отразить\nблок", typeof(MirrorCommand),
                 "Отразить блок командой Revit «Отразить проект» и вернуть оформление на видах: оси, марки, отметки, размеры, текст",
                 icon: "Mirror");
             button.LongDescription = "Откройте файл блока (в нём никто не работает) и нажмите. Плагин запомнит оформление на всех видах " +
@@ -66,7 +66,7 @@ namespace RASv2.BlockMirrorRotation
                 var doc = app.ActiveUIDocument?.Document;
                 if (doc == null || doc.IsFamilyDocument)
                 {
-                    TaskDialog.Show(Title, "Откройте файл блока (проект) и нажмите «Повернуть блок» в нём.");
+                    TaskDialog.Show(Title, "Откройте файл блока (проект) и нажмите «Отразить блок» в нём.");
                     return;
                 }
                 if (doc.IsReadOnly)
@@ -110,18 +110,18 @@ namespace RASv2.BlockMirrorRotation
                     progress.Close();
                 }
                 var journal = new StringBuilder();
-                journal.AppendLine($"Повернуть блок — {doc.Title}, {DateTime.Now:dd.MM.yyyy HH:mm}, {Environment.UserName}, Revit {_context.RevitYear}, сборка {_context.BuildId}");
+                journal.AppendLine($"Отразить блок — {doc.Title}, {DateTime.Now:dd.MM.yyyy HH:mm}, {Environment.UserName}, Revit {_context.RevitYear}, сборка {_context.BuildId}");
                 journal.AppendLine($"Запомнено: видов {snapshot.Views.Count}, осей и уровней {snapshot.Views.Sum(v => v.Datums.Count)}, марок {snapshot.Views.Sum(v => v.Tags.Count)}, " +
                                    $"отметок {snapshot.Views.Sum(v => v.Spots.Count)}, размеров {snapshot.Views.Sum(v => v.Dimensions.Count)}, текстов {snapshot.Views.Sum(v => v.Texts.Count)}, " +
                                    $"прочего {snapshot.Views.Sum(v => v.Others.Count)}; точек модели для поиска отражения — {snapshot.ModelPoints.Count}");
                 _pending = new Pending { Doc = doc, Snapshot = snapshot, RenameGrids = window.RenameGrids, Posted = DateTime.Now, Journal = journal.ToString() };
-                _context.Log.Info("Повернуть блок: оформление запомнено (" + doc.Title + "), запускаю «Отразить проект»");
+                _context.Log.Info("Отразить блок: оформление запомнено (" + doc.Title + "), запускаю «Отразить проект»");
                 app.PostCommand(RevitCommandId.LookupPostableCommandId(PostableCommand.MirrorProject));
             }
             catch (Exception ex)
             {
                 _pending = null;
-                _context.Log.Error("Повернуть блок: не запущено", ex);
+                _context.Log.Error("Отразить блок: не запущено", ex);
                 TaskDialog.Show(Title, "Не получилось запустить — подробности в журнале плагина («О плагине» → «Показать журнал ошибок»).");
             }
         }
@@ -156,7 +156,7 @@ namespace RASv2.BlockMirrorRotation
                 if (DateTime.Now - p.Posted > Wait)
                 {
                     _pending = null;
-                    _context.Log.Info("Повернуть блок: «Отразить проект» так и не изменила модель — перестал ждать");
+                    _context.Log.Info("Отразить блок: «Отразить проект» так и не изменила модель — перестал ждать");
                 }
                 return;
             }
@@ -222,7 +222,7 @@ namespace RASv2.BlockMirrorRotation
                 foreach (var r in report.Rows) journal.AppendLine($"  {r.View} | {r.Element} | {r.Problem}");
                 if (report.RowsDropped > 0) journal.AppendLine($"  … и ещё {report.RowsDropped} строк — не показаны");
                 var path = Save(journal);
-                _context.Log.Info("Повернуть блок: оформление восстановлено (" + doc.Title + "), журнал — " + path);
+                _context.Log.Info("Отразить блок: оформление восстановлено (" + doc.Title + "), журнал — " + path);
                 var window = new ResultWindow(report, path, (view, element) =>
                 {
                     _showHandler.Set(doc, view, element);
@@ -233,7 +233,7 @@ namespace RASv2.BlockMirrorRotation
             }
             catch (Exception ex)
             {
-                _context.Log.Error("Повернуть блок: оформление не восстановлено", ex);
+                _context.Log.Error("Отразить блок: оформление не восстановлено", ex);
                 journal.AppendLine("Ошибка: " + ex);
                 Save(journal);
                 TaskDialog.Show(Title, "Восстановление оформления прервалось — подробности в журнале плагина («О плагине» → «Показать журнал ошибок»). " +
@@ -255,13 +255,13 @@ namespace RASv2.BlockMirrorRotation
             {
                 var dir = Path.Combine(_context.LocalDataDir, "Журналы");
                 Directory.CreateDirectory(dir);
-                var path = Path.Combine(dir, "Повернуть блок " + DateTime.Now.ToString("yyyy-MM-dd HH-mm-ss") + ".log");
+                var path = Path.Combine(dir, "Отразить блок " + DateTime.Now.ToString("yyyy-MM-dd HH-mm-ss") + ".log");
                 File.WriteAllText(path, journal.ToString(), Encoding.UTF8);
                 return path;
             }
             catch (Exception ex)
             {
-                _context.Log.Error("Повернуть блок: журнал запуска не записан", ex);
+                _context.Log.Error("Отразить блок: журнал запуска не записан", ex);
                 return null;
             }
         }
@@ -296,7 +296,7 @@ namespace RASv2.BlockMirrorRotation
             }
             catch (Exception ex)
             {
-                _log.Error("Повернуть блок: элемент из итога не показан", ex);
+                _log.Error("Отразить блок: элемент из итога не показан", ex);
             }
         }
 
