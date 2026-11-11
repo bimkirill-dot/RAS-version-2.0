@@ -41,7 +41,9 @@ namespace RASv2.ClashAnalysis.Export
         /// <param name="only">«Повторить ошибки»: только эти NWC и NWF (и NWF, в которых эти NWC); null — всё.</param>
         /// <param name="planned">Что пойдёт в запуск — до начала: список раскладывает по строкам.</param>
         /// <returns>null — не начато (причина показана).</returns>
-        public static RunOutcome Run(Window owner, IRunView view, UIApplication ui, ExportTask task, ExportSettings common, int year,
+        /// <param name="tasks">Строки запуска: одна — ▷ у строки; несколько — «Запустить вместе» (11.11.2026): одна NWC — один раз, та же
+        /// модель у другой задачи в другой папке — копией (NwcRunPlan.Merge), NWF — у каждой свои.</param>
+        public static RunOutcome Run(Window owner, IRunView view, UIApplication ui, IList<ExportTask> tasks, ExportSettings common, int year,
             ICollection<string> only, Action<List<NwcProgress>, string> planned)
         {
             const string title = "Выгрузка NWC";
@@ -50,11 +52,20 @@ namespace RASv2.ClashAnalysis.Export
                 MessageBox.Show(owner, "Выгрузка работает только в Revit.", title, MessageBoxButton.OK, MessageBoxImage.Information);
                 return null;
             }
+            var task = tasks[0];
             var notes = new List<string>();
             var started = DateTime.Now;
-            var jobs = NwcRunPlan.Build(task, common, year, notes, null, started);
-            // NWF строк с галочкой «Формировать NWF» — после NWC (DECISIONS.md модуля, «Этап 2 — сборка NWF»)
-            var nwfPlans = NwfRunPlan.Build(task, common);
+            var jobs = NwcRunPlan.Merge(tasks.Select(t => NwcRunPlan.Build(t, common, year, notes, null, started)).ToList(), notes);
+            // NWF строк с галочкой «Формировать NWF» — после NWC (DECISIONS.md модуля, «Этап 2 — сборка NWF»); у каждой задачи — свои
+            var nwfOf = new Dictionary<NwfPlan, ExportTask>();
+            var nwfPlans = new List<NwfPlan>();
+            foreach (var t in tasks)
+                foreach (var n in NwfRunPlan.Build(t, common))
+                    if (!nwfPlans.Any(x => string.Equals(x.NwfPath, n.NwfPath, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        nwfPlans.Add(n);
+                        nwfOf[n] = t;
+                    }
             if (only != null)
             {
                 // повтор: NWC — только если её путь в списке, RVT — так же (повтор RVT не выгружает NWC заново)
@@ -69,6 +80,8 @@ namespace RASv2.ClashAnalysis.Export
                 jobs = jobs.Where(j => !j.Off || j.RvtPath != null || j.Resave).ToList();
                 nwfPlans = nwfPlans.Where(n => only.Contains(n.NwfPath) || n.Nwcs.Any(only.Contains)).ToList();
             }
+            // копия без своей исходной в запуске — выгружается сама
+            foreach (var j in jobs.Where(j => j.CopyOf != null && !jobs.Contains(j.CopyOf))) j.CopyOf = null;
             // пересохранение заменяет модели на месте — спросить (разработчик, 08.11.2026: «окно-предупреждение»)
             var resave = jobs.Where(j => j.Resave && j.Skip == null).ToList();
             if (resave.Count > 0)
@@ -81,11 +94,12 @@ namespace RASv2.ClashAnalysis.Export
                 if (MessageBox.Show(owner, text, "Пересохранение моделей", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
                     return null;
             }
-            AskTests(owner, task, nwfPlans);
+            foreach (var t in tasks) AskTests(owner, t, nwfPlans.Where(n => nwfOf[n] == t).ToList());
             var todo = jobs.Count(j => j.Skip == null) + nwfPlans.Count(n => n.Skip == null);
             if (todo == 0)
             {
-                var why = jobs.Count == 0 && nwfPlans.Count == 0 ? "у «" + task.Name + "» и её подзадач нет моделей." : "всё пропускается:\n" +
+                var why = jobs.Count == 0 && nwfPlans.Count == 0
+                    ? (tasks.Count == 1 ? "у «" + task.Name + "» и её подзадач нет моделей." : "у выбранных строк нет моделей.") : "всё пропускается:\n" +
                           string.Join("\n", jobs.Select(j => "• " + j.ModelName + " — " + j.Skip)
                               .Concat(nwfPlans.Select(n => "• " + ExportNodes.FileName(n.NwfPath) + " — " + n.Skip)));
                 MessageBox.Show(owner, "Выгружать нечего: " + why, title, MessageBoxButton.OK, MessageBoxImage.Information);
@@ -95,7 +109,8 @@ namespace RASv2.ClashAnalysis.Export
             // без вопроса «Начать?» (разработчик, 04.11.2026: «после нажатия сразу выгрузка начинается»): пропуски с причинами и
             // несостыковки — в подсказке к статусу строки и в журнале
             var root = ExportNodes.Root(task);
-            var journalPath = Path.Combine(JournalDir, $"{DateTime.Now:yyyy-MM-dd HH-mm-ss} {Safe(root.Name)}{(root == task ? "" : " — " + Safe(task.Name))}.log");
+            var journalPath = Path.Combine(JournalDir, $"{DateTime.Now:yyyy-MM-dd HH-mm-ss} {Safe(root.Name)}{(root == task ? "" : " — " + Safe(task.Name))}" +
+                                                       (tasks.Count > 1 ? $" и ещё {tasks.Count - 1}" : "") + ".log");
             ExportJournal journal;
             try
             {
@@ -112,13 +127,13 @@ namespace RASv2.ClashAnalysis.Export
             var clock = System.Diagnostics.Stopwatch.StartNew();
             using (journal)
             {
-                var runTitle = NwcExporter.Title(task) + (only != null ? " — повтор ошибок" : "");
+                var runTitle = string.Join(" + ", tasks.Select(NwcExporter.Title)) + (only != null ? " — повтор ошибок" : "");
                 var exporter = new NwcExporter(ui, journal, year, common.ParallelCopies);
                 var items = jobs.Select(j => new NwcProgress { Job = j }).ToList();
 
                 // модели другой версии Revit — фоновому Revit их версии (разработчик, 05.11.2026: «пусть плагин запускает Revit 2023»):
                 // Revit Server — по версии хранилища, файл — по версии самого файла; свои — здесь
-                var byYear = items.Where(p => p.Job.Skip == null)
+                var byYear = items.Where(p => p.Job.Skip == null && p.Job.CopyOf == null)
                     .GroupBy(p => NwcWorkers.RunYear(p.Job.Model, FileYear(p.Job.Model), year)).ToList();
                 var local = byYear.Where(g => g.Key == year).SelectMany(g => g).ToList();
                 var others = byYear.Where(g => g.Key != year).ToList();
@@ -136,7 +151,8 @@ namespace RASv2.ClashAnalysis.Export
                     local = local.Except(needNwc).ToList();
                 }
                 // шапка — после раскладки: пропуски «нет Revit …», «нет модуля экспорта» — уже в плане
-                exporter.Header(runTitle, common, jobs, notes);
+                exporter.Header(runTitle, common, jobs.Where(j => j.CopyOf == null).ToList(), notes);
+                NwcCopies.Header(journal, jobs.Where(j => j.CopyOf != null).ToList());
                 NwfStage.Header(journal, nwfPlans);
                 var nwfItems = NwfStage.Items(nwfPlans);
                 outcome.Items.AddRange(items.Concat(nwfItems));
@@ -174,10 +190,12 @@ namespace RASv2.ClashAnalysis.Export
                         Poll();
                         view.Pump(1000);
                     }
-                    // NWC готовы (свои и фоновых) — NWF; остановили — NWF не собираются
+                    // NWC готовы (свои и фоновых) — копии для других задач, затем NWF; остановили — NWF не собираются
+                    NwcCopies.Run(items, journal, view.Changed, view.Cancelled);
                     if (view.Cancelled) NwfStage.Stopped(nwfItems, view.Changed);
                     else NwfStage.Run(nwfPlans, nwfItems, journal, view.Changed, () => view.Cancelled, view.Pump);
-                    RememberTests(task, nwfPlans, nwfItems, journal);
+                    foreach (var t in tasks)
+                        RememberTests(t, nwfPlans.Select((n, i) => (n, nwfItems[i])).Where(x => nwfOf[x.n] == t).ToList(), journal);
                 }
                 catch (Exception ex)
                 {
@@ -192,9 +210,13 @@ namespace RASv2.ClashAnalysis.Export
                     }
                 }
                 outcome.Elapsed = clock.Elapsed;
-                var shared = ShareJournal(journal, ExportNodes.FolderOf(root));
-                if (shared != null) outcome.Journal = shared;
-                foreach (var path in remoteJournals.Where(File.Exists)) ShareFile(journal, path, ExportNodes.FolderOf(root));
+                // копия журнала — в папку каждой задачи запуска
+                foreach (var folder in tasks.Select(t => ExportNodes.FolderOf(ExportNodes.Root(t))).Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    var shared = ShareJournal(journal, folder);
+                    if (shared != null && outcome.Journal == journalPath) outcome.Journal = shared;
+                    foreach (var path in remoteJournals.Where(File.Exists)) ShareFile(journal, path, folder);
+                }
             }
             return outcome;
         }
@@ -227,16 +249,15 @@ namespace RASv2.ClashAnalysis.Export
         /// С какими файлами проверок собрана NWF — в состояние задачи (после сборки без ошибки). «Нет» в вопросе — прежняя подпись
         /// остаётся: в следующий раз спросит снова.
         /// </summary>
-        private static void RememberTests(ExportTask task, List<NwfPlan> plans, List<NwcProgress> items, ExportJournal journal)
+        private static void RememberTests(ExportTask task, List<(NwfPlan Plan, NwcProgress Item)> nwfs, ExportJournal journal)
         {
             var path = RunStates.PathOf(task);
             if (path == null) return;
             var state = RunStates.Load(path);
             var marks = new List<NwfTests>();
-            for (var i = 0; i < plans.Count; i++)
+            foreach (var (p, item) in nwfs)
             {
-                var p = plans[i];
-                if (items[i].State != NwcState.Done || p.Tests.Count == 0) continue;
+                if (item.State != NwcState.Done || p.Tests.Count == 0) continue;
                 var known = state.Tests.Any(x => string.Equals(x.Nwf, p.NwfPath, StringComparison.OrdinalIgnoreCase));
                 if (known && !p.ReplaceTests && RunStates.TestsChanged(state, p.NwfPath, p.TestsSignature) != null) continue;
                 marks.Add(new NwfTests { Nwf = p.NwfPath, Signature = p.TestsSignature ?? RunStates.TestsSignature(p.Tests), Files = p.Tests.ToList() });

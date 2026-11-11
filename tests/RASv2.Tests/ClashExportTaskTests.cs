@@ -1237,6 +1237,57 @@ namespace RASv2.Tests
                     if (Directory.Exists(dir)) Directory.Delete(dir, true);
                 }
             });
+            yield return Case("«Запустить вместе»: одна NWC — один раз, та же модель в другой папке — копией, разные настройки — дважды", () =>
+            {
+                NwcJob Job(string model, string nwc, string row, string view = "3D") => new NwcJob
+                {
+                    Model = new ExportModel { Path = model }, NwcPath = nwc, Export = new ExportSettings(), View = view, Rows = { row },
+                };
+                var notes = new List<string>();
+                // задачи с одной папкой NWC: один путь — одна выгрузка, строки обеих задач
+                var a = new List<NwcJob> { Job(@"\\srv\AR.rvt", @"\\p\NWC\AR.nwc", "АР×КЖ"), Job(@"\\srv\KJ.rvt", @"\\p\NWC\KJ.nwc", "АР×КЖ") };
+                var b = new List<NwcJob> { Job(@"\\srv\AR.rvt", @"\\p\NWC\AR.nwc", "ОВ×ВК") };
+                var jobs = NwcRunPlan.Merge(new List<List<NwcJob>> { a, b }, notes);
+                Check(jobs.Count == 2 && jobs[0].Rows.Count == 2 && jobs.All(j => j.CopyOf == null) && notes.Count == 0, "одна папка: " + jobs.Count);
+
+                // другая папка — копия; модель с RVT копией не становится, но служит исходной
+                a = new List<NwcJob> { Job(@"\\srv\AR.rvt", @"\\p1\AR.nwc", "1"), Job(@"\\srv\KJ.rvt", @"\\p1\KJ.nwc", "1") };
+                a[1].RvtPath = @"\\p1\KJ.rvt";
+                b = new List<NwcJob> { Job(@"\\srv\AR.rvt", @"\\p2\AR.nwc", "2"), Job(@"\\srv\KJ.rvt", @"\\p2\KJ.nwc", "2") };
+                jobs = NwcRunPlan.Merge(new List<List<NwcJob>> { a, b }, notes);
+                Check(jobs.Count == 4 && jobs[2].CopyOf == jobs[0] && jobs[3].CopyOf == jobs[1] && notes.Count == 0, "другая папка — копия");
+
+                // у второй — RVT, у первой нет: вторая выгружается (открывается всё равно), первая — её копия
+                a = new List<NwcJob> { Job(@"\\srv\AR.rvt", @"\\p1\AR.nwc", "1") };
+                b = new List<NwcJob> { Job(@"\\srv\AR.rvt", @"\\p2\AR.nwc", "2") };
+                b[0].RvtPath = @"\\p2\AR.rvt";
+                jobs = NwcRunPlan.Merge(new List<List<NwcJob>> { a, b }, notes);
+                Check(jobs[0].CopyOf == jobs[1] && jobs[1].CopyOf == null, "исходная — та, что открывается ради RVT");
+
+                // другой вид — выгружается дважды, несостыковка; пропущенная у одной задачи — не исходная
+                a = new List<NwcJob> { Job(@"\\srv\AR.rvt", @"\\p1\AR.nwc", "1") };
+                b = new List<NwcJob> { Job(@"\\srv\AR.rvt", @"\\p2\AR.nwc", "2", "3D_Другой") };
+                jobs = NwcRunPlan.Merge(new List<List<NwcJob>> { a, b }, notes);
+                Check(jobs.All(j => j.CopyOf == null) && notes.Count(n => n.Contains("выгружается 2 раза")) == 1, "другой вид: " + string.Join(" | ", notes));
+                notes.Clear();
+                a[0].Skip = "модель отключена";
+                b = new List<NwcJob> { Job(@"\\srv\AR.rvt", @"\\p2\AR.nwc", "2") };
+                jobs = NwcRunPlan.Merge(new List<List<NwcJob>> { a, b }, notes);
+                Check(jobs.All(j => j.CopyOf == null) && notes.Count == 0, "пропуск — не исходная");
+
+                // одна NWC: у первой задачи пропуск, у второй делается — остаётся вторая
+                a = new List<NwcJob> { Job(@"\\srv\AR.rvt", @"\\p\AR.nwc", "1") };
+                a[0].Skip = "выгрузка NWC выключена (галочка «NWC»)";
+                a[0].Off = true;
+                b = new List<NwcJob> { Job(@"\\srv\AR.rvt", @"\\p\AR.nwc", "2") };
+                jobs = NwcRunPlan.Merge(new List<List<NwcJob>> { a, b }, notes);
+                Check(jobs.Count == 1 && jobs[0] == b[0] && jobs[0].Rows.SequenceEqual(new[] { "2", "1" }), "делается — остаётся");
+
+                // одна задача — как прежде: две папки — две выгрузки, без копий
+                a = new List<NwcJob> { Job(@"\\srv\AR.rvt", @"\\p1\AR.nwc", "1"), Job(@"\\srv\AR.rvt", @"\\p2\AR.nwc", "1.1") };
+                jobs = NwcRunPlan.Merge(new List<List<NwcJob>> { a }, notes);
+                Check(jobs.All(j => j.CopyOf == null) && notes.Count == 0, "одна задача — без копий");
+            });
             yield return Case("удаление: подзадачи", () =>
             {
                 var roots = Sample(out var high, out _);

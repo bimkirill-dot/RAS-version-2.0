@@ -22,7 +22,13 @@ namespace RASv2.ClashAnalysis.UI
     {
         private sealed class RunRequest
         {
-            public ExportTask Task;
+            /// <summary>Строки запуска: одна — ▷; несколько — «Запустить вместе» (11.11.2026).</summary>
+            public List<ExportTask> Tasks;
+            public ExportTask Task
+            {
+                get => Tasks[0];
+                set => Tasks = new List<ExportTask> { value };
+            }
             /// <summary>«Повторить ошибки» — только эти NWC и NWF; null — всё.</summary>
             public HashSet<string> Only;
             public RowRun Previous;
@@ -223,12 +229,13 @@ namespace RASv2.ClashAnalysis.UI
         private void RunOne(RunRequest request)
         {
             RunOutcome outcome = null;
-            var title = request.Task.Name + (request.Only != null ? " — повтор ошибок" : "");
+            var title = (request.Tasks.Count == 1 ? request.Task.Name : "Вместе: " + string.Join(", ", request.Tasks.Select(t => t.Name))) +
+                        (request.Only != null ? " — повтор ошибок" : "");
             try
             {
                 _runWindow = new ExportRunWindow(title, w =>
                 {
-                    outcome = NwcRunner.Run(w, this, Revit as Autodesk.Revit.UI.UIApplication, request.Task, Settings, RevitYear, request.Only,
+                    outcome = NwcRunner.Run(w, this, Revit as Autodesk.Revit.UI.UIApplication, request.Tasks, Settings, RevitYear, request.Only,
                         (items, journal) =>
                         {
                             w.SetItems(items, journal);
@@ -251,7 +258,7 @@ namespace RASv2.ClashAnalysis.UI
             }
             catch (Exception ex)
             {
-                RASv2.Core.Log.Write("ClashAnalysis", "Выгрузка: не запустилась — " + request.Task.Name, ex);
+                RASv2.Core.Log.Write("ClashAnalysis", "Выгрузка: не запустилась — " + title, ex);
                 MessageBox.Show(this, "Выгрузка не запустилась: " + ex.Message + "\nПодробности — в журнале плагина.", Title,
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -275,19 +282,23 @@ namespace RASv2.ClashAnalysis.UI
             // RVT строки — по её модели (NWC тот же путь; {Дата} в папке RVT — время запуска, заново не вычислить)
             var rvtOf = items.Where(p => p.Job.RvtPath != null).ToDictionary(p => p.Job.NwcPath, p => p.Job.RvtPath, StringComparer.OrdinalIgnoreCase);
             var resaveOf = items.Where(p => p.Job.Resave).ToDictionary(p => p.Job.NwcPath, p => RunStates.ResaveKey(p.Job.Model.Path), StringComparer.OrdinalIgnoreCase);
-            foreach (var row in request.Task.Self())
-            {
-                var paths = new HashSet<string>(RowPaths(row).Where(inRun.Contains), StringComparer.OrdinalIgnoreCase);
-                if (row == request.Task) paths.UnionWith(inRun);
-                if (row.Settings.MakeRvt || row == request.Task)
-                    foreach (var n in paths.ToList())
-                        if (rvtOf.TryGetValue(n, out var rvt)) paths.Add(rvt);
-                if (row.Settings.Resave || row == request.Task)
-                    foreach (var n in paths.ToList())
-                        if (resaveOf.TryGetValue(n, out var key)) paths.Add(key);
-                if (paths.Count == 0) continue;
-                _live[row] = new RowLive { Paths = paths, Start = row == request.Task ? DateTime.Now : (DateTime?)null };
-            }
+            // «Запустить вместе» — у каждой строки запуска только её NWC и NWF (одна строка — всё, что в запуске)
+            foreach (var start in request.Tasks)
+                foreach (var row in start.Self())
+                {
+                    if (_live.ContainsKey(row)) continue;
+                    var isStart = row == start;
+                    var paths = new HashSet<string>(RowPaths(row).Where(inRun.Contains), StringComparer.OrdinalIgnoreCase);
+                    if (isStart && request.Tasks.Count == 1) paths.UnionWith(inRun);
+                    if (row.Settings.MakeRvt || isStart)
+                        foreach (var n in paths.ToList())
+                            if (rvtOf.TryGetValue(n, out var rvt)) paths.Add(rvt);
+                    if (row.Settings.Resave || isStart)
+                        foreach (var n in paths.ToList())
+                            if (resaveOf.TryGetValue(n, out var key)) paths.Add(key);
+                    if (paths.Count == 0) continue;
+                    _live[row] = new RowLive { Paths = paths, Start = isStart ? DateTime.Now : (DateTime?)null };
+                }
         }
 
         private List<string> RowPaths(ExportTask row) =>
@@ -316,16 +327,24 @@ namespace RASv2.ClashAnalysis.UI
             {
                 var row = pair.Key;
                 var live = pair.Value;
-                var seconds = row == request.Task ? outcome.Elapsed.TotalSeconds
+                var isStart = request.Tasks.Contains(row);
+                // вместе — у строки запуска своё время (её NWC и NWF), не всего запуска
+                var seconds = isStart && request.Tasks.Count == 1 ? outcome.Elapsed.TotalSeconds
                     : live.Start != null ? ((live.End ?? now) - live.Start.Value).TotalSeconds : 0;
                 var previous = request.Only != null ? (row == request.Task ? request.Previous : FindRun(row)) : null;
                 records.Add(RunStates.Record(row, live.Paths, results, outcome.Started, seconds, outcome.Journal,
-                    row == request.Task ? outcome.Notes : null, request.Only, previous, itemTimes));
+                    isStart ? outcome.Notes : null, request.Only, previous, itemTimes));
             }
             var times = outcome.Items.Where(p => p.State == NwcState.Done && p.Time > TimeSpan.Zero)
                 .Select(p => new ItemTime { Path = p.Job.NwcPath, Seconds = p.Time.TotalSeconds, At = now }).ToList();
-            var path = RunStates.PathOf(request.Task);
-            if (path == null) return;
+            // строки разных задач — в файлы своих задач
+            foreach (var group in records.Zip(_live.Keys, (r, row) => (r, path: RunStates.PathOf(row))).Where(x => x.path != null)
+                         .GroupBy(x => x.path, StringComparer.OrdinalIgnoreCase))
+                Save(group.Key, group.Select(x => x.r).ToList(), times);
+        }
+
+        private void Save(string path, List<RowRun> records, List<ItemTime> times)
+        {
             try
             {
                 RunStates.Save(path, records, times);
@@ -406,7 +425,26 @@ namespace RASv2.ClashAnalysis.UI
                 Foreground = (System.Windows.Media.Brush)FindResource("Muted"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 16),
             });
             var buttons = new System.Windows.Controls.WrapPanel();
-            var copy = new System.Windows.Controls.Button { Content = "Копировать", MinWidth = 120, Margin = new Thickness(0, 0, 8, 8) };
+            // «Запустить вместе» (разработчик, 11.11.2026): одна NWC — один раз на все выбранные строки; снятые галочкой — не запускаются
+            var together = ExportTask.Outermost(_roots, _picked).Where(t => !t.IsSkipped).ToList();
+            var run = new System.Windows.Controls.Button
+            {
+                Content = "▷  Запустить вместе", Style = (Style)FindResource("PrimaryButton"), MinWidth = 150, Margin = new Thickness(0, 0, 8, 8),
+                IsEnabled = together.Count > 1,
+                ToolTip = together.Count > 1
+                    ? "Одним запуском: каждая модель открывается один раз; та же модель у другой строки в другой папке — копией NWC. NWF — у каждой строки свои"
+                    : "Выберите хотя бы две строки (не подзадачи друг друга)",
+            };
+            System.Windows.Controls.ToolTipService.SetShowOnDisabled(run, true);
+            run.Click += (s, e) =>
+            {
+                if (!Leave()) return;
+                var all = _roots.SelectMany(r => r.Self()).ToList();
+                var tasks = together.Where(all.Contains).ToList();
+                if (tasks.Count > 0) Start(new RunRequest { Tasks = tasks });
+            };
+            buttons.Children.Add(run);
+            var copy =new System.Windows.Controls.Button { Content = "Копировать", MinWidth = 120, Margin = new Thickness(0, 0, 8, 8) };
             copy.Click += (s, e) => CopyPicked();
             var delete = new System.Windows.Controls.Button { Content = "Удалить", MinWidth = 120, Margin = new Thickness(0, 0, 8, 8) };
             delete.Click += (s, e) => DeletePicked();

@@ -45,6 +45,11 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>Строка окна хода — не NWC, а NWF строки (Export\NwfStage): имя — «S1_ВК.nwf».</summary>
         public bool IsNwf { get; set; }
         public string Name { get; set; }
+        /// <summary>
+        /// «Запустить вместе» (11.11.2026): эта NWC — копия NWC другой задачи (та же модель, вид, настройки и отбор, другая папка):
+        /// модель не открывается заново, файл копируется после выгрузки NWC; null — выгружается сама.
+        /// </summary>
+        public NwcJob CopyOf { get; set; }
 
         public string ModelName => Name ?? ExportNames.BareName(Model.Path);
     }
@@ -172,6 +177,76 @@ namespace RASv2.ClashAnalysis.Logic
                           string.Join(", ", g.Select(j => j.NwcPath)) + ". Модель откроется столько же раз.");
             return jobs;
         }
+
+        /// <summary>
+        /// Несколько строк одним запуском («Запустить вместе», разработчик, 11.11.2026: «в двух задачах одинаковый набор моделей, но
+        /// разные проверки — чтобы NWC два раза не выгружались»). perTask — Build каждой строки. Одна NWC — один раз (как внутри задачи;
+        /// остаётся та, что выгружается). Та же модель с теми же видом, «Настройками NWC Exporter» и отбором у другой задачи, но в другой
+        /// папке — копия (CopyOf): модель не открывается заново. Копией не становится NWC с RVT или пересохранением (модель всё равно
+        /// открывается). Разные вид или настройки — выгружается для каждой задачи, несостыковка — в notes.
+        /// </summary>
+        public static List<NwcJob> Merge(IList<List<NwcJob>> perTask, List<string> notes)
+        {
+            var all = new List<NwcJob>();
+            var tasks = new Dictionary<NwcJob, HashSet<int>>();
+            var byPath = new Dictionary<string, NwcJob>(StringComparer.OrdinalIgnoreCase);
+            for (var t = 0; t < perTask.Count; t++)
+                foreach (var job in perTask[t])
+                {
+                    if (!byPath.TryGetValue(job.NwcPath, out var same))
+                    {
+                        byPath[job.NwcPath] = job;
+                        tasks[job] = new HashSet<int> { t };
+                        all.Add(job);
+                        continue;
+                    }
+                    // та же NWC у второй задачи: остаётся та, что делается (не пропуск, NWC включена)
+                    var better = same.Skip != null && job.Skip == null || same.Skip == null && job.Skip == null && same.Off && !job.Off;
+                    var keep = better ? job : same;
+                    var other = better ? same : job;
+                    if (better)
+                    {
+                        all[all.IndexOf(same)] = job;
+                        byPath[job.NwcPath] = job;
+                        tasks[job] = tasks[same];
+                        tasks.Remove(same);
+                    }
+                    tasks[keep].Add(t);
+                    foreach (var r in other.Rows.Where(r => !keep.Rows.Contains(r)).ToList()) keep.Rows.Add(r);
+                    if (other.Skip == null)
+                    {
+                        if (keep.RvtPath == null) keep.RvtPath = other.RvtPath;
+                        if (other.Resave) keep.Resave = true;
+                    }
+                    if (keep.Skip == null && other.Skip == null && !other.Off && Signature(keep) != Signature(other))
+                        notes.Add($"«{ExportNodes.FileName(keep.NwcPath)}»: у «{keep.Rows[0]}» и «{other.Rows[0]}» разные вид или «Настройки NWC Exporter» — выгружается по «{keep.Rows[0]}».");
+                }
+
+            bool Exports(NwcJob j) => j.Skip == null && !j.Off && j.CopyOf == null;
+            bool Copyable(NwcJob j) => Exports(j) && j.RvtPath == null && !j.Resave;
+            bool Same(NwcJob a, NwcJob b) => string.Equals(a.Model.Path, b.Model.Path, StringComparison.OrdinalIgnoreCase) &&
+                                             Signature(a) == Signature(b) && EditedKey(a.Edited) == EditedKey(b.Edited);
+            for (var i = 0; i < all.Count; i++)
+            {
+                var job = all[i];
+                if (!Copyable(job)) continue;
+                // источник — выгружаемая NWC другой задачи; копируемая — только если она раньше (иначе она станет копией этой)
+                var source = all.Where((s, k) => k != i && Exports(s) && Same(s, job) && !tasks[s].Overlaps(tasks[job]) && (k < i || !Copyable(s)))
+                    .FirstOrDefault();
+                if (source != null) job.CopyOf = source;
+            }
+            foreach (var g in all.Where(Exports).GroupBy(j => j.Model.Path, StringComparer.OrdinalIgnoreCase))
+            {
+                var list = g.ToList();
+                if (list.Count < 2 || list.Select(j => tasks[j].Min()).Distinct().Count() < 2) continue;
+                notes.Add($"Модель «{ExportNames.BareName(g.Key)}» у разных задач — разные вид, «Настройки NWC Exporter», отбор или RVT: " +
+                          $"выгружается {list.Count} раза — " + string.Join(", ", list.Select(j => j.NwcPath)) + ".");
+            }
+            return all;
+        }
+
+        private static string EditedKey(ModelDateFilter e) =>
+            e?.On == true ? $"{e.Mode}|{e.From:yyyy-MM-dd}|{e.To:yyyy-MM-dd}" : "";
 
         /// <summary>
         /// Модель Revit Server другой версии выгружает фоновый Revit её версии (разработчик, 05.11.2026: «давай без обновления» — Revit
