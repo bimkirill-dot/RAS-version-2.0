@@ -139,9 +139,11 @@
                         <Grid.ColumnDefinitions><ColumnDefinition Width="320" /><ColumnDefinition /></Grid.ColumnDefinitions>
                         <TextBlock Style="{StaticResource OptionName}" Text="{}{Блок}" />
                         <StackPanel Grid.Column="1" Orientation="Horizontal">
-                            <TextBlock Text="часть имени:" VerticalAlignment="Center" Margin="0,0,8,0" />
-                            <TextBox x:Name="BlockPrefix" Width="56" TextChanged="Any_Changed" />
-                            <TextBlock Style="{StaticResource Inline}" Text="и цифры" />
+                            <TextBlock Text="маски через запятую:" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <!-- маски блока (12.11.2026): «S, P» — буквы и цифры после; «#» — где цифры; две нашлись — первая по списку -->
+                            <TextBox x:Name="BlockMasks" Width="160" TextChanged="Any_Changed"
+                                     ToolTip="Часть имени модели, по которой узнаётся блок. «S, P» — S или P и цифры после (S6, P10). «#» — где цифры, если иначе (Б#А — Б2А). Нашлись две — берётся первая по списку." />
+                            <TextBlock Style="{StaticResource Inline}" Text="«S» — S и цифры, «#» — где цифры" />
                         </StackPanel>
                     </Grid>
                 </Border>

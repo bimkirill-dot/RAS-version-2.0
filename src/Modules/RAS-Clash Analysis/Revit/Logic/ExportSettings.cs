@@ -131,8 +131,18 @@ namespace RASv2.ClashAnalysis.Logic
         /// для прежних сборок плагина у коллег.</summary>
         public bool TrimName { get; set; } = true;
 
-        /// <summary>{Блок} — часть имени модели вида «буква и цифры»: «S6», «S10» (разработчик, 02.11.2026: «зачем по частям делить»).</summary>
+        /// <summary>
+        /// Прежнее {Блок} — одна буква перед цифрами (02.11.2026). С 12.11.2026 — BlockMasks; пишется первой маской для прежних
+        /// сборок плагина у коллег, из файла без масок — становится масками.
+        /// </summary>
         public string BlockPrefix { get; set; } = "S";
+
+        /// <summary>
+        /// {Блок} — маски через запятую (разработчик, 12.11.2026: «блок определяется не только буквой S, но и P, и другими — свои
+        /// пресеты добавлять»): «S, P» — буквы и цифры после («S6», «P10»); «#» — где цифры, если иначе («Б#А»). Часть имени модели
+        /// подходит целиком; нашлись две — первая по списку. ExportNames.Block.
+        /// </summary>
+        public string BlockMasks { get; set; } = "S";
 
         /// <summary>{Дата} — формат (.NET); как в папках отчётов сейчас — «01.10.2026».</summary>
         public string DateFormat { get; set; } = "dd.MM.yyyy";
@@ -164,6 +174,7 @@ namespace RASv2.ClashAnalysis.Logic
             TrimName = s.TrimName;
             TrimAfter = s.TrimAfter;
             BlockPrefix = s.BlockPrefix;
+            BlockMasks = s.BlockMasks;
             DateFormat = s.DateFormat;
             ParallelCopies = s.ParallelCopies;
             Departments = s.Departments.Select(d => d.Clone()).ToList();
@@ -217,12 +228,41 @@ namespace RASv2.ClashAnalysis.Logic
                 return (space >= 0 ? p.Substring(0, space) : p).Trim();
             });
 
-        /// <summary>Блок — первая часть имени вида «префикс и цифры»: «S6», «S10», «S01»; нет — пусто.</summary>
-        public static string Block(string modelFile, string prefix)
+        /// <summary>Маски {Блок} из строки «S, P; Б#А» — по порядку, без пустых.</summary>
+        public static List<string> BlockMasks(string masks) =>
+            (masks ?? "").Split(',', ';').Select(m => m.Trim()).Where(m => m.Length > 0).ToList();
+
+        /// <summary>
+        /// Блок — часть имени модели, целиком подходящая под маску (12.11.2026): маски по порядку — первая нашедшаяся; «S» — «S» и
+        /// цифры («S6», «S10», «S01»), «#» — цифры на своём месте («Б#А» — «Б2А»). Без учёта регистра, русские и латинские буквы,
+        /// одинаковые на вид (Р и P, С и C), — одно и то же. Нет — пусто.
+        /// </summary>
+        public static string Block(string modelFile, string masks)
         {
-            if (string.IsNullOrWhiteSpace(prefix)) return "";
-            var rx = new Regex("^" + Regex.Escape(prefix.Trim()) + @"\d+$", RegexOptions.IgnoreCase);
-            return Parts(modelFile).FirstOrDefault(p => rx.IsMatch(p)) ?? "";
+            var parts = Parts(modelFile).ToList();
+            foreach (var mask in BlockMasks(masks))
+            {
+                var m = Fold(mask);
+                if (m.IndexOf('#') < 0) m += "#";
+                var rx = new Regex("^" + string.Concat(m.Select(c => c == '#' ? @"\d+" : Regex.Escape(c.ToString()))) + "$");
+                var found = parts.FirstOrDefault(p => rx.IsMatch(Fold(p)));
+                if (found != null) return found;
+            }
+            return "";
+        }
+
+        /// <summary>Маски {Блок}: хотя бы одна, каждая — одна часть имени (без пробелов и «_»), не только цифры; null — всё верно.</summary>
+        public static string CheckBlockMasks(string masks)
+        {
+            var list = BlockMasks(masks);
+            if (list.Count == 0) return "{Блок}: нужна хотя бы одна маска (например, «S, P»).";
+            foreach (var m in list)
+            {
+                if (m.Any(c => char.IsWhiteSpace(c) || c == '_')) return "{Блок}: маска «" + m + "» — без пробелов и «_»: блок — одна часть имени модели. Маски — через запятую.";
+                if (m.All(c => c == '#' || char.IsDigit(c))) return "{Блок}: в маске «" + m + "» нужны буквы.";
+                if (m.IndexOfAny(System.IO.Path.GetInvalidFileNameChars()) >= 0) return "{Блок}: в маске «" + m + "» — недопустимые знаки.";
+            }
+            return null;
         }
 
         /// <summary>

@@ -103,7 +103,7 @@ namespace RASv2.ClashAnalysis.UI
             ElementProperties.IsChecked, Urls.IsChecked, Lights.IsChecked, RoomAsAttribute.IsChecked, LinkedCad.IsChecked,
             LinkedFiles.IsChecked, Parts.IsChecked, MissingMaterials.IsChecked, Levels.IsChecked, Scope.SelectedIndex, ViewName.Text,
             RoomGeometry.IsChecked, RemoveRevitLinks.IsChecked, RemoveCad.IsChecked, RemovePointClouds.IsChecked, RemoveIfc.IsChecked,
-            TrimAfter.Text, BlockPrefix.Text, DateFormat.SelectedIndex, ParallelCopies.Text,
+            TrimAfter.Text, BlockMasks.Text, DateFormat.SelectedIndex, ParallelCopies.Text,
             string.Join(";", _departments.Select(d => d.Department)), Picked(_fields), Picked(_statuses), GroupMode.SelectedIndex,
             FilteredOnly.IsChecked, RvtAudit.IsChecked, RvtWorksets.SelectedIndex, RvtOverwrite.IsChecked, RvtTrimAfter.Text,
             ResaveCompact.IsChecked, ResaveAudit.IsChecked, ResaveBackup.Text);
@@ -119,7 +119,7 @@ namespace RASv2.ClashAnalysis.UI
             RemovePointClouds.IsChecked = s.RemovePointClouds;
             RemoveIfc.IsChecked = s.RemoveIfc;
             TrimAfter.Text = s.TrimAfter ?? "";
-            BlockPrefix.Text = s.BlockPrefix;
+            BlockMasks.Text = string.Join(", ", ExportNames.BlockMasks(s.BlockMasks));
             DateFormat.SelectedIndex = Math.Max(0, Array.IndexOf(ExportSettings.DateFormats, s.DateFormat));
             ParallelCopies.Text = s.ParallelCopies.ToString(CultureInfo.InvariantCulture);
             _departments.Clear();
@@ -191,7 +191,7 @@ namespace RASv2.ClashAnalysis.UI
             var nwc = ExportNames.NwcName(SampleModel, TrimAfter.Text, out var matches);
             NameExample.Text = "Пример: " + SampleModel + " → " + nwc +
                                (TrimAfter.Text.Trim().Length == 0 ? " (не обрезается)" : matches ? "" : " (в имени нет «" + TrimAfter.Text.Trim() + "» — как есть)");
-            var block = ExportNames.Block(SampleModel, BlockPrefix.Text);
+            var block = ExportNames.Block(SampleModel, BlockMasks.Text);
             var department = ExportNames.Department(SampleModel, _departments.Select(d => d.Department));
             LabelsExample.Text = "Пример: " + SampleModel + " → {Блок} " + Or(block) + " · {Отдел} " + Or(department) +
                                  " · {Дата} " + ExportNodes.DateLabel(DateTime.Now, SelectedDateFormat);
@@ -300,7 +300,10 @@ namespace RASv2.ClashAnalysis.UI
             result.TrimAfter = TrimAfter.Text.Trim();
             // прежние сборки плагина у коллег читают галочку «по шаблону»
             result.TrimName = result.TrimAfter.Length > 0;
-            result.BlockPrefix = BlockPrefix.Text.Trim();
+            result.BlockMasks = string.Join(", ", ExportNames.BlockMasks(BlockMasks.Text));
+            // прежние сборки плагина у коллег читают одну букву: первая маска, если она — только буквы
+            var first = ExportNames.BlockMasks(BlockMasks.Text).FirstOrDefault() ?? "";
+            if (first.Length > 0 && first.All(char.IsLetter)) result.BlockPrefix = first;
             result.DateFormat = SelectedDateFormat;
             result.ParallelCopies = int.Parse(ParallelCopies.Text.Trim(), CultureInfo.InvariantCulture);
             result.Departments = _departments.Where(d => !string.IsNullOrWhiteSpace(d.Department))
@@ -330,8 +333,8 @@ namespace RASv2.ClashAnalysis.UI
         {
             if (!NwcOptions.TryFaceting(Faceting.Text, out faceting)) return "Коэффициент фасетизации — число больше нуля.";
             if (Scope.SelectedIndex == 1 && string.IsNullOrWhiteSpace(ViewName.Text)) return "Нужно имя вида для выгрузки.";
-            var prefix = BlockPrefix.Text.Trim();
-            if (prefix.Length == 0 || !prefix.All(char.IsLetter)) return "{Блок}: часть имени — буквы перед цифрами блока (например, S).";
+            var masks = ExportNames.CheckBlockMasks(BlockMasks.Text);
+            if (masks != null) return masks;
             if (!int.TryParse(ParallelCopies.Text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var copies) || copies < 1 || copies > 8)
                 return "Копий с Revit Server одновременно — число от 1 до 8.";
             if (!_statuses.Any(p => p.On)) return "Настройки отчётов: отметьте хотя бы один статус — иначе в отчёте будет только сводка.";

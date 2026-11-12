@@ -231,6 +231,17 @@ namespace RASv2.Tests
                 Check(ExportNames.Block("0000_01_01_S6_KJ01_01_M3 еще текст.rvt", "S") == "S6", "блок S6");
                 Check(ExportNames.Block("0000_S10_KJ01.rvt", "s") == "S10", "S10, буква без учёта регистра");
                 Check(ExportNames.Block("0000_SX_KJ01.rvt", "S") == "" && ExportNames.Block("Модель АР.rvt", "S") == "", "нет блока");
+                // маски через запятую (12.11.2026)
+                Check(ExportNames.Block("0000_P02_KJ01.rvt", "S, P") == "P02", "P — второй маской");
+                Check(ExportNames.Block("0000_P02_S1_KJ01.rvt", "S, P") == "S1" && ExportNames.Block("0000_S1_P02.rvt", "P; S") == "P02",
+                      "две нашлись — первая по списку, не по месту в имени");
+                Check(ExportNames.Block("0000_Р3_KJ01.rvt", "P") == "Р3" && ExportNames.Block("0000_P3_KJ01.rvt", "Р") == "P3",
+                      "русская Р и латинская P — одно");
+                Check(ExportNames.Block("0000_Б2А_KJ01.rvt", "Б#А") == "Б2А" && ExportNames.Block("0000_Б2_KJ01.rvt", "Б#А") == "", "«#» — где цифры");
+                Check(ExportNames.Block("0000_PS1_KJ01.rvt", "S") == "" && ExportNames.Block("0000_S1.rvt", "") == "", "часть — целиком; без масок — нет");
+                Check(ExportNames.CheckBlockMasks("S, P") == null && ExportNames.CheckBlockMasks(" , ") != null &&
+                      ExportNames.CheckBlockMasks("S P") != null && ExportNames.CheckBlockMasks("S_1") != null && ExportNames.CheckBlockMasks("#") != null,
+                      "проверка масок");
                 Check(ExportNames.Department("0000_01_01_S6_KJ01_01_M3.rvt", codes) == "KJ", "KJ01 → KJ");
                 Check(ExportNames.Department("0000_S6_OV_вент.rvt", codes) == "OV", "код без цифр");
                 Check(ExportNames.Department("ArmanQala_S6_X01.rvt", codes) == "", "«AR» в «ArmanQala» — не отдел");
@@ -256,7 +267,7 @@ namespace RASv2.Tests
                 Check(!n.ConvertUrls && !n.ConvertLights && !n.ConvertLinkedCad && !n.ConvertLinkedFiles && !n.FindMissingMaterials &&
                       !n.RoomGeometry, "выключенное");
                 Check(s.RemoveRevitLinks && s.RemoveCad && s.RemovePointClouds && s.RemoveIfc, "перед выгрузкой удаляется всё внешнее");
-                Check(s.TrimName && s.BlockPrefix == "S" && s.DateFormat == "dd.MM.yyyy", "имя модели и дата");
+                Check(s.TrimName && s.BlockPrefix == "S" && s.BlockMasks == "S" && s.DateFormat == "dd.MM.yyyy", "имя модели и дата");
                 Check(NwcOptions.TryFaceting("0,5", out var f) && f == 0.5, "запятая");
                 Check(NwcOptions.TryFaceting(" 2.5 ", out f) && f == 2.5, "точка");
                 Check(!NwcOptions.TryFaceting("0", out _) && !NwcOptions.TryFaceting("-1", out _) &&
