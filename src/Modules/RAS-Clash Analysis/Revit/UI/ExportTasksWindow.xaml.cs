@@ -479,9 +479,82 @@ namespace RASv2.ClashAnalysis.UI
             Refresh();
         }
 
-        private void Delete_Click(object sender, RoutedEventArgs e)
+        private void Delete_Click(object sender, RoutedEventArgs e) => DeleteRow(RowOf(sender).Item);
+
+        /// <summary>
+        /// Правая кнопка мыши по строке — меню (разработчик, 12.11.2026): «Экспортировать…», «Свернуть все», «Свернуть выбранные»,
+        /// «Развернуть все», «Развернуть выбранные», «Удалить». Выбрано несколько строк (Ctrl / Shift) и щёлкнули по одной из них —
+        /// «выбранные» и «Удалить» — про все выбранные; иначе — про эту строку (с её подзадачами). Выбор строки меню не меняет.
+        /// </summary>
+        private void Row_RightClick(object sender, MouseButtonEventArgs e)
         {
-            var task = RowOf(sender).Item;
+            e.Handled = true;
+            var row = RowOf(sender).Item;
+            var many = _picked.Count > 1 && _picked.Contains(row);
+            var targets = many ? ExportTask.Outermost(_roots, _picked) : new List<ExportTask> { row };
+            var withInner = targets.SelectMany(t => t.Self()).Where(t => t.Children.Count > 0).ToList();
+            var all = _roots.SelectMany(r => r.Self()).Where(t => t.Children.Count > 0).ToList();
+            var menu = new ContextMenu { PlacementTarget = (UIElement)sender, Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint };
+            void Add(string header, bool enabled, System.Action click)
+            {
+                var item = new MenuItem { Header = header, IsEnabled = enabled };
+                item.Click += (s, a) => click();
+                menu.Items.Add(item);
+            }
+            Add("Экспортировать…", !many, () => ExportRow(row));
+            menu.Items.Add(new Separator());
+            Add("Свернуть все", all.Any(t => !_collapsed.Contains(t)), () => Collapse(all, true));
+            Add("Свернуть выбранные", withInner.Any(t => !_collapsed.Contains(t)), () => Collapse(withInner, true));
+            Add("Развернуть все", _collapsed.Count > 0, () => Collapse(all, false));
+            Add("Развернуть выбранные", withInner.Any(_collapsed.Contains), () => Collapse(withInner, false));
+            menu.Items.Add(new Separator());
+            Add(many ? "Удалить выбранные (" + targets.Count + ")" : "Удалить", true, () =>
+            {
+                if (many) DeletePicked();
+                else DeleteRow(row);
+            });
+            // меню — свойством строки: так оно берёт кисти и образцы окна (тема Revit), как меню в «Истории модели»
+            ((FrameworkElement)sender).ContextMenu = menu;
+            menu.IsOpen = true;
+        }
+
+        // свернуть / развернуть строки (у каждой — свои подзадачи); выбор и прокрутка — на месте
+        private void Collapse(IEnumerable<ExportTask> rows, bool collapse)
+        {
+            foreach (var t in rows.ToList())
+            {
+                if (collapse) _collapsed.Add(t);
+                else _collapsed.Remove(t);
+            }
+            Refresh();
+        }
+
+        /// <summary>«Экспортировать…» в меню строки: задача или подзадача с вложенными — в файл, как «Экспорт…» в её панели.</summary>
+        private void ExportRow(ExportTask row)
+        {
+            // несохранённые правки в панели — сначала вопрос: в файл идёт сохранённое
+            if (!Leave()) return;
+            if (!_roots.SelectMany(r => r.Self()).Contains(row)) return;
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Filter = ExportFiles.Filter,
+                FileName = string.Concat((row.Name ?? "").Trim().Select(c => System.IO.Path.GetInvalidFileNameChars().Contains(c) ? '_' : c)) + ".json",
+            };
+            if (dialog.ShowDialog(this) != true) return;
+            try
+            {
+                var copy = row.Copy();
+                ExportFiles.Save(dialog.FileName, row.Parent == null ? ExportFiles.FromTop(copy) : ExportFiles.FromTask(copy));
+            }
+            catch (System.Exception ex)
+            {
+                RASv2.Core.Log.Write("ClashAnalysis", "Задачи выгрузки: экспорт не записан — " + row.Name, ex);
+                MessageBox.Show(this, "Файл не записан: " + ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private void DeleteRow(ExportTask task)
+        {
             var inner = task.Descendants;
             var text = "Удалить «" + task.Name + "»" + (inner > 0 ? " и " + inner + " " + ExportTask.SubtasksWord(inner) : "") + "?";
             if (MessageBox.Show(this, text, Title, MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No)

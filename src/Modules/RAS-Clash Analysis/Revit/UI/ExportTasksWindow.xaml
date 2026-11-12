@@ -173,7 +173,7 @@
                         <DataTemplate>
                             <!-- щелчок по строке — её настройки справа; перетаскивание — перенос внутри уровня -->
                             <Border Style="{StaticResource TaskRowBox}" Margin="{Binding RowMargin}" AllowDrop="True"
-                                    PreviewMouseLeftButtonDown="Row_MouseDown" MouseMove="Row_MouseMove"
+                                    PreviewMouseLeftButtonDown="Row_MouseDown" MouseMove="Row_MouseMove" MouseRightButtonUp="Row_RightClick"
                                     DragOver="Row_DragOver" Drop="Row_Drop">
                                 <Grid Opacity="{Binding RowOpacity}">
                                     <!-- столбцы — как у шапки; отступ уровня — внутри «Названия», остальные столбцы ровно друг под другом;
