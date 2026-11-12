@@ -1125,7 +1125,12 @@ namespace RASv2.Tests
                 Check(NwcRunPlan.Build(r2[0], common, 2026, new List<string>()).Single(j => j.NwcPath == withOff[0].NwcPath).Skip == null,
                       "та же модель у «S1_ВК» включена — делается");
                 Check(mid3.Settings.Clone().Models[0].Off, "копия строки — с отключённой моделью");
-                Check(NwfRunPlan.Build(mid3, common).Single().Nwcs.Contains(withOff[0].NwcPath), "NWF — с NWC отключённой модели (та, что лежит)");
+                // с 12.11.2026 отключённая модель в NWF строки не входит (специалист: в подзадачах S1 отключал модели S2 — в NWF были все)
+                var offNwf = NwfRunPlan.Build(mid3, common).Single();
+                Check(!offNwf.Nwcs.Contains(withOff[0].NwcPath) && offNwf.Nwcs.Count == mid3.Settings.Models.Count - 1, "NWF — без отключённой модели");
+                Check(NwfRunPlan.Build(r2[0], common).Any(n => n.Nwcs.Contains(withOff[0].NwcPath)), "у другой строки та же модель включена — в её NWF есть");
+                mid3.Settings.Models.ForEach(m => m.Off = true);
+                Check(NwfRunPlan.Build(mid3, common).Single().Skip != null, "все отключены — NWF не из чего собрать");
                 // NWC включён (по умолчанию), папки нет, а пересохранение есть — модель не пропускается, NWC — с причиной (09.11.2026)
                 roots[1].Settings.NoNwc = false;
                 var plain = new List<string>();

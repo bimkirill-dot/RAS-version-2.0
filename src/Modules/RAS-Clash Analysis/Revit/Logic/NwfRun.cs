@@ -78,8 +78,10 @@ namespace RASv2.ClashAnalysis.Logic
                     else
                         plan.Reports = formats.Select(f => new NwfToolReport { Format = f, Folder = ExportNodes.ReportPath(row, common, when, f) }).ToList();
                 }
+                // отключённая модель (галочка снята) в NWF строки не входит (разработчик, 12.11.2026: «в подзадачах S1 отключал модели
+                // S2, а в NWF загрузились все»; было — NWF брала её NWC, что уже лежит)
                 plan.Nwcs = (ExportNodes.ModelsOf(row) ?? new List<ExportModel>())
-                    .Where(m => !string.IsNullOrWhiteSpace(m.Path))
+                    .Where(m => !m.Off && !string.IsNullOrWhiteSpace(m.Path))
                     .Select(m => ExportNodes.NwcPath(row, m, common))
                     .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
                 if (ExportNodes.HasLabel(plan.NwfPath))

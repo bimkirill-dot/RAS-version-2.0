@@ -119,7 +119,7 @@ namespace RASv2.ClashAnalysis.UI
                     var department = ExportNames.Department(Path, _common.Departments.Select(d => d.Department));
                     if (department.Length > 0) lines.Add("Отдел: " + department);
                     if (NwcStale) lines.Add("Модель изменилась после выгрузки NWC");
-                    if (Model.Off) lines.Add("Отключена — не делается: ни NWC, ни RVT, ни пересохранение");
+                    if (Model.Off) lines.Add("Отключена — не делается: ни NWC, ни RVT, ни пересохранение; в NWF этой строки не входит");
                     else if (_grey) lines.Add("Не изменялась в выбранный срок — пропускается отбором «Экспортировать модели, отредактированные…»");
                     return string.Join("\n", lines);
                 }
