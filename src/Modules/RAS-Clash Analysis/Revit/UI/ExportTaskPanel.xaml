@@ -609,11 +609,14 @@
                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" SharedSizeGroup="Cap" /><ColumnDefinition /><ColumnDefinition Width="36" /><ColumnDefinition Width="Auto" SharedSizeGroup="Side" /></Grid.ColumnDefinitions>
                         <TextBlock Style="{StaticResource Cap}" Text="Удалять пустые" />
                         <DockPanel Grid.Column="1" Style="{StaticResource FirstLine}" VerticalAlignment="Top">
-                            <CheckBox x:Name="DeleteEmptyReports" VerticalAlignment="Center" Checked="Any_Changed" Unchecked="Any_Changed"
-                                      ToolTip="Отчёт проверки, в которой нет коллизий или все исправлены, удаляется — у этой строки и всех её подзадач. Не ставьте, если отчёты загружаются на сайт коллизий: без пустого отчёта сайт не узнает, что коллизии исправлены" />
-                            <!-- стоит у строки выше — «от «…»», галочка не снимается -->
-                            <TextBlock x:Name="DeleteEmptyFrom" Style="{StaticResource From}" Margin="10,0,0,0" VerticalAlignment="Center" />
+                            <CheckBox x:Name="DeleteEmptyReports" VerticalAlignment="Center" Checked="Any_Changed" Unchecked="Any_Changed" Click="DeleteEmptyReports_Click"
+                                      ToolTip="Отчёт проверки, в которой нет коллизий или все исправлены, удаляется. Действует и на подзадачи; у подзадачи можно поставить или снять своё. Не ставьте, если отчёты загружаются на сайт коллизий: без пустого отчёта сайт не узнает, что коллизии исправлены" />
                         </DockPanel>
+                        <!-- от строки выше — «от «…»»; щёлкнули галочку у подзадачи — своё, «Вернуть от «…»» (12.11.2026) -->
+                        <StackPanel x:Name="DeleteEmptySide" Grid.Column="3" Style="{StaticResource Side}">
+                            <TextBlock x:Name="DeleteEmptyFrom" Style="{StaticResource From}" />
+                            <Button x:Name="DeleteEmptyLink" Style="{StaticResource SideLink}" Content="Вернуть" Click="DeleteEmptyLink_Click" />
+                        </StackPanel>
                     </Grid>
                 </StackPanel>
 

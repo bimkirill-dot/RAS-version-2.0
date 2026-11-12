@@ -1303,7 +1303,7 @@ namespace RASv2.Tests
 
                 var settings = NodeSettings.Top();
                 settings.DeleteEmptyReports = true;
-                Check(settings.Clone().DeleteEmptyReports && !NodeSettings.Top().DeleteEmptyReports, "своё у строки, по умолчанию снята");
+                Check(settings.Clone().DeleteEmptyReports == true && NodeSettings.Top().DeleteEmptyReports != true, "своё у строки, по умолчанию снята");
                 Check(new ReportOptions { DeleteEmpty = true }.Clone().DeleteEmpty, "в задание программе NWF");
 
                 // у задачи — и у всех подзадач (11.11.2026)
@@ -1311,9 +1311,17 @@ namespace RASv2.Tests
                 var leaf = high.Children[0];
                 Check(!ExportNodes.DeletesEmptyReports(leaf), "по умолчанию — нет");
                 roots[0].Settings.DeleteEmptyReports = true;
-                Check(ExportNodes.DeletesEmptyReports(leaf) && ExportNodes.DeleteEmptyFrom(leaf) == roots[0] && ExportNodes.DeleteEmptyFrom(roots[0]) == null,
-                      "от задачи — подзадачам");
-                roots[0].Settings.DeleteEmptyReports = false;
+                Check(ExportNodes.DeletesEmptyReports(leaf) && ExportNodes.DeletesEmptyReports(mid), "от задачи — подзадачам");
+                // у подзадачи — своё поверх (12.11.2026)
+                high.Settings.DeleteEmptyReports = false;
+                Check(!ExportNodes.DeletesEmptyReports(high) && !ExportNodes.DeletesEmptyReports(leaf) && ExportNodes.DeletesEmptyReports(mid),
+                      "сняли у подзадачи — у неё и ниже нет, у соседней есть");
+                leaf.Settings.DeleteEmptyReports = true;
+                Check(ExportNodes.DeletesEmptyReports(leaf) && !ExportNodes.DeletesEmptyReports(high), "ниже снова поставили — только у неё");
+                high.Settings.DeleteEmptyReports = null;
+                Check(ExportNodes.DeletesEmptyReports(high), "«Вернуть» — снова от задачи");
+                roots[0].Settings.DeleteEmptyReports = null;
+                leaf.Settings.DeleteEmptyReports = null;
                 high.Settings.DeleteEmptyReports = true;
                 Check(ExportNodes.DeletesEmptyReports(leaf) && !ExportNodes.DeletesEmptyReports(roots[0]) && !ExportNodes.DeletesEmptyReports(mid), "вниз, не вверх");
             });
