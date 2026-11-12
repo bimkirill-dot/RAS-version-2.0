@@ -336,9 +336,17 @@ namespace RASv2.ClashAnalysis.Logic
 
         // ── блоки ──
 
-        /// <summary>Блок модели: вписанный руками, иначе — из имени («S1»); нет — пусто.</summary>
-        public static string BlockOf(ExportModel model, ExportSettings common) =>
-            !string.IsNullOrWhiteSpace(model.Block) ? model.Block.Trim() : ExportNames.Block(model.Path, common.BlockMasks);
+        /// <summary>
+        /// Блок модели: вписанный руками, иначе — из имени («S01»); нет — пусто. Вписанный под маску — в том же написании («S1» —
+        /// «S01», 12.11.2026), иначе — как вписан.
+        /// </summary>
+        public static string BlockOf(ExportModel model, ExportSettings common)
+        {
+            if (string.IsNullOrWhiteSpace(model.Block)) return ExportNames.Block(model.Path, common.BlockMasks);
+            var typed = model.Block.Trim();
+            var same = ExportNames.Block(typed, common.BlockMasks);
+            return same.Length > 0 ? same : typed;
+        }
 
         /// <summary>Блоки по моделям — по порядку номеров (S1, S2, S10); модели без блока — последней группой с пустым именем.</summary>
         public static List<BlockGroup> Blocks(IEnumerable<ExportModel> models, ExportSettings common)

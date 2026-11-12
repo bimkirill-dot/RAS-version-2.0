@@ -235,20 +235,34 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>
         /// Блок — часть имени модели, целиком подходящая под маску (12.11.2026): маски по порядку — первая нашедшаяся; «S» — «S» и
         /// цифры («S6», «S10», «S01»), «#» — цифры на своём месте («Б#А» — «Б2А»). Без учёта регистра, русские и латинские буквы,
-        /// одинаковые на вид (Р и P, С и C), — одно и то же. Нет — пусто.
+        /// одинаковые на вид (Р и P, С и C), — одно и то же. Блок — в одном написании: буквы — как в маске (заглавные), номер — не
+        /// короче двух цифр (разработчик, 12.11.2026: «S01 и S1 — тот же блок 1; 01 и 1 должны считаться 01»): «S1», «s01», «S001» —
+        /// «S01»; «S10» — «S10». Нет — пусто.
         /// </summary>
         public static string Block(string modelFile, string masks)
         {
             var parts = Parts(modelFile).ToList();
             foreach (var mask in BlockMasks(masks))
             {
-                var m = Fold(mask);
+                var m = mask.ToUpperInvariant();
                 if (m.IndexOf('#') < 0) m += "#";
-                var rx = new Regex("^" + string.Concat(m.Select(c => c == '#' ? @"\d+" : Regex.Escape(c.ToString()))) + "$");
-                var found = parts.FirstOrDefault(p => rx.IsMatch(Fold(p)));
-                if (found != null) return found;
+                var rx = new Regex("^" + string.Concat(Fold(m).Select(c => c == '#' ? @"(\d+)" : Regex.Escape(c.ToString()))) + "$");
+                foreach (var p in parts)
+                {
+                    var hit = rx.Match(Fold(p));
+                    if (!hit.Success) continue;
+                    var n = 0;
+                    return string.Concat(m.Select(c => c == '#' ? Number(hit.Groups[++n].Value) : c.ToString()));
+                }
             }
             return "";
+        }
+
+        /// <summary>Номер блока — без лишних нулей, не короче двух цифр: «1», «001» — «01»; «10» — «10».</summary>
+        public static string Number(string digits)
+        {
+            var bare = (digits ?? "").TrimStart('0');
+            return bare.PadLeft(2, '0');
         }
 
         /// <summary>Маски {Блок}: хотя бы одна, каждая — одна часть имени (без пробелов и «_»), не только цифры; null — всё верно.</summary>

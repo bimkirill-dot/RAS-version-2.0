@@ -121,9 +121,9 @@ namespace RASv2.Tests
             {
                 var roots = Sample(out var high, out _);
                 var blocks = ExportNodes.Blocks(ExportNodes.ModelsOf(high), common);
-                Check(string.Join(",", blocks.Select(b => (b.Name.Length == 0 ? "—" : b.Name) + b.Models.Count)) == "S13,S22,S101,—1",
+                Check(string.Join(",", blocks.Select(b => (b.Name.Length == 0 ? "—" : b.Name) + b.Models.Count)) == "S013,S022,S101,—1",
                     string.Join(",", blocks.Select(b => b.Name + b.Models.Count)));
-                Check(ExportNodes.BlockOf(high.Children[0].Settings.Models[0], common) == "S1",
+                Check(ExportNodes.BlockOf(high.Children[0].Settings.Models[0], common) == "S01",
                     "{Блок} — общий у моделей строки; разные — пусто");
                 roots[0].Settings.Models.Last().Block = " S1 ";
                 Check(ExportNodes.Blocks(ExportNodes.ModelsOf(high), common)[0].Models.Count == 4, "Генплан — в S1 руками");
@@ -228,17 +228,28 @@ namespace RASv2.Tests
             yield return Case("{Блок} и {Отдел} — найденные в имени модели, не по номеру части", () =>
             {
                 var codes = new[] { "AR", "KJ", "OV" };
-                Check(ExportNames.Block("0000_01_01_S6_KJ01_01_M3 еще текст.rvt", "S") == "S6", "блок S6");
+                Check(ExportNames.Block("0000_01_01_S6_KJ01_01_M3 еще текст.rvt", "S") == "S06", "блок S6 — S06");
                 Check(ExportNames.Block("0000_S10_KJ01.rvt", "s") == "S10", "S10, буква без учёта регистра");
                 Check(ExportNames.Block("0000_SX_KJ01.rvt", "S") == "" && ExportNames.Block("Модель АР.rvt", "S") == "", "нет блока");
                 // маски через запятую (12.11.2026)
                 Check(ExportNames.Block("0000_P02_KJ01.rvt", "S, P") == "P02", "P — второй маской");
-                Check(ExportNames.Block("0000_P02_S1_KJ01.rvt", "S, P") == "S1" && ExportNames.Block("0000_S1_P02.rvt", "P; S") == "P02",
+                Check(ExportNames.Block("0000_P02_S1_KJ01.rvt", "S, P") == "S01" && ExportNames.Block("0000_S1_P02.rvt", "P; S") == "P02",
                       "две нашлись — первая по списку, не по месту в имени");
-                Check(ExportNames.Block("0000_Р3_KJ01.rvt", "P") == "Р3" && ExportNames.Block("0000_P3_KJ01.rvt", "Р") == "P3",
+                Check(ExportNames.Block("0000_Р3_KJ01.rvt", "P") == "P03" && ExportNames.Block("0000_P3_KJ01.rvt", "Р") == "Р03",
                       "русская Р и латинская P — одно");
-                Check(ExportNames.Block("0000_Б2А_KJ01.rvt", "Б#А") == "Б2А" && ExportNames.Block("0000_Б2_KJ01.rvt", "Б#А") == "", "«#» — где цифры");
+                Check(ExportNames.Block("0000_Б2А_KJ01.rvt", "Б#А") == "Б02А" && ExportNames.Block("0000_Б2_KJ01.rvt", "Б#А") == "", "«#» — где цифры");
                 Check(ExportNames.Block("0000_PS1_KJ01.rvt", "S") == "" && ExportNames.Block("0000_S1.rvt", "") == "", "часть — целиком; без масок — нет");
+                // S1 и S01 — один блок, номер — не короче двух цифр (12.11.2026)
+                Check(ExportNames.Block("a_S1_KJ.rvt", "S") == "S01" && ExportNames.Block("a_s001_KJ.rvt", "S") == "S01" &&
+                      ExportNames.Block("a_S10_KJ.rvt", "S") == "S10" && ExportNames.Block("a_S0_KJ.rvt", "S") == "S00" &&
+                      ExportNames.Block("a_Б2А_KJ.rvt", "б#а") == "Б02А", "S1, s001 — S01; S10 — как есть");
+                Check(ExportNames.Number("1") == "01" && ExportNames.Number("007") == "07" && ExportNames.Number("123") == "123", "номер");
+                var masksCommon = new ExportSettings { BlockMasks = "S" };
+                Check(ExportNodes.BlockOf(new ExportModel { Path = "a_S01_KJ.rvt" }, masksCommon) ==
+                      ExportNodes.BlockOf(new ExportModel { Path = "b_S1_AR.rvt" }, masksCommon) &&
+                      ExportNodes.BlockOf(new ExportModel { Path = "c.rvt", Block = " s1 " }, masksCommon) == "S01" &&
+                      ExportNodes.BlockOf(new ExportModel { Path = "c.rvt", Block = "Корпус Б" }, masksCommon) == "Корпус Б",
+                      "S01 и S1 — один блок; вписанный руками — так же; не под маску — как вписан");
                 Check(ExportNames.CheckBlockMasks("S, P") == null && ExportNames.CheckBlockMasks(" , ") != null &&
                       ExportNames.CheckBlockMasks("S P") != null && ExportNames.CheckBlockMasks("S_1") != null && ExportNames.CheckBlockMasks("#") != null,
                       "проверка масок");
@@ -289,7 +300,7 @@ namespace RASv2.Tests
                 var s1 = high.Children[0];
                 var m = s1.Settings.Models[0];
                 const string root = @"\\srv\2025_Арман Кала 7 очередь";
-                Check(ExportNodes.NwcPath(s1, m, c) == root + @"\S1\NWC\0000_01_01_S1_KJ01_01_M3.nwc", ExportNodes.NwcPath(s1, m, c));
+                Check(ExportNodes.NwcPath(s1, m, c) == root + @"\S01\NWC\0000_01_01_S1_KJ01_01_M3.nwc", ExportNodes.NwcPath(s1, m, c));
                 Check(ExportNodes.NwcPath(s1, m, c) == ExportNodes.NwcPath(mid, mid.Settings.Models[0], c), "одна модель — один NWC на обе критичности");
                 Check(ExportNodes.NwfPath(s1, c) == root + @"\NWF\S1_ВК.nwf" && ExportNodes.NwfPath(mid, c) == root + @"\NWF\S1_СК.nwf",
                     ExportNodes.NwfPath(s1, c));
@@ -302,7 +313,7 @@ namespace RASv2.Tests
                 Check(ExportNodes.ReportPath(s1, c, new DateTime(2026, 11, 2), "HTML") == root + @"\Отчеты\02.11.2026 00-00\S1\Высокая критичность\HTML" &&
                       ExportNodes.ReportPath(mid, c, new DateTime(2026, 11, 2), "XML") == root + @"\Отчеты\02.11.2026 00-00\XML", "своя и от задачи");
                 top.Settings.NwcFolder = @"{Блок}\NWC\{Отдел}";
-                Check(ExportNodes.NwcPath(s1, m, c).EndsWith(@"\S1\NWC\KJ\0000_01_01_S1_KJ01_01_M3.nwc"), "отдел — по модели");
+                Check(ExportNodes.NwcPath(s1, m, c).EndsWith(@"\S01\NWC\KJ\0000_01_01_S1_KJ01_01_M3.nwc"), "отдел — по модели");
                 high.Settings.NwfFolder = @"D:\NWF\S1";
                 Check(ExportNodes.NwfPath(s1, c) == @"D:\NWF\S1\S1_ВК.nwf", "полный путь — как есть");
                 Check(ExportNodes.InProject("", @"{Блок}") == "{Блок}" && ExportNodes.InProject(@"\\srv\P", "") == @"\\srv\P", "пустые части");
@@ -323,9 +334,9 @@ namespace RASv2.Tests
                 rbMid.Settings.NwfFolder = @"NWF\{Блок}";
                 rbMid.Settings.MakeReports = true;
                 rbMid.Settings.ReportFolder = @"Отчеты\{Блок}\{Дата}";
-                Check(ExportNodes.RowBlock(rbMid, common) == "S1" && ExportNodes.NwfPath(rbMid, common).EndsWith(@"\NWF\S1\S1_СК.nwf"), "блок строки — S1");
+                Check(ExportNodes.RowBlock(rbMid, common) == "S01" && ExportNodes.NwfPath(rbMid, common).EndsWith(@"\NWF\S01\S1_СК.nwf"), "блок строки — S01");
                 var rbPlan = NwfRunPlan.Build(rbMid, common, new DateTime(2026, 11, 9, 10, 0, 0)).Single();
-                Check(rbPlan.Skip == null && rbPlan.Reports[0].Folder.Contains(@"\Отчеты\S1\09.11.2026 10-00"), "отчёты — в папку блока: " + rbPlan.Reports[0].Folder);
+                Check(rbPlan.Skip == null && rbPlan.Reports[0].Folder.Contains(@"\Отчеты\S01\09.11.2026 10-00"), "отчёты — в папку блока: " + rbPlan.Reports[0].Folder);
                 rbMid.Settings.Models.Add(new ExportModel { Path = "0000_01_01_S2_KJ01_01_M3.rvt" });
                 Check(ExportNodes.RowBlock(rbMid, common) == "" && NwfRunPlan.Build(rbMid, common).Single().Skip.StartsWith("{Блок}"), "разные блоки — NWF с причиной");
                 var bad = ExportNodes.CheckReportFolder(@"{Проект}\{Дата}");
@@ -687,7 +698,7 @@ namespace RASv2.Tests
                       "одна NWC — для двух строк");
                 Check(notes.Count == 2 && notes.All(n => n.Contains("ни у одной подзадачи")), "модели только у задачи: " + string.Join(" | ", notes));
                 var s1kj = jobs.First(j => j.ModelName == "0000_01_01_S1_KJ01_01_M3");
-                Check(s1kj.NwcPath == @"\\srv\2025_Арман Кала 7 очередь\S1\NWC\0000_01_01_S1_KJ01_01_M3.nwc", s1kj.NwcPath);
+                Check(s1kj.NwcPath == @"\\srv\2025_Арман Кала 7 очередь\S01\NWC\0000_01_01_S1_KJ01_01_M3.nwc", s1kj.NwcPath);
                 Check(s1kj.View == "3D_Navisworks" && s1kj.Skip == null, "вид из общих");
 
                 // у «Средней» свой вид — у той же NWC разные настройки: несостыковка, выгружается по первой строке
@@ -865,7 +876,7 @@ namespace RASv2.Tests
                 Check(ExportNodes.SetFlag(high, RowFlag.Nwc, false, common) == null && high.Settings.NoNwc && s1.Settings.NoNwc && s2.Settings.NoNwc &&
                       !roots[0].Settings.NoNwc && C(0).NwcState == null && C(1).NwcState == false, "NWC выключен у ветки — у задачи по-разному");
                 var plan = NwcRunPlan.Build(roots[0], common, 2026, new List<string>());
-                var kj1 = plan.Single(j => j.NwcPath.EndsWith(@"S1\NWC\0000_01_01_S1_KJ01_01_M3.nwc"));
+                var kj1 = plan.Single(j => j.NwcPath.EndsWith(@"S01\NWC\0000_01_01_S1_KJ01_01_M3.nwc"));
                 Check(!kj1.Off && kj1.Skip == null, "модель S1 нужна и «Средней» (NWC включён) — выгружается: " + kj1.Skip);
                 mid.Settings.NoNwc = true;
                 plan = NwcRunPlan.Build(roots[0], common, 2026, new List<string>());
@@ -894,8 +905,8 @@ namespace RASv2.Tests
                 mid.Settings.MakeRvt = true;
                 mid.Settings.RvtFolder = @"RVT\{Блок}\{Дата}";
                 var jobs = NwcRunPlan.Build(roots[0], common, 2026, notes, null, when);
-                var kj = jobs.Single(j => j.NwcPath.EndsWith(@"S1\NWC\0000_01_01_S1_KJ01_01_M3.nwc"));
-                Check(kj.RvtPath == @"\\srv\2025_Арман Кала 7 очередь\RVT\S1\08.11.2026 18-05\0000_01_01_S1_KJ01_01_M3.rvt" && !kj.Off && kj.Skip == null,
+                var kj = jobs.Single(j => j.NwcPath.EndsWith(@"S01\NWC\0000_01_01_S1_KJ01_01_M3.nwc"));
+                Check(kj.RvtPath == @"\\srv\2025_Арман Кала 7 очередь\RVT\S01\08.11.2026 18-05\0000_01_01_S1_KJ01_01_M3.rvt" && !kj.Off && kj.Skip == null,
                       "модель «Средней» — NWC и RVT одной строкой плана: " + kj.RvtPath);
                 Check(jobs.Single(j => j.NwcPath.EndsWith("S1_OV01_01_M3.nwc")).RvtPath == null, "модель без RVT у своих строк — без RVT");
                 common.Rvt.TrimAfter = "M3";
