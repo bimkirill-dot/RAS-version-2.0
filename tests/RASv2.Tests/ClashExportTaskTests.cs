@@ -1455,6 +1455,12 @@ namespace RASv2.Tests
                 sources[2].Changed = new List<string> { "0000_S01_KJ01" };
                 sources[3].Changed = new List<string> { "0000_S01_KJ01" };
                 groups = RunWarnings.Build(sources, common);
+                // «Выгрузить изменённые» (12.11.2026): NWC изменившихся — у выбранных строк или у всех
+                sources[2].ChangedNwc["0000_S01_KJ01"] = @"C:\NWC\S1\0000_S01_KJ01.nwc";
+                sources[3].ChangedNwc["0000_S01_KJ01"] = @"C:\NWC\СК\0000_S01_KJ01.nwc";
+                var withNwc = RunWarnings.Build(sources, common);
+                Check(RunWarnings.ChangedNwcs(new[] { top }, withNwc).Count == 2 && RunWarnings.ChangedNwcs(new[] { high }, withNwc).Single().Contains(@"\S1\") &&
+                      RunWarnings.ChangedNwcs(new[] { mid, leaf }, withNwc).Count == 2, "изменённые NWC — по выбранным строкам и их подзадачам");
                 Check(groups[leaf].Changes.Single().Name == "0000_S01_KJ01" && groups[mid].Changes.Count == 1 && groups[high].Changes.Count == 0 &&
                       !groups.ContainsKey(top) && RunWarnings.Total(groups) == 2, "изменение — у нижних строк, в числе — один раз");
 

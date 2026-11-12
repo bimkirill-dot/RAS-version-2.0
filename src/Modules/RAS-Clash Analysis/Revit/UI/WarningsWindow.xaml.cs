@@ -46,6 +46,10 @@ namespace RASv2.ClashAnalysis.UI
         public RowRun RetryRun { get; private set; }
         public HashSet<string> RetryPaths { get; private set; }
 
+        /// <summary>«Выгрузить изменённые»: строки запуска и NWC изменившихся моделей; null — не нажимали.</summary>
+        public List<ExportTask> ExportTasks { get; private set; }
+        public HashSet<string> ExportPaths { get; private set; }
+
         /// <param name="start">Строка, на которой открыть; null — «Все задачи».</param>
         /// <param name="collapsed">Свёрнутые строки — как в «Менеджере задач»; строка, на которой открыть, видна.</param>
         public WarningsWindow(IList<ExportTask> roots, Dictionary<ExportTask, WarningGroup> groups, ExportTask start, ISet<ExportTask> collapsed)
@@ -115,6 +119,45 @@ namespace RASv2.ClashAnalysis.UI
 
         private void Rows_SelectionChanged(object sender, SelectionChangedEventArgs e) => ShowSelected();
 
+        /// <summary>Выбранные слева — самые верхние (подзадача выбранной строки — уже в ней); «Все задачи» или ничего — null (все).</summary>
+        private List<ExportTask> Picked()
+        {
+            var views = Rows.SelectedItems.OfType<RowView>().ToList();
+            if (views.Count == 0 || views.Any(v => v.Task == null)) return null;
+            return ExportTask.Outermost(_roots, views.Select(v => v.Task));
+        }
+
+        // кнопки «Выгрузить изменённые»: сколько NWC у всех и у выбранных; нечего — серые
+        private void UpdateExport()
+        {
+            var all = RunWarnings.ChangedNwcs(_roots, _groups).Count;
+            ExportAllText.Text = "По всем задачам (" + all + ")";
+            ExportAll.IsEnabled = all > 0;
+            var chosen = Picked();
+            var mine = chosen == null ? 0 : RunWarnings.ChangedNwcs(chosen, _groups).Count;
+            ExportPickedText.Text = chosen == null ? "По выбранным" :
+                (chosen.Count == 1 ? "По «" + chosen[0].Name + "»" : "По выбранным: " + chosen.Count) + " (" + mine + ")";
+            ExportPicked.IsEnabled = mine > 0;
+        }
+
+        private void ExportAll_Click(object sender, RoutedEventArgs e) => Export(_roots.ToList());
+
+        private void ExportPicked_Click(object sender, RoutedEventArgs e)
+        {
+            var chosen = Picked();
+            if (chosen != null) Export(chosen);
+        }
+
+        // запуск — у строк, где есть изменившиеся модели (у всех задач — у задач с ними), только их NWC; окно закрывается, запуск ставит «Менеджер задач»
+        private void Export(List<ExportTask> rows)
+        {
+            var paths = RunWarnings.ChangedNwcs(rows, _groups);
+            if (paths.Count == 0) return;
+            ExportTasks = rows.Where(r => RunWarnings.ChangedNwcs(new[] { r }, _groups).Count > 0).ToList();
+            ExportPaths = paths;
+            Close();
+        }
+
         private void Filter_Changed(object sender, RoutedEventArgs e) => ShowSelected();
 
         private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -130,8 +173,10 @@ namespace RASv2.ClashAnalysis.UI
             if (!_ready) return;
             Details.Children.Clear();
             Scroll.ScrollToTop();
-            var picked = (Rows.SelectedItem as RowView)?.Task;
-            var tasks = picked == null ? _roots.SelectMany(r => r.Self()) : picked.Self();
+            UpdateExport();
+            var chosen = Picked();
+            var picked = chosen != null && chosen.Count == 1 ? chosen[0] : null;
+            var tasks = chosen == null ? _roots.SelectMany(r => r.Self()) : chosen.SelectMany(t => t.Self()).Distinct();
             var shown = 0;
             foreach (var t in tasks)
             {

@@ -162,6 +162,10 @@ namespace RASv2.ClashAnalysis.UI
                     }).ToList();
                 // дату модели ещё не спросили — не «?»: подождать ответа
                 var changed = RunStates.Changed(checks.Where(c => c.Model != null || !c.Answered), out var unknown);
+                // NWC изменившихся — по имени модели (порядок проверок — как у моделей строки)
+                p.Item.ChangedNwc = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                for (var i = 0; i < checks.Count; i++)
+                    if (changed.Contains(checks[i].Name)) p.Item.ChangedNwc[checks[i].Name] = p.Models[i].Nwc;
                 p.Item.Paths = p.Paths;
                 p.Item.SetStatus(run, changed, unknown, RunStates.EstimateText(estimate),
                     estimate == null ? (p.Paths.Count == 0 ? null : "Ещё не выгружалось — время появится после первой выгрузки")

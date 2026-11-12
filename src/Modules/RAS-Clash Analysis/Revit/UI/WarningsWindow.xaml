@@ -37,7 +37,21 @@
     </Window.Resources>
 
     <DockPanel Margin="20,14,20,16">
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+        <!-- «Выгрузить изменённые» (разработчик, 12.11.2026): только изменившиеся модели — по всем задачам или по выбранным слева -->
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+            <TextBlock Text="Выгрузить изменённые:" VerticalAlignment="Center" Margin="0,0,10,0" Foreground="{DynamicResource Muted}" />
+            <!-- подпись — текстом: «_» в названии строки иначе съедается как клавиша доступа -->
+            <Button x:Name="ExportAll" Margin="0,0,8,0" Click="ExportAll_Click"
+                    ToolTip="NWC моделей, изменившихся после выгрузки, — у всех задач; NWF с ними пересоберутся">
+                <TextBlock x:Name="ExportAllText" />
+            </Button>
+            <Button x:Name="ExportPicked" Click="ExportPicked_Click"
+                    ToolTip="То же — только у выбранных слева строк и их подзадач (Ctrl, Shift — несколько)">
+                <TextBlock x:Name="ExportPickedText" MaxWidth="260" TextTrimming="CharacterEllipsis" />
+            </Button>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
             <TextBlock Text="Показать:" VerticalAlignment="Center" Margin="0,0,12,0" Foreground="{DynamicResource Muted}" />
             <CheckBox x:Name="ShowErrors" Content="Ошибки" IsChecked="True" Margin="0,0,16,0" VerticalAlignment="Center"
                       Checked="Filter_Changed" Unchecked="Filter_Changed" />
@@ -46,6 +60,7 @@
             <CheckBox x:Name="ShowSkips" Content="Пропуски" VerticalAlignment="Center" Checked="Filter_Changed" Unchecked="Filter_Changed"
                       ToolTip="Что не выгружалось и почему: NWC актуальна, модель не найдена, выключена…" />
         </StackPanel>
+        </DockPanel>
         <Border DockPanel.Dock="Top" Height="1" Background="{DynamicResource Line}" Margin="0,0,0,10" />
 
         <Grid>
@@ -54,7 +69,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-            <ListBox x:Name="Rows" Background="Transparent" BorderThickness="0" ItemContainerStyle="{StaticResource TreeItem}"
+            <ListBox x:Name="Rows" Background="Transparent" BorderThickness="0" ItemContainerStyle="{StaticResource TreeItem}" SelectionMode="Extended"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionChanged="Rows_SelectionChanged">
                 <ListBox.ItemTemplate>
                     <DataTemplate>

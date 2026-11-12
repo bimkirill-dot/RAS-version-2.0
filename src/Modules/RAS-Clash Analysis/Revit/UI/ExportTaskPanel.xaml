@@ -276,7 +276,7 @@
                                         </Grid.ColumnDefinitions>
                                         <CheckBox VerticalAlignment="Center" IsChecked="{Binding On, Mode=OneWay}" Click="ModelOn_Click"
                                                   IsEnabled="{Binding DataContext.ModelsOwn, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                  ToolTip="Снята — модель не делается: ни NWC, ни RVT, ни пересохранение" />
+                                                  ToolTip="Снята — модель не делается: ни NWC, ни RVT, ни пересохранение. Выделено несколько (Ctrl, Shift) — у всех выделенных" />
                                         <TextBlock Grid.Column="1" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                                                    Margin="0,0,10,0" Opacity="{Binding RowOpacity}" />
                                         <TextBlock Grid.Column="2" Text="{Binding NwcName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"

@@ -105,6 +105,8 @@ namespace RASv2.ClashAnalysis.UI
             /// <summary>Для «Предупреждений»: изменившиеся модели, дата не известна, NWC и NWF строки.</summary>
             public List<string> Changed => _changed;
             public bool DatesUnknown => _unknown;
+            /// <summary>NWC изменившихся моделей по имени — «Выгрузить изменённые».</summary>
+            public Dictionary<string, string> ChangedNwc { get; set; } = new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
             public List<string> Paths { get; set; } = new List<string>();
 
             public void SetStatus(RowRun run, List<string> changed, bool unknown, string estimate, string estimateTip)
@@ -650,7 +652,7 @@ namespace RASv2.ClashAnalysis.UI
         private Dictionary<ExportTask, WarningGroup> Warnings() =>
             RunWarnings.Build(_allItems.Select(i => new WarningSource
             {
-                Task = i.Item, Run = i.LastRun, Paths = i.Paths, Changed = i.Changed, Unknown = i.DatesUnknown,
+                Task = i.Item, Run = i.LastRun, Paths = i.Paths, Changed = i.Changed, Unknown = i.DatesUnknown, ChangedNwc = i.ChangedNwc,
             }).ToList(), Settings);
 
         /// <summary>Число на ⚠: ошибки и изменившиеся модели; есть ошибки — красное, только изменения — жёлтое, нет — серый значок без числа.</summary>
@@ -682,6 +684,16 @@ namespace RASv2.ClashAnalysis.UI
                 MessageBox.Show(this, "Окно «Предупреждения» не открылось — подробности в журнале плагина.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
+            // «Выгрузить изменённые» — только NWC изменившихся моделей (и NWF с ними) у выбранных строк или у всех задач
+            if (window.ExportTasks != null && window.ExportPaths != null && window.ExportPaths.Count > 0)
+            {
+                if (!Leave()) return;
+                var all = _roots.SelectMany(r => r.Self()).ToList();
+                var tasks = window.ExportTasks.Where(all.Contains).ToList();
+                if (tasks.Count == 0) return;
+                Start(new RunRequest { Tasks = tasks, Previous = FindRun(tasks[0]), Only = window.ExportPaths });
+                return;
+            }
             // «↻ Повторить ошибки» в окне — как ↻ у строки: только эти файлы
             if (window.RetryTask == null || window.RetryPaths == null || window.RetryPaths.Count == 0) return;
             if (!Leave()) return;
@@ -701,17 +713,27 @@ namespace RASv2.ClashAnalysis.UI
             var state = flag == RowFlag.Nwc ? row.Columns.NwcState : flag == RowFlag.Nwf ? row.Columns.NwfState
                 : flag == RowFlag.Rvt ? row.Columns.RvtState : flag == RowFlag.Resave ? row.Columns.ResaveState : row.Columns.ReportsState;
             var on = state != true;
-            Change(row.Item, () => ExportNodes.SetFlag(row.Item, flag, on, Settings));
+            var targets = Targets(row.Item);
+            Change(targets, () => targets.Select(t => ExportNodes.SetFlag(t, flag, on, Settings)).FirstOrDefault(x => x != null));
         }
+
+        /// <summary>
+        /// Галочка у одной из выбранных строк (Ctrl / Shift) — у всех выбранных (разработчик, 12.11.2026: «пакетно снимать галочки с
+        /// задач и подзадач»); строка не среди выбранных — только у неё.
+        /// </summary>
+        private List<ExportTask> Targets(ExportTask row) =>
+            _picked.Count > 1 && _picked.Contains(row) ? _picked.ToList() : new List<ExportTask> { row };
 
         /// <summary>Галочка подзадачи: снята — при ▷ у строки выше не делается и серая (разработчик, 07.11.2026); сразу на сервер.</summary>
         private void Do_Click(object sender, RoutedEventArgs e)
         {
             var task = RowOf(sender).Item;
             var on = ((CheckBox)sender).IsChecked == true;
-            Change(task, () =>
+            // у задачи верхнего уровня галочки нет — пропустить её
+            var targets = Targets(task).Where(t => t.Parent != null).ToList();
+            Change(targets, () =>
             {
-                task.Settings.Skipped = !on;
+                foreach (var t in targets) t.Settings.Skipped = !on;
                 return null;
             });
         }
@@ -721,10 +743,14 @@ namespace RASv2.ClashAnalysis.UI
         /// сначала вопрос: иначе «Сохранить» панели вернуло бы прежнее, а новая строка ушла бы на сервер без названия. Ошибка проверки —
         /// сообщением; не записалось — как было. Открытая строка — заново, с новым.
         /// </summary>
-        private void Change(ExportTask task, System.Func<string> change)
+        private void Change(ExportTask task, System.Func<string> change) => Change(new List<ExportTask> { task }, change);
+
+        /// <summary>Правка нескольких строк сразу (выбранных) — каждая задача на сервер один раз; не записалась — всё как было.</summary>
+        private void Change(List<ExportTask> tasks, System.Func<string> change)
         {
-            var rows = task.Self().ToList();
-            if ((_selected != null && rows.Contains(_selected) || _pending != null) && !Leave() || !_roots.SelectMany(r => r.Self()).Contains(task))
+            var rows = tasks.SelectMany(t => t.Self()).Distinct().ToList();
+            var all = _roots.SelectMany(r => r.Self()).ToList();
+            if (tasks.Count == 0 || (_selected != null && rows.Contains(_selected) || _pending != null) && !Leave() || !tasks.All(all.Contains))
             {
                 Refresh();
                 return;
@@ -737,7 +763,10 @@ namespace RASv2.ClashAnalysis.UI
                 Refresh();
                 return;
             }
-            if (!SaveTop(ExportNodes.Root(task)))
+            var saved = true;
+            foreach (var root in tasks.Select(ExportNodes.Root).Distinct().ToList())
+                saved &= SaveTop(root);
+            if (!saved)
                 for (var i = 0; i < rows.Count; i++) rows[i].Settings = before[i];
             Refresh();
             if (_selected != null && rows.Contains(_selected)) Show(_roots.SelectMany(r => r.Self()).Contains(_selected) ? _selected : null);

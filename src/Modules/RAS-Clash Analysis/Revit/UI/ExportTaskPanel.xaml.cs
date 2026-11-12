@@ -436,7 +436,11 @@ namespace RASv2.ClashAnalysis.UI
         private void ModelOn_Click(object sender, RoutedEventArgs e)
         {
             var row = (ModelRow)((FrameworkElement)sender).DataContext;
-            row.On = ((CheckBox)sender).IsChecked == true;
+            var on = ((CheckBox)sender).IsChecked == true;
+            // у одной из выделенных (Ctrl, Shift, Ctrl+A) — у всех выделенных (разработчик, 12.11.2026: «пакетно отключать модели»)
+            var rows = ModelsList.SelectedItems.Count > 1 && ModelsList.SelectedItems.Contains(row)
+                ? ModelsList.SelectedItems.OfType<ModelRow>().ToList() : new List<ModelRow> { row };
+            foreach (var r in rows) r.On = on;
             Changed();
         }
 

@@ -14,6 +14,8 @@ namespace RASv2.ClashAnalysis.Logic
         public ICollection<string> Paths { get; set; } = new List<string>();
         /// <summary>Модели, изменённые после своей NWC (имена).</summary>
         public IList<string> Changed { get; set; } = new List<string>();
+        /// <summary>NWC изменившихся моделей по имени — для «Выгрузить изменённые» (12.11.2026).</summary>
+        public IDictionary<string, string> ChangedNwc { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         /// <summary>Дату части моделей Revit Server не сообщил.</summary>
         public bool Unknown { get; set; }
     }
@@ -91,7 +93,11 @@ namespace RASv2.ClashAnalysis.Logic
                 foreach (var name in s.Changed.Distinct(StringComparer.OrdinalIgnoreCase))
                 {
                     if (below.Any(x => x.Changed.Contains(name, StringComparer.OrdinalIgnoreCase))) continue;
-                    Of(s).Changes.Add(new WarningLine { Kind = "NWC", Name = name, Full = name, Text = "модель изменилась после выгрузки NWC — выгрузить заново" });
+                    Of(s).Changes.Add(new WarningLine
+                    {
+                        Kind = "NWC", Name = name, Full = name, Text = "модель изменилась после выгрузки NWC — выгрузить заново",
+                        Path = s.ChangedNwc.TryGetValue(name, out var nwc) ? nwc : null,
+                    });
                 }
                 if (s.Unknown && !below.Any(x => x.Unknown)) Of(s).Unknown = true;
             }
@@ -104,6 +110,15 @@ namespace RASv2.ClashAnalysis.Logic
         public static int Total(Dictionary<ExportTask, WarningGroup> groups) =>
             groups.Values.Sum(g => g.Errors.Count) +
             groups.Values.SelectMany(g => g.Changes.Select(c => c.Full)).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+
+        /// <summary>
+        /// «Выгрузить изменённые» (разработчик, 12.11.2026: «кнопка — выгрузить только обновлённые модели; по всем задачам или только
+        /// по выбранным»): NWC изменившихся моделей у строк ветки — что выгрузить заново (NWF с ними пересоберутся).
+        /// </summary>
+        public static HashSet<string> ChangedNwcs(IEnumerable<ExportTask> rows, Dictionary<ExportTask, WarningGroup> groups) =>
+            new HashSet<string>(rows.SelectMany(r => r.Self()).Distinct()
+                .SelectMany(t => groups.TryGetValue(t, out var g) ? g.Changes : new List<WarningLine>())
+                .Select(c => c.Path).Where(p => !string.IsNullOrEmpty(p)), StringComparer.OrdinalIgnoreCase);
 
         /// <summary>Сколько у строки и всех её подзадач.</summary>
         public static int CountUnder(ExportTask task, Dictionary<ExportTask, WarningGroup> groups) =>
