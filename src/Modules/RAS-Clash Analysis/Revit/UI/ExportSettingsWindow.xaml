@@ -138,12 +138,16 @@
                     <Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="320" /><ColumnDefinition /></Grid.ColumnDefinitions>
                         <TextBlock Style="{StaticResource OptionName}" Text="{}{Блок}" />
-                        <StackPanel Grid.Column="1" Orientation="Horizontal">
-                            <TextBlock Text="маски через запятую:" VerticalAlignment="Center" Margin="0,0,8,0" />
-                            <!-- маски блока (12.11.2026): «S, P» — буквы и цифры после; «#» — где цифры; две нашлись — первая по списку -->
-                            <TextBox x:Name="BlockMasks" Width="160" TextChanged="Any_Changed"
-                                     ToolTip="Часть имени модели, по которой узнаётся блок. «S, P» — S или P и цифры после (S6, P10). «#» — где цифры, если иначе (Б#А — Б2А). Нашлись две — берётся первая по списку. S1 и S01 — один блок, пишется S01." />
-                            <TextBlock Style="{StaticResource Inline}" Text="«S» — S и цифры, «#» — где цифры" />
+                        <!-- пояснение — второй строкой: в одну строку с полем не влезало в окно обычной ширины (разработчик, 12.11.2026) -->
+                        <StackPanel Grid.Column="1">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="маски через запятую:" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <!-- маски блока (12.11.2026): «S, P» — буквы и цифры после; «#» — где цифры; две нашлись — первая по списку -->
+                                <TextBox x:Name="BlockMasks" Width="160" TextChanged="Any_Changed"
+                                         ToolTip="Часть имени модели, по которой узнаётся блок. «S, P» — S или P и цифры после (S6, P10). «#» — где цифры, если иначе (Б#А — Б2А). Нашлись две — берётся первая по списку. S1 и S01 — один блок, пишется S01." />
+                            </StackPanel>
+                            <TextBlock Text="«S» — S и цифры, «#» — где цифры" Foreground="{DynamicResource Muted}" FontSize="12" TextWrapping="Wrap"
+                                       Margin="0,4,0,0" />
                         </StackPanel>
                     </Grid>
                 </Border>
