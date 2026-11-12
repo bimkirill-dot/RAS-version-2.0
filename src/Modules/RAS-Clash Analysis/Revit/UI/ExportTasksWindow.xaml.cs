@@ -567,8 +567,12 @@ namespace RASv2.ClashAnalysis.UI
         /// </summary>
         private void Status_Click(object sender, RoutedEventArgs e) => ShowWarnings(RowOf(sender).Item);
 
-        /// <summary>⚠ в верхней ленте — «Предупреждения» по всем задачам.</summary>
-        private void Warnings_Click(object sender, RoutedEventArgs e) => ShowWarnings(null);
+        /// <summary>
+        /// ⚠ в верхней ленте — «Предупреждения»: выбрана строка — сразу на ней (разработчик, 12.11.2026: «нажал на задачу, затем на
+        /// кнопку — открываются предупреждения по этой задаче»), не выбрана — «Все задачи».
+        /// </summary>
+        private void Warnings_Click(object sender, RoutedEventArgs e) =>
+            ShowWarnings(_selected != null && _roots.SelectMany(r => r.Self()).Contains(_selected) ? _selected : null);
 
         private Dictionary<ExportTask, WarningGroup> Warnings() =>
             RunWarnings.Build(_allItems.Select(i => new WarningSource
@@ -586,8 +590,9 @@ namespace RASv2.ClashAnalysis.UI
             WarningsCount.Visibility = total > 0 ? Visibility.Visible : Visibility.Collapsed;
             var brush = errors > 0 ? (Brush)FindResource("Error") : total > 0 ? (Brush)FindResource("MarkChanged") : (Brush)FindResource("Muted");
             WarningsGlyph.Foreground = WarningsCount.Foreground = brush;
-            WarningsButton.ToolTip = total == 0 ? "Предупреждения — нет" :
-                "Предупреждения: ошибок " + errors + ", изменившихся моделей " + (total - errors) + " — по задачам";
+            WarningsButton.ToolTip = (total == 0 ? "Предупреждения — нет" :
+                "Предупреждения: ошибок " + errors + ", изменившихся моделей " + (total - errors)) +
+                "\nВыбрана строка — откроется на ней, иначе — по всем задачам";
         }
 
         private void ShowWarnings(ExportTask start)
