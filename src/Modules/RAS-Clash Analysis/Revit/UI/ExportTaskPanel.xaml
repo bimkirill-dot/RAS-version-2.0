@@ -221,7 +221,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Style="{StaticResource Note}" Text="Вкл." ToolTip="Снята — модель не делается: ни NWC, ни RVT, ни пересохранение" />
                             <Button Grid.Column="1" x:Name="SortName" Style="{StaticResource SortHead}" Tag="Name" Click="ModelsSort_Click" />
-                            <Button Grid.Column="2" x:Name="SortNwc" Style="{StaticResource SortHead}" Tag="Nwc" Click="ModelsSort_Click" Visibility="{Binding WideTableVisibility}" />
+                            <Button Grid.Column="2" x:Name="SortNwc" Style="{StaticResource SortHead}" Tag="Nwc" Click="ModelsSort_Click" Visibility="{Binding NwcTableVisibility}" />
                             <Button Grid.Column="3" x:Name="SortBlock" Style="{StaticResource SortHead}" Tag="Block" Click="ModelsSort_Click" />
                             <Button Grid.Column="4" x:Name="SortPath" Style="{StaticResource SortHead}" Tag="Path" Click="ModelsSort_Click" Visibility="{Binding WideTableVisibility}"
                                     ToolTip="Где модель: папка на Revit Server или сетевая папка" />
@@ -280,7 +280,7 @@
                                         <TextBlock Grid.Column="1" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                                                    Margin="0,0,10,0" Opacity="{Binding RowOpacity}" />
                                         <TextBlock Grid.Column="2" Text="{Binding NwcName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                                                   Visibility="{Binding DataContext.WideTableVisibility, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                   Visibility="{Binding DataContext.NwcTableVisibility, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                    Margin="0,0,10,0" Foreground="{DynamicResource Muted}" Opacity="{Binding RowOpacity}" />
                                         <TextBlock Grid.Column="3" Text="{Binding Block}" VerticalAlignment="Center" Opacity="{Binding RowOpacity}" />
                                         <!-- где модель (разработчик, 09.11.2026: вместо версии Revit — «путь на Revit Server») -->

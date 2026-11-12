@@ -1187,23 +1187,16 @@ namespace RASv2.ClashAnalysis.UI
         public bool Narrow { get; private set; }
 
         /// <summary>
-        /// Таблица моделей на узкой панели (09.11.2026: пять текстовых столбцов не помещались — имена обрезались до «3917_OMA…»):
-        /// «Имя NWC» и «Путь» прячутся, они — в подсказке строки.
+        /// Столбцы «Имя NWC» и «Путь» таблицы моделей — всегда (разработчик, 12.11.2026: «в списке моделей должен быть столбец с именем
+        /// NWC» — на узкой панели они прятались, 09.11.2026); не помещается — многоточием, целиком — в подсказке строки.
         /// </summary>
-        public bool WideTable { get; private set; } = true;
-        public Visibility WideTableVisibility => WideTable ? Visibility.Visible : Visibility.Collapsed;
-        public GridLength NwcColumn => WideTable ? new GridLength(2, GridUnitType.Star) : new GridLength(0);
-        public GridLength PathColumn => WideTable ? new GridLength(2, GridUnitType.Star) : new GridLength(0);
+        public Visibility NwcTableVisibility => Visibility.Visible;
+        public Visibility WideTableVisibility => Visibility.Visible;
+        public GridLength NwcColumn => new GridLength(2, GridUnitType.Star);
+        public GridLength PathColumn => new GridLength(2, GridUnitType.Star);
 
         private void Panel_SizeChanged(object sender, SizeChangedEventArgs e)
         {
-            var wide = e.NewSize.Width >= 680;
-            if (wide != WideTable)
-            {
-                WideTable = wide;
-                foreach (var n in new[] { nameof(WideTable), nameof(WideTableVisibility), nameof(NwcColumn), nameof(PathColumn) })
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
-            }
             var narrow = e.NewSize.Width < 760;
             if (narrow == Narrow) return;
             Narrow = narrow;
