@@ -337,7 +337,7 @@ namespace RASv2.ClashAnalysis.Logic
                 }
                 if (unknown) lines.Add("Дату части моделей Revit Server не сообщил — изменились ли они, не известно.");
             }
-            if (step != null) lines.Add("Щелчок — журнал запуска");
+            if (step != null || changed.Count > 0) lines.Add("Щелчок — предупреждения строки (там и журнал запуска)");
             return lines.Count == 0 ? null : string.Join("\n", lines);
         }
 

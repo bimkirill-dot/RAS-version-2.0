@@ -1347,6 +1347,60 @@ namespace RASv2.Tests
                 high.Settings.DeleteEmptyReports = true;
                 Check(ExportNodes.DeletesEmptyReports(leaf) && !ExportNodes.DeletesEmptyReports(roots[0]) && !ExportNodes.DeletesEmptyReports(mid), "вниз, не вверх");
             });
+            yield return Case("«Предупреждения»: каждое — у одной строки, свежий запуск главнее; пропуски — одной строкой на причину", () =>
+            {
+                var roots = Sample(out var high, out var mid);
+                var top = roots[0];
+                var leaf = high.Children[0];
+                var common = new ExportSettings { BlockMasks = "S", Departments = { new DepartmentTemplate { Department = "KJ" }, new DepartmentTemplate { Department = "AR" } } };
+                var t1 = new DateTime(2026, 11, 11, 18, 0, 0);
+                const string a = @"C:\NWC\0000_S01_KJ01.nwc", b = @"C:\NWC\0000_S02_AR01.nwc";
+                RowRun Run(DateTime at, params string[] errors) => new RowRun
+                {
+                    At = at, By = "Иванов",
+                    Errors = errors.Select(x => new RunIssue { Path = x, Name = System.IO.Path.GetFileNameWithoutExtension(x), Note = "Модель занята другим. Повторите позже" }).ToList(),
+                };
+                // запуск задачи — запись у неё и у всех подзадач: ошибка — у нижней строки, один раз
+                var sources = new List<WarningSource>
+                {
+                    new WarningSource { Task = top, Run = Run(t1, a, b), Paths = new List<string> { a, b } },
+                    new WarningSource { Task = high, Run = Run(t1, a, b), Paths = new List<string> { a, b } },
+                    new WarningSource { Task = leaf, Run = Run(t1, a), Paths = new List<string> { a } },
+                    new WarningSource { Task = mid, Paths = new List<string> { a } },
+                };
+                var groups = RunWarnings.Build(sources, common);
+                Check(groups.ContainsKey(leaf) && groups[leaf].Errors.Single().Path == a && groups[high].Errors.Single().Path == b && !groups.ContainsKey(top),
+                      "ошибка — у нижней строки с этим файлом");
+                Check(groups[leaf].Errors[0].Name == "S01 KJ" && groups[leaf].Errors[0].Text == "Модель занята другим" && groups[leaf].Errors[0].Kind == "NWC",
+                      "коротко: блок и отдел, первая фраза: " + groups[leaf].Errors[0].Name + " / " + groups[leaf].Errors[0].Text);
+                Check(RunWarnings.Total(groups) == 2 && RunWarnings.CountUnder(top, groups) == 2 && RunWarnings.CountUnder(leaf, groups) == 1, "числа");
+
+                // подзадачу потом запустили отдельно, файл прошёл — прежней ошибки задачи нет нигде
+                sources[2].Run = Run(t1.AddHours(1));
+                groups = RunWarnings.Build(sources, common);
+                Check(!groups.ContainsKey(leaf) && groups[high].Errors.Single().Path == b && RunWarnings.Total(groups) == 1, "свежий запуск без ошибки — ошибки нет");
+
+                // изменившаяся модель — у нижних строк с ней; число — один раз
+                sources[0].Changed = new List<string> { "0000_S01_KJ01" };
+                sources[1].Changed = new List<string> { "0000_S01_KJ01" };
+                sources[2].Changed = new List<string> { "0000_S01_KJ01" };
+                sources[3].Changed = new List<string> { "0000_S01_KJ01" };
+                groups = RunWarnings.Build(sources, common);
+                Check(groups[leaf].Changes.Single().Name == "S01 KJ" && groups[mid].Changes.Count == 1 && groups[high].Changes.Count == 0 &&
+                      !groups.ContainsKey(top) && RunWarnings.Total(groups) == 2, "изменение — у нижних строк, в числе — один раз");
+
+                // пропуски: одинаковая причина — одной строкой
+                var skips = RunWarnings.GroupSkips(new[]
+                {
+                    "0000_S01_KJ01 — NWC актуальна. Модель не менялась с 11.11.2026", "0000_S01_AR01 — NWC актуальна. Модель не менялась",
+                    "Модель вне блоков",
+                }, common);
+                Check(skips.Count == 2 && skips[0].Text == "NWC актуальна" && skips[0].Name == "S01 KJ, S01 AR" && skips[1].Text == "Модель вне блоков",
+                      "пропуски по причинам: " + string.Join(" | ", skips.Select(x => x.Text + ": " + x.Name)));
+                Check(RunWarnings.Reason("Не открылась 11.11.2026 в 18:05; Revit закрылся") == "Не открылась 11.11.2026 в 18:05" &&
+                      RunWarnings.ShortName("Модель АР.rvt", common) == "Модель АР.rvt" && RunWarnings.ShortName("S1_ВК.nwf", common) == "S1_ВК.nwf",
+                      "первая фраза — не по точке в дате; без блока и отдела — имя целиком");
+            });
             yield return Case("удаление: подзадачи", () =>
             {
                 var roots = Sample(out var high, out _);

@@ -102,6 +102,10 @@ namespace RASv2.ClashAnalysis.UI
             private string _estimate = "", _estimateTip;
 
             public RowRun LastRun => _run;
+            /// <summary>Для «Предупреждений»: изменившиеся модели, дата не известна, NWC и NWF строки.</summary>
+            public List<string> Changed => _changed;
+            public bool DatesUnknown => _unknown;
+            public List<string> Paths { get; set; } = new List<string>();
 
             public void SetStatus(RowRun run, List<string> changed, bool unknown, string estimate, string estimateTip)
             {
@@ -181,6 +185,8 @@ namespace RASv2.ClashAnalysis.UI
         private ExportTaskPanel _panel;
         private ExportTask _pending;
         private List<RowItem> _items = new List<RowItem>();
+        // все строки, и под свёрнутыми, — статус и «Предупреждения» (12.11.2026); в списке — _items, те же объекты
+        private List<RowItem> _allItems = new List<RowItem>();
         // несколько выбранных строк (Ctrl / Shift / Ctrl+A) — пакетное копирование и удаление; одна строка — _selected и её панель
         private readonly List<ExportTask> _picked = new List<ExportTask>();
         private ExportTask _anchor;
@@ -229,15 +235,17 @@ namespace RASv2.ClashAnalysis.UI
             var offset = TreeScroll.VerticalOffset;
             var muted = (Brush)FindResource("Muted");
             var normal = (Brush)FindResource("Fg");
-            RowsList.ItemsSource = _items = ExportNodes.Rows(_roots, _collapsed)
+            var visible = new HashSet<ExportTask>(ExportNodes.Rows(_roots, _collapsed).Select(r => r.Item));
+            _allItems = ExportNodes.Rows(_roots, new HashSet<ExportTask>())
                 .Select(r => new RowItem
                 {
                     Row = r, Columns = ExportNodes.Columns(r), Collapsed = _collapsed.Contains(r.Item), HasInner = r.Item.Children.Count > 0,
                     IsSelected = r.Item == _selected || _picked.Contains(r.Item), Muted = muted, Normal = normal, Layout = _layout,
                 })
                 .ToList();
+            RowsList.ItemsSource = _items = _allItems.Where(i => visible.Contains(i.Item)).ToList();
             Dispatcher.BeginInvoke(new System.Action(() => TreeScroll.ScrollToVerticalOffset(offset)), System.Windows.Threading.DispatcherPriority.Loaded);
-            LoadStatus(_items);
+            LoadStatus(_allItems);
         }
 
         // шапка таблицы — над столбцами строк: появилась полоса прокрутки — у шапки справа столько же места
@@ -553,24 +561,54 @@ namespace RASv2.ClashAnalysis.UI
             }
         }
 
-        /// <summary>Статус — щелчок: журнал последнего запуска строки (копия в папке задачи, у запускавшего — свой).</summary>
-        private void Status_Click(object sender, RoutedEventArgs e)
-        {
-            var run = RowOf(sender).LastRun;
-            if (run == null) return;
-            if (string.IsNullOrEmpty(run.Journal) || !System.IO.File.Exists(run.Journal))
+        /// <summary>
+        /// Значок у функции — щелчок: «Предупреждения» сразу на этой строке (разработчик, 12.11.2026; было — журнал запуска, он теперь
+        /// кнопкой «Журнал» в окне).
+        /// </summary>
+        private void Status_Click(object sender, RoutedEventArgs e) => ShowWarnings(RowOf(sender).Item);
+
+        /// <summary>⚠ в верхней ленте — «Предупреждения» по всем задачам.</summary>
+        private void Warnings_Click(object sender, RoutedEventArgs e) => ShowWarnings(null);
+
+        private Dictionary<ExportTask, WarningGroup> Warnings() =>
+            RunWarnings.Build(_allItems.Select(i => new WarningSource
             {
-                MessageBox.Show(this, "Журнал запуска не найден: " + (run.Journal ?? "—"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
+                Task = i.Item, Run = i.LastRun, Paths = i.Paths, Changed = i.Changed, Unknown = i.DatesUnknown,
+            }).ToList(), Settings);
+
+        /// <summary>Число на ⚠: ошибки и изменившиеся модели; есть ошибки — красное, только изменения — жёлтое, нет — серый значок без числа.</summary>
+        private void UpdateWarnings()
+        {
+            var groups = Warnings();
+            var total = RunWarnings.Total(groups);
+            var errors = groups.Values.Sum(g => g.Errors.Count);
+            WarningsCount.Text = total > 0 ? total.ToString() : "";
+            WarningsCount.Visibility = total > 0 ? Visibility.Visible : Visibility.Collapsed;
+            var brush = errors > 0 ? (Brush)FindResource("Error") : total > 0 ? (Brush)FindResource("MarkChanged") : (Brush)FindResource("Muted");
+            WarningsGlyph.Foreground = WarningsCount.Foreground = brush;
+            WarningsButton.ToolTip = total == 0 ? "Предупреждения — нет" :
+                "Предупреждения: ошибок " + errors + ", изменившихся моделей " + (total - errors) + " — по задачам";
+        }
+
+        private void ShowWarnings(ExportTask start)
+        {
+            WarningsWindow window;
             try
             {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(run.Journal) { UseShellExecute = true });
+                window = new WarningsWindow(_roots, Warnings(), start) { Owner = this };
+                window.ShowDialog();
             }
             catch (System.Exception ex)
             {
-                MessageBox.Show(this, "Журнал не открылся: " + ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+                RASv2.Core.Log.Write("ClashAnalysis", "Менеджер задач: окно «Предупреждения»", ex);
+                MessageBox.Show(this, "Окно «Предупреждения» не открылось — подробности в журнале плагина.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
             }
+            // «↻ Повторить ошибки» в окне — как ↻ у строки: только эти файлы
+            if (window.RetryTask == null || window.RetryPaths == null || window.RetryPaths.Count == 0) return;
+            if (!Leave()) return;
+            if (!_roots.SelectMany(r => r.Self()).Contains(window.RetryTask)) return;
+            Start(new RunRequest { Task = window.RetryTask, Previous = window.RetryRun, Only = window.RetryPaths });
         }
 
         /// <summary>
