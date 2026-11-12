@@ -74,7 +74,8 @@
                           ResizeBehavior="PreviousAndNext" />
             <Border Grid.Column="1" Width="1" Background="{DynamicResource Line}" IsHitTestVisible="False" />
             <ScrollViewer x:Name="Scroll" Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                <StackPanel x:Name="Details" Margin="18,0,8,0" />
+                <!-- таблицы строк — с общими ширинами столбцов (SharedSizeGroup) -->
+                <StackPanel x:Name="Details" Margin="18,0,8,0" Grid.IsSharedSizeScope="True" />
             </ScrollViewer>
         </Grid>
     </DockPanel>

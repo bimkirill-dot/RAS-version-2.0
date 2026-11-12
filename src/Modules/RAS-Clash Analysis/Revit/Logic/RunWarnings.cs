@@ -82,7 +82,7 @@ namespace RASv2.ClashAnalysis.Logic
                 var skips = new List<string>();
                 foreach (var n in s.Run.Notes.Distinct())
                     if (Latest(ran.Where(x => x.Run.Notes.Contains(n))) == s) skips.Add(n);
-                Of(s).Skips.AddRange(GroupSkips(skips, common));
+                Of(s).Skips.AddRange(SplitSkips(skips));
             }
 
             foreach (var s in sources)
@@ -91,7 +91,7 @@ namespace RASv2.ClashAnalysis.Logic
                 foreach (var name in s.Changed.Distinct(StringComparer.OrdinalIgnoreCase))
                 {
                     if (below.Any(x => x.Changed.Contains(name, StringComparer.OrdinalIgnoreCase))) continue;
-                    Of(s).Changes.Add(new WarningLine { Name = name, Full = name, Text = "изменилась после выгрузки NWC" });
+                    Of(s).Changes.Add(new WarningLine { Kind = "NWC", Name = name, Full = name, Text = "модель изменилась после выгрузки NWC — выгрузить заново" });
                 }
                 if (s.Unknown && !below.Any(x => x.Unknown)) Of(s).Unknown = true;
             }
@@ -119,12 +119,13 @@ namespace RASv2.ClashAnalysis.Logic
             return s.Length > 140 ? s.Substring(0, 139) + "…" : s;
         }
 
-        /// <summary>Пропуски «имя — причина»: одинаковые причины — одной строкой, имена через запятую; без имени — как есть.</summary>
-        public static List<WarningLine> GroupSkips(IEnumerable<string> notes, ExportSettings common)
+        /// <summary>
+        /// Пропуски «имя — причина»: каждая модель — своей строкой таблицы (разработчик, 12.11.2026: «окно — в табличном виде»;
+        /// было — одинаковые причины одной строкой); без имени — как есть.
+        /// </summary>
+        public static List<WarningLine> SplitSkips(IEnumerable<string> notes)
         {
             var lines = new List<WarningLine>();
-            var byReason = new Dictionary<string, WarningLine>(StringComparer.OrdinalIgnoreCase);
-            var counts = new Dictionary<WarningLine, List<string>>();
             foreach (var n in notes)
             {
                 var at = n.IndexOf(" — ", StringComparison.Ordinal);
@@ -135,23 +136,13 @@ namespace RASv2.ClashAnalysis.Logic
                 }
                 var name = n.Substring(0, at).Trim();
                 var detail = n.Substring(at + 3).Trim();
-                var reason = Reason(detail);
-                if (!byReason.TryGetValue(reason, out var line))
-                {
-                    byReason[reason] = line = new WarningLine { Text = reason, Detail = detail };
-                    counts[line] = new List<string>();
-                    lines.Add(line);
-                }
-                counts[line].Add(name);
-            }
-            foreach (var c in counts)
-            {
-                var names = c.Value.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-                c.Key.Name = string.Join(", ", names);
-                c.Key.Full = string.Join("\n", names);
+                lines.Add(new WarningLine { Kind = KindOfName(name), Name = name, Full = name, Text = Reason(detail), Detail = detail });
             }
             return lines;
         }
+
+        // функция по имени из пропуска: «….nwf» — NWF, иначе — модель (NWC)
+        private static string KindOfName(string name) => name.EndsWith(".nwf", StringComparison.OrdinalIgnoreCase) ? "NWF" : "NWC";
 
         // самый свежий запуск; равны — у нижней строки
         private static WarningSource Latest(IEnumerable<WarningSource> candidates) =>

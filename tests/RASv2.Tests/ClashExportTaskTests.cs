@@ -1394,14 +1394,15 @@ namespace RASv2.Tests
                 Check(groups[leaf].Changes.Single().Name == "0000_S01_KJ01" && groups[mid].Changes.Count == 1 && groups[high].Changes.Count == 0 &&
                       !groups.ContainsKey(top) && RunWarnings.Total(groups) == 2, "изменение — у нижних строк, в числе — один раз");
 
-                // пропуски: одинаковая причина — одной строкой
-                var skips = RunWarnings.GroupSkips(new[]
+                // пропуски — каждая модель своей строкой таблицы
+                var skips = RunWarnings.SplitSkips(new[]
                 {
                     "0000_S01_KJ01 — NWC актуальна. Модель не менялась с 11.11.2026", "0000_S01_AR01 — NWC актуальна. Модель не менялась",
                     "Модель вне блоков",
-                }, common);
-                Check(skips.Count == 2 && skips[0].Text == "NWC актуальна" && skips[0].Name == "0000_S01_KJ01, 0000_S01_AR01" && skips[1].Text == "Модель вне блоков",
-                      "пропуски по причинам: " + string.Join(" | ", skips.Select(x => x.Text + ": " + x.Name)));
+                });
+                Check(skips.Count == 3 && skips[0].Text == "NWC актуальна" && skips[0].Name == "0000_S01_KJ01" && skips[1].Name == "0000_S01_AR01" &&
+                      skips[2].Text == "Модель вне блоков" && skips[2].Name == "",
+                      "пропуски по строкам: " + string.Join(" | ", skips.Select(x => x.Text + ": " + x.Name)));
                 Check(RunWarnings.Reason("Не открылась 11.11.2026 в 18:05; Revit закрылся") == "Не открылась 11.11.2026 в 18:05",
                       "первая фраза — не по точке в дате");
             });

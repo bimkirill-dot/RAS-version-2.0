@@ -154,7 +154,7 @@ namespace RASv2.ClashAnalysis.UI
 
         private void AddGroup(WarningGroup g, List<WarningLine> errors, List<WarningLine> changes, bool unknown, List<WarningLine> skips, bool first)
         {
-            var box = new StackPanel { Margin = new Thickness(0, first ? 0 : 22, 0, 0) };
+            var box = new StackPanel { Margin = new Thickness(0, first ? 0 : 26, 0, 0) };
             box.Children.Add(new TextBlock
             {
                 Text = RunStates.Key(g.Task), FontSize = 15, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap,
@@ -180,80 +180,70 @@ namespace RASv2.ClashAnalysis.UI
                 box.Children.Add(info);
             }
 
-            if (errors.Count > 0)
-            {
-                box.Children.Add(Section("Ошибки", errors.Count, _error));
-                foreach (var e in errors) box.Children.Add(ErrorLine(e));
-            }
-            if (changes.Count > 0 || unknown)
-            {
-                box.Children.Add(Section("Изменения", changes.Count, _changed));
-                foreach (var c in changes)
-                    box.Children.Add(Line(c.Name, "модель изменилась после выгрузки NWC — выгрузить заново", c.Full, null));
-                if (unknown)
-                    box.Children.Add(new TextBlock
-                    {
-                        Text = "Дату части моделей Revit Server не сообщил — изменились ли они, не известно.", Foreground = _muted, FontSize = 12,
-                        TextWrapping = TextWrapping.Wrap, Margin = new Thickness(22, 2, 0, 0),
-                    });
-            }
-            if (skips.Count > 0)
-            {
-                box.Children.Add(Section("Пропущено", skips.Count, _muted));
-                foreach (var s in skips) box.Children.Add(Line(s.Text, s.Name, s.Detail, s.Full, muted: true));
-            }
+            // таблица (разработчик, 12.11.2026: «окно — в табличном виде»): тип, функция, модель, причина; ширины столбцов — общие у всех таблиц окна
+            var rows = errors.Select(x => ("Ошибка", _error, x))
+                .Concat(changes.Select(x => ("Изменение", _changed, x)))
+                .Concat(skips.Select(x => ("Пропуск", _muted, x))).ToList();
+            if (rows.Count > 0) box.Children.Add(Table(rows));
+            if (unknown)
+                box.Children.Add(new TextBlock
+                {
+                    Text = "Дату части моделей Revit Server не сообщил — изменились ли они, не известно.", Foreground = _muted, FontSize = 12,
+                    TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0),
+                });
             Details.Children.Add(box);
         }
 
-        // заголовок раздела: значок и «Ошибки — 2» цветом раздела
-        private UIElement Section(string title, int count, Brush brush)
+        private UIElement Table(List<(string Type, Brush Brush, WarningLine Line)> rows)
         {
-            var p = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 4) };
-            p.Children.Add(new TextBlock
-            {
-                Text = ((char)0xE7BA).ToString(), FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 13, Foreground = brush,
-                VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 8, 0),
-            });
-            p.Children.Add(new TextBlock
-            {
-                Text = count > 0 ? title + " — " + count : title, FontWeight = FontWeights.SemiBold, Foreground = brush,
-                VerticalAlignment = VerticalAlignment.Center,
-            });
-            return p;
-        }
+            var grid = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+            foreach (var group in new[] { "WarnType", "WarnKind", "WarnName" })
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, SharedSizeGroup = group });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 160 });
+            var line = (Brush)FindResource("Line");
 
-        // ошибка: функция (бледно), имя (коротко, полное — в подсказке), причина (первая фраза, целиком — в подсказке)
-        private UIElement ErrorLine(WarningLine e)
-        {
-            var grid = new Grid { Margin = new Thickness(22, 2, 0, 2) };
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, MinWidth = 120 });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            grid.Children.Add(new TextBlock { Text = e.Kind, Foreground = _muted, FontSize = 12, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 0, 0) });
-            var name = new TextBlock { Text = e.Name, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 14, 0), ToolTip = Tip(e.Full) };
-            Grid.SetColumn(name, 1);
-            grid.Children.Add(name);
-            var text = new TextBlock { Text = e.Text, TextWrapping = TextWrapping.Wrap, ToolTip = Tip(e.Detail) };
-            ToolTipService.SetShowDuration(text, 60000);
-            Grid.SetColumn(text, 2);
-            grid.Children.Add(text);
-            return grid;
-        }
-
-        // строка изменения или пропуска: главное и пояснение бледно
-        private UIElement Line(string main, string note, string mainTip, string noteTip, bool muted = false)
-        {
-            var t = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(22, 2, 0, 2) };
-            t.Inlines.Add(new System.Windows.Documents.Run(main) { FontWeight = muted ? FontWeights.Normal : FontWeights.SemiBold });
-            if (!string.IsNullOrEmpty(note))
-                t.Inlines.Add(new System.Windows.Documents.Run(" — " + note) { Foreground = _muted });
-            var tip = string.Join("\n\n", new[] { mainTip, noteTip }.Where(x => !string.IsNullOrWhiteSpace(x) && x != main));
-            if (tip.Length > 0)
+            void Row(int r, Brush background, params UIElement[] cells)
             {
-                t.ToolTip = Tip(tip);
-                ToolTipService.SetShowDuration(t, 60000);
+                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                var back = new Border { Background = background, BorderBrush = line, BorderThickness = new Thickness(0, 0, 0, 1) };
+                Grid.SetRow(back, r);
+                Grid.SetColumnSpan(back, 4);
+                grid.Children.Add(back);
+                for (var c = 0; c < cells.Length; c++)
+                {
+                    Grid.SetRow(cells[c], r);
+                    Grid.SetColumn(cells[c], c);
+                    grid.Children.Add(cells[c]);
+                }
             }
-            return t;
+            TextBlock Head(string text) => new TextBlock
+            {
+                Text = text, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = _muted, Margin = new Thickness(8, 5, 16, 5),
+            };
+            Row(0, (Brush)FindResource("Row"), Head("Тип"), Head("Функция"), Head("Модель / файл"), Head("Причина"));
+
+            for (var i = 0; i < rows.Count; i++)
+            {
+                var (type, brush, w) = rows[i];
+                var typeCell = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 5, 16, 5), VerticalAlignment = VerticalAlignment.Top };
+                if (type != "Пропуск")
+                    typeCell.Children.Add(new TextBlock
+                    {
+                        Text = ((char)0xE7BA).ToString(), FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 12, Foreground = brush,
+                        VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 6, 0),
+                    });
+                typeCell.Children.Add(new TextBlock { Text = type, Foreground = brush, FontWeight = FontWeights.SemiBold });
+                var kind = new TextBlock { Text = w.Kind, Foreground = _muted, Margin = new Thickness(8, 5, 16, 5) };
+                var name = new TextBlock
+                {
+                    Text = w.Name.Length > 0 ? w.Name : "—", Margin = new Thickness(8, 5, 16, 5), MaxWidth = 380, TextTrimming = TextTrimming.CharacterEllipsis,
+                    ToolTip = Tip(w.Full),
+                };
+                var reason = new TextBlock { Text = w.Text, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(8, 5, 8, 5), ToolTip = Tip(w.Detail) };
+                ToolTipService.SetShowDuration(reason, 60000);
+                Row(i + 1, Brushes.Transparent, typeCell, kind, name, reason);
+            }
+            return grid;
         }
 
         private static object Tip(string text) =>
