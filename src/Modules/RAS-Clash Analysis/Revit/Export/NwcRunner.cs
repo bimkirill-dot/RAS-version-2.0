@@ -94,6 +94,16 @@ namespace RASv2.ClashAnalysis.Export
                 if (MessageBox.Show(owner, text, "Пересохранение моделей", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
                     return null;
             }
+            // готовой NWC нет ни у подрядчика, ни в папке — спросить (разработчик, 12.11.2026: «такой NWC больше нет — всё равно выгрузить?»)
+            var lost = ReadyNwc.Lost(jobs, File.Exists);
+            if (lost.Count > 0)
+            {
+                var text = $"Нет {lost.Count} {(lost.Count == 1 ? "готовой NWC" : "готовых NWC")} — ни файла подрядчика, ни NWC в папке:\n" +
+                           string.Join("\n", lost.Take(15).Select(j => "• " + j.Ready)) + (lost.Count > 15 ? "\n…" : "") +
+                           "\n\nNWF соберутся без них. Всё равно выгрузить?";
+                if (MessageBox.Show(owner, text, "Готовые NWC", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
+                    return null;
+            }
             foreach (var t in tasks) AskTests(owner, t, nwfPlans.Where(n => nwfOf[n] == t).ToList());
             var todo = jobs.Count(j => j.Skip == null) + nwfPlans.Count(n => n.Skip == null);
             if (todo == 0)
@@ -133,7 +143,7 @@ namespace RASv2.ClashAnalysis.Export
 
                 // модели другой версии Revit — фоновому Revit их версии (разработчик, 05.11.2026: «пусть плагин запускает Revit 2023»):
                 // Revit Server — по версии хранилища, файл — по версии самого файла; свои — здесь
-                var byYear = items.Where(p => p.Job.Skip == null && p.Job.CopyOf == null)
+                var byYear = items.Where(p => p.Job.Skip == null && p.Job.CopyOf == null && p.Job.Ready == null)
                     .GroupBy(p => NwcWorkers.RunYear(p.Job.Model, FileYear(p.Job.Model), year)).ToList();
                 var local = byYear.Where(g => g.Key == year).SelectMany(g => g).ToList();
                 var others = byYear.Where(g => g.Key != year).ToList();
@@ -151,7 +161,8 @@ namespace RASv2.ClashAnalysis.Export
                     local = local.Except(needNwc).ToList();
                 }
                 // шапка — после раскладки: пропуски «нет Revit …», «нет модуля экспорта» — уже в плане
-                exporter.Header(runTitle, common, jobs.Where(j => j.CopyOf == null).ToList(), notes);
+                exporter.Header(runTitle, common, jobs.Where(j => j.CopyOf == null && j.Ready == null).ToList(), notes);
+                NwcReady.Header(journal, jobs.Where(j => j.Ready != null).ToList());
                 NwcCopies.Header(journal, jobs.Where(j => j.CopyOf != null).ToList());
                 NwfStage.Header(journal, nwfPlans);
                 var nwfItems = NwfStage.Items(nwfPlans);
@@ -191,6 +202,7 @@ namespace RASv2.ClashAnalysis.Export
                         view.Pump(1000);
                     }
                     // NWC готовы (свои и фоновых) — копии для других задач, затем NWF; остановили — NWF не собираются
+                    NwcReady.Run(items, tasks, journal, view.Changed, view.Cancelled);
                     NwcCopies.Run(items, journal, view.Changed, view.Cancelled);
                     if (view.Cancelled) NwfStage.Stopped(nwfItems, view.Changed);
                     else NwfStage.Run(nwfPlans, nwfItems, journal, view.Changed, () => view.Cancelled, view.Pump);

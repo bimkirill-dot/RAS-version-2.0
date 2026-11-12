@@ -228,13 +228,14 @@
                             <Button Grid.Column="5" x:Name="SortDate" Style="{StaticResource SortHead}" Tag="Date" Click="ModelsSort_Click" />
                             <!-- «+» — добавить модели (разработчик, 09.11.2026: «вместо огромной кнопки — плюсик в таблице, как у задач») -->
                             <Button Grid.Column="6" x:Name="AddModels" Style="{StaticResource IconButton}" Content="&#xE710;" Width="26" Height="24"
-                                    FontSize="12" Margin="0,-4,0,-4" HorizontalAlignment="Center" Click="AddModels_Click" ToolTip="Добавить модели…" />
+                                    FontSize="12" Margin="0,-4,0,-4" HorizontalAlignment="Center" Click="AddModels_Click"
+                                    ToolTip="Добавить модели Revit или готовые NWC подрядчика…" />
                         </Grid>
                         <TextBlock x:Name="ModelsEmpty" DockPanel.Dock="Bottom" Style="{StaticResource Note}" Margin="9,4,0,6"
                                    Text="Моделей нет — «+» справа вверху" />
                         <ListBox x:Name="ModelsList" MaxHeight="420" SelectionMode="Extended" Background="Transparent" BorderThickness="0"
                                  Padding="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                 SelectionChanged="ModelsList_SelectionChanged" KeyDown="ModelsList_KeyDown">
+                                 SelectionChanged="ModelsList_SelectionChanged" KeyDown="ModelsList_KeyDown" MouseDoubleClick="ModelsList_DoubleClick">
                             <!-- выделенная — как выбранная строка дерева: фон наведения и рамка акцентом; толщина рамки не меняется -->
                             <ListBox.ItemContainerStyle>
                                 <Style TargetType="ListBoxItem">

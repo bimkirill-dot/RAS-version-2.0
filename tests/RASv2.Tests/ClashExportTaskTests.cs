@@ -1352,6 +1352,70 @@ namespace RASv2.Tests
                 high.Settings.DeleteEmptyReports = true;
                 Check(ExportNodes.DeletesEmptyReports(leaf) && !ExportNodes.DeletesEmptyReports(roots[0]) && !ExportNodes.DeletesEmptyReports(mid), "вниз, не вверх");
             });
+            yield return Case("готовые NWC подрядчика: не открываются, копируются в папку NWC — когда нет, другой файл, файл обновился; ручную замену не трогают", () =>
+            {
+                var common = new ExportSettings();
+                var roots = Sample(out var high, out var mid);
+                var s1 = high.Children[0];
+                const string src = @"\\partner\Входящие\S1_АР_подрядчик.nwc";
+                s1.Settings.Models.Add(new ExportModel { Path = src, NwcName = "S1_АР_подрядчик" });
+                s1.Settings.MakeRvt = true;
+                s1.Settings.Resave = true;
+                var jobs = NwcRunPlan.Build(s1, common, 2026, new List<string>());
+                var ready = jobs.Single(j => j.Ready != null);
+                Check(ready.Ready == src && ready.RvtPath == null && !ready.Resave && ready.Skip == null &&
+                      ready.NwcPath == @"\\srv\2025_Арман Кала 7 очередь\S01\NWC\S1_АР_подрядчик.nwc", "задание: без RVT и пересохранения, в папку NWC: " + ready.NwcPath);
+                Check(jobs.Where(j => j.Ready == null).All(j => j.RvtPath != null), "модели Revit — как были");
+                Check(NwfRunPlan.Build(s1, common).Single().Nwcs.Contains(ready.NwcPath), "в NWF строки — копия из папки NWC");
+                // «Запустить вместе»: готовая NWC у двух задач — копируется у каждой сама, копией выгрузки не бывает
+                var other = Sample(out var high2, out _);
+                high2.Children[0].Settings.Models.Add(new ExportModel { Path = src, NwcName = "S1_АР_подрядчик" });
+                other[0].Settings.Folder = @"\\srv\Другая";
+                var merged = NwcRunPlan.Merge(new List<List<NwcJob>> { NwcRunPlan.Build(s1, common, 2026, new List<string>()),
+                    NwcRunPlan.Build(high2.Children[0], common, 2026, new List<string>()) }, new List<string>());
+                Check(merged.Where(j => j.Ready != null).All(j => j.CopyOf == null) && merged.Where(j => j.CopyOf != null).All(j => j.CopyOf.Ready == null),
+                      "готовая NWC — ни источник, ни копия");
+
+                // когда копировать
+                var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                bool Exists(string f) => files.ContainsKey(f);
+                string Stamp(string f) => files[f];
+                const string tgt = @"\\srv\NWC\S1_АР_подрядчик.nwc";
+                files[src] = "v1";
+                Check(ReadyNwc.Decide(src, tgt, null, Exists, Stamp, out _) == ReadyAction.Copy, "в папке нет — копировать");
+                files[tgt] = "руками";
+                Check(ReadyNwc.Decide(src, tgt, null, Exists, Stamp, out _) == ReadyAction.Keep, "в папке уже есть, плагин не копировал — не трогать");
+                var last = new ReadyCopy { Target = tgt, Source = src, Stamp = "v1" };
+                Check(ReadyNwc.Decide(src, tgt, last, Exists, Stamp, out _) == ReadyAction.Keep, "файл подрядчика тот же — NWC в папке (и заменённую руками) не трогать");
+                files[src] = "v2";
+                Check(ReadyNwc.Decide(src, tgt, last, Exists, Stamp, out _) == ReadyAction.Copy, "файл подрядчика по тому же пути обновился — копировать");
+                const string src2 = @"\\partner\Входящие\S1_АР_подрядчик_v2.nwc";
+                files[src2] = "x";
+                Check(ReadyNwc.Decide(src2, tgt, last, Exists, Stamp, out _) == ReadyAction.Copy, "выбран другой файл — копировать");
+                files.Remove(src);
+                Check(ReadyNwc.Decide(src, tgt, last, Exists, Stamp, out var keepNote) == ReadyAction.Keep && keepNote.Contains("нет"),
+                      "файла подрядчика нет, в папке есть — NWF с той, что в папке");
+                files.Remove(tgt);
+                Check(ReadyNwc.Decide(src, tgt, last, Exists, Stamp, out _) == ReadyAction.Lost, "нет нигде — в NWF её не будет");
+                var lostJob = new NwcJob { Model = new ExportModel { Path = src }, Ready = src, NwcPath = tgt };
+                Check(ReadyNwc.Lost(new[] { lostJob, new NwcJob { Model = new ExportModel { Path = "a.rvt" }, NwcPath = "a.nwc" } }, Exists).Single() == lostJob,
+                      "перед запуском — вопрос только о потерянных готовых NWC");
+
+                // что скопировано — в файле состояния задачи
+                var dir = Path.Combine(Path.GetTempPath(), "ras-ready-" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    var state = Path.Combine(dir, "состояние.json");
+                    RunStates.Save(state, new List<RowRun>(), new List<ItemTime>(), null, new[] { last });
+                    RunStates.Save(state, new List<RowRun>(), new List<ItemTime>(), null, new[] { new ReadyCopy { Target = tgt, Source = src2, Stamp = "x" } });
+                    var back = RunStates.Load(state).Ready;
+                    Check(back.Count == 1 && back[0].Source == src2, "запись по папке NWC — последняя");
+                }
+                finally
+                {
+                    if (Directory.Exists(dir)) Directory.Delete(dir, true);
+                }
+            });
             yield return Case("«Предупреждения»: каждое — у одной строки, свежий запуск главнее; пропуски — одной строкой на причину", () =>
             {
                 var roots = Sample(out var high, out var mid);

@@ -115,7 +115,9 @@ namespace RASv2.ClashAnalysis.UI
                     var lines = new List<string> { Path + (Model.Year > 0 ? " (Revit " + Model.Year + ")" : "") };
                     // когда выгружена — не пишется (разработчик, 09.11.2026: «уберём „выгружалась / не выгружалась“»)
                     lines.Add("NWC: " + NwcName + ".nwc");
-                    if (!string.IsNullOrEmpty(RvtName)) lines.Add("RVT: " + RvtName + ".rvt");
+                    if (ExportNodes.IsReadyNwc(Model))
+                        lines.Add("Готовая NWC подрядчика: модель не открывается, файл копируется в папку NWC задачи. Двойной щелчок — выбрать другой файл");
+                    else if (!string.IsNullOrEmpty(RvtName)) lines.Add("RVT: " + RvtName + ".rvt");
                     var department = ExportNames.Department(Path, _common.Departments.Select(d => d.Department));
                     if (department.Length > 0) lines.Add("Отдел: " + department);
                     if (NwcStale) lines.Add("Модель изменилась после выгрузки NWC");
@@ -438,7 +440,63 @@ namespace RASv2.ClashAnalysis.UI
             Changed();
         }
 
+        /// <summary>
+        /// «+» у моделей — меню (разработчик, 12.11.2026: готовые NWC подрядчика): модели Revit (с Revit Server или из папки) или
+        /// готовые NWC — их Revit не открывает, плагин копирует в папку NWC задачи (ReadyNwc).
+        /// </summary>
         private void AddModels_Click(object sender, RoutedEventArgs e)
+        {
+            var button = (Button)sender;
+            var menu = new ContextMenu { PlacementTarget = button, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+            var revit = new MenuItem { Header = "Модели Revit…" };
+            revit.Click += (s, a) => AddRevitModels();
+            var ready = new MenuItem { Header = "Готовые NWC подрядчика…" };
+            ready.Click += (s, a) => AddReadyNwc();
+            menu.Items.Add(revit);
+            menu.Items.Add(ready);
+            // меню — свойством кнопки: так оно берёт кисти окна (тема Revit)
+            button.ContextMenu = menu;
+            menu.IsOpen = true;
+        }
+
+        /// <summary>Готовые NWC: файлы «.nwc»; имя NWC — имя файла (выберут потом другой файл — имя в папке NWC то же).</summary>
+        private void AddReadyNwc()
+        {
+            var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "NWC (*.nwc)|*.nwc", Multiselect = true, Title = "Готовые NWC подрядчика" };
+            if (dialog.ShowDialog(Owner) != true) return;
+            var picked = dialog.FileNames.Select(f => new ExportModel { Path = f, NwcName = ExportNames.BareName(f) }).ToList();
+            var list = _models.Select(m => m.Model).ToList();
+            var added = ExportNodes.AddModels(list, picked);
+            foreach (var m in list.Skip(_models.Count)) _models.Add(new ModelRow(_common, m));
+            Info.Text = added == picked.Count ? "" : "Уже есть: " + (picked.Count - added) + " " + ExportTask.ModelsWord(picked.Count - added) + ".";
+            _showModels = true;
+            Regroup();
+        }
+
+        /// <summary>Двойной щелчок по готовой NWC — другой файл подрядчика; имя NWC в папке — прежнее, при запуске файл скопируется.</summary>
+        private void ModelsList_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (!_modelsOwn || !(ModelsList.SelectedItem is ModelRow row) || !ExportNodes.IsReadyNwc(row.Model)) return;
+            var dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Filter = "NWC (*.nwc)|*.nwc", Title = "Другой файл для «" + ExportNodes.NwcNameOf(row.Model, _common) + "»",
+                InitialDirectory = System.IO.Path.GetDirectoryName(row.Model.Path), FileName = System.IO.Path.GetFileName(row.Model.Path),
+            };
+            if (dialog.ShowDialog(Owner) != true) return;
+            if (_models.Any(m => m != row && string.Equals(m.Model.Path, dialog.FileName, StringComparison.OrdinalIgnoreCase)))
+            {
+                Info.Text = "Этот файл уже есть в списке.";
+                return;
+            }
+            var model = row.Model.Clone();
+            model.Path = dialog.FileName;
+            if (string.IsNullOrWhiteSpace(model.NwcName)) model.NwcName = ExportNodes.NwcNameOf(row.Model, _common);
+            _models[_models.IndexOf(row)] = new ModelRow(_common, model);
+            Info.Text = "Файл заменён — скопируется в папку NWC при запуске.";
+            Regroup();
+        }
+
+        private void AddRevitModels()
         {
             List<ExportModel> picked;
             try

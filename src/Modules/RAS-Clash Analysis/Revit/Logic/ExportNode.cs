@@ -337,6 +337,10 @@ namespace RASv2.ClashAnalysis.Logic
 
         // ── блоки ──
 
+        /// <summary>Готовая NWC подрядчика (12.11.2026): «модель» — путь к «.nwc»; Revit её не открывает, файл копируется в папку NWC.</summary>
+        public static bool IsReadyNwc(ExportModel model) =>
+            (model?.Path ?? "").Trim().EndsWith(".nwc", StringComparison.OrdinalIgnoreCase);
+
         /// <summary>
         /// Блок модели: вписанный руками, иначе — из имени («S01»); нет — пусто. Вписанный под маску — в том же написании («S1» —
         /// «S01», 12.11.2026), иначе — как вписан.

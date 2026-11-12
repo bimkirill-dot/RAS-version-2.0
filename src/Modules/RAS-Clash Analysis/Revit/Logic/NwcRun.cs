@@ -50,6 +50,8 @@ namespace RASv2.ClashAnalysis.Logic
         /// модель не открывается заново, файл копируется после выгрузки NWC; null — выгружается сама.
         /// </summary>
         public NwcJob CopyOf { get; set; }
+        /// <summary>Готовая NWC подрядчика (12.11.2026): путь к его «.nwc» — модель не открывается, файл копируется (ReadyNwc); null — модель Revit.</summary>
+        public string Ready { get; set; }
 
         public string ModelName => Name ?? ExportNames.BareName(Model.Path);
     }
@@ -103,15 +105,17 @@ namespace RASv2.ClashAnalysis.Logic
                     {
                         Model = model, Export = export, View = ExportNodes.ViewOf(row, common), Edited = ExportNodes.EditedOf(row),
                         NwcPath = ExportNodes.NwcPath(row, model, common),
-                        RvtPath = row.Settings.MakeRvt ? ExportNodes.RvtPath(row, model, common, when) : null,
-                        Resave = row.Settings.Resave, Disabled = model.Off,
+                        // готовая NWC — не модель Revit: ни RVT, ни пересохранения
+                        RvtPath = row.Settings.MakeRvt && !ExportNodes.IsReadyNwc(model) ? ExportNodes.RvtPath(row, model, common, when) : null,
+                        Resave = row.Settings.Resave && !ExportNodes.IsReadyNwc(model), Disabled = model.Off,
+                        Ready = ExportNodes.IsReadyNwc(model) ? model.Path.Trim() : null,
                     };
                     job.BackupDir = System.IO.Path.Combine((export.Resave ?? new ResaveOptions()).BackupDir, ExportNodes.DateLabel(when, common.DateFormat));
                     if (byPath.TryGetValue(job.NwcPath, out var same))
                     {
                         same.Rows.Add(row.Name);
                         if (!row.Settings.NoNwc) same.Off = false;
-                        if (row.Settings.Resave) same.Resave = true;
+                        if (row.Settings.Resave && same.Ready == null) same.Resave = true;
                         if (!model.Off) same.Disabled = false;
                         if (job.RvtPath != null)
                         {
@@ -222,7 +226,8 @@ namespace RASv2.ClashAnalysis.Logic
                         notes.Add($"«{ExportNodes.FileName(keep.NwcPath)}»: у «{keep.Rows[0]}» и «{other.Rows[0]}» разные вид или «Настройки NWC Exporter» — выгружается по «{keep.Rows[0]}».");
                 }
 
-            bool Exports(NwcJob j) => j.Skip == null && !j.Off && j.CopyOf == null;
+            // готовая NWC копируется из файла подрядчика у каждой задачи сама — ни источником, ни копией не бывает
+            bool Exports(NwcJob j) => j.Skip == null && !j.Off && j.CopyOf == null && j.Ready == null;
             bool Copyable(NwcJob j) => Exports(j) && j.RvtPath == null && !j.Resave;
             bool Same(NwcJob a, NwcJob b) => string.Equals(a.Model.Path, b.Model.Path, StringComparison.OrdinalIgnoreCase) &&
                                              Signature(a) == Signature(b) && EditedKey(a.Edited) == EditedKey(b.Edited);

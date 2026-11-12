@@ -79,6 +79,8 @@ namespace RASv2.ClashAnalysis.Logic
         [DataMember(Order = 1)] public List<RowRun> Rows { get; set; } = new List<RowRun>();
         [DataMember(Order = 2)] public List<ItemTime> Items { get; set; } = new List<ItemTime>();
         [DataMember(Order = 3)] public List<NwfTests> Tests { get; set; } = new List<NwfTests>();
+        /// <summary>Готовые NWC подрядчика: что скопировано в папку NWC последним (12.11.2026, ReadyNwc).</summary>
+        [DataMember(Order = 4)] public List<ReadyCopy> Ready { get; set; } = new List<ReadyCopy>();
     }
 
     /// <summary>Модель строки для жёлтого «модель изменилась»: дата модели (null — не узнали) и дата её NWC (null — NWC нет).</summary>
@@ -137,6 +139,7 @@ namespace RASv2.ClashAnalysis.Logic
                     f.Rows = f.Rows ?? new List<RowRun>();
                     f.Items = f.Items ?? new List<ItemTime>();
                     f.Tests = f.Tests ?? new List<NwfTests>();
+                    f.Ready = f.Ready ?? new List<ReadyCopy>();
                     foreach (var r in f.Rows)
                     {
                         r.Errors = r.Errors ?? new List<RunIssue>();
@@ -153,10 +156,16 @@ namespace RASv2.ClashAnalysis.Logic
         }
 
         /// <summary>Записать поверх того, что в файле сейчас (коллега мог выгрузить другую строку): строки — по ключу, NWC — по пути.</summary>
-        public static void Save(string path, IEnumerable<RowRun> rows, IEnumerable<ItemTime> items, IEnumerable<NwfTests> tests = null)
+        public static void Save(string path, IEnumerable<RowRun> rows, IEnumerable<ItemTime> items, IEnumerable<NwfTests> tests = null,
+            IEnumerable<ReadyCopy> ready = null)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path));
             var file = Load(path);
+            foreach (var r in ready ?? Enumerable.Empty<ReadyCopy>())
+            {
+                file.Ready.RemoveAll(x => string.Equals(x.Target, r.Target, StringComparison.OrdinalIgnoreCase));
+                file.Ready.Add(r);
+            }
             foreach (var t in tests ?? Enumerable.Empty<NwfTests>())
             {
                 file.Tests.RemoveAll(x => string.Equals(x.Nwf, t.Nwf, StringComparison.OrdinalIgnoreCase));
