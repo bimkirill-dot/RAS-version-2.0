@@ -229,7 +229,7 @@
                             <!-- «+» — добавить модели (разработчик, 09.11.2026: «вместо огромной кнопки — плюсик в таблице, как у задач») -->
                             <Button Grid.Column="6" x:Name="AddModels" Style="{StaticResource IconButton}" Content="&#xE710;" Width="26" Height="24"
                                     FontSize="12" Margin="0,-4,0,-4" HorizontalAlignment="Center" Click="AddModels_Click"
-                                    ToolTip="Добавить модели Revit или готовые NWC подрядчика…" />
+                                    ToolTip="Добавить модели Revit или готовые NWC…" />
                         </Grid>
                         <TextBlock x:Name="ModelsEmpty" DockPanel.Dock="Bottom" Style="{StaticResource Note}" Margin="9,4,0,6"
                                    Text="Моделей нет — «+» справа вверху" />

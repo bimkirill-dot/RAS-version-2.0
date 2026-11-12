@@ -450,7 +450,8 @@ namespace RASv2.ClashAnalysis.UI
             var menu = new ContextMenu { PlacementTarget = button, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
             var revit = new MenuItem { Header = "Модели Revit…" };
             revit.Click += (s, a) => AddRevitModels();
-            var ready = new MenuItem { Header = "Готовые NWC подрядчика…" };
+            // «NWC…» (разработчик, 12.11.2026: «вместо „Готовые NWC подрядчика“ — просто NWC»)
+            var ready = new MenuItem { Header = "NWC…" };
             ready.Click += (s, a) => AddReadyNwc();
             menu.Items.Add(revit);
             menu.Items.Add(ready);
