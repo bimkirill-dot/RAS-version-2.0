@@ -23,7 +23,7 @@ namespace RASv2.ClashAnalysis.Logic
     {
         /// <summary>Функция у ошибки: «NWC», «NWF», «RVT», «Пересохранение».</summary>
         public string Kind { get; set; } = "";
-        /// <summary>Коротко: блок и отдел («S01 KJ»), не нашлись — имя целиком; у пропуска — имена через запятую.</summary>
+        /// <summary>Имя модели или NWF целиком (разработчик, 12.11.2026: «вместо S01 AR — имя модели»); у пропуска — имена через запятую.</summary>
         public string Name { get; set; } = "";
         /// <summary>Имя целиком (имена) — в подсказке.</summary>
         public string Full { get; set; } = "";
@@ -75,7 +75,7 @@ namespace RASv2.ClashAnalysis.Logic
                     if (owner != s) continue;
                     Of(s).Errors.Add(new WarningLine
                     {
-                        Kind = RunStates.KindTitle(RunStates.KindOf(e.Path)), Name = ShortName(e.Name, common), Full = e.Name ?? "",
+                        Kind = RunStates.KindTitle(RunStates.KindOf(e.Path)), Name = e.Name ?? "", Full = e.Name ?? "",
                         Text = Reason(e.Note), Detail = e.Note ?? "", Path = e.Path,
                     });
                 }
@@ -91,7 +91,7 @@ namespace RASv2.ClashAnalysis.Logic
                 foreach (var name in s.Changed.Distinct(StringComparer.OrdinalIgnoreCase))
                 {
                     if (below.Any(x => x.Changed.Contains(name, StringComparer.OrdinalIgnoreCase))) continue;
-                    Of(s).Changes.Add(new WarningLine { Name = ShortName(name, common), Full = name, Text = "изменилась после выгрузки NWC" });
+                    Of(s).Changes.Add(new WarningLine { Name = name, Full = name, Text = "изменилась после выгрузки NWC" });
                 }
                 if (s.Unknown && !below.Any(x => x.Unknown)) Of(s).Unknown = true;
             }
@@ -108,17 +108,6 @@ namespace RASv2.ClashAnalysis.Logic
         /// <summary>Сколько у строки и всех её подзадач.</summary>
         public static int CountUnder(ExportTask task, Dictionary<ExportTask, WarningGroup> groups) =>
             task.Self().Sum(t => groups.TryGetValue(t, out var g) ? g.Count : 0);
-
-        /// <summary>Коротко: блок и отдел из имени («S01 KJ»); не нашлось ни того, ни другого — имя целиком.</summary>
-        public static string ShortName(string name, ExportSettings common)
-        {
-            if (string.IsNullOrWhiteSpace(name)) return "";
-            if (name.EndsWith(".nwf", StringComparison.OrdinalIgnoreCase)) return name;
-            var block = ExportNames.Block(name, common.BlockMasks);
-            var department = ExportNames.Department(name, common.Departments.Select(d => d.Department));
-            var s = (block + " " + department).Trim();
-            return s.Length == 0 || block.Length == 0 || department.Length == 0 ? name : s;
-        }
 
         /// <summary>Причина — первая фраза: до «. » или «; » (точки в датах — «11.11.2026» — не конец), не длиннее 140 знаков.</summary>
         public static string Reason(string note)
@@ -158,7 +147,7 @@ namespace RASv2.ClashAnalysis.Logic
             foreach (var c in counts)
             {
                 var names = c.Value.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-                c.Key.Name = string.Join(", ", names.Select(x => ShortName(x, common)));
+                c.Key.Name = string.Join(", ", names);
                 c.Key.Full = string.Join("\n", names);
             }
             return lines;

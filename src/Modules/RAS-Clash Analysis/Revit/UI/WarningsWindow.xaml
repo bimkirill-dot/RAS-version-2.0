@@ -59,6 +59,9 @@
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <DockPanel Margin="{Binding Indent}">
+                            <!-- ▾ / ▸ — свернуть подзадачи; у строки без подзадач — пустое место той же ширины -->
+                            <Button DockPanel.Dock="Left" Style="{StaticResource IconButton}" Width="18" Height="20" MinHeight="0" FontSize="10"
+                                    Margin="0,0,4,0" Content="{Binding Arrow}" Visibility="{Binding ArrowVisibility}" Click="Toggle_Click" />
                             <TextBlock DockPanel.Dock="Right" Text="{Binding CountText}" Foreground="{Binding CountBrush}" FontWeight="SemiBold"
                                        Margin="8,0,0,0" VerticalAlignment="Center" />
                             <TextBlock Text="{Binding Name}" FontWeight="{Binding Weight}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"

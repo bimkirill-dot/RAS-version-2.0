@@ -23,6 +23,11 @@ namespace RASv2.ClashAnalysis.UI
         public sealed class RowView
         {
             public ExportTask Task { get; set; }
+            public int Level { get; set; }
+            public bool Collapsed { get; set; }
+            // Segoe MDL2 Assets: E70D — вниз (развёрнуто), E76C — вправо (свёрнуто)
+            public string Arrow => ((char)(Collapsed ? 0xE76C : 0xE70D)).ToString();
+            public Visibility ArrowVisibility => Task != null && Task.Children.Count > 0 ? Visibility.Visible : Visibility.Hidden;
             public string Name { get; set; }
             public Thickness Indent { get; set; }
             public FontWeight Weight { get; set; }
@@ -34,6 +39,7 @@ namespace RASv2.ClashAnalysis.UI
         private readonly Dictionary<ExportTask, WarningGroup> _groups;
         private readonly Brush _error, _changed, _muted;
         private bool _ready;
+        private readonly List<RowView> _views = new List<RowView>();
 
         /// <summary>«↻ Повторить ошибки»: строка, её последний запуск и файлы с ошибками; null — не нажимали.</summary>
         public ExportTask RetryTask { get; private set; }
@@ -41,7 +47,8 @@ namespace RASv2.ClashAnalysis.UI
         public HashSet<string> RetryPaths { get; private set; }
 
         /// <param name="start">Строка, на которой открыть; null — «Все задачи».</param>
-        public WarningsWindow(IList<ExportTask> roots, Dictionary<ExportTask, WarningGroup> groups, ExportTask start)
+        /// <param name="collapsed">Свёрнутые строки — как в «Менеджере задач»; строка, на которой открыть, видна.</param>
+        public WarningsWindow(IList<ExportTask> roots, Dictionary<ExportTask, WarningGroup> groups, ExportTask start, ISet<ExportTask> collapsed)
         {
             RASv2.Core.WindowTheme.Apply(this);
             InitializeComponent();
@@ -51,24 +58,49 @@ namespace RASv2.ClashAnalysis.UI
             _changed = (Brush)FindResource("MarkChanged");
             _muted = (Brush)FindResource("Muted");
 
-            var views = new List<RowView> { new RowView { Name = "Все задачи", Weight = FontWeights.SemiBold, Indent = new Thickness(0) } };
-            Count(views[0], roots.SelectMany(r => r.Self()));
+            _views.Add(new RowView { Name = "Все задачи", Weight = FontWeights.SemiBold, Indent = new Thickness(22, 0, 0, 0) });
+            Count(_views[0], roots.SelectMany(r => r.Self()));
+            var open = new HashSet<ExportTask>();
+            for (var p = start?.Parent; p != null; p = p.Parent) open.Add(p);
             foreach (var t in roots.SelectMany(r => r.Self()))
             {
                 var level = 0;
                 for (var p = t.Parent; p != null; p = p.Parent) level++;
                 var v = new RowView
                 {
-                    Task = t, Name = string.IsNullOrWhiteSpace(t.Name) ? "Без названия" : t.Name, Indent = new Thickness(level * 16 + 10, 0, 0, 0),
+                    Task = t, Level = level, Collapsed = collapsed != null && collapsed.Contains(t) && !open.Contains(t),
+                    Name = string.IsNullOrWhiteSpace(t.Name) ? "Без названия" : t.Name, Indent = new Thickness(level * 16, 0, 0, 0),
                     Weight = level == 0 ? FontWeights.SemiBold : FontWeights.Normal,
                 };
                 Count(v, t.Self());
-                views.Add(v);
+                _views.Add(v);
             }
-            Rows.ItemsSource = views;
-            Rows.SelectedItem = views.FirstOrDefault(v => v.Task == start && start != null) ?? views[0];
+            ShowRows(_views.FirstOrDefault(v => v.Task == start && start != null) ?? _views[0]);
             _ready = true;
             ShowSelected();
+        }
+
+        // строки слева — без тех, что под свёрнутыми; выбранная остаётся (ушла под свёрнутую — выбирается та, что её свернула)
+        private void ShowRows(RowView select)
+        {
+            var hidden = new HashSet<ExportTask>(_views.Where(v => v.Collapsed).SelectMany(v => v.Task.Self().Skip(1)));
+            var shown = _views.Where(v => v.Task == null || !hidden.Contains(v.Task)).ToList();
+            var was = _ready;
+            _ready = false;
+            Rows.ItemsSource = shown;
+            Rows.Items.Refresh();
+            while (select?.Task != null && hidden.Contains(select.Task)) select = _views.First(v => v.Task == select.Task.Parent);
+            Rows.SelectedItem = select;
+            _ready = was;
+        }
+
+        private void Toggle_Click(object sender, RoutedEventArgs e)
+        {
+            var v = (RowView)((FrameworkElement)sender).DataContext;
+            v.Collapsed = !v.Collapsed;
+            var selected = Rows.SelectedItem as RowView;
+            ShowRows(selected);
+            if (Rows.SelectedItem != selected) ShowSelected();
         }
 
         // число у строки: ошибки и изменения у неё и подзадач; есть ошибки — красное, только изменения — жёлтое, ничего — «—»

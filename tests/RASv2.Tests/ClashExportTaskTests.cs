@@ -1376,8 +1376,8 @@ namespace RASv2.Tests
                 var groups = RunWarnings.Build(sources, common);
                 Check(groups.ContainsKey(leaf) && groups[leaf].Errors.Single().Path == a && groups[high].Errors.Single().Path == b && !groups.ContainsKey(top),
                       "ошибка — у нижней строки с этим файлом");
-                Check(groups[leaf].Errors[0].Name == "S01 KJ" && groups[leaf].Errors[0].Text == "Модель занята другим" && groups[leaf].Errors[0].Kind == "NWC",
-                      "коротко: блок и отдел, первая фраза: " + groups[leaf].Errors[0].Name + " / " + groups[leaf].Errors[0].Text);
+                Check(groups[leaf].Errors[0].Name == "0000_S01_KJ01" && groups[leaf].Errors[0].Text == "Модель занята другим" && groups[leaf].Errors[0].Kind == "NWC",
+                      "имя модели целиком, первая фраза: " + groups[leaf].Errors[0].Name + " / " + groups[leaf].Errors[0].Text);
                 Check(RunWarnings.Total(groups) == 2 && RunWarnings.CountUnder(top, groups) == 2 && RunWarnings.CountUnder(leaf, groups) == 1, "числа");
 
                 // подзадачу потом запустили отдельно, файл прошёл — прежней ошибки задачи нет нигде
@@ -1391,7 +1391,7 @@ namespace RASv2.Tests
                 sources[2].Changed = new List<string> { "0000_S01_KJ01" };
                 sources[3].Changed = new List<string> { "0000_S01_KJ01" };
                 groups = RunWarnings.Build(sources, common);
-                Check(groups[leaf].Changes.Single().Name == "S01 KJ" && groups[mid].Changes.Count == 1 && groups[high].Changes.Count == 0 &&
+                Check(groups[leaf].Changes.Single().Name == "0000_S01_KJ01" && groups[mid].Changes.Count == 1 && groups[high].Changes.Count == 0 &&
                       !groups.ContainsKey(top) && RunWarnings.Total(groups) == 2, "изменение — у нижних строк, в числе — один раз");
 
                 // пропуски: одинаковая причина — одной строкой
@@ -1400,11 +1400,10 @@ namespace RASv2.Tests
                     "0000_S01_KJ01 — NWC актуальна. Модель не менялась с 11.11.2026", "0000_S01_AR01 — NWC актуальна. Модель не менялась",
                     "Модель вне блоков",
                 }, common);
-                Check(skips.Count == 2 && skips[0].Text == "NWC актуальна" && skips[0].Name == "S01 KJ, S01 AR" && skips[1].Text == "Модель вне блоков",
+                Check(skips.Count == 2 && skips[0].Text == "NWC актуальна" && skips[0].Name == "0000_S01_KJ01, 0000_S01_AR01" && skips[1].Text == "Модель вне блоков",
                       "пропуски по причинам: " + string.Join(" | ", skips.Select(x => x.Text + ": " + x.Name)));
-                Check(RunWarnings.Reason("Не открылась 11.11.2026 в 18:05; Revit закрылся") == "Не открылась 11.11.2026 в 18:05" &&
-                      RunWarnings.ShortName("Модель АР.rvt", common) == "Модель АР.rvt" && RunWarnings.ShortName("S1_ВК.nwf", common) == "S1_ВК.nwf",
-                      "первая фраза — не по точке в дате; без блока и отдела — имя целиком");
+                Check(RunWarnings.Reason("Не открылась 11.11.2026 в 18:05; Revit закрылся") == "Не открылась 11.11.2026 в 18:05",
+                      "первая фраза — не по точке в дате");
             });
             yield return Case("удаление: подзадачи", () =>
             {

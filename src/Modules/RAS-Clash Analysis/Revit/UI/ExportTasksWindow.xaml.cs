@@ -673,7 +673,7 @@ namespace RASv2.ClashAnalysis.UI
             WarningsWindow window;
             try
             {
-                window = new WarningsWindow(_roots, Warnings(), start) { Owner = this };
+                window = new WarningsWindow(_roots, Warnings(), start, new HashSet<ExportTask>(_collapsed)) { Owner = this };
                 window.ShowDialog();
             }
             catch (System.Exception ex)
